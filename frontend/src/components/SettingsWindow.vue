@@ -6,15 +6,18 @@ import {
   ImportKnowledge, ListKnowledgeSources, DeleteKnowledgeSource,
   OpenFileDialog, GetToolPermissions, SetToolPermission
 } from '../../wailsjs/go/main/App'
-import { EventsOn } from '../../wailsjs/runtime/runtime'
+import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
+import { useModelPath } from '../composables/useModelPath.js'
 
 const emit = defineEmits(['close'])
 
 const cfg = ref({
   LLMBaseURL: '', LLMAPIKey: '', LLMModel: '', EmbeddingModel: '',
+  Live2DModel: 'hiyori',
   SystemPrompt: '', ShortTermLimit: 30, SkillsDir: '', Hotkey: 'Cmd+Shift+P',
   EmbeddingDim: 1536,
 })
+const { availableModels, loadModels } = useModelPath()
 const toolPerms = ref([])   // [{ ToolName, Level, Granted }]
 const sources = ref([])
 const importProgress = ref(null)
@@ -28,6 +31,7 @@ let dragStart = null
 let offProgress = null
 
 onMounted(async () => {
+  loadModels()
   const loaded = await GetConfig()
   if (loaded) Object.assign(cfg.value, loaded)
   sources.value = await ListKnowledgeSources() || []
@@ -43,6 +47,7 @@ async function save() {
   statusMsg.value = ''
   try {
     await SaveConfig(cfg.value)
+    EventsEmit('config:model:changed', cfg.value.Live2DModel)
     statusMsg.value = '已保存'
   } catch (e) {
     statusMsg.value = '保存失败: ' + e
@@ -136,6 +141,16 @@ function onMouseUp() {
 
         <!-- 宠物设置 -->
         <div v-if="activeTab === 'pet'" class="tab-pane">
+          <label>Live2D 模型
+            <div class="model-grid">
+              <button
+                v-for="m in availableModels"
+                :key="m"
+                :class="['model-btn', { selected: cfg.Live2DModel === m }]"
+                @click="cfg.Live2DModel = m"
+              >{{ m }}</button>
+            </div>
+          </label>
           <label>System Prompt<textarea v-model="cfg.SystemPrompt" rows="5" /></label>
           <label>短期记忆轮数（1-100）<input type="number" v-model.number="cfg.ShortTermLimit" min="1" max="100" /></label>
           <label>Skills 目录<input v-model="cfg.SkillsDir" placeholder="~/.desktop-pet/skills" /></label>
@@ -247,4 +262,8 @@ li button:hover { background: #dc2626; }
 .progress { color: #9ca3af; font-size: 12px; margin: 6px 0; }
 .win-footer { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 10px 16px; border-top: 1px solid #374151; flex-shrink: 0; background: #111827; }
 .status-msg { color: #6b7280; font-size: 12px; }
+.model-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.model-btn { background: #1f2937; color: #9ca3af; border: 1px solid #374151; border-radius: 6px; padding: 6px 14px; cursor: pointer; font-size: 12px; }
+.model-btn:hover { border-color: #4f46e5; color: #f9fafb; }
+.model-btn.selected { background: #312e81; border-color: #4f46e5; color: #a5b4fc; }
 </style>
