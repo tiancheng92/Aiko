@@ -362,3 +362,57 @@ func (a *App) GetAvailableModels() []string {
 	}
 	return models
 }
+
+// ExportChatHistory opens a native save dialog and writes the recent 1000
+// messages as plain text to the user-chosen file. Returns nil if the user
+// cancels without choosing a file.
+func (a *App) ExportChatHistory() error {
+	path, err := wailsruntime.SaveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
+		Title:           "导出聊天记录",
+		DefaultFilename: fmt.Sprintf("chat-export-%s.txt", time.Now().Format("20060102-150405")),
+		Filters: []wailsruntime.FileFilter{
+			{DisplayName: "文本文件", Pattern: "*.txt"},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("save dialog: %w", err)
+	}
+	if path == "" {
+		return nil // user cancelled
+	}
+
+	msgs, err := a.shortMem.Recent(1000)
+	if err != nil {
+		return fmt.Errorf("load messages: %w", err)
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("聊天记录导出 — %s\n\n", time.Now().Format("2006-01-02 15:04:05")))
+	for _, m := range msgs {
+		label := m.Role
+		switch m.Role {
+		case "user":
+			label = "用户"
+		case "assistant":
+			label = "宠物"
+		}
+		sb.WriteString(fmt.Sprintf("[%s] %s\n%s\n\n", m.CreatedAt, label, m.Content))
+	}
+	return os.WriteFile(path, []byte(sb.String()), 0o644)
+}
+
+// IsFirstLaunch reports whether the welcome message has never been shown.
+func (a *App) IsFirstLaunch() bool {
+	var val string
+	err := a.sqlDB.QueryRowContext(a.ctx,
+		`SELECT value FROM settings WHERE key = 'welcome_shown'`).Scan(&val)
+	return err != nil // row absent ⇒ first launch
+}
+
+// MarkWelcomeShown records that the welcome message has been displayed.
+func (a *App) MarkWelcomeShown() error {
+	_, err := a.sqlDB.ExecContext(a.ctx,
+		`INSERT INTO settings(key, value) VALUES('welcome_shown','1')
+		 ON CONFLICT(key) DO UPDATE SET value='1'`)
+	return err
+}

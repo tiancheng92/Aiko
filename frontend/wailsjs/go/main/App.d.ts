@@ -11,6 +11,8 @@ export function DeleteKnowledgeSource(arg1:string):Promise<void>;
 
 export function EmitPetState(arg1:string):Promise<void>;
 
+export function ExportChatHistory():Promise<void>;
+
 export function GetAvailableModels():Promise<Array<string>>;
 
 export function GetBallPosition(arg1:number,arg2:number):Promise<Array<number>>;
@@ -25,7 +27,11 @@ export function GetToolPermissions():Promise<Array<tools.PermissionRow>>;
 
 export function ImportKnowledge(arg1:string):Promise<void>;
 
+export function IsFirstLaunch():Promise<boolean>;
+
 export function ListKnowledgeSources():Promise<Array<string>>;
+
+export function MarkWelcomeShown():Promise<void>;
 
 export function MissingRequiredConfig():Promise<Array<string>>;
 

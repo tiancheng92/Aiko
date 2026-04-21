@@ -14,6 +14,10 @@ export function EmitPetState(arg1) {
   return window['go']['main']['App']['EmitPetState'](arg1);
 }
 
+export function ExportChatHistory() {
+  return window['go']['main']['App']['ExportChatHistory']();
+}
+
 export function GetAvailableModels() {
   return window['go']['main']['App']['GetAvailableModels']();
 }
@@ -42,8 +46,16 @@ export function ImportKnowledge(arg1) {
   return window['go']['main']['App']['ImportKnowledge'](arg1);
 }
 
+export function IsFirstLaunch() {
+  return window['go']['main']['App']['IsFirstLaunch']();
+}
+
 export function ListKnowledgeSources() {
   return window['go']['main']['App']['ListKnowledgeSources']();
+}
+
+export function MarkWelcomeShown() {
+  return window['go']['main']['App']['MarkWelcomeShown']();
 }
 
 export function MissingRequiredConfig() {
