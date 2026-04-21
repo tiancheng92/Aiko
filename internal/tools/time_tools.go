@@ -56,5 +56,5 @@ func (t *FormatTimeTool) Execute(_ context.Context, args map[string]any) ToolRes
 	if l, ok := args["layout"].(string); ok && l != "" {
 		layout = l
 	}
-	return ToolResult{Content: fmt.Sprintf("格式化时间: %s", time.Now().Format(layout))}
+	return ToolResult{Content: fmt.Sprintf("格式化后的时间: %s", time.Now().Format(layout))}
 }

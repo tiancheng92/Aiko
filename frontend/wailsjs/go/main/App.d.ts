@@ -31,6 +31,8 @@ export function IsFirstLaunch():Promise<boolean>;
 
 export function ListKnowledgeSources():Promise<Array<string>>;
 
+export function ListLLMModels():Promise<Array<string>>;
+
 export function MarkWelcomeShown():Promise<void>;
 
 export function MissingRequiredConfig():Promise<Array<string>>;

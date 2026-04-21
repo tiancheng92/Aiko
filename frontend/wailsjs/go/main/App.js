@@ -54,6 +54,10 @@ export function ListKnowledgeSources() {
   return window['go']['main']['App']['ListKnowledgeSources']();
 }
 
+export function ListLLMModels() {
+  return window['go']['main']['App']['ListLLMModels']();
+}
+
 export function MarkWelcomeShown() {
   return window['go']['main']['App']['MarkWelcomeShown']();
 }
