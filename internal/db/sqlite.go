@@ -15,10 +15,17 @@ func Open(dataDir string) (*sql.DB, error) {
 		return nil, fmt.Errorf("create data dir: %w", err)
 	}
 	dbPath := filepath.Join(dataDir, "desktop-pet.db")
-	db, err := sql.Open("sqlite", dbPath)
+	// Enable WAL mode and a 5-second busy timeout via DSN parameters so
+	// concurrent goroutines (agent, knowledge import, config save) never see
+	// "database is locked" errors.
+	dsn := dbPath + "?_journal_mode=WAL&_busy_timeout=5000"
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
+	// Limit to one open connection; SQLite WAL allows concurrent reads but
+	// only one writer at a time — serialising through one connection is simplest.
+	db.SetMaxOpenConns(1)
 	if err := migrate(db); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)

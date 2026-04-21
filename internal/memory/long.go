@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/cloudwego/eino/components/embedding"
@@ -12,6 +13,7 @@ import (
 
 // LongStore manages long-term conversation memory using chromem-go.
 type LongStore struct {
+	mu  sync.RWMutex
 	col *chromem.Collection
 }
 
@@ -26,7 +28,10 @@ func NewLongStore(db *chromem.DB, embedder embedding.Embedder) (*LongStore, erro
 
 // Store saves a block of conversation text (raw, no summarization).
 func (l *LongStore) Store(ctx context.Context, text string) error {
-	return l.col.AddDocument(ctx, chromem.Document{
+	l.mu.RLock()
+	col := l.col
+	l.mu.RUnlock()
+	return col.AddDocument(ctx, chromem.Document{
 		ID:      uuid.NewString(),
 		Content: text,
 		Metadata: map[string]string{
@@ -38,14 +43,14 @@ func (l *LongStore) Store(ctx context.Context, text string) error {
 // Search returns the top-k most relevant memory blocks for the query.
 // Returns nil if no memories exist yet.
 func (l *LongStore) Search(ctx context.Context, query string, k int) ([]string, error) {
-	if l.col.Count() == 0 {
+	l.mu.RLock()
+	col := l.col
+	l.mu.RUnlock()
+	if col.Count() == 0 {
 		return nil, nil
 	}
-	n := k
-	if n > l.col.Count() {
-		n = l.col.Count()
-	}
-	results, err := l.col.Query(ctx, query, n, nil, nil)
+	n := min(k, col.Count())
+	results, err := col.Query(ctx, query, n, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +71,9 @@ func (l *LongStore) DeleteAll(db *chromem.DB, embedder embedding.Embedder) error
 	if err != nil {
 		return fmt.Errorf("recreate memories collection: %w", err)
 	}
+	l.mu.Lock()
 	l.col = col
+	l.mu.Unlock()
 	return nil
 }
 

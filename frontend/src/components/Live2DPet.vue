@@ -208,6 +208,9 @@ watch(petState, (state) => {
 
 onUnmounted(() => {
   mounted = false
+  // Clean up any in-progress drag listeners to prevent ghost handlers.
+  window.removeEventListener('mousemove', onMouseMove)
+  window.removeEventListener('mouseup', onMouseUp)
   if (live2dModel) {
     live2dModel.off('hit')
     live2dModel = null
