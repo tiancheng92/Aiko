@@ -32,7 +32,7 @@ static void hitTestPoint(CGFloat cssX, CGFloat cssY) {
     NSString *js = [NSString stringWithFormat:
         @"(function(x,y){"
          "var e=document.elementFromPoint(x,y);"
-         "return !!(e&&e.closest('.floating-ball,.chat-bubble'));"
+         "return !!(e&&e.closest('.live2d-pet,.chat-bubble'));"
          "}(%g,%g))",
         cssX, cssY];
     [gWebView evaluateJavaScript:js completionHandler:^(id result, NSError *err) {
