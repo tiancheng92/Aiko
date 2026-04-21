@@ -1,21 +1,40 @@
 <script setup>
-import { ref, onMounted } from 'vue'
-import { GetConfig, SaveBallPosition, GetScreenSize } from '../../wailsjs/go/main/App'
+import { ref, watch, onMounted } from 'vue'
+import { GetBallPosition, SaveBallPosition, GetScreenSize } from '../../wailsjs/go/main/App'
 
-const emit = defineEmits(['click'])
-const pos = ref({ x: 0, y: 0 })
+const emit = defineEmits(['click', 'position', 'ball-size'])
+const pos = ref(null)
 const ballSize = ref(64)
+const sw = ref(0)
+const sh = ref(0)
 let dragStart = null
 let isDragging = false
 
+watch(pos, (p) => { if (p) emit('position', { ...p }) })
+
+/** waitForRuntime polls until the Wails Go bridge is available. */
+async function waitForRuntime() {
+  while (!window.go?.main?.App) {
+    await new Promise(r => setTimeout(r, 20))
+  }
+}
+
 onMounted(async () => {
-  const [cfg, screenSize] = await Promise.all([GetConfig(), GetScreenSize()])
-  const [sw, sh] = screenSize
-  ballSize.value = Math.min(80, Math.max(48, Math.round(sh * 0.055)))
-  if (cfg.BallPositionX >= 0 && cfg.BallPositionY >= 0) {
-    pos.value = { x: cfg.BallPositionX, y: cfg.BallPositionY }
-  } else {
-    pos.value = { x: sw - ballSize.value - 24, y: sh - ballSize.value - 24 }
+  try {
+    await waitForRuntime()
+    const [screenW, screenH] = await GetScreenSize()
+    sw.value = screenW
+    sh.value = screenH
+    ballSize.value = Math.min(80, Math.max(48, Math.round(screenH * 0.055)))
+    emit('ball-size', ballSize.value)
+    const [bx, by] = await GetBallPosition(screenW, screenH)
+    pos.value = (bx >= 0 && by >= 0)
+      ? { x: bx, y: by }
+      : { x: screenW - ballSize.value - 40, y: screenH - ballSize.value - 40 }
+  } catch (err) {
+    console.error('FloatingBall init:', err)
+    const bs = ballSize.value
+    pos.value = { x: window.innerWidth - bs - 40, y: window.innerHeight - bs - 40 }
   }
 })
 
@@ -29,7 +48,7 @@ function onMouseDown(e) {
 
 /** onMouseMove updates the ball position during drag. */
 function onMouseMove(e) {
-  if (!dragStart) return
+  if (!dragStart || !pos.value) return
   const dx = e.clientX - dragStart.startX
   const dy = e.clientY - dragStart.startY
   if (!isDragging && Math.sqrt(dx * dx + dy * dy) < 5) return
@@ -45,7 +64,7 @@ async function onMouseUp(e) {
     if (!isDragging) {
       emit('click')
     } else {
-      await SaveBallPosition(Math.round(pos.value.x), Math.round(pos.value.y))
+      await SaveBallPosition(Math.round(pos.value.x), Math.round(pos.value.y), sw.value, sh.value)
     }
   } catch (e) {
     console.error('Failed to save ball position:', e)
@@ -58,6 +77,7 @@ async function onMouseUp(e) {
 
 <template>
   <div
+    v-if="pos"
     class="floating-ball"
     :style="{ left: pos.x + 'px', top: pos.y + 'px', width: ballSize + 'px', height: ballSize + 'px', fontSize: Math.round(ballSize * 0.44) + 'px' }"
     @mousedown="onMouseDown"

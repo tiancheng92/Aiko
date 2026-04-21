@@ -36,9 +36,8 @@ func main() {
 		OnStartup:        app.startup,
 		Bind:             []any{app},
 		Mac: &mac.Options{
-			TitleBar:             mac.TitleBarHiddenInset(),
 			WebviewIsTransparent: true,
-			WindowIsTranslucent:  true,
+			WindowIsTranslucent:  false,
 			About: &mac.AboutInfo{
 				Title:   "Desktop Pet",
 				Message: "Your AI companion on the desktop",

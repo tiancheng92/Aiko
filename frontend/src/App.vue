@@ -7,9 +7,19 @@ import { EventsOn } from '../wailsjs/runtime/runtime'
 
 const bubbleOpen = ref(false)
 const activeTab = ref('chat')
+const ballPos  = ref({ x: -1, y: -1 })
+const ballSize = ref(64)
 let offToggle
 
+/** waitForRuntime polls until the Wails Go bridge is available. */
+async function waitForRuntime() {
+  while (!window.go?.main?.App) {
+    await new Promise(r => setTimeout(r, 20))
+  }
+}
+
 onMounted(async () => {
+  await waitForRuntime()
   const missing = await MissingRequiredConfig()
   if (missing && missing.length > 0) {
     activeTab.value = 'settings'
@@ -27,10 +37,16 @@ function toggleBubble() {
 </script>
 
 <template>
-  <FloatingBall @click="toggleBubble" />
+  <FloatingBall
+    @click="toggleBubble"
+    @position="p => ballPos = p"
+    @ball-size="s => ballSize = s"
+  />
   <ChatBubble
     v-if="bubbleOpen"
     v-model:tab="activeTab"
+    :ball-pos="ballPos"
+    :ball-size="ballSize"
     @close="bubbleOpen = false"
   />
 </template>

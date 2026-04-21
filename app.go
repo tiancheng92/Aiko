@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 
 	chromem "github.com/philippgille/chromem-go"
@@ -84,6 +86,9 @@ func (a *App) startup(ctx context.Context) {
 			}
 		}
 	}
+
+	// Allow mouse events to pass through transparent window regions.
+	enableClickThrough()
 }
 
 // initLLMComponents initializes chat model, embedder, memory stores, skills, and agent.
@@ -142,11 +147,34 @@ func (a *App) SaveConfig(cfg *config.Config) error {
 	return a.initLLMComponents(a.ctx)
 }
 
-// SaveBallPosition persists only the ball position without reinitializing LLM.
-func (a *App) SaveBallPosition(x, y int) error {
-	a.cfg.BallPositionX = x
-	a.cfg.BallPositionY = y
-	return a.configStore.Save(a.cfg)
+// GetBallPosition returns the saved ball [x, y] for the given screen resolution,
+// or [-1, -1] if no position has been saved for that resolution yet.
+func (a *App) GetBallPosition(screenW, screenH int) []int {
+	key := fmt.Sprintf("ball_pos_%dx%d", screenW, screenH)
+	var val string
+	if err := a.sqlDB.QueryRowContext(a.ctx, `SELECT value FROM settings WHERE key=?`, key).Scan(&val); err != nil {
+		return []int{-1, -1}
+	}
+	parts := strings.SplitN(val, ",", 2)
+	if len(parts) != 2 {
+		return []int{-1, -1}
+	}
+	x, err1 := strconv.Atoi(parts[0])
+	y, err2 := strconv.Atoi(parts[1])
+	if err1 != nil || err2 != nil {
+		return []int{-1, -1}
+	}
+	return []int{x, y}
+}
+
+// SaveBallPosition persists the ball position for the given screen resolution.
+func (a *App) SaveBallPosition(x, y, screenW, screenH int) error {
+	key := fmt.Sprintf("ball_pos_%dx%d", screenW, screenH)
+	val := fmt.Sprintf("%d,%d", x, y)
+	_, err := a.sqlDB.ExecContext(a.ctx,
+		`INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+		key, val)
+	return err
 }
 
 // MissingRequiredConfig returns names of empty required config fields.
@@ -240,16 +268,16 @@ func (a *App) ToggleBubble() {
 	wailsruntime.EventsEmit(a.ctx, "bubble:toggle")
 }
 
-// GetScreenSize returns the primary screen's width and height in pixels.
-func (a *App) GetScreenSize() (int, int) {
+// GetScreenSize returns the primary screen's [width, height] in pixels.
+func (a *App) GetScreenSize() []int {
 	screens, err := wailsruntime.ScreenGetAll(a.ctx)
 	if err != nil || len(screens) == 0 {
-		return 1440, 900
+		return []int{1440, 900}
 	}
 	for _, s := range screens {
 		if s.IsPrimary {
-			return s.Size.Width, s.Size.Height
+			return []int{s.Size.Width, s.Size.Height}
 		}
 	}
-	return screens[0].Size.Width, screens[0].Size.Height
+	return []int{screens[0].Size.Width, screens[0].Size.Height}
 }
