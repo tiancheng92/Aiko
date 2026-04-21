@@ -859,14 +859,14 @@ pinkie@^2.0.0:
   resolved "https://registry.yarnpkg.com/pinkie/-/pinkie-2.0.4.tgz#72556b80cfa0d48a974e80e77248e80ed4f7f870"
   integrity sha512-MnUuEycAemtSaeFSjXKW/aroV7akBbY+Sv+RkyqFjgAe73F+MR0TBWKBRDkmfWq/HiFmdavfZ1G7h4SPZXaCSg==
 
-pixi-live2d-display@^0.4.0:
+pixi-live2d-display@0.4.0:
   version "0.4.0"
   resolved "https://registry.yarnpkg.com/pixi-live2d-display/-/pixi-live2d-display-0.4.0.tgz#f0628d1bb71765c042b85288344ef72d7b557fce"
   integrity sha512-xeYC6y4Y0Bxe9ksWNlGFZC1rII/MPrzPQK7t1c3ubA8RhkOISIqHJl38fNumXqhGEs+yItmgDOkFT+9dsyGDjA==
   dependencies:
     gh-pages "^4.0.0"
 
-pixi.js@^6:
+pixi.js@^6.5.0:
   version "6.5.10"
   resolved "https://registry.yarnpkg.com/pixi.js/-/pixi.js-6.5.10.tgz#a82638e0b7afc5bf7f3ab70d960521477276e866"
   integrity sha512-Z2mjeoISml2iuVwT1e/BQwERYM2yKoiR08ZdGrg8y5JjeuVptfTrve4DbPMRN/kEDodesgQZGV/pFv0fE9Q2SA==
