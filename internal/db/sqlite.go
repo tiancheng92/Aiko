@@ -42,6 +42,13 @@ func migrate(db *sql.DB) error {
 			source TEXT PRIMARY KEY,
 			added_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
+		CREATE TABLE IF NOT EXISTS tool_permissions (
+			tool_name        TEXT PRIMARY KEY,
+			permission_level TEXT NOT NULL DEFAULT 'public',
+			granted          INTEGER NOT NULL DEFAULT 0,
+			granted_at       DATETIME,
+			last_used        DATETIME
+		);
 	`)
 	return err
 }
