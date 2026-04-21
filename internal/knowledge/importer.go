@@ -109,16 +109,17 @@ func extractEPUB(path string) (string, error) {
 
 	var sb strings.Builder
 	for _, f := range r.File {
-		if strings.HasSuffix(f.Name, ".html") || strings.HasSuffix(f.Name, ".xhtml") {
-			rc, err := f.Open()
-			if err != nil {
-				continue
-			}
-			text := extractHTMLText(rc)
-			rc.Close()
-			sb.WriteString(text)
-			sb.WriteString("\n")
+		if !strings.HasSuffix(f.Name, ".html") && !strings.HasSuffix(f.Name, ".xhtml") {
+			continue
 		}
+		rc, err := f.Open()
+		if err != nil {
+			return "", fmt.Errorf("open epub entry %s: %w", f.Name, err)
+		}
+		text := extractHTMLText(rc)
+		rc.Close()
+		sb.WriteString(text)
+		sb.WriteString("\n")
 	}
 	return sb.String(), nil
 }

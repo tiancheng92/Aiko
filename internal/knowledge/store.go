@@ -3,7 +3,6 @@ package knowledge
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/cloudwego/eino/components/embedding"
 	"github.com/google/uuid"
@@ -14,8 +13,7 @@ import (
 
 // Store manages the knowledge base collection in chromem-go.
 type Store struct {
-	col     *chromem.Collection
-	sources sync.Map // tracks known source names (populated by AddChunk)
+	col *chromem.Collection
 }
 
 // NewStore creates or opens the knowledge collection.
@@ -29,7 +27,7 @@ func NewStore(db *chromem.DB, embedder embedding.Embedder) (*Store, error) {
 
 // AddChunk stores a single text chunk with source metadata.
 func (s *Store) AddChunk(ctx context.Context, text, source string, chunkIdx int) error {
-	err := s.col.AddDocument(ctx, chromem.Document{
+	return s.col.AddDocument(ctx, chromem.Document{
 		ID:      uuid.NewString(),
 		Content: text,
 		Metadata: map[string]string{
@@ -37,11 +35,6 @@ func (s *Store) AddChunk(ctx context.Context, text, source string, chunkIdx int)
 			"chunk_index": fmt.Sprintf("%d", chunkIdx),
 		},
 	})
-	if err != nil {
-		return err
-	}
-	s.sources.Store(source, true)
-	return nil
 }
 
 // Search returns top-k relevant chunks for the query.
@@ -67,23 +60,27 @@ func (s *Store) Search(ctx context.Context, query string, k int) ([]string, erro
 
 // DeleteBySource removes all chunks from a given source file.
 func (s *Store) DeleteBySource(ctx context.Context, source string) error {
-	err := s.col.Delete(ctx, map[string]string{"source": source}, nil)
-	if err != nil {
-		return err
-	}
-	s.sources.Delete(source)
-	return nil
+	return s.col.Delete(ctx, map[string]string{"source": source}, nil)
 }
 
-// ListSources returns all unique source filenames tracked since the store was created.
-// Note: this reflects sources added in the current session; re-importing restores them.
-func (s *Store) ListSources(_ context.Context) ([]string, error) {
+// ListSources returns all unique source filenames in the knowledge collection.
+func (s *Store) ListSources(ctx context.Context) ([]string, error) {
+	count := s.col.Count()
+	if count == 0 {
+		return nil, nil
+	}
+	results, err := s.col.Query(ctx, "a", count, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
 	var sources []string
-	s.sources.Range(func(key, _ any) bool {
-		if src, ok := key.(string); ok {
+	for _, r := range results {
+		src := r.Metadata["source"]
+		if src != "" && !seen[src] {
+			seen[src] = true
 			sources = append(sources, src)
 		}
-		return true
-	})
+	}
 	return sources, nil
 }

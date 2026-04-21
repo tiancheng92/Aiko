@@ -12,8 +12,7 @@ import (
 
 // LongStore manages long-term conversation memory using chromem-go.
 type LongStore struct {
-	col      *chromem.Collection
-	embedder embedding.Embedder
+	col *chromem.Collection
 }
 
 // NewLongStore creates or opens the memories collection.
@@ -22,7 +21,7 @@ func NewLongStore(db *chromem.DB, embedder embedding.Embedder) (*LongStore, erro
 	if err != nil {
 		return nil, fmt.Errorf("get memories collection: %w", err)
 	}
-	return &LongStore{col: col, embedder: embedder}, nil
+	return &LongStore{col: col}, nil
 }
 
 // Store saves a block of conversation text (raw, no summarization).
