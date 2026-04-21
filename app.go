@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	chromem "github.com/philippgille/chromem-go"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -27,6 +28,9 @@ type App struct {
 	cfg         *config.Config
 	vectorDB    *chromem.DB
 	shortMem    *memory.ShortStore
+
+	// mu guards fields that may be replaced on config save while agent goroutines run.
+	mu          sync.RWMutex
 	longMem     *memory.LongStore
 	knowledgeSt *knowledge.Store
 	petAgent    *agent.Agent
@@ -70,6 +74,7 @@ func (a *App) startup(ctx context.Context) {
 }
 
 // initLLMComponents initializes chat model, embedder, memory stores, skills, and agent.
+// Callers must NOT hold mu when calling this function.
 func (a *App) initLLMComponents(ctx context.Context) error {
 	chatModel, err := llm.NewChatModel(ctx, a.cfg)
 	if err != nil {
@@ -88,23 +93,27 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("new long store: %w", err)
 		}
-		knowledgeSt, err = knowledge.NewStore(a.vectorDB, embedder)
+		knowledgeSt, err = knowledge.NewStore(a.vectorDB, a.sqlDB, embedder)
 		if err != nil {
 			return fmt.Errorf("new knowledge store: %w", err)
 		}
 	}
-	a.longMem = longMem
-	a.knowledgeSt = knowledgeSt
 
 	skills, err := skill.LoadAll(a.cfg.SkillsDir)
 	if err != nil {
 		return fmt.Errorf("load skills: %w", err)
 	}
 
-	a.petAgent, err = agent.New(ctx, chatModel, a.shortMem, longMem, skills, a.cfg)
+	newAgent, err := agent.New(ctx, chatModel, a.shortMem, longMem, skills, a.cfg)
 	if err != nil {
 		return fmt.Errorf("new agent: %w", err)
 	}
+
+	a.mu.Lock()
+	a.longMem = longMem
+	a.knowledgeSt = knowledgeSt
+	a.petAgent = newAgent
+	a.mu.Unlock()
 	return nil
 }
 
@@ -120,6 +129,13 @@ func (a *App) SaveConfig(cfg *config.Config) error {
 	return a.initLLMComponents(a.ctx)
 }
 
+// SaveBallPosition persists only the ball position without reinitializing LLM.
+func (a *App) SaveBallPosition(x, y int) error {
+	a.cfg.BallPositionX = x
+	a.cfg.BallPositionY = y
+	return a.configStore.Save(a.cfg)
+}
+
 // MissingRequiredConfig returns names of empty required config fields.
 func (a *App) MissingRequiredConfig() []string {
 	return a.cfg.MissingRequired()
@@ -128,11 +144,15 @@ func (a *App) MissingRequiredConfig() []string {
 // SendMessage sends a user message and streams response tokens as Wails events.
 // Events emitted: "chat:token" (string), "chat:done" (""), "chat:error" (string).
 func (a *App) SendMessage(userInput string) error {
-	if a.petAgent == nil {
+	a.mu.RLock()
+	ag := a.petAgent
+	a.mu.RUnlock()
+
+	if ag == nil {
 		return fmt.Errorf("agent not initialized: complete settings first")
 	}
 	go func() {
-		ch := a.petAgent.Chat(a.ctx, userInput)
+		ch := ag.Chat(a.ctx, userInput)
 		for result := range ch {
 			if result.Err != nil {
 				wailsruntime.EventsEmit(a.ctx, "chat:error", result.Err.Error())
@@ -158,28 +178,40 @@ func (a *App) GetMessages(limit int) ([]memory.Message, error) {
 // ImportKnowledge imports a file into the knowledge base.
 // Emits "knowledge:progress" events during import.
 func (a *App) ImportKnowledge(filePath string) error {
-	if a.knowledgeSt == nil {
+	a.mu.RLock()
+	ks := a.knowledgeSt
+	a.mu.RUnlock()
+
+	if ks == nil {
 		return fmt.Errorf("knowledge store not initialized: configure embedding model first")
 	}
-	return knowledge.Import(a.ctx, a.knowledgeSt, filePath, func(p knowledge.ImportProgress) {
+	return knowledge.Import(a.ctx, ks, filePath, func(p knowledge.ImportProgress) {
 		wailsruntime.EventsEmit(a.ctx, "knowledge:progress", p)
 	})
 }
 
 // ListKnowledgeSources returns distinct source filenames in the knowledge base.
 func (a *App) ListKnowledgeSources() ([]string, error) {
-	if a.knowledgeSt == nil {
+	a.mu.RLock()
+	ks := a.knowledgeSt
+	a.mu.RUnlock()
+
+	if ks == nil {
 		return nil, nil
 	}
-	return a.knowledgeSt.ListSources(a.ctx)
+	return ks.ListSources(a.ctx)
 }
 
 // DeleteKnowledgeSource removes all chunks for a given source file.
 func (a *App) DeleteKnowledgeSource(source string) error {
-	if a.knowledgeSt == nil {
+	a.mu.RLock()
+	ks := a.knowledgeSt
+	a.mu.RUnlock()
+
+	if ks == nil {
 		return fmt.Errorf("knowledge store not initialized")
 	}
-	return a.knowledgeSt.DeleteBySource(a.ctx, source)
+	return ks.DeleteBySource(a.ctx, source)
 }
 
 // ToggleBubble emits the bubble:toggle event to open/close the chat bubble.
@@ -192,6 +224,11 @@ func (a *App) GetScreenSize() (int, int) {
 	screens, err := wailsruntime.ScreenGetAll(a.ctx)
 	if err != nil || len(screens) == 0 {
 		return 1440, 900
+	}
+	for _, s := range screens {
+		if s.IsPrimary {
+			return s.Size.Width, s.Size.Height
+		}
 	}
 	return screens[0].Size.Width, screens[0].Size.Height
 }

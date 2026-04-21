@@ -2,6 +2,7 @@ package knowledge
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -10,7 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	pdfapi "github.com/pdfcpu/pdfcpu/pkg/api"
+	lnpdf "github.com/ledongthuc/pdf"
 	"golang.org/x/net/html"
 )
 
@@ -66,37 +67,23 @@ func extractText(path string) (string, error) {
 	}
 }
 
-// extractPDF extracts plain text from a PDF file using pdfcpu.
-// pdfcpu writes per-page .txt files to a temp directory; we read and concatenate them.
+// extractPDF extracts plain text from a PDF file using ledongthuc/pdf.
 func extractPDF(path string) (string, error) {
-	tmpDir, err := os.MkdirTemp("", "desktop-pet-pdf-*")
+	f, r, err := lnpdf.Open(path)
 	if err != nil {
-		return "", fmt.Errorf("create temp dir: %w", err)
+		return "", fmt.Errorf("open pdf: %w", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer f.Close()
 
-	if err := pdfapi.ExtractContentFile(path, tmpDir, nil, nil); err != nil {
-		return "", fmt.Errorf("pdfcpu extract content: %w", err)
-	}
-
-	entries, err := os.ReadDir(tmpDir)
+	var buf bytes.Buffer
+	b, err := r.GetPlainText()
 	if err != nil {
-		return "", fmt.Errorf("read temp dir: %w", err)
+		return "", fmt.Errorf("read pdf text: %w", err)
 	}
-
-	var sb strings.Builder
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".txt") {
-			continue
-		}
-		b, err := os.ReadFile(filepath.Join(tmpDir, e.Name()))
-		if err != nil {
-			return "", err
-		}
-		sb.Write(b)
-		sb.WriteString("\n")
+	if _, err := io.Copy(&buf, b); err != nil {
+		return "", fmt.Errorf("copy pdf text: %w", err)
 	}
-	return sb.String(), nil
+	return buf.String(), nil
 }
 
 // extractEPUB extracts plain text from an EPUB file (which is a ZIP of HTML files).

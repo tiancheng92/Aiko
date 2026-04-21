@@ -2,6 +2,7 @@ package knowledge
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
 	"github.com/cloudwego/eino/components/embedding"
@@ -11,30 +12,38 @@ import (
 	"desktop-pet/internal/memory"
 )
 
-// Store manages the knowledge base collection in chromem-go.
+// Store manages the knowledge base collection in chromem-go, with source
+// names tracked in SQLite to avoid querying the vector index for metadata.
 type Store struct {
 	col *chromem.Collection
+	db  *sql.DB
 }
 
 // NewStore creates or opens the knowledge collection.
-func NewStore(db *chromem.DB, embedder embedding.Embedder) (*Store, error) {
+func NewStore(db *chromem.DB, sqlDB *sql.DB, embedder embedding.Embedder) (*Store, error) {
 	col, err := db.GetOrCreateCollection("knowledge", nil, memory.EmbeddingFuncFrom(embedder))
 	if err != nil {
 		return nil, fmt.Errorf("get knowledge collection: %w", err)
 	}
-	return &Store{col: col}, nil
+	return &Store{col: col, db: sqlDB}, nil
 }
 
-// AddChunk stores a single text chunk with source metadata.
+// AddChunk stores a single text chunk with source metadata and records the
+// source in the knowledge_sources table.
 func (s *Store) AddChunk(ctx context.Context, text, source string, chunkIdx int) error {
-	return s.col.AddDocument(ctx, chromem.Document{
+	if err := s.col.AddDocument(ctx, chromem.Document{
 		ID:      uuid.NewString(),
 		Content: text,
 		Metadata: map[string]string{
 			"source":      source,
 			"chunk_index": fmt.Sprintf("%d", chunkIdx),
 		},
-	})
+	}); err != nil {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx,
+		`INSERT OR IGNORE INTO knowledge_sources(source) VALUES(?)`, source)
+	return err
 }
 
 // Search returns top-k relevant chunks for the query.
@@ -43,10 +52,7 @@ func (s *Store) Search(ctx context.Context, query string, k int) ([]string, erro
 	if s.col.Count() == 0 {
 		return nil, nil
 	}
-	n := k
-	if n > s.col.Count() {
-		n = s.col.Count()
-	}
+	n := min(k, s.col.Count())
 	results, err := s.col.Query(ctx, query, n, nil, nil)
 	if err != nil {
 		return nil, err
@@ -58,29 +64,33 @@ func (s *Store) Search(ctx context.Context, query string, k int) ([]string, erro
 	return texts, nil
 }
 
-// DeleteBySource removes all chunks from a given source file.
+// DeleteBySource removes all chunks from a given source file and deletes
+// the source record from the SQLite index.
 func (s *Store) DeleteBySource(ctx context.Context, source string) error {
-	return s.col.Delete(ctx, map[string]string{"source": source}, nil)
+	if err := s.col.Delete(ctx, map[string]string{"source": source}, nil); err != nil {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx,
+		`DELETE FROM knowledge_sources WHERE source = ?`, source)
+	return err
 }
 
-// ListSources returns all unique source filenames in the knowledge collection.
+// ListSources returns all unique source filenames recorded in the SQLite index.
 func (s *Store) ListSources(ctx context.Context) ([]string, error) {
-	count := s.col.Count()
-	if count == 0 {
-		return nil, nil
-	}
-	results, err := s.col.Query(ctx, "a", count, nil, nil)
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT source FROM knowledge_sources ORDER BY added_at`)
 	if err != nil {
 		return nil, err
 	}
-	seen := map[string]bool{}
+	defer rows.Close()
+
 	var sources []string
-	for _, r := range results {
-		src := r.Metadata["source"]
-		if src != "" && !seen[src] {
-			seen[src] = true
-			sources = append(sources, src)
+	for rows.Next() {
+		var src string
+		if err := rows.Scan(&src); err != nil {
+			return nil, err
 		}
+		sources = append(sources, src)
 	}
-	return sources, nil
+	return sources, rows.Err()
 }

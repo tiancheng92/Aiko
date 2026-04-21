@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { GetConfig, SaveConfig, GetScreenSize } from '../../wailsjs/go/main/App'
+import { GetConfig, SaveBallPosition, GetScreenSize } from '../../wailsjs/go/main/App'
 
 const emit = defineEmits(['click'])
 const pos = ref({ x: 0, y: 0 })
@@ -45,10 +45,7 @@ async function onMouseUp(e) {
     if (!isDragging) {
       emit('click')
     } else {
-      const cfg = await GetConfig()
-      cfg.BallPositionX = Math.round(pos.value.x)
-      cfg.BallPositionY = Math.round(pos.value.y)
-      await SaveConfig(cfg)
+      await SaveBallPosition(Math.round(pos.value.x), Math.round(pos.value.y))
     }
   } catch (e) {
     console.error('Failed to save ball position:', e)
