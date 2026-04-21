@@ -185,8 +185,9 @@ function onCanvasClick(e) {
   emit('click')
 }
 
-/** onMouseDown starts drag tracking on mouse button press. */
+/** onMouseDown starts drag tracking on left mouse button press. */
 function onMouseDown(e) {
+  if (e.button !== 0) return
   dragStart = { x: e.clientX - pos.value.x, y: e.clientY - pos.value.y, startX: e.clientX, startY: e.clientY }
   isDragging = false
   window.addEventListener('mousemove', onMouseMove)

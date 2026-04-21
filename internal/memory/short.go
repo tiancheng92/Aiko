@@ -93,6 +93,12 @@ func (s *ShortStore) OldestN(n int) ([]Message, error) {
 	return msgs, nil
 }
 
+// DeleteAll removes all messages from the short-term store.
+func (s *ShortStore) DeleteAll() error {
+	_, err := s.db.Exec(`DELETE FROM messages`)
+	return err
+}
+
 // DeleteByIDs removes messages with the given IDs.
 func (s *ShortStore) DeleteByIDs(ids []int64) error {
 	if len(ids) == 0 {

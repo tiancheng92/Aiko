@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { SendMessage, GetMessages } from '../../wailsjs/go/main/App'
+import { SendMessage, GetMessages, ClearChatHistory } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 
 const messages = ref([])
@@ -15,7 +15,14 @@ onMounted(async () => {
   messages.value = (history || []).map(m => ({ role: m.Role, content: m.Content }))
   scrollToBottom()
 
-  offClear = EventsOn('chat:clear', () => { messages.value = [] })
+  offClear = EventsOn('chat:clear', async () => {
+    try {
+      await ClearChatHistory()
+      messages.value = []
+    } catch (e) {
+      console.error('clear chat history failed:', e)
+    }
+  })
 
   offToken = EventsOn('chat:token', (token) => {
     const idx = messages.value.length - 1

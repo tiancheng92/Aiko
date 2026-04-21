@@ -5,6 +5,8 @@ import {memory} from '../models';
 import {tools} from '../models';
 import {frontend} from '../models';
 
+export function ClearChatHistory():Promise<void>;
+
 export function DeleteKnowledgeSource(arg1:string):Promise<void>;
 
 export function EmitPetState(arg1:string):Promise<void>;

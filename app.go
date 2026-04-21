@@ -321,3 +321,24 @@ func (a *App) SetToolPermission(toolName string, granted bool) error {
 func (a *App) EmitPetState(state string) {
 	wailsruntime.EventsEmit(a.ctx, "pet:state:change", state)
 }
+
+// ClearChatHistory deletes all short-term messages from SQLite and all
+// long-term memory vectors from the chromem collection.
+func (a *App) ClearChatHistory() error {
+	if err := a.shortMem.DeleteAll(); err != nil {
+		return fmt.Errorf("clear short-term memory: %w", err)
+	}
+	a.mu.RLock()
+	longMem := a.longMem
+	a.mu.RUnlock()
+	if longMem != nil {
+		embedder, err := llm.NewEmbedder(a.ctx, a.cfg)
+		if err != nil {
+			return fmt.Errorf("rebuild embedder for clear: %w", err)
+		}
+		if err := longMem.DeleteAll(a.vectorDB, embedder); err != nil {
+			return fmt.Errorf("clear long-term memory: %w", err)
+		}
+	}
+	return nil
+}

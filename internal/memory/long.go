@@ -56,6 +56,20 @@ func (l *LongStore) Search(ctx context.Context, query string, k int) ([]string, 
 	return texts, nil
 }
 
+// DeleteAll removes all documents from the long-term memory collection.
+// It drops and re-creates the collection so subsequent writes start fresh.
+func (l *LongStore) DeleteAll(db *chromem.DB, embedder embedding.Embedder) error {
+	if err := db.DeleteCollection("memories"); err != nil {
+		return fmt.Errorf("delete memories collection: %w", err)
+	}
+	col, err := db.GetOrCreateCollection("memories", nil, EmbeddingFuncFrom(embedder))
+	if err != nil {
+		return fmt.Errorf("recreate memories collection: %w", err)
+	}
+	l.col = col
+	return nil
+}
+
 // EmbeddingFuncFrom wraps an eino Embedder into chromem-go's EmbeddingFunc type.
 // Returns nil if e is nil.
 func EmbeddingFuncFrom(e embedding.Embedder) chromem.EmbeddingFunc {
