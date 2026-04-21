@@ -11,6 +11,7 @@ type Config struct {
 	LLMAPIKey      string
 	LLMModel       string
 	EmbeddingModel string
+	Live2DModel    string // 模型目录名，默认 "hiyori"
 	EmbeddingDim   int
 	SystemPrompt   string
 	ShortTermLimit int
@@ -20,7 +21,6 @@ type Config struct {
 	BallPositionY    int
 	BubblePositionX  int
 	BubblePositionY  int
-	Live2DModel      string // 模型目录名，默认 "hiyori"
 }
 
 type Store struct{ db *sql.DB }
@@ -53,6 +53,7 @@ func (s *Store) Load() (*Config, error) {
 		LLMAPIKey:      m["llm_api_key"],
 		LLMModel:       m["llm_model"],
 		EmbeddingModel: m["embedding_model"],
+		Live2DModel:    orDefault(m["live2d_model"], "hiyori"),
 		SystemPrompt:   m["system_prompt"],
 		SkillsDir:      m["skills_dir"],
 		Hotkey:         orDefault(m["hotkey"], "Cmd+Shift+P"),
@@ -63,7 +64,6 @@ func (s *Store) Load() (*Config, error) {
 	cfg.BallPositionY   = parseInt(m["ball_position_y"], -1)
 	cfg.BubblePositionX = parseInt(m["bubble_position_x"], -1)
 	cfg.BubblePositionY = parseInt(m["bubble_position_y"], -1)
-	cfg.Live2DModel = orDefault(m["live2d_model"], "hiyori")
 	return cfg, nil
 }
 
@@ -83,7 +83,7 @@ func (s *Store) Save(cfg *Config) error {
 		"ball_position_y":    strconv.Itoa(cfg.BallPositionY),
 		"bubble_position_x":  strconv.Itoa(cfg.BubblePositionX),
 		"bubble_position_y":  strconv.Itoa(cfg.BubblePositionY),
-		"live2d_model":        cfg.Live2DModel,
+		"live2d_model":      cfg.Live2DModel,
 	}
 	tx, err := s.db.Begin()
 	if err != nil {
