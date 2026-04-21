@@ -12,8 +12,9 @@ import (
 	"desktop-pet/internal/config"
 )
 
-// NewChatModel creates an eino ChatModel from config.
-func NewChatModel(ctx context.Context, cfg *config.Config) (model.ChatModel, error) {
+// NewChatModel creates an eino ToolCallingChatModel from config.
+// The openai implementation satisfies both model.ChatModel and model.ToolCallingChatModel.
+func NewChatModel(ctx context.Context, cfg *config.Config) (model.ToolCallingChatModel, error) {
 	if cfg.LLMBaseURL == "" || cfg.LLMModel == "" {
 		return nil, fmt.Errorf("llm_base_url and llm_model are required")
 	}
