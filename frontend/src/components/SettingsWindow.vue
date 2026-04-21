@@ -47,12 +47,12 @@ onMounted(async () => {
 
 onUnmounted(() => offProgress?.())
 
-/** fetchLLMModels calls the backend to list models from the configured endpoint. */
+/** fetchLLMModels calls the backend with the current form values to list available models. */
 async function fetchLLMModels() {
   fetchingModels.value = true
   statusMsg.value = ''
   try {
-    llmModels.value = await ListLLMModels() || []
+    llmModels.value = await ListLLMModels(cfg.value.LLMBaseURL, cfg.value.LLMAPIKey) || []
     if (llmModels.value.length === 0) statusMsg.value = '未获取到模型列表'
   } catch (e) {
     statusMsg.value = '获取模型失败: ' + e

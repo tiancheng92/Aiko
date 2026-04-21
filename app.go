@@ -429,11 +429,10 @@ func (a *App) MarkWelcomeShown() error {
 }
 
 // ListLLMModels queries the OpenAI-compatible /v1/models endpoint using the
-// currently saved BaseURL and APIKey, and returns a sorted list of model IDs.
-// It uses the saved config so the user can fetch models after entering the URL
-// (before saving a new model selection).
-func (a *App) ListLLMModels() ([]string, error) {
-	baseURL := strings.TrimRight(a.cfg.LLMBaseURL, "/")
+// provided baseURL and apiKey (taken directly from the settings form, not the
+// saved config), and returns a sorted list of model IDs.
+func (a *App) ListLLMModels(baseURL, apiKey string) ([]string, error) {
+	baseURL = strings.TrimRight(baseURL, "/")
 	if baseURL == "" {
 		return nil, fmt.Errorf("LLM Base URL is not configured")
 	}
@@ -446,8 +445,8 @@ func (a *App) ListLLMModels() ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
 	}
-	if a.cfg.LLMAPIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+a.cfg.LLMAPIKey)
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 
 	resp, err := http.DefaultClient.Do(req)
