@@ -5,14 +5,14 @@ import { Live2DModel, MotionPriority } from 'pixi-live2d-display/cubism4'
 import { GetBallPosition, SaveBallPosition, GetScreenSize } from '../../wailsjs/go/main/App'
 import { Quit } from '../../wailsjs/runtime/runtime'
 import { usePetState } from '../composables/usePetState.js'
+import { useModelPath } from '../composables/useModelPath.js'
 import ContextMenu from './ContextMenu.vue'
-
-const MODEL_PATH = '/live2d/hiyori/Hiyori.model3.json'
 
 const emit = defineEmits(['click', 'position', 'ball-size', 'open-settings'])
 
 const pos = ref(null)
 const { petState } = usePetState()
+const { modelPath, loadModels } = useModelPath()
 const petMenuRef = ref(null)
 const petMenuItems = [
   { icon: '⚙️', label: '打开设置', action: () => emit('open-settings') },
@@ -45,11 +45,37 @@ async function waitForRuntime() {
   }
 }
 
-/** initPixi creates the PixiJS application and loads the Live2D model. */
-async function initPixi() {
-  // Use registerTicker instead of window.PIXI global to avoid module-level side effects.
-  Live2DModel.registerTicker(PIXI.Ticker)
+/** attachModel loads a Live2D model from path, scales it, and wires up interactions. */
+async function attachModel(path) {
+  const newModel = await Live2DModel.from(path, { autoInteract: false })
+  if (!mounted || !pixiApp) {
+    newModel.destroy()
+    return
+  }
+  // Remove old model if present.
+  if (live2dModel) {
+    live2dModel.off('hit')
+    pixiApp.stage.removeChild(live2dModel)
+    live2dModel.destroy()
+    live2dModel = null
+  }
+  live2dModel = newModel
+  pixiApp.stage.addChild(live2dModel)
+  const scale = petSize.value / live2dModel.internalModel.originalHeight
+  live2dModel.scale.set(scale)
+  live2dModel.anchor.set(0.5, 0.5)
+  live2dModel.position.set(petSize.value / 2, petSize.value / 2)
+  live2dModel.on('hit', (hitAreas) => {
+    if (hitAreas.includes('Body')) {
+      live2dModel.motion('TapBody', undefined, MotionPriority.NORMAL)
+    }
+  })
+  live2dModel.motion('Idle', undefined, MotionPriority.IDLE)
+}
 
+/** initPixi creates the PixiJS application and loads the initial Live2D model. */
+async function initPixi() {
+  Live2DModel.registerTicker(PIXI.Ticker)
   pixiApp = new PIXI.Application({
     view: canvasRef.value,
     width: petSize.value,
@@ -59,35 +85,13 @@ async function initPixi() {
     autoDensity: true,
     resolution: window.devicePixelRatio || 1,
   })
-
-  live2dModel = await Live2DModel.from(MODEL_PATH, { autoInteract: false })
-
-  // Guard against component unmounting while model was loading.
-  if (!mounted) {
-    live2dModel.destroy()
-    return
-  }
-
-  pixiApp.stage.addChild(live2dModel)
-
-  // Scale to fit canvas — Hiyori is a tall portrait model (~2300×4096); limit by height.
-  const scale = petSize.value / live2dModel.internalModel.originalHeight
-  live2dModel.scale.set(scale)
-  live2dModel.anchor.set(0.5, 0.5)
-  live2dModel.position.set(petSize.value / 2, petSize.value / 2)
-
-  // Play TapBody motion when the model's body hit area is tapped.
-  live2dModel.on('hit', (hitAreas) => {
-    if (hitAreas.includes('Body')) {
-      live2dModel.motion('TapBody', undefined, MotionPriority.NORMAL)
-    }
-  })
-
-  // Start idle animation loop.
-  live2dModel.motion('Idle', undefined, MotionPriority.IDLE)
+  await attachModel(modelPath.value)
 }
 
 onMounted(async () => {
+  // Kick off model list fetch in background; composable handles errors.
+  loadModels()
+
   // Phase 1: load position — isolated so PixiJS errors can't reset a successfully loaded position.
   try {
     await waitForRuntime()
@@ -127,6 +131,16 @@ onMounted(async () => {
   }
 })
 
+/** Watch modelPath and hot-reload the Live2D model when it changes. */
+watch(modelPath, async (path) => {
+  if (!pixiApp || !mounted) return
+  try {
+    await attachModel(path)
+  } catch (err) {
+    console.error('Live2DPet model reload failed:', err)
+  }
+})
+
 /**
  * watchPetState maps pet states to Live2D motions and expressions.
  * Only applied after the model is loaded (live2dModel is non-null).
@@ -136,24 +150,24 @@ watch(petState, (state) => {
   switch (state) {
     case 'thinking':
       live2dModel.motion('Idle', undefined, MotionPriority.NORMAL)
-      live2dModel.expression('f01') // 困惑
+      live2dModel.expression('f01')
       break
     case 'speaking':
       live2dModel.motion('TapBody', undefined, MotionPriority.FORCE)
-      live2dModel.expression('f02') // 开心
+      live2dModel.expression('f02')
       break
     case 'listening':
       live2dModel.motion('Idle', undefined, MotionPriority.NORMAL)
-      live2dModel.expression('f03') // 专注
+      live2dModel.expression('f03')
       break
     case 'error':
       live2dModel.motion('TapBody', undefined, MotionPriority.FORCE)
-      live2dModel.expression('f04') // 尴尬
+      live2dModel.expression('f04')
       break
     case 'idle':
     default:
       live2dModel.motion('Idle', undefined, MotionPriority.IDLE)
-      live2dModel.expression() // 默认表情
+      live2dModel.expression()
       break
   }
 })
