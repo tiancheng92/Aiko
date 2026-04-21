@@ -9,17 +9,20 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	chromem "github.com/philippgille/chromem-go"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"desktop-pet/internal/agent"
+	"desktop-pet/internal/agent/middleware"
 	"desktop-pet/internal/config"
 	"desktop-pet/internal/db"
 	"desktop-pet/internal/knowledge"
 	"desktop-pet/internal/llm"
 	"desktop-pet/internal/memory"
 	"desktop-pet/internal/skill"
+	internaltools "desktop-pet/internal/tools"
 )
 
 // App is the main application struct. All exported methods are Wails bindings.
@@ -30,6 +33,7 @@ type App struct {
 	cfg         *config.Config
 	vectorDB    *chromem.DB
 	shortMem    *memory.ShortStore
+	permStore   *internaltools.PermissionStore
 
 	// mu guards fields that may be replaced on config save while agent goroutines run.
 	mu          sync.RWMutex
@@ -61,6 +65,13 @@ func (a *App) startup(ctx context.Context) {
 	}
 
 	a.shortMem = memory.NewShortStore(a.sqlDB)
+
+	a.permStore = internaltools.NewPermissionStore(a.sqlDB)
+	// Ensure all built-in tools have rows in tool_permissions.
+	toolsCtx := context.Background()
+	for _, t := range internaltools.All() {
+		_ = a.permStore.EnsureRow(toolsCtx, t)
+	}
 
 	vectorPath := filepath.Join(dataDir, "vectors")
 	a.vectorDB, err = chromem.NewPersistentDB(vectorPath, false)
@@ -117,12 +128,22 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		}
 	}
 
-	skills, err := skill.LoadAll(a.cfg.SkillsDir)
+	// Built-in tools + skill tools
+	builtinTools := internaltools.AllEino(a.permStore)
+	skillTools, err := skill.LoadAll(a.cfg.SkillsDir)
 	if err != nil {
 		return fmt.Errorf("load skills: %w", err)
 	}
+	allTools := append(builtinTools, skillTools...)
 
-	newAgent, err := agent.New(ctx, chatModel, a.shortMem, longMem, skills, a.cfg)
+	// Middleware chain: logging -> retry -> error recovery (outermost first)
+	mw := middleware.Chain(
+		middleware.Logging(),
+		middleware.Retry(3, 200*time.Millisecond),
+		middleware.ErrorRecovery(),
+	)
+
+	newAgent, err := agent.New(ctx, chatModel, a.shortMem, longMem, allTools, a.cfg, mw)
 	if err != nil {
 		return fmt.Errorf("new agent: %w", err)
 	}
@@ -280,4 +301,23 @@ func (a *App) GetScreenSize() []int {
 		}
 	}
 	return []int{screens[0].Size.Width, screens[0].Size.Height}
+}
+
+// GetToolPermissions returns all tool permission rows for the settings UI.
+func (a *App) GetToolPermissions() ([]internaltools.PermissionRow, error) {
+	return a.permStore.ListAll(a.ctx)
+}
+
+// SetToolPermission grants or revokes a tool permission.
+func (a *App) SetToolPermission(toolName string, granted bool) error {
+	if granted {
+		return a.permStore.Grant(a.ctx, toolName)
+	}
+	return a.permStore.Revoke(a.ctx, toolName)
+}
+
+// EmitPetState broadcasts a pet state change event to the frontend.
+// Valid states: "idle", "thinking", "speaking", "listening", "error".
+func (a *App) EmitPetState(state string) {
+	wailsruntime.EventsEmit(a.ctx, "pet:state:change", state)
 }

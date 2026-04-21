@@ -11,6 +11,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 
+	"desktop-pet/internal/agent/middleware"
 	"desktop-pet/internal/config"
 	"desktop-pet/internal/memory"
 )
@@ -40,7 +41,12 @@ func New(
 	longMem *memory.LongStore,
 	tools []tool.BaseTool,
 	cfg *config.Config,
+	mw middleware.Middleware,
 ) (*Agent, error) {
+	// Apply middleware chain to all tools if provided.
+	if mw != nil && len(tools) > 0 {
+		tools = middleware.WrapAll(tools, mw)
+	}
 	agentCfg := &adk.ChatModelAgentConfig{
 		Name:          "desktop-pet",
 		Description:   "A desktop pet AI assistant",
