@@ -1,14 +1,15 @@
 <script setup>
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import ChatPanel from './ChatPanel.vue'
 import SettingsPanel from './SettingsPanel.vue'
+import ContextMenu from './ContextMenu.vue'
 
 const props = defineProps({
   tab:      String,
   ballPos:  { type: Object, default: () => ({ x: -1, y: -1 }) },
   ballSize: { type: Number, default: 64 },
 })
-const emit = defineEmits(['update:tab', 'close'])
+const emit = defineEmits(['update:tab', 'close', 'open-settings'])
 
 // Mirror CSS clamp so the JS position matches the rendered size exactly.
 const bubbleW = computed(() => Math.min(480, Math.max(320, window.innerWidth  * 0.22)))
@@ -31,10 +32,26 @@ function setTab(t) { emit('update:tab', t) }
 
 /** onSaved handles settings save by switching back to chat. */
 function onSaved() { emit('update:tab', 'chat') }
+
+const chatMenuRef = ref(null)
+const chatMenuItems = computed(() => [
+  { icon: '🗑️', label: '清空聊天历史', action: clearHistory },
+  { divider: true },
+  { icon: '⚙️', label: '打开设置', action: () => emit('open-settings') },
+])
+
+/** clearHistory clears the chat history display (frontend-only). */
+function clearHistory() {}
+
+/** onBubbleContextMenu shows the chat bubble right-click menu. */
+function onBubbleContextMenu(e) {
+  e.preventDefault()
+  chatMenuRef.value?.show(e.clientX, e.clientY)
+}
 </script>
 
 <template>
-  <div class="chat-bubble" :style="{ left: pos.x + 'px', top: pos.y + 'px' }">
+  <div class="chat-bubble" :style="{ left: pos.x + 'px', top: pos.y + 'px' }" @contextmenu="onBubbleContextMenu">
     <div class="tab-bar">
       <button :class="{ active: tab === 'chat' }" @click="setTab('chat')">聊天</button>
       <button :class="{ active: tab === 'settings' }" @click="setTab('settings')">设置</button>
@@ -44,6 +61,7 @@ function onSaved() { emit('update:tab', 'chat') }
       <ChatPanel v-if="tab === 'chat'" />
       <SettingsPanel v-else @saved="onSaved" />
     </div>
+    <ContextMenu ref="chatMenuRef" :items="chatMenuItems" />
   </div>
 </template>
 

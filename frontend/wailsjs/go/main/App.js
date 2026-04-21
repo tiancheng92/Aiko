@@ -6,6 +6,10 @@ export function DeleteKnowledgeSource(arg1) {
   return window['go']['main']['App']['DeleteKnowledgeSource'](arg1);
 }
 
+export function EmitPetState(arg1) {
+  return window['go']['main']['App']['EmitPetState'](arg1);
+}
+
 export function GetBallPosition(arg1, arg2) {
   return window['go']['main']['App']['GetBallPosition'](arg1, arg2);
 }
@@ -20,6 +24,10 @@ export function GetMessages(arg1) {
 
 export function GetScreenSize() {
   return window['go']['main']['App']['GetScreenSize']();
+}
+
+export function GetToolPermissions() {
+  return window['go']['main']['App']['GetToolPermissions']();
 }
 
 export function ImportKnowledge(arg1) {
@@ -48,6 +56,10 @@ export function SaveConfig(arg1) {
 
 export function SendMessage(arg1) {
   return window['go']['main']['App']['SendMessage'](arg1);
+}
+
+export function SetToolPermission(arg1, arg2) {
+  return window['go']['main']['App']['SetToolPermission'](arg1, arg2);
 }
 
 export function ToggleBubble() {
