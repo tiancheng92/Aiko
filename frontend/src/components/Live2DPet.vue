@@ -72,26 +72,42 @@ async function initPixi() {
 }
 
 onMounted(async () => {
+  // Phase 1: load position — isolated so PixiJS errors can't reset a successfully loaded position.
   try {
     await waitForRuntime()
-    const [screenW, screenH] = await GetScreenSize()
-    sw.value = screenW
-    sh.value = screenH
-    petSize.value = Math.min(320, Math.max(180, Math.round(screenH * 0.20)))
+    // Fallback to window dimensions so sw/sh are never 0 if the Go call fails.
+    sw.value = window.innerWidth
+    sh.value = window.innerHeight
+    try {
+      const [screenW, screenH] = await GetScreenSize()
+      if (screenW > 0 && screenH > 0) {
+        sw.value = screenW
+        sh.value = screenH
+      }
+    } catch (e) {
+      console.warn('GetScreenSize failed, using window dimensions', e)
+    }
+    petSize.value = Math.min(320, Math.max(180, Math.round(sh.value * 0.20)))
     emit('ball-size', petSize.value)
 
-    const [bx, by] = await GetBallPosition(screenW, screenH)
+    const [bx, by] = await GetBallPosition(sw.value, sh.value)
     pos.value = (bx >= 0 && by >= 0)
       ? { x: bx, y: by }
-      : { x: screenW - petSize.value - 40, y: screenH - petSize.value - 40 }
+      : { x: sw.value - petSize.value - 40, y: sh.value - petSize.value - 40 }
+  } catch (err) {
+    console.error('Live2DPet position init failed:', err)
+    if (!sw.value) sw.value = window.innerWidth
+    if (!sh.value) sh.value = window.innerHeight
+    const ps = petSize.value
+    if (!pos.value) pos.value = { x: window.innerWidth - ps - 40, y: window.innerHeight - ps - 40 }
+  }
 
-    // Wait for Vue to render the canvas element before passing it to PixiJS.
-    await nextTick()
+  // Phase 2: initialize PixiJS — separate try/catch so errors here don't affect saved position.
+  await nextTick()
+  try {
     await initPixi()
   } catch (err) {
-    console.error('Live2DPet init:', err)
-    const ps = petSize.value
-    pos.value = { x: window.innerWidth - ps - 40, y: window.innerHeight - ps - 40 }
+    console.error('Live2DPet PixiJS init failed:', err)
   }
 })
 
