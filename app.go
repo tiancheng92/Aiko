@@ -182,6 +182,11 @@ func (a *App) DeleteKnowledgeSource(source string) error {
 	return a.knowledgeSt.DeleteBySource(a.ctx, source)
 }
 
+// ToggleBubble emits the bubble:toggle event to open/close the chat bubble.
+func (a *App) ToggleBubble() {
+	wailsruntime.EventsEmit(a.ctx, "bubble:toggle")
+}
+
 // GetScreenSize returns the primary screen's width and height in pixels.
 func (a *App) GetScreenSize() (int, int) {
 	screens, err := wailsruntime.ScreenGetAll(a.ctx)

@@ -4,33 +4,49 @@ import (
 	"embed"
 
 	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/menu"
+	"github.com/wailsapp/wails/v2/pkg/menu/keys"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
+	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 //go:embed all:frontend/dist
 var assets embed.FS
 
 func main() {
-	// Create an instance of the app structure
 	app := NewApp()
 
-	// Create application with options
+	appMenu := menu.NewMenu()
+	appMenu.Append(menu.AppMenu())
+	toggleItem := appMenu.AddText("Toggle Pet", keys.Combo("p", keys.CmdOrCtrlKey, keys.ShiftKey), func(_ *menu.CallbackData) {
+		wailsruntime.EventsEmit(app.ctx, "bubble:toggle")
+	})
+	_ = toggleItem
+
 	err := wails.Run(&options.App{
-		Title:  "desktop-pet",
-		Width:  1024,
-		Height: 768,
-		AssetServer: &assetserver.Options{
-			Assets: assets,
-		},
-		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
+		Title:            "Desktop Pet",
+		Width:            1,
+		Height:           1,
+		Frameless:        true,
+		AlwaysOnTop:      true,
+		BackgroundColour: &options.RGBA{R: 0, G: 0, B: 0, A: 0},
+		Menu:             appMenu,
+		AssetServer:      &assetserver.Options{Assets: assets},
 		OnStartup:        app.startup,
-		Bind: []interface{}{
-			app,
+		Bind:             []interface{}{app},
+		Mac: &mac.Options{
+			TitleBar:             mac.TitleBarHiddenInset(),
+			WebviewIsTransparent: true,
+			WindowIsTranslucent:  true,
+			About: &mac.AboutInfo{
+				Title:   "Desktop Pet",
+				Message: "Your AI companion on the desktop",
+			},
 		},
 	})
-
 	if err != nil {
-		println("Error:", err.Error())
+		panic(err)
 	}
 }
