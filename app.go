@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -23,8 +24,11 @@ func NewApp() *App { return &App{} }
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	dataDir := filepath.Join(os.Getenv("HOME"), ".desktop-pet")
-	var err error
+	home, err := os.UserHomeDir()
+	if err != nil {
+		panic(fmt.Errorf("get home dir: %w", err))
+	}
+	dataDir := filepath.Join(home, ".desktop-pet")
 	a.sqlDB, err = db.Open(dataDir)
 	if err != nil {
 		panic(err)

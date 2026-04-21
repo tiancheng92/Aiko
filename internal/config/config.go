@@ -2,7 +2,6 @@ package config
 
 import (
 	"database/sql"
-	"errors"
 	"strconv"
 )
 
@@ -42,6 +41,9 @@ func (s *Store) Load() (*Config, error) {
 		}
 		m[k] = v
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
 	cfg := &Config{
 		LLMBaseURL:     m["llm_base_url"],
@@ -74,15 +76,20 @@ func (s *Store) Save(cfg *Config) error {
 		"ball_position_x":  strconv.Itoa(cfg.BallPositionX),
 		"ball_position_y":  strconv.Itoa(cfg.BallPositionY),
 	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 	for k, v := range pairs {
-		if _, err := s.db.Exec(
+		if _, err := tx.Exec(
 			`INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
 			k, v,
 		); err != nil {
 			return err
 		}
 	}
-	return nil
+	return tx.Commit()
 }
 
 // MissingRequired returns names of required fields that are empty.
@@ -120,5 +127,3 @@ func orDefault(s, def string) string {
 	return s
 }
 
-// ErrMissingRequired is returned when required config is absent.
-var ErrMissingRequired = errors.New("required config missing")
