@@ -71,6 +71,19 @@ func (a *App) startup(ctx context.Context) {
 			fmt.Fprintf(os.Stderr, "init llm components: %v\n", err)
 		}
 	}
+
+	// Resize window to cover the full primary screen so position:fixed
+	// coordinates in the WebView map to real screen coordinates.
+	screens, err := wailsruntime.ScreenGetAll(ctx)
+	if err == nil {
+		for _, s := range screens {
+			if s.IsPrimary {
+				wailsruntime.WindowSetSize(ctx, s.Size.Width, s.Size.Height)
+				wailsruntime.WindowSetPosition(ctx, 0, 0)
+				break
+			}
+		}
+	}
 }
 
 // initLLMComponents initializes chat model, embedder, memory stores, skills, and agent.

@@ -26,8 +26,8 @@ func main() {
 
 	err := wails.Run(&options.App{
 		Title:            "Desktop Pet",
-		Width:            1,
-		Height:           1,
+		Width:            1440,
+		Height:           900,
 		Frameless:        true,
 		AlwaysOnTop:      true,
 		BackgroundColour: &options.RGBA{R: 0, G: 0, B: 0, A: 0},
