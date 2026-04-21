@@ -214,6 +214,14 @@ func (a *App) DeleteKnowledgeSource(source string) error {
 	return ks.DeleteBySource(a.ctx, source)
 }
 
+// OpenFileDialog opens a native file picker and returns the selected path.
+func (a *App) OpenFileDialog(title string, filters []wailsruntime.FileFilter) (string, error) {
+	return wailsruntime.OpenFileDialog(a.ctx, wailsruntime.OpenDialogOptions{
+		Title:   title,
+		Filters: filters,
+	})
+}
+
 // ToggleBubble emits the bubble:toggle event to open/close the chat bubble.
 func (a *App) ToggleBubble() {
 	wailsruntime.EventsEmit(a.ctx, "bubble:toggle")

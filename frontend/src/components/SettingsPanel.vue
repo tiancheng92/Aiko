@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { GetConfig, SaveConfig, ImportKnowledge, ListKnowledgeSources, DeleteKnowledgeSource } from '../../wailsjs/go/main/App'
-import { EventsOn, OpenFileDialog } from '../../wailsjs/runtime/runtime'
+import { GetConfig, SaveConfig, ImportKnowledge, ListKnowledgeSources, DeleteKnowledgeSource, OpenFileDialog } from '../../wailsjs/go/main/App'
+import { EventsOn } from '../../wailsjs/runtime/runtime'
 
 const emit = defineEmits(['saved'])
 const cfg = ref({
@@ -40,9 +40,7 @@ async function save() {
 
 /** importFile opens a file picker and imports the selected document into the knowledge base. */
 async function importFile() {
-  const path = await OpenFileDialog({
-    Filters: [{ DisplayName: '文档', Pattern: '*.txt;*.md;*.pdf;*.epub' }]
-  })
+  const path = await OpenFileDialog('选择文档', [{ DisplayName: '文档', Pattern: '*.txt;*.md;*.pdf;*.epub' }])
   if (!path) return
   importProgress.value = { Source: path, Total: 0, Processed: 0 }
   try {
