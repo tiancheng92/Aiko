@@ -20,10 +20,9 @@ func main() {
 
 	appMenu := menu.NewMenu()
 	appMenu.Append(menu.AppMenu())
-	toggleItem := appMenu.AddText("Toggle Pet", keys.Combo("p", keys.CmdOrCtrlKey, keys.ShiftKey), func(_ *menu.CallbackData) {
+	appMenu.AddText("Toggle Pet", keys.Combo("p", keys.CmdOrCtrlKey, keys.ShiftKey), func(_ *menu.CallbackData) {
 		wailsruntime.EventsEmit(app.ctx, "bubble:toggle")
 	})
-	_ = toggleItem
 
 	err := wails.Run(&options.App{
 		Title:            "Desktop Pet",
@@ -35,7 +34,7 @@ func main() {
 		Menu:             appMenu,
 		AssetServer:      &assetserver.Options{Assets: assets},
 		OnStartup:        app.startup,
-		Bind:             []interface{}{app},
+		Bind:             []any{app},
 		Mac: &mac.Options{
 			TitleBar:             mac.TitleBarHiddenInset(),
 			WebviewIsTransparent: true,
