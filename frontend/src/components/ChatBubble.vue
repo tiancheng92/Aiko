@@ -1,15 +1,14 @@
 <script setup>
 import { ref, computed } from 'vue'
 import ChatPanel from './ChatPanel.vue'
-import SettingsPanel from './SettingsPanel.vue'
 import ContextMenu from './ContextMenu.vue'
+import { EventsEmit } from '../../wailsjs/runtime/runtime'
 
 const props = defineProps({
-  tab:      String,
   ballPos:  { type: Object, default: () => ({ x: -1, y: -1 }) },
   ballSize: { type: Number, default: 64 },
 })
-const emit = defineEmits(['update:tab', 'close', 'open-settings'])
+const emit = defineEmits(['close', 'open-settings'])
 
 // Mirror CSS clamp so the JS position matches the rendered size exactly.
 const bubbleW = computed(() => Math.min(480, Math.max(320, window.innerWidth  * 0.22)))
@@ -27,12 +26,6 @@ const pos = computed(() => {
   }
 })
 
-/** setTab switches the active tab. */
-function setTab(t) { emit('update:tab', t) }
-
-/** onSaved handles settings save by switching back to chat. */
-function onSaved() { emit('update:tab', 'chat') }
-
 const chatMenuRef = ref(null)
 const chatMenuItems = computed(() => [
   { icon: '🗑️', label: '清空聊天历史', action: clearHistory },
@@ -40,8 +33,10 @@ const chatMenuItems = computed(() => [
   { icon: '⚙️', label: '打开设置', action: () => emit('open-settings') },
 ])
 
-/** clearHistory clears the chat history display (frontend-only). */
-function clearHistory() {}
+/** clearHistory broadcasts a clear event to ChatPanel. */
+function clearHistory() {
+  EventsEmit('chat:clear')
+}
 
 /** onBubbleContextMenu shows the chat bubble right-click menu. */
 function onBubbleContextMenu(e) {
@@ -52,14 +47,12 @@ function onBubbleContextMenu(e) {
 
 <template>
   <div class="chat-bubble" :style="{ left: pos.x + 'px', top: pos.y + 'px' }" @contextmenu="onBubbleContextMenu">
-    <div class="tab-bar">
-      <button :class="{ active: tab === 'chat' }" @click="setTab('chat')">聊天</button>
-      <button :class="{ active: tab === 'settings' }" @click="setTab('settings')">设置</button>
+    <div class="title-bar">
+      <span class="title">聊天</span>
       <button class="close-btn" @click="$emit('close')">✕</button>
     </div>
     <div class="content">
-      <ChatPanel v-if="tab === 'chat'" />
-      <SettingsPanel v-else @saved="onSaved" />
+      <ChatPanel />
     </div>
     <ContextMenu ref="chatMenuRef" :items="chatMenuItems" />
   </div>
@@ -78,23 +71,17 @@ function onBubbleContextMenu(e) {
   z-index: 9998;
   overflow: hidden;
 }
-.tab-bar {
+.title-bar {
   display: flex;
+  align-items: center;
   background: #1f2937;
   border-bottom: 1px solid #374151;
   padding: 0 8px;
   flex-shrink: 0;
   user-select: none;
 }
-.tab-bar button {
-  background: none;
-  border: none;
-  color: #9ca3af;
-  padding: 10px 14px;
-  cursor: pointer;
-  font-size: 13px;
-}
-.tab-bar button.active { color: #f9fafb; border-bottom: 2px solid #4f46e5; }
-.close-btn { margin-left: auto; color: #6b7280 !important; }
+.title { flex: 1; color: #f9fafb; font-size: 13px; font-weight: 600; padding: 10px 6px; }
+.close-btn { background: none; border: none; color: #6b7280; padding: 10px 8px; cursor: pointer; font-size: 13px; }
+.close-btn:hover { color: #f9fafb; }
 .content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
 </style>

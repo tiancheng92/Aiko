@@ -8,12 +8,14 @@ const input = ref('')
 const loading = ref(false)
 const messagesEl = ref(null)
 
-let offToken, offDone, offError
+let offToken, offDone, offError, offClear
 
 onMounted(async () => {
   const history = await GetMessages(50)
   messages.value = (history || []).map(m => ({ role: m.Role, content: m.Content }))
   scrollToBottom()
+
+  offClear = EventsOn('chat:clear', () => { messages.value = [] })
 
   offToken = EventsOn('chat:token', (token) => {
     const idx = messages.value.length - 1
@@ -41,7 +43,7 @@ onMounted(async () => {
   })
 })
 
-onUnmounted(() => { offToken?.(); offDone?.(); offError?.() })
+onUnmounted(() => { offToken?.(); offDone?.(); offError?.(); offClear?.() })
 
 /** send submits the current input as a user message. */
 async function send() {

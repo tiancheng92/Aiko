@@ -3,6 +3,7 @@ import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import * as PIXI from 'pixi.js'
 import { Live2DModel, MotionPriority } from 'pixi-live2d-display/cubism4'
 import { GetBallPosition, SaveBallPosition, GetScreenSize } from '../../wailsjs/go/main/App'
+import { Quit } from '../../wailsjs/runtime/runtime'
 import { usePetState } from '../composables/usePetState.js'
 import ContextMenu from './ContextMenu.vue'
 
@@ -16,7 +17,7 @@ const petMenuRef = ref(null)
 const petMenuItems = [
   { icon: '⚙️', label: '打开设置', action: () => emit('open-settings') },
   { divider: true },
-  { icon: '❌', label: '退出程序', action: () => window.go?.main?.App?.Quit?.() },
+  { icon: '❌', label: '退出程序', action: () => Quit() },
 ]
 
 /** onContextMenu shows the pet right-click menu. */

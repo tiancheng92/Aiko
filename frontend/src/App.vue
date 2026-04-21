@@ -8,7 +8,6 @@ import { EventsOn } from '../wailsjs/runtime/runtime'
 
 const bubbleOpen = ref(false)
 const settingsOpen = ref(false)
-const activeTab = ref('chat')
 const ballPos  = ref({ x: -1, y: -1 })
 const ballSize = ref(160)
 let offToggle
@@ -51,7 +50,6 @@ function openSettings() {
   />
   <ChatBubble
     v-if="bubbleOpen"
-    v-model:tab="activeTab"
     :ball-pos="ballPos"
     :ball-size="ballSize"
     @close="bubbleOpen = false"
