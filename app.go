@@ -289,11 +289,6 @@ func (a *App) OpenFileDialog(title string, filters []wailsruntime.FileFilter) (s
 	})
 }
 
-// ToggleBubble emits the bubble:toggle event to open/close the chat bubble.
-func (a *App) ToggleBubble() {
-	wailsruntime.EventsEmit(a.ctx, "bubble:toggle")
-}
-
 // GetScreenSize returns the primary screen's [width, height] in pixels.
 func (a *App) GetScreenSize() []int {
 	screens, err := wailsruntime.ScreenGetAll(a.ctx)
@@ -319,12 +314,6 @@ func (a *App) SetToolPermission(toolName string, granted bool) error {
 		return a.permStore.Grant(a.ctx, toolName)
 	}
 	return a.permStore.Revoke(a.ctx, toolName)
-}
-
-// EmitPetState broadcasts a pet state change event to the frontend.
-// Valid states: "idle", "thinking", "speaking", "listening", "error".
-func (a *App) EmitPetState(state string) {
-	wailsruntime.EventsEmit(a.ctx, "pet:state:change", state)
 }
 
 // ClearChatHistory deletes all short-term messages from SQLite and all

@@ -17,10 +17,6 @@ type Config struct {
 	ShortTermLimit int
 	SkillsDir      string
 	Hotkey         string
-	BallPositionX    int
-	BallPositionY    int
-	BubblePositionX  int
-	BubblePositionY  int
 }
 
 type Store struct{ db *sql.DB }
@@ -60,10 +56,6 @@ func (s *Store) Load() (*Config, error) {
 	}
 	cfg.EmbeddingDim = parseInt(m["embedding_dim"], 1536)
 	cfg.ShortTermLimit = parseInt(m["short_term_limit"], 30)
-	cfg.BallPositionX   = parseInt(m["ball_position_x"], -1)
-	cfg.BallPositionY   = parseInt(m["ball_position_y"], -1)
-	cfg.BubblePositionX = parseInt(m["bubble_position_x"], -1)
-	cfg.BubblePositionY = parseInt(m["bubble_position_y"], -1)
 	return cfg, nil
 }
 
@@ -79,11 +71,7 @@ func (s *Store) Save(cfg *Config) error {
 		"short_term_limit": strconv.Itoa(cfg.ShortTermLimit),
 		"skills_dir":       cfg.SkillsDir,
 		"hotkey":           cfg.Hotkey,
-		"ball_position_x":    strconv.Itoa(cfg.BallPositionX),
-		"ball_position_y":    strconv.Itoa(cfg.BallPositionY),
-		"bubble_position_x":  strconv.Itoa(cfg.BubblePositionX),
-		"bubble_position_y":  strconv.Itoa(cfg.BubblePositionY),
-		"live2d_model":  cfg.Live2DModel,
+		"live2d_model":     cfg.Live2DModel,
 	}
 	tx, err := s.db.Begin()
 	if err != nil {
