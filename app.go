@@ -113,10 +113,10 @@ func (a *App) GetConfig() *config.Config { return a.cfg }
 
 // SaveConfig persists updated config and reinitializes LLM components.
 func (a *App) SaveConfig(cfg *config.Config) error {
-	a.cfg = cfg
 	if err := a.configStore.Save(cfg); err != nil {
 		return err
 	}
+	a.cfg = cfg
 	return a.initLLMComponents(a.ctx)
 }
 
@@ -144,6 +144,8 @@ func (a *App) SendMessage(userInput string) error {
 			}
 			wailsruntime.EventsEmit(a.ctx, "chat:token", result.Token)
 		}
+		// Fallback: ensure frontend unblocks if channel closes without a terminal result.
+		wailsruntime.EventsEmit(a.ctx, "chat:done", "")
 	}()
 	return nil
 }
@@ -186,5 +188,5 @@ func (a *App) GetScreenSize() (int, int) {
 	if err != nil || len(screens) == 0 {
 		return 1440, 900
 	}
-	return screens[0].Width, screens[0].Height
+	return screens[0].Size.Width, screens[0].Size.Height
 }
