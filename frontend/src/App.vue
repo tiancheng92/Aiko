@@ -1,21 +1,33 @@
 <script setup>
-import HelloWorld from './components/HelloWorld.vue'</script>
+import { ref, onMounted } from 'vue'
+import FloatingBall from './components/FloatingBall.vue'
+import ChatBubble from './components/ChatBubble.vue'
+import { MissingRequiredConfig } from '../wailsjs/go/main/App'
+import { EventsOn } from '../wailsjs/runtime/runtime'
+
+const bubbleOpen = ref(false)
+const activeTab = ref('chat')
+
+onMounted(async () => {
+  const missing = await MissingRequiredConfig()
+  if (missing && missing.length > 0) {
+    activeTab.value = 'settings'
+    bubbleOpen.value = true
+  }
+  EventsOn('bubble:toggle', () => { bubbleOpen.value = !bubbleOpen.value })
+})
+
+/** toggleBubble flips the bubble open/close state. */
+function toggleBubble() {
+  bubbleOpen.value = !bubbleOpen.value
+}
+</script>
 
 <template>
-  <img id="logo" alt="Wails logo" src="./assets/images/logo-universal.png"/>
-  <HelloWorld/>
+  <FloatingBall @click="toggleBubble" />
+  <ChatBubble
+    v-if="bubbleOpen"
+    v-model:tab="activeTab"
+    @close="bubbleOpen = false"
+  />
 </template>
-
-<style>
-#logo {
-  display: block;
-  width: 50%;
-  height: 50%;
-  margin: auto;
-  padding: 10% 0 0;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: 100% 100%;
-  background-origin: content-box;
-}
-</style>
