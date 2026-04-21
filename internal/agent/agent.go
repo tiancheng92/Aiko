@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log"
+	"strings"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/model"
@@ -34,7 +35,7 @@ type Agent struct {
 // not configured.
 func New(
 	ctx context.Context,
-	chatModel model.BaseChatModel,
+	chatModel model.ToolCallingChatModel,
 	shortMem *memory.ShortStore,
 	longMem *memory.LongStore,
 	tools []tool.BaseTool,
@@ -85,7 +86,7 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 		defer close(ch)
 
 		// Prepend recent history as context to the query.
-		history, err := a.buildHistoryPrefix(ctx)
+		history, err := a.buildHistoryPrefix(ctx, userInput)
 		if err != nil {
 			ch <- StreamResult{Err: err}
 			return
@@ -98,7 +99,7 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 
 		iter := a.runner.Query(ctx, query)
 
-		var fullResponse string
+		var sb strings.Builder
 		for {
 			event, ok := iter.Next()
 			if !ok {
@@ -126,14 +127,15 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 					}
 					if msg != nil && msg.Content != "" {
 						ch <- StreamResult{Token: msg.Content}
-						fullResponse += msg.Content
+						sb.WriteString(msg.Content)
 					}
 				}
 			} else if mo.Message != nil && mo.Message.Content != "" {
 				ch <- StreamResult{Token: mo.Message.Content}
-				fullResponse += mo.Message.Content
+				sb.WriteString(mo.Message.Content)
 			}
 		}
+		fullResponse := sb.String()
 
 		ch <- StreamResult{Done: true}
 
@@ -146,7 +148,8 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 
 // buildHistoryPrefix returns recent conversation history as a formatted string.
 // Returns empty string if no history exists or an error occurs.
-func (a *Agent) buildHistoryPrefix(ctx context.Context) (string, error) {
+// userInput is used as the semantic query for long-term memory retrieval.
+func (a *Agent) buildHistoryPrefix(ctx context.Context, userInput string) (string, error) {
 	if a.shortMem == nil {
 		return "", nil
 	}
@@ -154,17 +157,21 @@ func (a *Agent) buildHistoryPrefix(ctx context.Context) (string, error) {
 	// Also inject relevant long-term memories if available.
 	var longMemContext string
 	if a.longMem != nil {
-		results, err := a.longMem.Search(ctx, "conversation context", 3)
+		results, err := a.longMem.Search(ctx, userInput, 3)
 		if err == nil && len(results) > 0 {
-			longMemContext = "Relevant past context:\n"
+			var lmb strings.Builder
+			lmb.WriteString("Relevant past context:\n")
 			for _, r := range results {
-				longMemContext += r + "\n"
+				lmb.WriteString(r)
+				lmb.WriteByte('\n')
 			}
+			longMemContext = lmb.String()
 		}
 	}
 
 	recent, err := a.shortMem.Recent(a.cfg.ShortTermLimit)
 	if err != nil {
+		log.Printf("short memory Recent error: %v", err)
 		return longMemContext, nil
 	}
 
