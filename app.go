@@ -342,3 +342,27 @@ func (a *App) ClearChatHistory() error {
 	}
 	return nil
 }
+
+// GetAvailableModels returns a list of available Live2D model names by
+// scanning subdirectories of the bundled live2d assets directory.
+// The special "core" directory is excluded.
+func (a *App) GetAvailableModels() []string {
+	// Wails serves static files from frontend/public; at runtime the
+	// WebView root maps to that directory, but the Go process needs the
+	// filesystem path. We locate it relative to the executable's working dir.
+	base := "frontend/public/live2d"
+	entries, err := os.ReadDir(base)
+	if err != nil {
+		return []string{"hiyori"}
+	}
+	var models []string
+	for _, e := range entries {
+		if e.IsDir() && e.Name() != "core" {
+			models = append(models, e.Name())
+		}
+	}
+	if len(models) == 0 {
+		return []string{"hiyori"}
+	}
+	return models
+}

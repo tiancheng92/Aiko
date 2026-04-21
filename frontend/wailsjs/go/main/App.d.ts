@@ -11,6 +11,8 @@ export function DeleteKnowledgeSource(arg1:string):Promise<void>;
 
 export function EmitPetState(arg1:string):Promise<void>;
 
+export function GetAvailableModels():Promise<Array<string>>;
+
 export function GetBallPosition(arg1:number,arg2:number):Promise<Array<number>>;
 
 export function GetConfig():Promise<config.Config>;

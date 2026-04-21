@@ -14,6 +14,10 @@ export function EmitPetState(arg1) {
   return window['go']['main']['App']['EmitPetState'](arg1);
 }
 
+export function GetAvailableModels() {
+  return window['go']['main']['App']['GetAvailableModels']();
+}
+
 export function GetBallPosition(arg1, arg2) {
   return window['go']['main']['App']['GetBallPosition'](arg1, arg2);
 }

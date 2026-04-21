@@ -5,6 +5,7 @@ export namespace config {
 	    LLMAPIKey: string;
 	    LLMModel: string;
 	    EmbeddingModel: string;
+	    Live2DModel: string;
 	    EmbeddingDim: number;
 	    SystemPrompt: string;
 	    ShortTermLimit: number;
@@ -25,6 +26,7 @@ export namespace config {
 	        this.LLMAPIKey = source["LLMAPIKey"];
 	        this.LLMModel = source["LLMModel"];
 	        this.EmbeddingModel = source["EmbeddingModel"];
+	        this.Live2DModel = source["Live2DModel"];
 	        this.EmbeddingDim = source["EmbeddingDim"];
 	        this.SystemPrompt = source["SystemPrompt"];
 	        this.ShortTermLimit = source["ShortTermLimit"];
