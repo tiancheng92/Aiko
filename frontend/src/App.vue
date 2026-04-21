@@ -23,7 +23,10 @@ onMounted(async () => {
   await waitForRuntime()
   const missing = await MissingRequiredConfig()
   if (missing && missing.length > 0) {
-    settingsOpen.value = true
+    // Open the chat bubble first so the welcome message is visible,
+    // then open settings after a short delay so it doesn't cover the greeting.
+    bubbleOpen.value = true
+    setTimeout(() => { settingsOpen.value = true }, 1200)
   }
   offToggle = EventsOn('bubble:toggle', () => { bubbleOpen.value = !bubbleOpen.value })
 })
