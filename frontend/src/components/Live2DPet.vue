@@ -2,8 +2,8 @@
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import * as PIXI from 'pixi.js'
 import { Live2DModel, MotionPriority } from 'pixi-live2d-display/cubism4'
-import { GetBallPosition, SaveBallPosition, GetScreenSize } from '../../wailsjs/go/main/App'
-import { Quit } from '../../wailsjs/runtime/runtime'
+import { GetBallPosition, SaveBallPosition, GetScreenSize, GetConfig, SaveConfig } from '../../wailsjs/go/main/App'
+import { Quit, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { usePetState } from '../composables/usePetState.js'
 import { useModelPath } from '../composables/useModelPath.js'
 import ContextMenu from './ContextMenu.vue'
@@ -12,9 +12,43 @@ const emit = defineEmits(['click', 'position', 'ball-size', 'open-settings'])
 
 const pos = ref(null)
 const { petState } = usePetState()
-const { modelPath, loadModels } = useModelPath()
+const { currentModel, availableModels, modelPath, loadModels } = useModelPath()
 const petMenuRef = ref(null)
+
+// Expression cycle — index into a fixed list; pixi-live2d silently ignores unknown IDs.
+const EXPRESSIONS = ['f01', 'f02', 'f03', 'f04', 'f05']
+let exprIdx = 0
+
+/** cycleExpression advances the Live2D model to the next expression in rotation. */
+function cycleExpression() {
+  if (!live2dModel) return
+  exprIdx = (exprIdx + 1) % EXPRESSIONS.length
+  live2dModel.expression(EXPRESSIONS[exprIdx])
+}
+
+/** switchToNextModel cycles availableModels and persists the selection. */
+async function switchToNextModel() {
+  const models = availableModels.value
+  if (models.length <= 1) return
+  const idx = models.indexOf(currentModel.value)
+  const next = models[(idx + 1) % models.length]
+  // Emit immediately for instant visual feedback via the composable's EventsOn listener.
+  EventsEmit('config:model:changed', next)
+  try {
+    const cfg = await GetConfig()
+    if (cfg) {
+      cfg.Live2DModel = next
+      await SaveConfig(cfg)
+    }
+  } catch (e) {
+    console.warn('switchToNextModel: failed to save config', e)
+  }
+}
+
 const petMenuItems = [
+  { icon: '🎭', label: '切换表情', action: cycleExpression },
+  { icon: '👗', label: '更换模型', action: switchToNextModel },
+  { divider: true },
   { icon: '⚙️', label: '打开设置', action: () => emit('open-settings') },
   { divider: true },
   { icon: '❌', label: '退出程序', action: () => Quit() },
