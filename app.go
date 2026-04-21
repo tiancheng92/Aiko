@@ -347,11 +347,7 @@ func (a *App) ClearChatHistory() error {
 // scanning subdirectories of the bundled live2d assets directory.
 // The special "core" directory is excluded.
 func (a *App) GetAvailableModels() []string {
-	// Wails serves static files from frontend/public; at runtime the
-	// WebView root maps to that directory, but the Go process needs the
-	// filesystem path. We locate it relative to the executable's working dir.
-	base := "frontend/public/live2d"
-	entries, err := os.ReadDir(base)
+	entries, err := assets.ReadDir("frontend/dist/live2d")
 	if err != nil {
 		return []string{"hiyori"}
 	}
