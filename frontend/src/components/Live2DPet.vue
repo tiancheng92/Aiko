@@ -4,13 +4,26 @@ import * as PIXI from 'pixi.js'
 import { Live2DModel, MotionPriority } from 'pixi-live2d-display/cubism4'
 import { GetBallPosition, SaveBallPosition, GetScreenSize } from '../../wailsjs/go/main/App'
 import { usePetState } from '../composables/usePetState.js'
+import ContextMenu from './ContextMenu.vue'
 
 const MODEL_PATH = '/live2d/hiyori/Hiyori.model3.json'
 
-const emit = defineEmits(['click', 'position', 'ball-size'])
+const emit = defineEmits(['click', 'position', 'ball-size', 'open-settings'])
 
 const pos = ref(null)
 const { petState } = usePetState()
+const petMenuRef = ref(null)
+const petMenuItems = [
+  { icon: '⚙️', label: '打开设置', action: () => emit('open-settings') },
+  { divider: true },
+  { icon: '❌', label: '退出程序', action: () => window.go?.main?.App?.Quit?.() },
+]
+
+/** onContextMenu shows the pet right-click menu. */
+function onContextMenu(e) {
+  e.preventDefault()
+  petMenuRef.value?.show(e.clientX, e.clientY)
+}
 const canvasRef = ref(null)
 const petSize = ref(160)
 const sw = ref(0)
@@ -215,8 +228,10 @@ async function onMouseUp(e) {
     :style="{ left: pos.x + 'px', top: pos.y + 'px', width: petSize + 'px', height: petSize + 'px' }"
     @mousedown="onMouseDown"
     @mousemove="onCanvasMouseMove"
+    @contextmenu="onContextMenu"
   >
     <canvas ref="canvasRef" class="pet-canvas" />
+    <ContextMenu ref="petMenuRef" :items="petMenuItems" />
   </div>
 </template>
 
