@@ -81,3 +81,24 @@ export namespace memory {
 
 }
 
+export namespace tools {
+	
+	export class PermissionRow {
+	    ToolName: string;
+	    Level: string;
+	    Granted: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PermissionRow(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ToolName = source["ToolName"];
+	        this.Level = source["Level"];
+	        this.Granted = source["Granted"];
+	    }
+	}
+
+}
+
