@@ -387,7 +387,7 @@ func (a *App) ExportChatHistory() error {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("聊天记录导出 — %s\n\n", time.Now().Format("2006-01-02 15:04:05")))
+	fmt.Fprintf(&sb, "聊天记录导出 — %s\n\n", time.Now().Format("2006-01-02 15:04:05"))
 	for _, m := range msgs {
 		label := m.Role
 		switch m.Role {
@@ -396,7 +396,7 @@ func (a *App) ExportChatHistory() error {
 		case "assistant":
 			label = "宠物"
 		}
-		sb.WriteString(fmt.Sprintf("[%s] %s\n%s\n\n", m.CreatedAt, label, m.Content))
+		fmt.Fprintf(&sb, "[%s] %s\n%s\n\n", m.CreatedAt, label, m.Content)
 	}
 	return os.WriteFile(path, []byte(sb.String()), 0o644)
 }
