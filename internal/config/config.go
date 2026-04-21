@@ -83,7 +83,7 @@ func (s *Store) Save(cfg *Config) error {
 		"ball_position_y":    strconv.Itoa(cfg.BallPositionY),
 		"bubble_position_x":  strconv.Itoa(cfg.BubblePositionX),
 		"bubble_position_y":  strconv.Itoa(cfg.BubblePositionY),
-		"live2d_model":      cfg.Live2DModel,
+		"live2d_model":  cfg.Live2DModel,
 	}
 	tx, err := s.db.Begin()
 	if err != nil {
