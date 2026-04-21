@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -398,7 +399,10 @@ func (a *App) ExportChatHistory() error {
 		}
 		fmt.Fprintf(&sb, "[%s] %s\n%s\n\n", m.CreatedAt, label, m.Content)
 	}
-	return os.WriteFile(path, []byte(sb.String()), 0o644)
+	if err := os.WriteFile(path, []byte(sb.String()), 0o644); err != nil {
+		return fmt.Errorf("write file: %w", err)
+	}
+	return nil
 }
 
 // IsFirstLaunch reports whether the welcome message has never been shown.
@@ -406,7 +410,7 @@ func (a *App) IsFirstLaunch() bool {
 	var val string
 	err := a.sqlDB.QueryRowContext(a.ctx,
 		`SELECT value FROM settings WHERE key = 'welcome_shown'`).Scan(&val)
-	return err != nil // row absent ⇒ first launch
+	return errors.Is(err, sql.ErrNoRows)
 }
 
 // MarkWelcomeShown records that the welcome message has been displayed.
@@ -414,5 +418,8 @@ func (a *App) MarkWelcomeShown() error {
 	_, err := a.sqlDB.ExecContext(a.ctx,
 		`INSERT INTO settings(key, value) VALUES('welcome_shown','1')
 		 ON CONFLICT(key) DO UPDATE SET value='1'`)
-	return err
+	if err != nil {
+		return fmt.Errorf("mark welcome shown: %w", err)
+	}
+	return nil
 }
