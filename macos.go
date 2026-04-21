@@ -38,6 +38,9 @@ static void hitTestPoint(CGFloat cssX, CGFloat cssY) {
     [gWebView evaluateJavaScript:js completionHandler:^(id result, NSError *err) {
         BOOL interactive = !err && [result isEqual:@YES];
         dispatch_async(dispatch_get_main_queue(), ^{
+            // Never ignore events while the window is key (e.g. textarea has focus),
+            // otherwise keyboard shortcuts like Cmd+V are also swallowed.
+            if ([gWindow isKeyWindow]) return;
             [gWindow setIgnoresMouseEvents:!interactive];
         });
     }];
