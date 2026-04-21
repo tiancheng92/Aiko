@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import ChatPanel from './ChatPanel.vue'
 import ContextMenu from './ContextMenu.vue'
 import { EventsEmit } from '../../wailsjs/runtime/runtime'
+import { ExportChatHistory } from '../../wailsjs/go/main/App'
 
 const props = defineProps({
   ballPos:  { type: Object, default: () => ({ x: -1, y: -1 }) },
@@ -28,6 +29,7 @@ const pos = computed(() => {
 
 const chatMenuRef = ref(null)
 const chatMenuItems = computed(() => [
+  { icon: '💾', label: '导出聊天记录', action: exportHistory },
   { icon: '🗑️', label: '清空聊天历史', action: clearHistory },
   { divider: true },
   { icon: '⚙️', label: '打开设置', action: () => emit('open-settings') },
@@ -36,6 +38,15 @@ const chatMenuItems = computed(() => [
 /** clearHistory broadcasts a clear event to ChatPanel. */
 function clearHistory() {
   EventsEmit('chat:clear')
+}
+
+/** exportHistory opens a native save dialog and writes chat history to a file. */
+async function exportHistory() {
+  try {
+    await ExportChatHistory()
+  } catch (e) {
+    console.error('export chat history failed:', e)
+  }
 }
 
 /** onBubbleContextMenu shows the chat bubble right-click menu. */
