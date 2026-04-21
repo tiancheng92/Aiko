@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { SendMessage, GetMessages } from '../../wailsjs/go/main/App'
-import { EventsOn } from '../../wailsjs/runtime/runtime'
+import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 
 const messages = ref([])
 const input = ref('')
@@ -22,6 +22,7 @@ onMounted(async () => {
       messages.value[idx] = { ...last, content: last.content + token }
     } else {
       messages.value.push({ role: 'assistant', content: token, streaming: true })
+      EventsEmit('pet:state:change', 'speaking')
     }
     scrollToBottom()
   })
@@ -30,11 +31,13 @@ onMounted(async () => {
     const idx = messages.value.length - 1
     if (idx >= 0) messages.value[idx] = { ...messages.value[idx], streaming: false }
     loading.value = false
+    EventsEmit('pet:state:change', 'idle')
   })
 
   offError = EventsOn('chat:error', (err) => {
     messages.value.push({ role: 'system', content: '错误: ' + err })
     loading.value = false
+    EventsEmit('pet:state:change', 'error')
   })
 })
 
@@ -48,11 +51,13 @@ async function send() {
   loading.value = true
   messages.value.push({ role: 'user', content: text })
   scrollToBottom()
+  EventsEmit('pet:state:change', 'thinking')
   try {
     await SendMessage(text)
   } catch (e) {
     messages.value.push({ role: 'system', content: '发送失败: ' + e })
     loading.value = false
+    EventsEmit('pet:state:change', 'error')
   }
 }
 

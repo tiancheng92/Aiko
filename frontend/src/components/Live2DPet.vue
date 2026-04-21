@@ -3,12 +3,14 @@ import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import * as PIXI from 'pixi.js'
 import { Live2DModel, MotionPriority } from 'pixi-live2d-display/cubism4'
 import { GetBallPosition, SaveBallPosition, GetScreenSize } from '../../wailsjs/go/main/App'
+import { usePetState } from '../composables/usePetState.js'
 
 const MODEL_PATH = '/live2d/hiyori/Hiyori.model3.json'
 
 const emit = defineEmits(['click', 'position', 'ball-size'])
 
 const pos = ref(null)
+const { petState } = usePetState()
 const canvasRef = ref(null)
 const petSize = ref(160)
 const sw = ref(0)
@@ -108,6 +110,37 @@ onMounted(async () => {
     await initPixi()
   } catch (err) {
     console.error('Live2DPet PixiJS init failed:', err)
+  }
+})
+
+/**
+ * watchPetState maps pet states to Live2D motions and expressions.
+ * Only applied after the model is loaded (live2dModel is non-null).
+ */
+watch(petState, (state) => {
+  if (!live2dModel) return
+  switch (state) {
+    case 'thinking':
+      live2dModel.motion('Idle', undefined, MotionPriority.NORMAL)
+      live2dModel.expression('f01') // 困惑
+      break
+    case 'speaking':
+      live2dModel.motion('TapBody', undefined, MotionPriority.FORCE)
+      live2dModel.expression('f02') // 开心
+      break
+    case 'listening':
+      live2dModel.motion('Idle', undefined, MotionPriority.NORMAL)
+      live2dModel.expression('f03') // 专注
+      break
+    case 'error':
+      live2dModel.motion('TapBody', undefined, MotionPriority.FORCE)
+      live2dModel.expression('f04') // 尴尬
+      break
+    case 'idle':
+    default:
+      live2dModel.motion('Idle', undefined, MotionPriority.IDLE)
+      live2dModel.expression() // 默认表情
+      break
   }
 })
 
