@@ -8,34 +8,37 @@ const input = ref('')
 const loading = ref(false)
 const messagesEl = ref(null)
 
+let offToken, offDone, offError
+
 onMounted(async () => {
   const history = await GetMessages(50)
   messages.value = (history || []).map(m => ({ role: m.Role, content: m.Content }))
   scrollToBottom()
+
+  offToken = EventsOn('chat:token', (token) => {
+    const idx = messages.value.length - 1
+    const last = messages.value[idx]
+    if (last && last.role === 'assistant' && last.streaming) {
+      messages.value[idx] = { ...last, content: last.content + token }
+    } else {
+      messages.value.push({ role: 'assistant', content: token, streaming: true })
+    }
+    scrollToBottom()
+  })
+
+  offDone = EventsOn('chat:done', () => {
+    const idx = messages.value.length - 1
+    if (idx >= 0) messages.value[idx] = { ...messages.value[idx], streaming: false }
+    loading.value = false
+  })
+
+  offError = EventsOn('chat:error', (err) => {
+    messages.value.push({ role: 'system', content: '错误: ' + err })
+    loading.value = false
+  })
 })
 
-const offToken = EventsOn('chat:token', (token) => {
-  const last = messages.value[messages.value.length - 1]
-  if (last && last.role === 'assistant' && last.streaming) {
-    last.content += token
-  } else {
-    messages.value.push({ role: 'assistant', content: token, streaming: true })
-  }
-  scrollToBottom()
-})
-
-const offDone = EventsOn('chat:done', () => {
-  const last = messages.value[messages.value.length - 1]
-  if (last) last.streaming = false
-  loading.value = false
-})
-
-const offError = EventsOn('chat:error', (err) => {
-  messages.value.push({ role: 'system', content: '错误: ' + err })
-  loading.value = false
-})
-
-onUnmounted(() => { offToken(); offDone(); offError() })
+onUnmounted(() => { offToken?.(); offDone?.(); offError?.() })
 
 /** send submits the current input as a user message. */
 async function send() {

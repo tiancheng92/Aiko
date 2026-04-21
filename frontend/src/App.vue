@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import FloatingBall from './components/FloatingBall.vue'
 import ChatBubble from './components/ChatBubble.vue'
 import { MissingRequiredConfig } from '../wailsjs/go/main/App'
@@ -7,6 +7,7 @@ import { EventsOn } from '../wailsjs/runtime/runtime'
 
 const bubbleOpen = ref(false)
 const activeTab = ref('chat')
+let offToggle
 
 onMounted(async () => {
   const missing = await MissingRequiredConfig()
@@ -14,8 +15,10 @@ onMounted(async () => {
     activeTab.value = 'settings'
     bubbleOpen.value = true
   }
-  EventsOn('bubble:toggle', () => { bubbleOpen.value = !bubbleOpen.value })
+  offToggle = EventsOn('bubble:toggle', () => { bubbleOpen.value = !bubbleOpen.value })
 })
+
+onUnmounted(() => { offToggle?.() })
 
 /** toggleBubble flips the bubble open/close state. */
 function toggleBubble() {

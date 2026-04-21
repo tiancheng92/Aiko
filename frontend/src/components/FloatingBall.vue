@@ -41,16 +41,21 @@ function onMouseMove(e) {
 async function onMouseUp(e) {
   window.removeEventListener('mousemove', onMouseMove)
   window.removeEventListener('mouseup', onMouseUp)
-  if (!isDragging) {
-    emit('click')
-  } else {
-    const cfg = await GetConfig()
-    cfg.BallPositionX = Math.round(pos.value.x)
-    cfg.BallPositionY = Math.round(pos.value.y)
-    await SaveConfig(cfg)
+  try {
+    if (!isDragging) {
+      emit('click')
+    } else {
+      const cfg = await GetConfig()
+      cfg.BallPositionX = Math.round(pos.value.x)
+      cfg.BallPositionY = Math.round(pos.value.y)
+      await SaveConfig(cfg)
+    }
+  } catch (e) {
+    console.error('Failed to save ball position:', e)
+  } finally {
+    dragStart = null
+    isDragging = false
   }
-  dragStart = null
-  isDragging = false
 }
 </script>
 

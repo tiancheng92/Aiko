@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { GetConfig, SaveConfig, ImportKnowledge, ListKnowledgeSources, DeleteKnowledgeSource } from '../../wailsjs/go/main/App'
 import { EventsOn, OpenFileDialog } from '../../wailsjs/runtime/runtime'
 
@@ -20,7 +20,8 @@ onMounted(async () => {
   sources.value = await ListKnowledgeSources() || []
 })
 
-EventsOn('knowledge:progress', (p) => { importProgress.value = p })
+const offProgress = EventsOn('knowledge:progress', (p) => { importProgress.value = p })
+onUnmounted(() => offProgress())
 
 /** save persists the current config and emits saved on success. */
 async function save() {
