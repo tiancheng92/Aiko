@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import FloatingBall from './components/FloatingBall.vue'
+import Live2DPet from './components/Live2DPet.vue'
 import ChatBubble from './components/ChatBubble.vue'
 import { MissingRequiredConfig } from '../wailsjs/go/main/App'
 import { EventsOn } from '../wailsjs/runtime/runtime'
@@ -8,7 +8,7 @@ import { EventsOn } from '../wailsjs/runtime/runtime'
 const bubbleOpen = ref(false)
 const activeTab = ref('chat')
 const ballPos  = ref({ x: -1, y: -1 })
-const ballSize = ref(64)
+const ballSize = ref(160)
 let offToggle
 
 /** waitForRuntime polls until the Wails Go bridge is available. */
@@ -37,7 +37,7 @@ function toggleBubble() {
 </script>
 
 <template>
-  <FloatingBall
+  <Live2DPet
     @click="toggleBubble"
     @position="p => ballPos = p"
     @ball-size="s => ballSize = s"
