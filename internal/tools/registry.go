@@ -15,8 +15,10 @@ func All() []Tool {
 	return []Tool{
 		&GetCurrentTimeTool{},
 		&GetTimezoneTool{},
+		&FormatTimeTool{},
 		&GetOSInfoTool{},
 		&GetHardwareInfoTool{},
+		&GetNetworkStatusTool{},
 	}
 }
 

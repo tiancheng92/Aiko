@@ -39,3 +39,22 @@ func (t *GetTimezoneTool) Execute(_ context.Context, _ map[string]any) ToolResul
 		Content: fmt.Sprintf("时区: %s (UTC%+03d:%02d)", name, hours, minutes),
 	}
 }
+
+// FormatTimeTool formats the current time using a Go time layout string.
+type FormatTimeTool struct{}
+
+func (t *FormatTimeTool) Name() string        { return "format_time" }
+func (t *FormatTimeTool) Description() string {
+	return `将当前时间按指定格式输出。参数 JSON: {"layout":"<Go time layout>"}，默认格式为 RFC3339。` +
+		`常用格式示例: "2006-01-02 15:04:05" (本地), "Monday, 02 Jan 2006" (英文日期)。`
+}
+func (t *FormatTimeTool) Permission() PermissionLevel { return PermPublic }
+
+// Execute formats time.Now() using the optional "layout" arg (Go time layout string).
+func (t *FormatTimeTool) Execute(_ context.Context, args map[string]any) ToolResult {
+	layout := time.RFC3339
+	if l, ok := args["layout"].(string); ok && l != "" {
+		layout = l
+	}
+	return ToolResult{Content: fmt.Sprintf("格式化时间: %s", time.Now().Format(layout))}
+}

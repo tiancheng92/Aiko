@@ -4,7 +4,9 @@ package tools
 import (
 	"context"
 	"fmt"
+	"net"
 	"runtime"
+	"time"
 )
 
 // GetOSInfoTool returns operating system information.
@@ -32,4 +34,21 @@ func (t *GetHardwareInfoTool) Execute(_ context.Context, _ map[string]any) ToolR
 	return ToolResult{
 		Content: fmt.Sprintf("CPU 逻辑核心数: %d", runtime.NumCPU()),
 	}
+}
+
+// GetNetworkStatusTool checks internet connectivity by dialing a well-known DNS server.
+type GetNetworkStatusTool struct{}
+
+func (t *GetNetworkStatusTool) Name() string        { return "get_network_status" }
+func (t *GetNetworkStatusTool) Description() string { return "检测当前网络连接状态（在线/离线）" }
+func (t *GetNetworkStatusTool) Permission() PermissionLevel { return PermProtected }
+
+// Execute dials 1.1.1.1:53 with a 3-second timeout to determine connectivity.
+func (t *GetNetworkStatusTool) Execute(_ context.Context, _ map[string]any) ToolResult {
+	conn, err := net.DialTimeout("tcp", "1.1.1.1:53", 3*time.Second)
+	if err != nil {
+		return ToolResult{Content: "网络状态: 离线（无法连接互联网）"}
+	}
+	conn.Close()
+	return ToolResult{Content: "网络状态: 在线"}
 }

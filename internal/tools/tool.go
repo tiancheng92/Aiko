@@ -13,6 +13,9 @@ const (
 	PermPublic PermissionLevel = "public"
 	// PermProtected tools require one-time user approval stored in the DB.
 	PermProtected PermissionLevel = "protected"
+	// PermRestricted tools require explicit user confirmation on every invocation.
+	// Reserved for future use (e.g. location, microphone access).
+	PermRestricted PermissionLevel = "restricted"
 )
 
 // ToolResult is the structured output of a tool invocation.
