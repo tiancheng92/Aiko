@@ -20,6 +20,7 @@ func main() {
 
 	appMenu := menu.NewMenu()
 	appMenu.Append(menu.AppMenu())
+	appMenu.Append(menu.EditMenu())
 	appMenu.AddText("Toggle Pet", keys.Combo("p", keys.CmdOrCtrlKey, keys.ShiftKey), func(_ *menu.CallbackData) {
 		wailsruntime.EventsEmit(app.ctx, "bubble:toggle")
 	})
