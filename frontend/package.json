@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "highlight.js": "^11.11.1",
+    "marked": "^18.0.2",
     "pixi-live2d-display": "0.4.0",
     "pixi.js": "^6.5.0",
     "vue": "^3.2.37"
