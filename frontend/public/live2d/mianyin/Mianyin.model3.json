@@ -1,0 +1,60 @@
+{
+	"Version": 3,
+	"FileReferences": {
+		"Moc": "mianyin.moc3",
+		"Textures": [
+			"mianyin.8192/texture_00.png"
+		],
+		"Physics": "mianyin.physics3.json",
+		"DisplayInfo": "mianyin.cdi3.json",
+		"Expressions": [
+			{
+				"Name": "帽子",
+				"File": "expressions/帽子.exp3.json"
+			},
+			{
+				"Name": "星星眼",
+				"File": "expressions/星星眼.exp3.json"
+			},
+			{
+				"Name": "爱心",
+				"File": "expressions/爱心.exp3.json"
+			},
+			{
+				"Name": "生气",
+				"File": "expressions/生气.exp3.json"
+			},
+			{
+				"Name": "眼泪",
+				"File": "expressions/眼泪.exp3.json"
+			},
+			{
+				"Name": "舌头",
+				"File": "expressions/舌头.exp3.json"
+			}
+		],
+		"Motions": {
+			"": [
+				{
+					"File": "motions/Idle.motion3.json"
+				}
+			]
+		}
+	},
+	"Groups": [
+		{
+			"Target": "Parameter",
+			"Name": "EyeBlink",
+			"Ids": [
+				"ParamEyeLOpen",
+				"ParamEyeROpen"
+			]
+		},
+		{
+			"Target": "Parameter",
+			"Name": "LipSync",
+			"Ids": []
+		}
+	],
+	"HitAreas": []
+}
