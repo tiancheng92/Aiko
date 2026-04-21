@@ -3,10 +3,14 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -422,4 +426,59 @@ func (a *App) MarkWelcomeShown() error {
 		return fmt.Errorf("mark welcome shown: %w", err)
 	}
 	return nil
+}
+
+// ListLLMModels queries the OpenAI-compatible /v1/models endpoint using the
+// currently saved BaseURL and APIKey, and returns a sorted list of model IDs.
+// It uses the saved config so the user can fetch models after entering the URL
+// (before saving a new model selection).
+func (a *App) ListLLMModels() ([]string, error) {
+	baseURL := strings.TrimRight(a.cfg.LLMBaseURL, "/")
+	if baseURL == "" {
+		return nil, fmt.Errorf("LLM Base URL is not configured")
+	}
+	url := baseURL + "/models"
+
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	if a.cfg.LLMAPIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+a.cfg.LLMAPIKey)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("server returned %d: %s", resp.StatusCode, body)
+	}
+
+	var result struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("parse response: %w", err)
+	}
+
+	ids := make([]string, 0, len(result.Data))
+	for _, m := range result.Data {
+		if m.ID != "" {
+			ids = append(ids, m.ID)
+		}
+	}
+	sort.Strings(ids)
+	return ids, nil
 }

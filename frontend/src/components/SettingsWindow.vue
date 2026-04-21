@@ -4,7 +4,8 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import {
   GetConfig, SaveConfig,
   ImportKnowledge, ListKnowledgeSources, DeleteKnowledgeSource,
-  OpenFileDialog, GetToolPermissions, SetToolPermission
+  OpenFileDialog, GetToolPermissions, SetToolPermission,
+  ListLLMModels
 } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { useModelPath } from '../composables/useModelPath.js'
@@ -25,6 +26,9 @@ const saving = ref(false)
 const statusMsg = ref('')
 const activeTab = ref('model')  // 'model' | 'pet' | 'tools' | 'knowledge'
 
+const llmModels = ref([])       // fetched from /v1/models
+const fetchingModels = ref(false)
+
 // Draggable window state
 const pos = ref({ x: Math.round(window.innerWidth / 2 - 300), y: Math.round(window.innerHeight / 2 - 250) })
 let dragStart = null
@@ -37,9 +41,26 @@ onMounted(async () => {
   sources.value = await ListKnowledgeSources() || []
   try { toolPerms.value = await GetToolPermissions() || [] } catch {}
   offProgress = EventsOn('knowledge:progress', (p) => { importProgress.value = p })
+  // Auto-fetch model list if URL is already configured.
+  if (cfg.value.LLMBaseURL) fetchLLMModels()
 })
 
 onUnmounted(() => offProgress?.())
+
+/** fetchLLMModels calls the backend to list models from the configured endpoint. */
+async function fetchLLMModels() {
+  fetchingModels.value = true
+  statusMsg.value = ''
+  try {
+    llmModels.value = await ListLLMModels() || []
+    if (llmModels.value.length === 0) statusMsg.value = '未获取到模型列表'
+  } catch (e) {
+    statusMsg.value = '获取模型失败: ' + e
+    llmModels.value = []
+  } finally {
+    fetchingModels.value = false
+  }
+}
 
 /** save persists configuration to the backend. */
 async function save() {
@@ -91,14 +112,14 @@ async function deleteSource(src) {
   }
 }
 
-/** onHeaderMouseDown starts window drag. */
+/** onHeaderMouseDown begins dragging the settings window. */
 function onHeaderMouseDown(e) {
   dragStart = { mx: e.clientX - pos.value.x, my: e.clientY - pos.value.y }
   window.addEventListener('mousemove', onMouseMove)
   window.addEventListener('mouseup', onMouseUp)
 }
 
-/** onMouseMove updates window position during drag. */
+/** onMouseMove updates position during drag. */
 function onMouseMove(e) {
   if (!dragStart) return
   pos.value = { x: e.clientX - dragStart.mx, y: e.clientY - dragStart.my }
@@ -132,10 +153,33 @@ function onMouseUp() {
       <div class="win-content">
         <!-- 模型设置 -->
         <div v-if="activeTab === 'model'" class="tab-pane">
-          <label>Base URL<input v-model="cfg.LLMBaseURL" placeholder="http://localhost:11434/v1" /></label>
+          <label>Base URL
+            <div class="url-row">
+              <input v-model="cfg.LLMBaseURL" placeholder="http://localhost:11434/v1" />
+              <button class="fetch-btn" @click="fetchLLMModels" :disabled="fetchingModels || !cfg.LLMBaseURL">
+                {{ fetchingModels ? '获取中...' : '获取模型' }}
+              </button>
+            </div>
+          </label>
           <label>API Key<input v-model="cfg.LLMAPIKey" type="password" placeholder="（可选）" /></label>
-          <label>Model<input v-model="cfg.LLMModel" placeholder="qwen2.5:7b" /></label>
-          <label>Embedding Model<input v-model="cfg.EmbeddingModel" placeholder="nomic-embed-text（可选）" /></label>
+          <label>Model
+            <div class="select-row">
+              <select v-if="llmModels.length" v-model="cfg.LLMModel">
+                <option value="">-- 请选择模型 --</option>
+                <option v-for="m in llmModels" :key="m" :value="m">{{ m }}</option>
+              </select>
+              <input v-else v-model="cfg.LLMModel" placeholder="qwen2.5:7b" />
+            </div>
+          </label>
+          <label>Embedding Model
+            <div class="select-row">
+              <select v-if="llmModels.length" v-model="cfg.EmbeddingModel">
+                <option value="">-- 不使用 Embedding --</option>
+                <option v-for="m in llmModels" :key="m" :value="m">{{ m }}</option>
+              </select>
+              <input v-else v-model="cfg.EmbeddingModel" placeholder="nomic-embed-text（可选）" />
+            </div>
+          </label>
           <label>Embedding 维度<input type="number" v-model.number="cfg.EmbeddingDim" min="256" max="4096" /></label>
         </div>
 
@@ -235,9 +279,17 @@ function onMouseUp() {
 .win-content { flex: 1; overflow-y: auto; padding: 16px; }
 .tab-pane { display: flex; flex-direction: column; gap: 10px; }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #9ca3af; }
-input, textarea { background: #1f2937; border: 1px solid #374151; border-radius: 6px; padding: 6px 10px; color: #f9fafb; font-size: 13px; outline: none; font-family: inherit; }
-input:focus, textarea:focus { border-color: #4f46e5; }
+input, textarea, select { background: #1f2937; border: 1px solid #374151; border-radius: 6px; padding: 6px 10px; color: #f9fafb; font-size: 13px; outline: none; font-family: inherit; }
+input:focus, textarea:focus, select:focus { border-color: #4f46e5; }
 textarea { resize: vertical; }
+select { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; }
+.url-row { display: flex; gap: 8px; align-items: center; }
+.url-row input { flex: 1; }
+.fetch-btn { background: #374151; color: #d1d5db; border: 1px solid #4b5563; border-radius: 6px; padding: 5px 10px; cursor: pointer; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
+.fetch-btn:hover:not(:disabled) { background: #4b5563; color: #f9fafb; }
+.fetch-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.select-row { display: flex; }
+.select-row select, .select-row input { flex: 1; }
 .hint { color: #6b7280; font-size: 12px; margin: 0 0 8px; }
 .perm-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #1f2937; }
 .perm-info { display: flex; align-items: center; gap: 8px; }
