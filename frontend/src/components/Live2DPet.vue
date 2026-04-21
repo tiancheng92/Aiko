@@ -77,7 +77,7 @@ onMounted(async () => {
     const [screenW, screenH] = await GetScreenSize()
     sw.value = screenW
     sh.value = screenH
-    petSize.value = Math.min(200, Math.max(120, Math.round(screenH * 0.14)))
+    petSize.value = Math.min(320, Math.max(180, Math.round(screenH * 0.20)))
     emit('ball-size', petSize.value)
 
     const [bx, by] = await GetBallPosition(screenW, screenH)
