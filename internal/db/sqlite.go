@@ -64,6 +64,16 @@ func migrate(db *sql.DB) error {
 			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 		CREATE INDEX IF NOT EXISTS idx_memory_segments_created ON memory_segments(created_at DESC);
+		CREATE TABLE IF NOT EXISTS cron_jobs (
+		    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+		    name        TEXT NOT NULL,
+		    description TEXT NOT NULL,
+		    schedule    TEXT NOT NULL,
+		    prompt      TEXT NOT NULL,
+		    enabled     INTEGER NOT NULL DEFAULT 1,
+		    last_run    DATETIME,
+		    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
 	`)
 	return err
 }
