@@ -1170,12 +1170,12 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
   border-radius: 8px;
   font-size: 12px;
   font-family: 'Fira Code', monospace;
-  white-space: pre-wrap;
-  word-break: break-all;
+  max-height: 140px;
+  overflow: auto;
 }
 .lark-status--ok  { background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2); color: #4ade80; }
 .lark-status--err { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); color: #f87171; }
-.lark-status pre { margin: 0; }
+.lark-status pre { margin: 0; white-space: pre-wrap; word-break: break-all; }
 .lark-guide { display: flex; flex-direction: column; gap: 10px; }
 .lark-guide-step {
   display: flex;
@@ -1196,20 +1196,22 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
   font-weight: 700;
   display: flex; align-items: center; justify-content: center;
 }
-.lark-step-body { display: flex; flex-direction: column; gap: 4px; }
+.lark-step-body { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
 .lark-step-title { font-size: 12px; font-weight: 600; color: #f9fafb; }
 .lark-code {
-  display: inline-block;
+  display: block;
   font-family: 'Fira Code', monospace;
   font-size: 11px;
-  background: rgba(0,0,0,0.35);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.08);
   border-radius: 4px;
-  padding: 2px 8px;
+  padding: 5px 10px;
   color: #e2e8f0;
   user-select: text;
+  white-space: nowrap;
+  overflow-x: auto;
 }
-.lark-step-hint { font-size: 11px; color: #9ca3af; margin: 0; }
+.lark-step-hint { font-size: 11px; color: #9ca3af; margin: 2px 0 0; }
 .lark-hint {
   font-size: 11px;
   color: #6b7280;
