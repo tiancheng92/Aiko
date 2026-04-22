@@ -12,8 +12,8 @@ const props = defineProps({
 const emit = defineEmits(['close', 'open-settings'])
 
 // Mirror CSS clamp so the JS position matches the rendered size exactly.
-const bubbleW = computed(() => Math.min(480, Math.max(320, window.innerWidth  * 0.22)))
-const bubbleH = computed(() => Math.min(620, Math.max(360, window.innerHeight * 0.55)))
+const bubbleW = computed(() => Math.min(520, Math.max(340, window.innerWidth  * 0.24)))
+const bubbleH = computed(() => Math.min(680, Math.max(400, window.innerHeight * 0.58)))
 
 /** pos aligns the bubble's right edge to the ball's right edge, sitting above the ball. */
 const pos = computed(() => {
@@ -72,11 +72,16 @@ function onBubbleContextMenu(e) {
 <style scoped>
 .chat-bubble {
   position: fixed;
-  width: clamp(320px, 22vw, 480px);
-  height: clamp(360px, 55vh, 620px);
-  background: #111827;
-  border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  width: clamp(340px, 24vw, 520px);
+  height: clamp(400px, 58vh, 680px);
+  background: rgba(15, 18, 30, 0.82);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.6),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
   display: flex;
   flex-direction: column;
   z-index: 9998;
@@ -85,14 +90,39 @@ function onBubbleContextMenu(e) {
 .title-bar {
   display: flex;
   align-items: center;
-  background: #1f2937;
-  border-bottom: 1px solid #374151;
-  padding: 0 8px;
+  padding: 0 14px;
+  height: 44px;
   flex-shrink: 0;
   user-select: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
 }
-.title { flex: 1; color: #f9fafb; font-size: 13px; font-weight: 600; padding: 10px 6px; }
-.close-btn { background: none; border: none; color: #6b7280; padding: 10px 8px; cursor: pointer; font-size: 13px; }
-.close-btn:hover { color: #f9fafb; }
-.content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.title {
+  flex: 1;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.close-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.3);
+  padding: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1;
+}
+.close-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+.content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
 </style>
