@@ -166,7 +166,7 @@ onMounted(async () => {
     }
     petSize.value = configuredSize > 0
       ? configuredSize
-      : Math.min(320, Math.max(180, Math.round(sh.value * 0.20)))
+      : 350
     emit('ball-size', petSize.value)
 
     const [bx, by] = await GetBallPosition(sw.value, sh.value)
