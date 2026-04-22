@@ -51,20 +51,24 @@ func (t *Tool) InvokableRun(ctx context.Context, input string, _ ...tool.Option)
 	return t.Client.Run(ctx, parts...)
 }
 
-// splitArgs splits a shell-like argument string, respecting quoted strings.
+// splitArgs splits a shell-like argument string, respecting single- and double-quoted substrings.
 func splitArgs(s string) []string {
 	var args []string
 	var cur []byte
+	var quoteChar byte
 	inQ := false
 	for i := 0; i < len(s); i++ {
 		c := s[i]
 		switch {
-		case c == '"' || c == '\'':
-			inQ = !inQ
+		case !inQ && (c == '"' || c == '\''):
+			inQ = true
+			quoteChar = c
+		case inQ && c == quoteChar:
+			inQ = false
 		case c == ' ' && !inQ:
 			if len(cur) > 0 {
 				args = append(args, string(cur))
-				cur = cur[:0]
+				cur = nil
 			}
 		default:
 			cur = append(cur, c)
