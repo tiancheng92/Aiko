@@ -78,6 +78,8 @@ func (a *App) startup(ctx context.Context) {
 	for _, t := range internaltools.All() {
 		_ = a.permStore.EnsureRow(toolsCtx, t)
 	}
+	// Ensure contextual tool permission rows (store not needed for row creation).
+	_ = a.permStore.EnsureRow(toolsCtx, &internaltools.SearchKnowledgeTool{})
 
 	vectorPath := filepath.Join(dataDir, "vectors")
 	a.vectorDB, err = chromem.NewPersistentDB(vectorPath, false)
@@ -106,6 +108,11 @@ func (a *App) startup(ctx context.Context) {
 
 	// Allow mouse events to pass through transparent window regions.
 	enableClickThrough()
+
+	// Register global Cmd+Shift+P hotkey to toggle the chat bubble.
+	RegisterHotkeyCallback(func() {
+		wailsruntime.EventsEmit(a.ctx, "bubble:toggle")
+	})
 }
 
 // initLLMComponents initializes chat model, embedder, memory stores, skills, and agent.
@@ -134,13 +141,15 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		}
 	}
 
-	// Built-in tools + skill tools
+	// Built-in tools + context-aware tools (knowledge) + skill tools
 	builtinTools := internaltools.AllEino(a.permStore)
+	contextTools := internaltools.AllContextual(a.permStore, knowledgeSt)
 	skillTools, err := skill.LoadAll(a.cfg.SkillsDir)
 	if err != nil {
 		return fmt.Errorf("load skills: %w", err)
 	}
-	allTools := append(builtinTools, skillTools...)
+	allTools := append(builtinTools, contextTools...)
+	allTools = append(allTools, skillTools...)
 
 	// Middleware chain: logging -> retry -> error recovery (outermost first)
 	mw := middleware.Chain(

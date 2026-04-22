@@ -8,6 +8,8 @@ import (
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
+
+	"desktop-pet/internal/knowledge"
 )
 
 // All returns all built-in Tool instances in registration order.
@@ -38,6 +40,22 @@ func AllEino(permStore *PermissionStore) []tool.BaseTool {
 	all := All()
 	result := make([]tool.BaseTool, len(all))
 	for i, t := range all {
+		result[i] = ToEino(t, permStore)
+	}
+	return result
+}
+
+// AllContextual returns tools that require runtime dependencies (knowledge store).
+// These are registered separately in initLLMComponents after the store is created.
+func AllContextual(
+	permStore *PermissionStore,
+	knowledgeSt *knowledge.Store,
+) []tool.BaseTool {
+	contextTools := []Tool{
+		&SearchKnowledgeTool{KnowledgeSt: knowledgeSt},
+	}
+	result := make([]tool.BaseTool, len(contextTools))
+	for i, t := range contextTools {
 		result[i] = ToEino(t, permStore)
 	}
 	return result

@@ -56,7 +56,7 @@ static void handleScreenPoint(NSPoint screen) {
 // enableClickThrough sets the window to ignore mouse events by default,
 // then installs global and local NSEvent monitors so that the window
 // temporarily accepts events only when the cursor is over interactive elements.
-void enableClickThrough() {
+static void enableClickThrough() {
     dispatch_async(dispatch_get_main_queue(), ^{
         for (NSWindow *win in [NSApp windows]) {
             gWindow  = win;
@@ -84,10 +84,60 @@ void enableClickThrough() {
             }];
     });
 }
+
+// 全局 Go 函数指针，由 Go 侧在 startup 时设置
+static void (*gHotkeyCallback)(void) = NULL;
+
+// goHotkeyFired is implemented in Go (//export goHotkeyFired).
+extern void goHotkeyFired(void);
+
+// setHotkeyCallback 由 Go 侧调用，注册热键触发时的回调。
+static void setHotkeyCallback(void (*cb)(void)) {
+    gHotkeyCallback = cb;
+}
+
+// enableGlobalHotkey 注册 Cmd+Shift+P 的全局 NSEvent 监听器。
+static void enableGlobalHotkey() {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSEventMask keyMask = NSEventMaskKeyDown;
+        [NSEvent addGlobalMonitorForEventsMatchingMask:keyMask
+            handler:^(NSEvent *evt) {
+                // keyCode 35 = P, flags & (Cmd|Shift)
+                NSEventModifierFlags flags = evt.modifierFlags &
+                    (NSEventModifierFlagCommand | NSEventModifierFlagShift);
+                if (evt.keyCode == 35 &&
+                    flags == (NSEventModifierFlagCommand | NSEventModifierFlagShift)) {
+                    if (gHotkeyCallback) {
+                        dispatch_async(dispatch_get_main_queue(), ^{
+                            gHotkeyCallback();
+                        });
+                    }
+                }
+            }];
+    });
+}
 */
 import "C"
+import "unsafe"
 
 // enableClickThrough installs per-pixel click-through for the main window.
 func enableClickThrough() {
 	C.enableClickThrough()
+}
+
+// hotkeyHandler is set by RegisterHotkeyCallback and called from C on Cmd+Shift+P.
+var hotkeyHandler func()
+
+//export goHotkeyFired
+func goHotkeyFired() {
+	if hotkeyHandler != nil {
+		hotkeyHandler()
+	}
+}
+
+// RegisterHotkeyCallback registers fn to be called when Cmd+Shift+P is pressed globally.
+func RegisterHotkeyCallback(fn func()) {
+	hotkeyHandler = fn
+	C.setHotkeyCallback((*[0]byte)(unsafe.Pointer(C.goHotkeyFired)))
+	C.enableGlobalHotkey()
 }
