@@ -3,6 +3,8 @@ import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { SendMessage, GetMessages, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 import { marked, Renderer } from 'marked'
+import markedKatex from 'marked-katex-extension'
+import 'katex/dist/katex.min.css'
 import hljs from 'highlight.js/lib/core'
 import javascript from 'highlight.js/lib/languages/javascript'
 import typescript from 'highlight.js/lib/languages/typescript'
@@ -43,6 +45,7 @@ renderer.link = ({ href, title, text }) => {
   return `<a href="${safeHref}"${titleAttr} target="_blank" rel="noopener">${display}</a>`
 }
 
+marked.use(markedKatex({ throwOnError: false, output: 'html' }))
 marked.use({ renderer, breaks: true, gfm: true })
 
 /** extractRealUrl unwraps DuckDuckGo redirect URLs (//duckduckgo.com/l/?uddg=...). */
@@ -431,6 +434,15 @@ function scrollToBottom() {
   padding: 5px 10px;
   text-align: left;
 }
+
+/* KaTeX math — adapt to dark theme */
+.bubble.markdown :deep(.katex) { font-size: 1em; color: #e2e8f0; }
+.bubble.markdown :deep(.katex-display) {
+  margin: 8px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.bubble.markdown :deep(.katex-html) { color: #e2e8f0; }
 
 /* Input row */
 .input-row {
