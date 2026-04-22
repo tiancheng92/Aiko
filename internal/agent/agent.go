@@ -152,6 +152,57 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 	return ch
 }
 
+// ChatDirect sends a prompt to the agent and streams tokens without persisting
+// the exchange to memory. Used by the scheduler to avoid polluting chat history.
+func (a *Agent) ChatDirect(ctx context.Context, prompt string) <-chan StreamResult {
+	ch := make(chan StreamResult, 64)
+
+	go func() {
+		defer close(ch)
+
+		iter := a.runner.Query(ctx, prompt)
+
+		var sb strings.Builder
+		for {
+			event, ok := iter.Next()
+			if !ok {
+				break
+			}
+			if event.Err != nil {
+				ch <- StreamResult{Err: event.Err}
+				return
+			}
+			if event.Output == nil || event.Output.MessageOutput == nil {
+				continue
+			}
+			mo := event.Output.MessageOutput
+			if mo.IsStreaming {
+				for {
+					msg, recvErr := mo.MessageStream.Recv()
+					if recvErr != nil {
+						if recvErr == io.EOF {
+							break
+						}
+						ch <- StreamResult{Err: recvErr}
+						return
+					}
+					if msg != nil && msg.Content != "" {
+						ch <- StreamResult{Token: msg.Content}
+						sb.WriteString(msg.Content)
+					}
+				}
+			} else if mo.Message != nil && mo.Message.Content != "" {
+				ch <- StreamResult{Token: mo.Message.Content}
+				sb.WriteString(mo.Message.Content)
+			}
+		}
+		ch <- StreamResult{Done: true}
+		// NOTE: No persistAndMigrate call here — intentional.
+	}()
+
+	return ch
+}
+
 // buildHistoryPrefix returns recent conversation history as a formatted string.
 // Returns empty string if no history exists or an error occurs.
 // userInput is used as the semantic query for long-term memory retrieval.

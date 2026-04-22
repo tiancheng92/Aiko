@@ -27,6 +27,7 @@ import (
 	"desktop-pet/internal/knowledge"
 	"desktop-pet/internal/llm"
 	"desktop-pet/internal/memory"
+	"desktop-pet/internal/scheduler"
 	"desktop-pet/internal/skill"
 	internaltools "desktop-pet/internal/tools"
 )
@@ -43,6 +44,7 @@ type App struct {
 
 	// mu guards fields that may be replaced on config save while agent goroutines run.
 	mu          sync.RWMutex
+	scheduler   *scheduler.Scheduler
 	longMem     *memory.LongStore
 	knowledgeSt *knowledge.Store
 	petAgent    *agent.Agent
@@ -80,6 +82,14 @@ func (a *App) startup(ctx context.Context) {
 	}
 	// Ensure contextual tool permission rows (store not needed for row creation).
 	_ = a.permStore.EnsureRow(toolsCtx, &internaltools.SearchKnowledgeTool{})
+	for _, t := range []internaltools.Tool{
+		&internaltools.SearchKnowledgeTool{},
+		&internaltools.CreateCronJobTool{},
+		&internaltools.ListCronJobsTool{},
+		&internaltools.DeleteCronJobTool{},
+	} {
+		_ = a.permStore.EnsureRow(toolsCtx, t)
+	}
 
 	vectorPath := filepath.Join(dataDir, "vectors")
 	a.vectorDB, err = chromem.NewPersistentDB(vectorPath, false)
@@ -151,7 +161,49 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 
 	// Built-in tools + context-aware tools (knowledge) + skill tools
 	builtinTools := internaltools.AllEino(a.permStore)
-	contextTools := internaltools.AllContextual(a.permStore, knowledgeSt)
+
+	// Build a chat function for the scheduler.
+	// IMPORTANT: Scheduler jobs use a direct LLM call that bypasses persistAndMigrate,
+	// so job prompts and results are NOT written to short/long-term memory.
+	chatFn := func(ctx context.Context, prompt string) (string, error) {
+		a.mu.RLock()
+		ag := a.petAgent
+		a.mu.RUnlock()
+		if ag == nil {
+			return "", fmt.Errorf("agent not ready")
+		}
+		ch := ag.ChatDirect(ctx, prompt) // ChatDirect skips memory persistence
+		var sb strings.Builder
+		for r := range ch {
+			if r.Err != nil {
+				return "", r.Err
+			}
+			if r.Done {
+				break
+			}
+			sb.WriteString(r.Token)
+		}
+		return sb.String(), nil
+	}
+
+	onResult := func(job scheduler.Job, result string, err error) {
+		if err != nil {
+			slog.Error("cron job failed", "job", job.Name, "err", err)
+			return
+		}
+		// Emit to the unified notification channel consumed by NotificationBubble.vue.
+		wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
+			"title":   job.Name,
+			"message": result,
+		})
+	}
+
+	sched := scheduler.New(a.sqlDB, chatFn, onResult)
+	if err := sched.Start(a.ctx); err != nil {
+		slog.Error("scheduler start failed", "err", err)
+	}
+
+	contextTools := internaltools.AllContextual(a.permStore, knowledgeSt, sched)
 	skillTools, err := skill.LoadAll(a.cfg.SkillsDir)
 	if err != nil {
 		return fmt.Errorf("load skills: %w", err)
@@ -172,6 +224,10 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	}
 
 	a.mu.Lock()
+	if a.scheduler != nil {
+		a.scheduler.Stop()
+	}
+	a.scheduler = sched
 	a.longMem = longMem
 	a.knowledgeSt = knowledgeSt
 	a.petAgent = newAgent
