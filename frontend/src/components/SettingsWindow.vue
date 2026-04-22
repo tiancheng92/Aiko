@@ -18,6 +18,7 @@ const cfg = ref({
   Live2DModel: 'hiyori',
   SystemPrompt: '', ShortTermLimit: 30, SkillsDir: '', Hotkey: 'Cmd+Shift+P',
   EmbeddingDim: 1536,
+  PetSize: 0,
 })
 const { availableModels, loadModels } = useModelPath()
 const toolPerms = ref([])   // [{ ToolName, Level, Granted }]
@@ -68,6 +69,13 @@ async function fetchLLMModels() {
   } finally {
     fetchingModels.value = false
   }
+}
+
+/** previewPetSize emits a real-time size change event so the pet resizes without saving. */
+function previewPetSize(e) {
+  const size = Number(e.target.value)
+  cfg.value.PetSize = size
+  EventsEmit('config:pet:size:changed', size)
 }
 
 /** save persists configuration to the backend. */
@@ -272,6 +280,18 @@ async function toggleMCPServer(srv) {
                 @click="cfg.Live2DModel = m"
               >{{ m }}</button>
             </div>
+          </label>
+          <label>宠物大小
+            <div class="size-row">
+              <input
+                type="range" min="100" max="400" step="10"
+                :value="cfg.PetSize || 200"
+                @input="previewPetSize"
+              />
+              <span class="size-val">{{ cfg.PetSize || '自动' }}{{ cfg.PetSize ? 'px' : '' }}</span>
+            </div>
+            <div class="size-hint">0 = 自动根据屏幕高度计算；拖动滑块实时预览，保存后生效</div>
+            <button class="btn-reset-size" @click="cfg.PetSize = 0; EventsEmit('config:pet:size:changed', 0)">重置为自动</button>
           </label>
           <label>System Prompt<textarea v-model="cfg.SystemPrompt" rows="5" /></label>
           <label>短期记忆轮数（1-100）<input type="number" v-model.number="cfg.ShortTermLimit" min="1" max="100" /></label>
@@ -776,5 +796,23 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
   font-size: 12px;
   opacity: 0.5;
   padding: 8px 0;
+}
+
+/* Pet size slider */
+.size-row { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
+.size-row input[type=range] { flex: 1; accent-color: #6366f1; cursor: pointer; }
+.size-val { font-size: 12px; color: #a5b4fc; min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+.size-hint { font-size: 11px; color: rgba(107,114,128,0.6); margin-top: 2px; line-height: 1.4; }
+.btn-reset-size {
+  margin-top: 4px;
+  background: rgba(55, 65, 81, 0.6);
+  color: rgba(209, 213, 219, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  box-shadow: none;
+  align-self: flex-start;
 }
 </style>

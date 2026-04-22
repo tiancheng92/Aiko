@@ -17,6 +17,7 @@ type Config struct {
 	ShortTermLimit int
 	SkillsDir      string
 	Hotkey         string
+	PetSize        int // 宠物显示尺寸（像素），0 表示自动根据屏幕高度计算
 }
 
 type Store struct{ db *sql.DB }
@@ -56,6 +57,7 @@ func (s *Store) Load() (*Config, error) {
 	}
 	cfg.EmbeddingDim = parseInt(m["embedding_dim"], 1536)
 	cfg.ShortTermLimit = parseInt(m["short_term_limit"], 30)
+	cfg.PetSize = parseInt(m["pet_size"], 0)
 	return cfg, nil
 }
 
@@ -72,6 +74,7 @@ func (s *Store) Save(cfg *Config) error {
 		"skills_dir":       cfg.SkillsDir,
 		"hotkey":           cfg.Hotkey,
 		"live2d_model":     cfg.Live2DModel,
+		"pet_size":         strconv.Itoa(cfg.PetSize),
 	}
 	tx, err := s.db.Begin()
 	if err != nil {

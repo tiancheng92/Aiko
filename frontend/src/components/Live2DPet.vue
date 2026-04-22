@@ -3,7 +3,7 @@ import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import * as PIXI from 'pixi.js'
 import { Live2DModel, MotionPriority } from 'pixi-live2d-display/cubism4'
 import { GetBallPosition, SaveBallPosition, GetScreenSize, GetConfig, SaveConfig } from '../../wailsjs/go/main/App'
-import { Quit, EventsEmit } from '../../wailsjs/runtime/runtime'
+import { Quit, EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { usePetState } from '../composables/usePetState.js'
 import { useModelPath } from '../composables/useModelPath.js'
 import ContextMenu from './ContextMenu.vue'
@@ -69,6 +69,7 @@ let live2dModel = null
 let dragStart = null
 let isDragging = false
 let mounted = true
+let offSizeChange = null
 
 watch(pos, (p) => { if (p) emit('position', { ...p }) })
 
@@ -107,6 +108,19 @@ async function attachModel(path) {
   live2dModel.motion('Idle', undefined, MotionPriority.IDLE)
 }
 
+/** applySize resizes the PixiJS canvas and rescales the Live2D model. */
+function applySize(size) {
+  if (!pixiApp || size <= 0) return
+  petSize.value = size
+  emit('ball-size', size)
+  pixiApp.renderer.resize(size, size)
+  if (live2dModel) {
+    const scale = size / live2dModel.internalModel.originalHeight
+    live2dModel.scale.set(scale)
+    live2dModel.position.set(size / 2, size / 2)
+  }
+}
+
 /** initPixi creates the PixiJS application and loads the initial Live2D model. */
 async function initPixi() {
   Live2DModel.registerTicker(PIXI.Ticker)
@@ -141,7 +155,18 @@ onMounted(async () => {
     } catch (e) {
       console.warn('GetScreenSize failed, using window dimensions', e)
     }
-    petSize.value = Math.min(320, Math.max(180, Math.round(sh.value * 0.20)))
+
+    // Use configured size, or auto-calculate from screen height.
+    let configuredSize = 0
+    try {
+      const loadedCfg = await GetConfig()
+      if (loadedCfg?.PetSize > 0) configuredSize = loadedCfg.PetSize
+    } catch (e) {
+      console.warn('GetConfig for PetSize failed', e)
+    }
+    petSize.value = configuredSize > 0
+      ? configuredSize
+      : Math.min(320, Math.max(180, Math.round(sh.value * 0.20)))
     emit('ball-size', petSize.value)
 
     const [bx, by] = await GetBallPosition(sw.value, sh.value)
@@ -163,6 +188,11 @@ onMounted(async () => {
   } catch (err) {
     console.error('Live2DPet PixiJS init failed:', err)
   }
+
+  // Listen for real-time pet size changes from settings.
+  offSizeChange = EventsOn('config:pet:size:changed', (size) => {
+    applySize(size)
+  })
 })
 
 /** Watch modelPath and hot-reload the Live2D model when it changes. */
@@ -208,6 +238,7 @@ watch(petState, (state) => {
 
 onUnmounted(() => {
   mounted = false
+  offSizeChange?.()
   // Clean up any in-progress drag listeners to prevent ghost handlers.
   window.removeEventListener('mousemove', onMouseMove)
   window.removeEventListener('mouseup', onMouseUp)
