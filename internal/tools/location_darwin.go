@@ -131,7 +131,10 @@ static ToolsGeocoderResult reverseGeocode(double lat, double lon) {
 }
 */
 import "C"
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // coreLocation fetches the device's GPS location via CoreLocation on macOS.
 func coreLocation() (lat, lon, accuracy float64, err error) {
@@ -142,7 +145,23 @@ func coreLocation() (lat, lon, accuracy float64, err error) {
 	case 1:
 		return 0, 0, 0, fmt.Errorf("位置权限被拒绝，请在系统设置 → 隐私与安全性 → 位置服务 中授权")
 	default:
-		return 0, 0, 0, fmt.Errorf("%s", C.GoString(&r.errMsg[0]))
+		return 0, 0, 0, fmt.Errorf("%s", clErrorMessage(C.GoString(&r.errMsg[0])))
+	}
+}
+
+// clErrorMessage converts raw CoreLocation error strings to user-friendly Chinese messages.
+func clErrorMessage(raw string) string {
+	switch {
+	case strings.Contains(raw, "kCLErrorDomain error 0"):
+		return "无法获取位置（设备无 GPS 或位置信号不足）"
+	case strings.Contains(raw, "kCLErrorDomain error 1"):
+		return "位置权限被拒绝"
+	case strings.Contains(raw, "kCLErrorDomain error 2"):
+		return "网络不可用，无法获取位置"
+	case strings.Contains(raw, "timed out"):
+		return "定位超时"
+	default:
+		return raw
 	}
 }
 

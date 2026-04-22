@@ -61,13 +61,12 @@ func (t *GetLocationTool) InvokableRun(_ context.Context, _ string, _ ...tool.Op
 		return result, nil
 	}
 
-	// Fallback: IP geolocation.
-	coreErr := err
+	// GPS not available — fall back to IP geolocation silently.
 	ipResult, ipErr := ipLocation()
 	if ipErr != nil {
-		return "", fmt.Errorf("CoreLocation: %w; IP定位: %v", coreErr, ipErr)
+		return "", fmt.Errorf("定位失败: %w", ipErr)
 	}
-	return "来源: IP 定位（CoreLocation 不可用: " + coreErr.Error() + "）\n" + ipResult, nil
+	return "来源: IP 定位\n" + ipResult, nil
 }
 
 // ipLocation fetches approximate location via ip-api.com.
