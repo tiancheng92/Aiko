@@ -56,6 +56,14 @@ func migrate(db *sql.DB) error {
 			granted_at       DATETIME,
 			last_used        DATETIME
 		);
+		CREATE TABLE IF NOT EXISTS memory_segments (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			vector_id   TEXT NOT NULL UNIQUE,
+			raw_content TEXT NOT NULL,
+			summary     TEXT,
+			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE INDEX IF NOT EXISTS idx_memory_segments_created ON memory_segments(created_at DESC);
 	`)
 	return err
 }
