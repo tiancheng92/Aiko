@@ -62,6 +62,14 @@ export function IsFirstLaunch() {
   return window['go']['main']['App']['IsFirstLaunch']();
 }
 
+export function LarkRunCommand(arg1) {
+  return window['go']['main']['App']['LarkRunCommand'](arg1);
+}
+
+export function LarkStatus() {
+  return window['go']['main']['App']['LarkStatus']();
+}
+
 export function ListCronJobs() {
   return window['go']['main']['App']['ListCronJobs']();
 }

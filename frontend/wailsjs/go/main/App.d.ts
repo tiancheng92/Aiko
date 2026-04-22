@@ -37,6 +37,10 @@ export function ImportKnowledge(arg1:string):Promise<void>;
 
 export function IsFirstLaunch():Promise<boolean>;
 
+export function LarkRunCommand(arg1:string):Promise<string>;
+
+export function LarkStatus():Promise<string>;
+
 export function ListCronJobs():Promise<Array<scheduler.Job>>;
 
 export function ListKnowledgeSources():Promise<Array<string>>;
