@@ -32,7 +32,7 @@ type ipAPIResponse struct {
 	Query       string  `json:"query"`
 }
 
-// GetLocationTool returns approximate geographic location based on the current public IP.
+// GetLocationTool returns geographic location via CoreLocation (macOS) or IP geolocation fallback.
 type GetLocationTool struct{}
 
 // Name returns the tool identifier.
@@ -44,18 +44,34 @@ func (t *GetLocationTool) Permission() PermissionLevel { return PermProtected }
 // Info returns the eino tool schema.
 func (t *GetLocationTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
-		Name:        t.Name(),
-		Desc:        "根据当前公网 IP 获取近似地理位置，返回国家、城市、经纬度、时区等信息。",
+		Name: t.Name(),
+		Desc: "获取当前地理位置。在 macOS 上优先使用系统 CoreLocation 获取精确 GPS 坐标，失败时回退到公网 IP 定位。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{}),
 	}, nil
 }
 
-// InvokableRun calls ip-api.com and returns location info as a formatted string.
+// InvokableRun tries CoreLocation first, falls back to ip-api.com on error.
 func (t *GetLocationTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (string, error) {
+	lat, lon, accuracy, err := coreLocation()
+	if err == nil {
+		return fmt.Sprintf("来源: CoreLocation (GPS)\n坐标: %.6f, %.6f\n精度: %.0f 米", lat, lon, accuracy), nil
+	}
+
+	// Fallback: IP geolocation.
+	coreErr := err
+	ipResult, ipErr := ipLocation()
+	if ipErr != nil {
+		return "", fmt.Errorf("CoreLocation: %w; IP定位: %v", coreErr, ipErr)
+	}
+	return "来源: IP 定位（CoreLocation 不可用: " + coreErr.Error() + "）\n" + ipResult, nil
+}
+
+// ipLocation fetches approximate location via ip-api.com.
+func ipLocation() (string, error) {
 	client := &http.Client{Timeout: locationTimeout}
 	resp, err := client.Get("http://ip-api.com/json/?fields=status,message,country,countryCode,regionName,city,zip,lat,lon,timezone,isp,query")
 	if err != nil {
-		return "", fmt.Errorf("location request failed: %w", err)
+		return "", fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -69,7 +85,7 @@ func (t *GetLocationTool) InvokableRun(_ context.Context, _ string, _ ...tool.Op
 		return "", fmt.Errorf("parse response: %w", err)
 	}
 	if r.Status != "success" {
-		return "", fmt.Errorf("location lookup failed: %s", r.Message)
+		return "", fmt.Errorf("ip-api: %s", r.Message)
 	}
 
 	return fmt.Sprintf(
