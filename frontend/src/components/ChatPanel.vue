@@ -192,52 +192,186 @@ function scrollToBottom() {
 
 <style scoped>
 .chat-panel { display: flex; flex-direction: column; height: 100%; }
-.messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+/* Messages list */
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+.messages::-webkit-scrollbar { width: 4px; }
+.messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+
+/* Row */
 .msg { display: flex; }
 .msg.user { justify-content: flex-end; }
 .msg.assistant, .msg.system { justify-content: flex-start; }
-.bubble-wrap { position: relative; max-width: 80%; display: flex; flex-direction: column; }
+
+/* Wrap */
+.bubble-wrap { position: relative; max-width: 82%; display: flex; flex-direction: column; }
 .msg.user .bubble-wrap { align-items: flex-end; }
-.bubble { padding: 8px 12px; border-radius: 12px; font-size: 13px; line-height: 1.5; word-break: break-word; }
-.user .bubble { background: #4f46e5; color: #fff; border-radius: 12px 12px 2px 12px; white-space: pre-wrap; }
-.assistant .bubble { background: #374151; color: #e5e7eb; border-radius: 12px 12px 12px 2px; }
-.system .bubble { background: #dc2626; color: #fff; border-radius: 8px; font-size: 12px; white-space: pre-wrap; }
+
+/* Bubble base */
+.bubble {
+  padding: 9px 14px;
+  border-radius: 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+/* User bubble */
+.user .bubble {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #fff;
+  border-radius: 16px 16px 4px 16px;
+  white-space: pre-wrap;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.4);
+}
+
+/* Assistant bubble */
+.assistant .bubble {
+  background: rgba(55, 65, 81, 0.7);
+  color: #e5e7eb;
+  border-radius: 16px 16px 16px 4px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+/* System / error bubble */
+.system .bubble {
+  background: rgba(220, 38, 38, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  border-radius: 10px;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+/* Cursor blink */
 .cursor { animation: blink 1s step-end infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 
-/* Thinking animation */
-.thinking-bubble { display: flex; align-items: center; gap: 4px; padding: 12px 16px; }
-.dot { width: 8px; height: 8px; background: #9ca3af; border-radius: 50%; display: inline-block; animation: bounce 1.2s infinite ease-in-out; }
+/* Thinking dots */
+.thinking-bubble { display: flex; align-items: center; gap: 5px; padding: 12px 16px; }
+.dot {
+  width: 7px; height: 7px;
+  background: rgba(156, 163, 175, 0.7);
+  border-radius: 50%;
+  display: inline-block;
+  animation: bounce 1.2s infinite ease-in-out;
+}
 .dot:nth-child(1) { animation-delay: 0s; }
 .dot:nth-child(2) { animation-delay: 0.2s; }
 .dot:nth-child(3) { animation-delay: 0.4s; }
 @keyframes bounce {
-  0%, 80%, 100% { transform: translateY(0); opacity: 0.5; }
-  40% { transform: translateY(-6px); opacity: 1; }
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40% { transform: translateY(-5px); opacity: 1; }
 }
 
 /* Copy button */
-.copy-btn { position: absolute; top: 4px; right: -28px; background: #374151; border: none; color: #9ca3af; border-radius: 4px; width: 22px; height: 22px; cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.15s; padding: 0; }
+.copy-btn {
+  position: absolute;
+  top: 4px; right: -30px;
+  background: rgba(55, 65, 81, 0.8);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(156, 163, 175, 0.8);
+  border-radius: 6px;
+  width: 24px; height: 24px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+  padding: 0;
+}
 .bubble-wrap:hover .copy-btn { opacity: 1; }
-.copy-btn:hover { background: #4b5563; color: #f9fafb; }
+.copy-btn:hover { background: rgba(75, 85, 99, 0.9); color: #f9fafb; }
 
-/* Markdown prose styles */
+/* Markdown prose */
 .bubble.markdown :deep(p) { margin: 0 0 6px; }
 .bubble.markdown :deep(p:last-child) { margin-bottom: 0; }
-.bubble.markdown :deep(pre) { background: #1a1a2e; border-radius: 6px; padding: 10px 12px; overflow-x: auto; margin: 6px 0; }
-.bubble.markdown :deep(code) { font-family: 'Fira Code', monospace; font-size: 12px; }
+.bubble.markdown :deep(pre) {
+  background: rgba(10, 10, 20, 0.6);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  margin: 6px 0;
+}
+.bubble.markdown :deep(code) { font-family: 'Fira Code', 'JetBrains Mono', monospace; font-size: 12px; }
 .bubble.markdown :deep(pre code) { background: none; padding: 0; }
-.bubble.markdown :deep(:not(pre) > code) { background: #1f2937; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+.bubble.markdown :deep(:not(pre) > code) {
+  background: rgba(79, 70, 229, 0.2);
+  color: #a5b4fc;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+}
 .bubble.markdown :deep(ul), .bubble.markdown :deep(ol) { padding-left: 18px; margin: 4px 0; }
 .bubble.markdown :deep(li) { margin: 2px 0; }
-.bubble.markdown :deep(blockquote) { border-left: 3px solid #4f46e5; margin: 6px 0; padding-left: 10px; color: #9ca3af; }
-.bubble.markdown :deep(h1), .bubble.markdown :deep(h2), .bubble.markdown :deep(h3) { margin: 8px 0 4px; font-size: 14px; }
-.bubble.markdown :deep(a) { color: #818cf8; }
-.bubble.markdown :deep(table) { border-collapse: collapse; margin: 6px 0; font-size: 12px; }
-.bubble.markdown :deep(th), .bubble.markdown :deep(td) { border: 1px solid #374151; padding: 4px 8px; }
+.bubble.markdown :deep(blockquote) {
+  border-left: 3px solid #6366f1;
+  margin: 6px 0;
+  padding-left: 10px;
+  color: #9ca3af;
+  background: rgba(99, 102, 241, 0.05);
+  border-radius: 0 6px 6px 0;
+}
+.bubble.markdown :deep(h1), .bubble.markdown :deep(h2), .bubble.markdown :deep(h3) {
+  margin: 8px 0 4px; font-size: 14px; color: #f9fafb;
+}
+.bubble.markdown :deep(a) { color: #818cf8; text-decoration: none; }
+.bubble.markdown :deep(a:hover) { text-decoration: underline; }
+.bubble.markdown :deep(table) { border-collapse: collapse; margin: 6px 0; font-size: 12px; width: 100%; }
+.bubble.markdown :deep(th) { background: rgba(255,255,255,0.05); }
+.bubble.markdown :deep(th), .bubble.markdown :deep(td) {
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 4px 8px;
+}
 
-.input-row { display: flex; gap: 8px; padding: 10px; border-top: 1px solid #374151; flex-shrink: 0; }
-.input-row textarea { flex: 1; background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 8px 12px; color: #f9fafb; font-size: 13px; outline: none; resize: none; font-family: inherit; }
-.input-row button { background: #4f46e5; color: #fff; border: none; border-radius: 8px; padding: 8px 16px; cursor: pointer; font-size: 13px; }
-.input-row button:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Input row */
+.input-row {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.02);
+  flex-shrink: 0;
+}
+.input-row textarea {
+  flex: 1;
+  background: rgba(31, 41, 55, 0.6);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 8px 12px;
+  color: #f9fafb;
+  font-size: 13px;
+  outline: none;
+  resize: none;
+  font-family: inherit;
+  transition: border-color 0.15s;
+  line-height: 1.5;
+}
+.input-row textarea:focus { border-color: rgba(99, 102, 241, 0.6); }
+.input-row textarea::placeholder { color: rgba(156, 163, 175, 0.5); }
+.input-row button {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: opacity 0.15s, transform 0.1s;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
+}
+.input-row button:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+.input-row button:active:not(:disabled) { transform: translateY(0); }
+.input-row button:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 </style>
