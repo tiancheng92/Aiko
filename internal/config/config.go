@@ -18,7 +18,8 @@ type Config struct {
 	SkillsDir      string
 	PetSize        int // 宠物显示尺寸（像素），0 表示自动根据屏幕高度计算
 	ChatWidth      int // 聊天框宽度（像素），0 表示使用默认值
-	ChatHeight     int // 聊天框高度（像素），0 表示使用默认值
+	ChatHeight     int    // 聊天框高度（像素），0 表示使用默认值
+	LarkCLIPath    string // lark-cli 可执行文件路径，空串表示从 PATH 自动查找
 }
 
 type Store struct{ db *sql.DB }
@@ -54,6 +55,7 @@ func (s *Store) Load() (*Config, error) {
 		Live2DModel:    orDefault(m["live2d_model"], "hiyori"),
 		SystemPrompt:   m["system_prompt"],
 		SkillsDir:      m["skills_dir"],
+		LarkCLIPath:    m["lark_cli_path"],
 	}
 	cfg.EmbeddingDim = parseInt(m["embedding_dim"], 1536)
 	cfg.ShortTermLimit = parseInt(m["short_term_limit"], 30)
@@ -78,6 +80,7 @@ func (s *Store) Save(cfg *Config) error {
 		"pet_size":         strconv.Itoa(cfg.PetSize),
 		"chat_width":       strconv.Itoa(cfg.ChatWidth),
 		"chat_height":      strconv.Itoa(cfg.ChatHeight),
+		"lark_cli_path":    cfg.LarkCLIPath,
 	}
 	tx, err := s.db.Begin()
 	if err != nil {
