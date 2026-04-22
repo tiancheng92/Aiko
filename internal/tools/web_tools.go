@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -14,8 +15,20 @@ import (
 )
 
 const (
-	webTimeout   = 15 * time.Second
-	maxBodyBytes = 1 << 20 // 1 MiB
+	webTimeout    = 15 * time.Second
+	fetchTimeout  = 30 * time.Second
+	maxBodyBytes  = 2 << 20 // 2 MiB
+	userAgent     = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+	defaultMaxChars = 8000
+)
+
+// Pre-compiled regexes for better performance
+var (
+	reScript     = regexp.MustCompile(`(?i)<script[\s\S]*?</script>`)
+	reStyle      = regexp.MustCompile(`(?i)<style[\s\S]*?</style>`)
+	reTags       = regexp.MustCompile(`<[^>]*>`)
+	reWhitespace = regexp.MustCompile(`[^\S\n]+`)
+	reBlankLines = regexp.MustCompile(`\n{3,}`)
 )
 
 // WebSearchTool searches the web via DuckDuckGo HTML endpoint.
@@ -26,7 +39,7 @@ func (t *WebSearchTool) Name() string { return "web_search" }
 
 // Description returns the tool description.
 func (t *WebSearchTool) Description() string {
-	return `使用 DuckDuckGo 搜索互联网，返回摘要结果列表。参数 JSON: {"query":"<搜索词>","num_results":5}`
+	return `使用多种搜索引擎搜索互联网，返回相关结果。支持 DuckDuckGo。参数: {"query":"搜索词","num_results":5,"time_range":"w"}`
 }
 
 // Permission returns the permission level required to use this tool.
@@ -54,7 +67,11 @@ func (t *WebSearchTool) Execute(ctx context.Context, args map[string]any) ToolRe
 	if err != nil {
 		return ToolResult{Error: fmt.Errorf("build search request: %w", err)}
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; desktop-pet/1.0)")
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+	req.Header.Set("Accept-Encoding", "gzip, deflate")
+	req.Header.Set("DNT", "1")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -73,9 +90,9 @@ func (t *WebSearchTool) Execute(ctx context.Context, args map[string]any) ToolRe
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("DuckDuckGo 搜索 \"%s\" 的结果：\n\n", query))
+	fmt.Fprintf(&sb, "DuckDuckGo 搜索 \"%s\" 的结果：\n\n", query)
 	for i, r := range results {
-		sb.WriteString(fmt.Sprintf("%d. **%s**\n   %s\n   %s\n\n", i+1, r.title, r.snippet, r.url))
+		fmt.Fprintf(&sb, "%d. **%s**\n   %s\n   %s\n\n", i+1, r.title, r.snippet, r.url)
 	}
 	return ToolResult{Content: sb.String()}
 }
@@ -175,7 +192,7 @@ func (t *WebFetchTool) Name() string { return "web_fetch" }
 
 // Description returns the tool description.
 func (t *WebFetchTool) Description() string {
-	return `抓取指定 URL 的网页内容，返回去除 HTML 标签后的纯文本。参数 JSON: {"url":"<完整URL>","max_chars":3000}`
+	return `抓取指定 URL 的网页内容，返回去除 HTML 标签后的纯文本。参数: {"url":"完整URL","max_chars":8000}`
 }
 
 // Permission returns the permission level required to use this tool.
@@ -190,22 +207,26 @@ func (t *WebFetchTool) Execute(ctx context.Context, args map[string]any) ToolRes
 	if !strings.HasPrefix(targetURL, "http://") && !strings.HasPrefix(targetURL, "https://") {
 		targetURL = "https://" + targetURL
 	}
-	maxChars := 3000
+	maxChars := defaultMaxChars
 	if m, ok := args["max_chars"].(float64); ok && m > 0 {
 		maxChars = int(m)
 	}
-	if maxChars > 8000 {
-		maxChars = 8000
+	if maxChars > 50000 {
+		maxChars = 50000
 	}
 
-	reqCtx, cancel := context.WithTimeout(ctx, webTimeout)
+	reqCtx, cancel := context.WithTimeout(ctx, fetchTimeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, targetURL, nil)
 	if err != nil {
 		return ToolResult{Error: fmt.Errorf("build fetch request: %w", err)}
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; desktop-pet/1.0)")
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+	req.Header.Set("Accept-Encoding", "gzip, deflate")
+	req.Header.Set("DNT", "1")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -228,30 +249,18 @@ func (t *WebFetchTool) Execute(ctx context.Context, args map[string]any) ToolRes
 	return ToolResult{Content: fmt.Sprintf("URL: %s\n\n%s", targetURL, text)}
 }
 
-// htmlToText converts HTML to plain text by stripping tags.
+// htmlToText converts HTML to plain text using regex for better performance.
 func htmlToText(body string) string {
-	doc, err := html.Parse(strings.NewReader(body))
-	if err != nil {
-		return body
-	}
-	var sb strings.Builder
-	var walk func(*html.Node)
-	walk = func(n *html.Node) {
-		// Skip script/style nodes entirely.
-		if n.Type == html.ElementNode && (n.Data == "script" || n.Data == "style") {
-			return
-		}
-		if n.Type == html.TextNode {
-			t := strings.TrimSpace(n.Data)
-			if t != "" {
-				sb.WriteString(t)
-				sb.WriteString(" ")
-			}
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			walk(c)
-		}
-	}
-	walk(doc)
-	return strings.Join(strings.Fields(sb.String()), " ")
+	// Remove script and style elements first
+	text := reScript.ReplaceAllString(body, "")
+	text = reStyle.ReplaceAllString(text, "")
+
+	// Remove HTML tags
+	text = reTags.ReplaceAllString(text, " ")
+
+	// Normalize whitespace
+	text = reWhitespace.ReplaceAllString(text, " ")
+	text = reBlankLines.ReplaceAllString(text, "\n\n")
+
+	return strings.TrimSpace(text)
 }
