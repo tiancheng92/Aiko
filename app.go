@@ -79,6 +79,8 @@ func (a *App) startup(ctx context.Context) {
 
 	a.permStore = internaltools.NewPermissionStore(a.sqlDB)
 	a.mcpStore = mcp.NewServerStore(a.sqlDB)
+	// Remove stale tool rows that no longer exist.
+	_, _ = a.sqlDB.Exec(`DELETE FROM tool_permissions WHERE tool_name = 'lark'`)
 	// Ensure all built-in tools have rows in tool_permissions.
 	toolsCtx := context.Background()
 	for _, t := range internaltools.All() {
