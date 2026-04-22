@@ -18,7 +18,7 @@ const pos = computed(() => {
   if (props.petPos.x < 0) return { x: 40, y: 40 }
   return {
     x: props.petPos.x - 20,
-    y: props.petPos.y - 170,
+    y: props.petPos.y - 120,
   }
 })
 
@@ -78,7 +78,7 @@ onUnmounted(() => {
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.55),
     0 1px 0 rgba(255, 255, 255, 0.06) inset;
-  padding: 12px 14px 10px;
+  padding: 10px 12px 8px;
   animation: popIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
   color: #e5e7eb;
 }
@@ -102,7 +102,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 .notif-icon { font-size: 15px; flex-shrink: 0; }
 .notif-title {
@@ -131,7 +131,7 @@ onUnmounted(() => {
   line-height: 1.65;
   max-height: 120px;
   overflow-y: auto;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
   white-space: pre-wrap;
@@ -143,7 +143,7 @@ onUnmounted(() => {
   border: 1px solid rgba(99, 102, 241, 0.35);
   color: #a5b4fc;
   border-radius: 10px;
-  padding: 6px;
+  padding: 5px 8px;
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
