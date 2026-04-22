@@ -3,7 +3,7 @@ package middleware
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 )
 
@@ -15,9 +15,9 @@ func Logging() Middleware {
 			out, err := next(ctx, input)
 			elapsed := time.Since(start)
 			if err != nil {
-				log.Printf("[tool] %s error=%v elapsed=%s", name, err, elapsed)
+				slog.Error("tool invocation failed", "tool", name, "err", err, "elapsed", elapsed)
 			} else {
-				log.Printf("[tool] %s elapsed=%s", name, elapsed)
+				slog.Debug("tool invoked", "tool", name, "elapsed", elapsed)
 			}
 			return out, err
 		}

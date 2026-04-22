@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -86,7 +87,7 @@ func (a *App) startup(ctx context.Context) {
 
 	if len(a.cfg.MissingRequired()) == 0 {
 		if err := a.initLLMComponents(ctx); err != nil {
-			fmt.Fprintf(os.Stderr, "init llm components: %v\n", err)
+			slog.Error("init llm components failed", "err", err)
 		}
 	}
 

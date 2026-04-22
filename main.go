@@ -2,6 +2,8 @@ package main
 
 import (
 	"embed"
+	"log/slog"
+	"os"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/menu"
@@ -16,6 +18,13 @@ import (
 var assets embed.FS
 
 func main() {
+	// 使用 TEXT handler 输出到 stderr，带时间戳和来源文件
+	h := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level:     slog.LevelDebug,
+		AddSource: true,
+	})
+	slog.SetDefault(slog.New(h))
+
 	app := NewApp()
 
 	appMenu := menu.NewMenu()

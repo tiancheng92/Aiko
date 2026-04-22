@@ -3,7 +3,7 @@ package agent
 import (
 	"context"
 	"io"
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/cloudwego/eino/adk"
@@ -177,7 +177,7 @@ func (a *Agent) buildHistoryPrefix(ctx context.Context, userInput string) (strin
 
 	recent, err := a.shortMem.Recent(a.cfg.ShortTermLimit)
 	if err != nil {
-		log.Printf("short memory Recent error: %v", err)
+		slog.Warn("short memory Recent error", "err", err)
 		return longMemContext, nil
 	}
 
@@ -201,11 +201,11 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput, assistantReply
 	}
 
 	if _, err := a.shortMem.Add("user", userInput); err != nil {
-		log.Printf("agent: failed to save user message: %v", err)
+		slog.Error("save user message failed", "err", err)
 		return
 	}
 	if _, err := a.shortMem.Add("assistant", assistantReply); err != nil {
-		log.Printf("agent: failed to save assistant message: %v", err)
+		slog.Error("save assistant message failed", "err", err)
 		return
 	}
 
@@ -217,7 +217,7 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput, assistantReply
 
 	count, err := a.shortMem.Count()
 	if err != nil {
-		log.Printf("agent: failed to count messages: %v", err)
+		slog.Error("count messages failed", "err", err)
 		return
 	}
 
@@ -228,7 +228,7 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput, assistantReply
 
 	oldest, err := a.shortMem.OldestN(excess)
 	if err != nil {
-		log.Printf("agent: failed to get oldest messages: %v", err)
+		slog.Error("get oldest messages failed", "err", err)
 		return
 	}
 	if len(oldest) == 0 {
@@ -239,7 +239,7 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput, assistantReply
 	if a.longMem != nil {
 		block := memory.FormatBlock(oldest)
 		if err := a.longMem.Store(ctx, block); err != nil {
-			log.Printf("agent: failed to store long-term memory: %v", err)
+			slog.Error("store long-term memory failed", "err", err)
 			// Don't return — still delete from short-term.
 		}
 	}
@@ -250,6 +250,6 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput, assistantReply
 		ids[i] = m.ID
 	}
 	if err := a.shortMem.DeleteByIDs(ids); err != nil {
-		log.Printf("agent: failed to delete migrated messages: %v", err)
+		slog.Error("delete migrated messages failed", "err", err)
 	}
 }
