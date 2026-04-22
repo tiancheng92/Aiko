@@ -10,6 +10,7 @@ import (
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
+	"github.com/cloudwego/eino/schema"
 
 	"desktop-pet/internal/agent/middleware"
 	"desktop-pet/internal/config"
@@ -132,12 +133,19 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 						return
 					}
 					if msg != nil && msg.Content != "" {
+						// Skip tool role messages and assistant messages that only contain tool calls.
+						if msg.Role == schema.Tool || len(msg.ToolCalls) > 0 {
+							continue
+						}
 						ch <- StreamResult{Token: msg.Content}
 						sb.WriteString(msg.Content)
 					}
 				}
 			} else if mo.Message != nil && mo.Message.Content != "" {
-				ch <- StreamResult{Token: mo.Message.Content}
+				// Skip tool result messages and tool-call-only assistant messages.
+				if mo.Message.Role != schema.Tool && len(mo.Message.ToolCalls) == 0 {
+					ch <- StreamResult{Token: mo.Message.Content}
+				}
 				sb.WriteString(mo.Message.Content)
 			}
 		}
@@ -187,12 +195,19 @@ func (a *Agent) ChatDirect(ctx context.Context, prompt string) <-chan StreamResu
 						return
 					}
 					if msg != nil && msg.Content != "" {
+						// Skip tool role messages and assistant messages that only contain tool calls.
+						if msg.Role == schema.Tool || len(msg.ToolCalls) > 0 {
+							continue
+						}
 						ch <- StreamResult{Token: msg.Content}
 						sb.WriteString(msg.Content)
 					}
 				}
 			} else if mo.Message != nil && mo.Message.Content != "" {
-				ch <- StreamResult{Token: mo.Message.Content}
+				// Skip tool result messages and tool-call-only assistant messages.
+				if mo.Message.Role != schema.Tool && len(mo.Message.ToolCalls) == 0 {
+					ch <- StreamResult{Token: mo.Message.Content}
+				}
 				sb.WriteString(mo.Message.Content)
 			}
 		}
