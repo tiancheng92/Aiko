@@ -88,6 +88,8 @@ func (a *App) startup(ctx context.Context) {
 	for _, t := range []internaltools.Tool{
 		&internaltools.SearchKnowledgeTool{},
 		&internaltools.CronTool{},
+		// Pre-register lark tool so it appears in settings even before lark-cli is detected.
+		internaltools.WrapLarkTool(&lark.Tool{}),
 	} {
 		_ = a.permStore.EnsureRow(toolsCtx, t)
 	}
