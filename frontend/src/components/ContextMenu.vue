@@ -74,28 +74,36 @@ defineExpose({ show, hide })
 .ctx-menu {
   position: fixed;
   z-index: 99999;
-  background: #1f2937;
-  border: 1px solid #374151;
-  border-radius: 8px;
-  padding: 4px 0;
-  min-width: 160px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  background: rgba(15, 20, 35, 0.88);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 5px 0;
+  min-width: 172px;
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.6),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset;
   user-select: none;
 }
 .ctx-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   width: 100%;
   background: none;
   border: none;
-  color: #e5e7eb;
+  color: rgba(229, 231, 235, 0.9);
   padding: 7px 14px;
   font-size: 13px;
   cursor: pointer;
   text-align: left;
+  border-radius: 0;
+  box-shadow: none;
+  transition: background 0.12s;
+  font-weight: 400;
 }
-.ctx-item:hover { background: #374151; }
-.ctx-icon { font-size: 14px; width: 18px; text-align: center; }
-.ctx-divider { height: 1px; background: #374151; margin: 3px 0; }
+.ctx-item:hover { background: rgba(99, 102, 241, 0.15); color: #f9fafb; }
+.ctx-icon { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
+.ctx-divider { height: 1px; background: rgba(255, 255, 255, 0.06); margin: 4px 8px; }
 </style>
