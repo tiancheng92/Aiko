@@ -5,7 +5,8 @@ import {
   GetConfig, SaveConfig,
   ImportKnowledge, ListKnowledgeSources, DeleteKnowledgeSource,
   OpenFileDialog, GetToolPermissions, SetToolPermission,
-  ListLLMModels
+  ListLLMModels,
+  ListMCPServers, AddMCPServer, UpdateMCPServer, DeleteMCPServer
 } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { useModelPath } from '../composables/useModelPath.js'
@@ -29,6 +30,12 @@ const activeTab = ref('model')  // 'model' | 'pet' | 'tools' | 'knowledge'
 const llmModels = ref([])       // fetched from /v1/models
 const fetchingModels = ref(false)
 
+// MCP servers
+const mcpServers = ref([])
+const showMCPForm = ref(false)
+const mcpForm = ref({ id: 0, name: '', transport: 'stdio', command: '', args: '', url: '', enabled: true })
+const mcpFormError = ref('')
+
 // Draggable window state
 const pos = ref({ x: Math.round(window.innerWidth / 2 - 300), y: Math.round(window.innerHeight / 2 - 250) })
 let dragStart = null
@@ -40,6 +47,7 @@ onMounted(async () => {
   if (loaded) Object.assign(cfg.value, loaded)
   sources.value = await ListKnowledgeSources() || []
   try { toolPerms.value = await GetToolPermissions() || [] } catch {}
+  await fetchMCPServers()
   offProgress = EventsOn('knowledge:progress', (p) => { importProgress.value = p })
   // Auto-fetch model list if URL is already configured.
   if (cfg.value.LLMBaseURL) fetchLLMModels()
@@ -131,6 +139,62 @@ function onMouseUp() {
   window.removeEventListener('mousemove', onMouseMove)
   window.removeEventListener('mouseup', onMouseUp)
 }
+
+/** fetchMCPServers loads the MCP server list from the backend. */
+async function fetchMCPServers() {
+  try {
+    mcpServers.value = await ListMCPServers() || []
+  } catch (e) {
+    console.error('fetchMCPServers:', e)
+  }
+}
+
+/** openMCPForm opens the add-server form with empty fields. */
+function openMCPForm() {
+  mcpForm.value = { id: 0, name: '', transport: 'stdio', command: '', args: '', url: '', enabled: true }
+  mcpFormError.value = ''
+  showMCPForm.value = true
+}
+
+/** saveMCPServer adds or updates an MCP server. */
+async function saveMCPServer() {
+  mcpFormError.value = ''
+  const cfg = {
+    ...mcpForm.value,
+    args: mcpForm.value.args ? mcpForm.value.args.split(' ').filter(Boolean) : [],
+  }
+  try {
+    if (cfg.id === 0) {
+      await AddMCPServer(cfg)
+    } else {
+      await UpdateMCPServer(cfg)
+    }
+    showMCPForm.value = false
+    await fetchMCPServers()
+  } catch (e) {
+    mcpFormError.value = String(e)
+  }
+}
+
+/** deleteMCPServer removes an MCP server by ID. */
+async function deleteMCPServer(id) {
+  try {
+    await DeleteMCPServer(id)
+    await fetchMCPServers()
+  } catch (e) {
+    console.error('deleteMCPServer:', e)
+  }
+}
+
+/** toggleMCPServer toggles the enabled state of an MCP server. */
+async function toggleMCPServer(srv) {
+  try {
+    await UpdateMCPServer({ ...srv, enabled: !srv.enabled })
+    await fetchMCPServers()
+  } catch (e) {
+    console.error('toggleMCPServer:', e)
+  }
+}
 </script>
 
 <template>
@@ -148,6 +212,7 @@ function onMouseUp() {
         <button :class="{ active: activeTab === 'pet' }" @click="activeTab = 'pet'">🐾 宠物</button>
         <button :class="{ active: activeTab === 'tools' }" @click="activeTab = 'tools'">🔧 工具权限</button>
         <button :class="{ active: activeTab === 'knowledge' }" @click="activeTab = 'knowledge'">📚 知识库</button>
+        <button :class="{ active: activeTab === 'mcp' }" @click="activeTab = 'mcp'">🔌 MCP服务器</button>
       </nav>
 
       <div class="win-content">
@@ -229,6 +294,68 @@ function onMouseUp() {
             </li>
           </ul>
           <p v-else class="empty">暂无知识库文件</p>
+        </div>
+
+        <!-- MCP Servers Section -->
+        <div v-if="activeTab === 'mcp'" class="tab-pane">
+          <div class="section-header">
+            <h3>MCP 服务器</h3>
+            <button class="btn-small" @click="openMCPForm">+ 添加</button>
+          </div>
+
+          <div v-if="mcpServers.length === 0" class="empty-hint">
+            暂无 MCP 服务器，点击"添加"接入外部工具
+          </div>
+
+          <div v-for="srv in mcpServers" :key="srv.id" class="mcp-row">
+            <div class="mcp-info">
+              <span class="mcp-name">{{ srv.name }}</span>
+              <span class="mcp-transport">{{ srv.transport }}</span>
+              <span class="mcp-endpoint">{{ srv.transport === 'stdio' ? srv.command : srv.url }}</span>
+            </div>
+            <div class="mcp-actions">
+              <button class="btn-toggle" :class="{ active: srv.enabled }" @click="toggleMCPServer(srv)">
+                {{ srv.enabled ? '已启用' : '已禁用' }}
+              </button>
+              <button class="btn-danger-small" @click="deleteMCPServer(srv.id)">删除</button>
+            </div>
+          </div>
+
+          <!-- Add/Edit Form -->
+          <div v-if="showMCPForm" class="mcp-form">
+            <div class="form-row">
+              <label>名称</label>
+              <input v-model="mcpForm.name" placeholder="my-server" />
+            </div>
+            <div class="form-row">
+              <label>传输方式</label>
+              <select v-model="mcpForm.transport">
+                <option value="stdio">stdio</option>
+                <option value="sse">SSE</option>
+              </select>
+            </div>
+            <template v-if="mcpForm.transport === 'stdio'">
+              <div class="form-row">
+                <label>命令</label>
+                <input v-model="mcpForm.command" placeholder="/usr/local/bin/mcp-server" />
+              </div>
+              <div class="form-row">
+                <label>参数（空格分隔）</label>
+                <input v-model="mcpForm.args" placeholder="--flag value" />
+              </div>
+            </template>
+            <template v-else>
+              <div class="form-row">
+                <label>URL</label>
+                <input v-model="mcpForm.url" placeholder="http://localhost:8080/sse" />
+              </div>
+            </template>
+            <div v-if="mcpFormError" class="form-error">{{ mcpFormError }}</div>
+            <div class="form-buttons">
+              <button class="btn-primary" @click="saveMCPServer">保存</button>
+              <button class="btn-secondary" @click="showMCPForm = false">取消</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -485,4 +612,151 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
   background: rgba(255,255,255,0.01);
 }
 .status-msg { color: rgba(107, 114, 128, 0.8); font-size: 12px; flex: 1; }
+
+/* MCP Servers */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.section-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+.btn-small {
+  background: rgba(55, 65, 81, 0.6);
+  color: rgba(209, 213, 219, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 11px;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+  box-shadow: none;
+}
+.btn-small:hover { background: rgba(75, 85, 99, 0.7); border-color: rgba(255,255,255,0.15); }
+
+.mcp-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  gap: 8px;
+}
+.mcp-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.mcp-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+.mcp-transport {
+  font-size: 11px;
+  opacity: 0.6;
+  text-transform: uppercase;
+}
+.mcp-endpoint {
+  font-size: 11px;
+  opacity: 0.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mcp-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.btn-toggle {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.05);
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.6;
+  box-shadow: none;
+}
+.btn-toggle.active {
+  opacity: 1;
+  border-color: rgba(100,200,100,0.5);
+  background: rgba(100,200,100,0.1);
+  color: #6dc96d;
+}
+.btn-danger-small {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,80,80,0.3);
+  background: rgba(255,80,80,0.08);
+  color: #ff6b6b;
+  cursor: pointer;
+  box-shadow: none;
+}
+.mcp-form {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.form-row label {
+  font-size: 12px;
+  color: rgba(156, 163, 175, 0.8);
+  font-weight: 500;
+}
+.form-error {
+  color: #ff6b6b;
+  font-size: 12px;
+}
+.form-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.btn-primary {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+}
+.btn-secondary {
+  background: rgba(55, 65, 81, 0.6);
+  color: rgba(209, 213, 219, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: none;
+}
+.empty-hint {
+  font-size: 12px;
+  opacity: 0.5;
+  padding: 8px 0;
+}
 </style>
