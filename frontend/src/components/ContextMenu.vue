@@ -74,16 +74,17 @@ defineExpose({ show, hide })
 .ctx-menu {
   position: fixed;
   z-index: 99999;
-  background: rgba(15, 20, 35, 0.88);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  background: rgba(12, 15, 26, 0.65);
+  backdrop-filter: blur(40px) saturate(200%) brightness(0.9);
+  -webkit-backdrop-filter: blur(40px) saturate(200%) brightness(0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
   padding: 5px 0;
   min-width: 172px;
   box-shadow:
-    0 16px 40px rgba(0, 0, 0, 0.6),
-    0 1px 0 rgba(255, 255, 255, 0.05) inset;
+    0 12px 32px rgba(0, 0, 0, 0.55),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset,
+    0 0 0 0.5px rgba(255, 255, 255, 0.04) inset;
   user-select: none;
 }
 .ctx-item {

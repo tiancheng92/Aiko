@@ -893,13 +893,15 @@ async function fetchLarkStatus() {
   z-index: 99990;
   width: 640px;
   height: 520px;
-  background: rgba(13, 17, 28, 0.88);
-  backdrop-filter: blur(24px) saturate(160%);
-  -webkit-backdrop-filter: blur(24px) saturate(160%);
-  border: none;
-  border-radius: 16px;
+  background: rgba(12, 15, 26, 0.55);
+  backdrop-filter: blur(40px) saturate(200%) brightness(0.9);
+  -webkit-backdrop-filter: blur(40px) saturate(200%) brightness(0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
   box-shadow:
-    0 24px 64px rgba(0, 0, 0, 0.8);
+    0 12px 40px rgba(0, 0, 0, 0.5),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset,
+    0 0 0 0.5px rgba(255, 255, 255, 0.04) inset;
   display: flex;
   flex-direction: column;
   overflow: hidden;
