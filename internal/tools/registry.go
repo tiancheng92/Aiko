@@ -50,6 +50,7 @@ func All() []Tool {
 		&GetHardwareInfoTool{},
 		&GetNetworkStatusTool{},
 		&GetLocationTool{},
+		&GetWeatherTool{},
 		&WebSearchTool{},
 		&WebFetchTool{},
 	}
