@@ -26,6 +26,7 @@ import (
 	"desktop-pet/internal/db"
 	"desktop-pet/internal/knowledge"
 	"desktop-pet/internal/llm"
+	"desktop-pet/internal/mcp"
 	"desktop-pet/internal/memory"
 	"desktop-pet/internal/scheduler"
 	"desktop-pet/internal/skill"
@@ -41,6 +42,7 @@ type App struct {
 	vectorDB    *chromem.DB
 	shortMem    *memory.ShortStore
 	permStore   *internaltools.PermissionStore
+	mcpStore    *mcp.ServerStore
 
 	// mu guards fields that may be replaced on config save while agent goroutines run.
 	mu          sync.RWMutex
@@ -75,6 +77,7 @@ func (a *App) startup(ctx context.Context) {
 	a.shortMem = memory.NewShortStore(a.sqlDB)
 
 	a.permStore = internaltools.NewPermissionStore(a.sqlDB)
+	a.mcpStore = mcp.NewServerStore(a.sqlDB)
 	// Ensure all built-in tools have rows in tool_permissions.
 	toolsCtx := context.Background()
 	for _, t := range internaltools.All() {
@@ -211,8 +214,10 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("load skills: %w", err)
 	}
+	mcpTools := mcp.LoadTools(ctx, a.mcpStore)
 	allTools := append(builtinTools, contextTools...)
 	allTools = append(allTools, skillTools...)
+	allTools = append(allTools, mcpTools...)
 
 	// Middleware chain: logging -> retry -> error recovery (outermost first)
 	mw := middleware.Chain(
@@ -546,4 +551,24 @@ func (a *App) ListLLMModels(baseURL, apiKey string) ([]string, error) {
 	}
 	sort.Strings(ids)
 	return ids, nil
+}
+
+// ListMCPServers returns all configured MCP server entries.
+func (a *App) ListMCPServers() ([]mcp.ServerConfig, error) {
+	return a.mcpStore.List(a.ctx)
+}
+
+// AddMCPServer adds a new MCP server configuration.
+func (a *App) AddMCPServer(cfg mcp.ServerConfig) (mcp.ServerConfig, error) {
+	return a.mcpStore.Add(a.ctx, cfg)
+}
+
+// UpdateMCPServer updates an existing MCP server configuration by ID.
+func (a *App) UpdateMCPServer(cfg mcp.ServerConfig) error {
+	return a.mcpStore.Update(a.ctx, cfg)
+}
+
+// DeleteMCPServer removes an MCP server configuration by ID.
+func (a *App) DeleteMCPServer(id int64) error {
+	return a.mcpStore.Delete(a.ctx, id)
 }
