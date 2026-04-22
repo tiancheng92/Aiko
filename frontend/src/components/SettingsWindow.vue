@@ -33,7 +33,7 @@ const fetchingModels = ref(false)
 // MCP servers
 const mcpServers = ref([])
 const showMCPForm = ref(false)
-const mcpForm = ref({ id: 0, name: '', transport: 'stdio', command: '', args: '', url: '', enabled: true })
+const mcpForm = ref({ id: 0, name: '', transport: 'stdio', command: '', args: '', url: '', headers: '', enabled: true })
 const mcpFormError = ref('')
 
 // Draggable window state
@@ -151,7 +151,7 @@ async function fetchMCPServers() {
 
 /** openMCPForm opens the add-server form with empty fields. */
 function openMCPForm() {
-  mcpForm.value = { id: 0, name: '', transport: 'stdio', command: '', args: '', url: '', enabled: true }
+  mcpForm.value = { id: 0, name: '', transport: 'stdio', command: '', args: '', url: '', headers: '', enabled: true }
   mcpFormError.value = ''
   showMCPForm.value = true
 }
@@ -159,9 +159,22 @@ function openMCPForm() {
 /** saveMCPServer adds or updates an MCP server. */
 async function saveMCPServer() {
   mcpFormError.value = ''
+  // Parse headers string ("Key: Value\nKey2: Value2") into map
+  const headers = {}
+  if (mcpForm.value.headers) {
+    for (const line of mcpForm.value.headers.split('\n')) {
+      const idx = line.indexOf(':')
+      if (idx > 0) {
+        const k = line.slice(0, idx).trim()
+        const v = line.slice(idx + 1).trim()
+        if (k) headers[k] = v
+      }
+    }
+  }
   const cfg = {
     ...mcpForm.value,
     args: mcpForm.value.args ? mcpForm.value.args.split(' ').filter(Boolean) : [],
+    headers,
   }
   try {
     if (cfg.id === 0) {
@@ -332,6 +345,7 @@ async function toggleMCPServer(srv) {
               <select v-model="mcpForm.transport">
                 <option value="stdio">stdio</option>
                 <option value="sse">SSE</option>
+                <option value="http">HTTP (Streamable)</option>
               </select>
             </div>
             <template v-if="mcpForm.transport === 'stdio'">
@@ -348,6 +362,10 @@ async function toggleMCPServer(srv) {
               <div class="form-row">
                 <label>URL</label>
                 <input v-model="mcpForm.url" placeholder="http://localhost:8080/sse" />
+              </div>
+              <div class="form-row">
+                <label>请求头（每行一个，格式：Key: Value）</label>
+                <textarea v-model="mcpForm.headers" rows="3" placeholder="Authorization: Bearer xxx&#10;X-Custom: value" />
               </div>
             </template>
             <div v-if="mcpFormError" class="form-error">{{ mcpFormError }}</div>
