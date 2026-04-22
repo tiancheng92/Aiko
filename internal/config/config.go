@@ -3,6 +3,7 @@ package config
 import (
 	"database/sql"
 	"strconv"
+	"strings"
 )
 
 // Config holds all application settings.
@@ -15,7 +16,7 @@ type Config struct {
 	EmbeddingDim   int
 	SystemPrompt   string
 	ShortTermLimit int
-	SkillsDir      string
+	SkillsDirs     []string // skills 目录列表，支持多个路径
 	PetSize        int // 宠物显示尺寸（像素），0 表示自动根据屏幕高度计算
 	ChatWidth      int // 聊天框宽度（像素），0 表示使用默认值
 	ChatHeight     int // 聊天框高度（像素），0 表示使用默认值
@@ -53,7 +54,7 @@ func (s *Store) Load() (*Config, error) {
 		EmbeddingModel: m["embedding_model"],
 		Live2DModel:    orDefault(m["live2d_model"], "hiyori"),
 		SystemPrompt:   m["system_prompt"],
-		SkillsDir:      m["skills_dir"],
+		SkillsDirs:     splitLines(m["skills_dirs"]),
 	}
 	cfg.EmbeddingDim = parseInt(m["embedding_dim"], 1536)
 	cfg.ShortTermLimit = parseInt(m["short_term_limit"], 30)
@@ -73,7 +74,7 @@ func (s *Store) Save(cfg *Config) error {
 		"embedding_dim":    strconv.Itoa(cfg.EmbeddingDim),
 		"system_prompt":    cfg.SystemPrompt,
 		"short_term_limit": strconv.Itoa(cfg.ShortTermLimit),
-		"skills_dir":       cfg.SkillsDir,
+		"skills_dirs":      joinLines(cfg.SkillsDirs),
 		"live2d_model":     cfg.Live2DModel,
 		"pet_size":         strconv.Itoa(cfg.PetSize),
 		"chat_width":       strconv.Itoa(cfg.ChatWidth),
@@ -129,4 +130,18 @@ func orDefault(s, def string) string {
 	}
 	return s
 }
+
+// splitLines splits a newline-separated string into non-empty trimmed lines.
+func splitLines(s string) []string {
+	var out []string
+	for _, line := range strings.Split(s, "\n") {
+		if t := strings.TrimSpace(line); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// joinLines joins a slice of strings with newlines.
+func joinLines(ss []string) string { return strings.Join(ss, "\n") }
 

@@ -203,7 +203,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	}
 
 	contextTools := internaltools.AllContextual(a.permStore, knowledgeSt, sched)
-	skillTools, err := skill.LoadAll(a.cfg.SkillsDir)
+	skillTools, err := skill.LoadAll(a.cfg.SkillsDirs)
 	if err != nil {
 		return fmt.Errorf("load skills: %w", err)
 	}

@@ -45,9 +45,22 @@ func (t *skillTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) 
 	return fmt.Sprintf("skill %s: not yet implemented", t.def.Name), nil
 }
 
-// LoadAll scans skillsDir and returns one InvokableTool per valid skill.yaml.
-// Returns nil, nil if skillsDir is empty or does not exist.
-func LoadAll(skillsDir string) ([]tool.BaseTool, error) {
+// LoadAll scans each directory in skillsDirs and returns one InvokableTool per valid skill.yaml.
+// Returns nil, nil if skillsDirs is empty.
+func LoadAll(skillsDirs []string) ([]tool.BaseTool, error) {
+	var tools []tool.BaseTool
+	for _, dir := range skillsDirs {
+		ts, err := loadDir(dir)
+		if err != nil {
+			return nil, err
+		}
+		tools = append(tools, ts...)
+	}
+	return tools, nil
+}
+
+// loadDir scans a single directory for skill subdirectories containing skill.yaml.
+func loadDir(skillsDir string) ([]tool.BaseTool, error) {
 	if skillsDir == "" {
 		return nil, nil
 	}

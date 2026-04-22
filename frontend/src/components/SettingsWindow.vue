@@ -18,7 +18,7 @@ const emit = defineEmits(['close'])
 const cfg = ref({
   LLMBaseURL: '', LLMAPIKey: '', LLMModel: '', EmbeddingModel: '',
   Live2DModel: 'hiyori',
-  SystemPrompt: '', ShortTermLimit: 30, SkillsDir: '',
+  SystemPrompt: '', ShortTermLimit: 30, SkillsDirs: '',
   EmbeddingDim: 1536,
   PetSize: 0,
   ChatWidth: 0,
@@ -60,7 +60,13 @@ let offProgress = null
 onMounted(async () => {
   loadModels()
   const loaded = await GetConfig()
-  if (loaded) Object.assign(cfg.value, loaded)
+  if (loaded) {
+    Object.assign(cfg.value, loaded)
+    // SkillsDirs comes as []string from Go; join to newline-separated string for textarea.
+    cfg.value.SkillsDirs = Array.isArray(loaded.SkillsDirs)
+      ? loaded.SkillsDirs.join('\n')
+      : (loaded.SkillsDirs || '')
+  }
   sources.value = await ListKnowledgeSources() || []
   try { toolPerms.value = await GetToolPermissions() || [] } catch {}
   await fetchMCPServers()
@@ -114,7 +120,14 @@ async function save() {
   saving.value = true
   statusMsg.value = ''
   try {
-    await SaveConfig(cfg.value)
+    // Convert SkillsDirs textarea string back to []string for Go.
+    const payload = {
+      ...cfg.value,
+      SkillsDirs: cfg.value.SkillsDirs
+        ? cfg.value.SkillsDirs.split('\n').map(s => s.trim()).filter(Boolean)
+        : [],
+    }
+    await SaveConfig(payload)
     EventsEmit('config:model:changed', cfg.value.Live2DModel)
     statusMsg.value = '已保存'
   } catch (e) {
@@ -434,7 +447,7 @@ async function fetchLarkStatus() {
           </label>
           <label>System Prompt<textarea v-model="cfg.SystemPrompt" rows="5" /></label>
           <label>短期记忆轮数（1-100）<input type="number" v-model.number="cfg.ShortTermLimit" min="1" max="100" /></label>
-          <label>Skills 目录<input v-model="cfg.SkillsDir" placeholder="~/.desktop-pet/skills" /></label>
+          <label>Skills 目录<span class="field-hint">每行一个路径</span><textarea v-model="cfg.SkillsDirs" rows="3" placeholder="~/.desktop-pet/skills" /></label>
         </div>
 
         <!-- 工具权限 -->

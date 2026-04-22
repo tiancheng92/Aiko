@@ -9,7 +9,7 @@ export namespace config {
 	    EmbeddingDim: number;
 	    SystemPrompt: string;
 	    ShortTermLimit: number;
-	    SkillsDir: string;
+	    SkillsDirs: string[];
 	    PetSize: number;
 	    ChatWidth: number;
 	    ChatHeight: number;
@@ -28,7 +28,7 @@ export namespace config {
 	        this.EmbeddingDim = source["EmbeddingDim"];
 	        this.SystemPrompt = source["SystemPrompt"];
 	        this.ShortTermLimit = source["ShortTermLimit"];
-	        this.SkillsDir = source["SkillsDir"];
+	        this.SkillsDirs = source["SkillsDirs"];
 	        this.PetSize = source["PetSize"];
 	        this.ChatWidth = source["ChatWidth"];
 	        this.ChatHeight = source["ChatHeight"];
