@@ -154,3 +154,40 @@ func (s *Scheduler) scheduleJob(j Job) error {
     s.mu.Unlock()
     return nil
 }
+
+// SeedDefaultJobs inserts built-in preset jobs if they don't already exist.
+// Each job is inserted only if no job with the same name exists.
+func (s *Scheduler) SeedDefaultJobs(ctx context.Context) error {
+    presets := []struct {
+        name     string
+        desc     string
+        schedule string
+        prompt   string
+    }{
+        {
+            name:     "每日早报",
+            desc:     "每天早上8点生成简短早报",
+            schedule: "0 8 * * *",
+            prompt:   "请生成今天的简短早报，包含日期、星期、一句激励语和今日注意事项提示。",
+        },
+        {
+            name:     "定时天气提醒",
+            desc:     "每天中午提醒查看天气",
+            schedule: "0 12 * * *",
+            prompt:   "请提醒我去查看今天下午和明天的天气预报，做好出行准备。",
+        },
+    }
+    for _, p := range presets {
+        var count int
+        err := s.db.QueryRowContext(ctx,
+            `SELECT COUNT(*) FROM cron_jobs WHERE name = ?`, p.name,
+        ).Scan(&count)
+        if err != nil || count > 0 {
+            continue
+        }
+        if _, err := s.CreateJob(ctx, p.name, p.desc, p.schedule, p.prompt); err != nil {
+            slog.Warn("seed default job failed", "name", p.name, "err", err)
+        }
+    }
+    return nil
+}

@@ -202,6 +202,9 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	if err := sched.Start(a.ctx); err != nil {
 		slog.Error("scheduler start failed", "err", err)
 	}
+	if err := sched.SeedDefaultJobs(a.ctx); err != nil {
+		slog.Warn("seed default jobs failed", "err", err)
+	}
 
 	contextTools := internaltools.AllContextual(a.permStore, knowledgeSt, sched)
 	skillTools, err := skill.LoadAll(a.cfg.SkillsDir)
