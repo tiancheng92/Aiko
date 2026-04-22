@@ -85,18 +85,10 @@ static void enableClickThrough() {
     });
 }
 
-// 全局 Go 函数指针，由 Go 侧在 startup 时设置
-static void (*gHotkeyCallback)(void) = NULL;
-
 // goHotkeyFired is implemented in Go (//export goHotkeyFired).
 extern void goHotkeyFired(void);
 
-// setHotkeyCallback 由 Go 侧调用，注册热键触发时的回调。
-static void setHotkeyCallback(void (*cb)(void)) {
-    gHotkeyCallback = cb;
-}
-
-// enableGlobalHotkey 注册 Cmd+Shift+P 的全局 NSEvent 监听器。
+// enableGlobalHotkey 注册 Cmd+Shift+P 的全局 NSEvent 监听器，直接调用 Go 导出函数。
 static void enableGlobalHotkey() {
     dispatch_async(dispatch_get_main_queue(), ^{
         NSEventMask keyMask = NSEventMaskKeyDown;
@@ -107,18 +99,15 @@ static void enableGlobalHotkey() {
                     (NSEventModifierFlagCommand | NSEventModifierFlagShift);
                 if (evt.keyCode == 35 &&
                     flags == (NSEventModifierFlagCommand | NSEventModifierFlagShift)) {
-                    if (gHotkeyCallback) {
-                        dispatch_async(dispatch_get_main_queue(), ^{
-                            gHotkeyCallback();
-                        });
-                    }
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        goHotkeyFired();
+                    });
                 }
             }];
     });
 }
 */
 import "C"
-import "unsafe"
 
 // enableClickThrough installs per-pixel click-through for the main window.
 func enableClickThrough() {
@@ -138,6 +127,5 @@ func goHotkeyFired() {
 // RegisterHotkeyCallback registers fn to be called when Cmd+Shift+P is pressed globally.
 func RegisterHotkeyCallback(fn func()) {
 	hotkeyHandler = fn
-	C.setHotkeyCallback((*[0]byte)(unsafe.Pointer(C.goHotkeyFired)))
 	C.enableGlobalHotkey()
 }
