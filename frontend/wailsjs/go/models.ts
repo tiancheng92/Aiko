@@ -10,7 +10,6 @@ export namespace config {
 	    SystemPrompt: string;
 	    ShortTermLimit: number;
 	    SkillsDir: string;
-	    Hotkey: string;
 	    PetSize: number;
 	    ChatWidth: number;
 	    ChatHeight: number;
@@ -30,7 +29,6 @@ export namespace config {
 	        this.SystemPrompt = source["SystemPrompt"];
 	        this.ShortTermLimit = source["ShortTermLimit"];
 	        this.SkillsDir = source["SkillsDir"];
-	        this.Hotkey = source["Hotkey"];
 	        this.PetSize = source["PetSize"];
 	        this.ChatWidth = source["ChatWidth"];
 	        this.ChatHeight = source["ChatHeight"];

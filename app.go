@@ -118,11 +118,6 @@ func (a *App) startup(ctx context.Context) {
 
 	// Allow mouse events to pass through transparent window regions.
 	enableClickThrough()
-
-	// Register global Cmd+Shift+P hotkey to toggle the chat bubble.
-	RegisterHotkeyCallback(func() {
-		wailsruntime.EventsEmit(a.ctx, "bubble:toggle")
-	})
 }
 
 // initLLMComponents initializes chat model, embedder, memory stores, skills, and agent.

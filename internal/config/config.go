@@ -16,7 +16,6 @@ type Config struct {
 	SystemPrompt   string
 	ShortTermLimit int
 	SkillsDir      string
-	Hotkey         string
 	PetSize        int // 宠物显示尺寸（像素），0 表示自动根据屏幕高度计算
 	ChatWidth      int // 聊天框宽度（像素），0 表示使用默认值
 	ChatHeight     int // 聊天框高度（像素），0 表示使用默认值
@@ -55,7 +54,6 @@ func (s *Store) Load() (*Config, error) {
 		Live2DModel:    orDefault(m["live2d_model"], "hiyori"),
 		SystemPrompt:   m["system_prompt"],
 		SkillsDir:      m["skills_dir"],
-		Hotkey:         orDefault(m["hotkey"], "Cmd+Shift+P"),
 	}
 	cfg.EmbeddingDim = parseInt(m["embedding_dim"], 1536)
 	cfg.ShortTermLimit = parseInt(m["short_term_limit"], 30)
@@ -76,7 +74,6 @@ func (s *Store) Save(cfg *Config) error {
 		"system_prompt":    cfg.SystemPrompt,
 		"short_term_limit": strconv.Itoa(cfg.ShortTermLimit),
 		"skills_dir":       cfg.SkillsDir,
-		"hotkey":           cfg.Hotkey,
 		"live2d_model":     cfg.Live2DModel,
 		"pet_size":         strconv.Itoa(cfg.PetSize),
 		"chat_width":       strconv.Itoa(cfg.ChatWidth),

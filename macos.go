@@ -25,8 +25,7 @@ static WKWebView *findWebView(NSView *view) {
 }
 
 // hitTestPoint evaluates JS to determine whether (cssX, cssY) lies over an
-// interactive element (.floating-ball or .chat-bubble). Toggles mouse-event
-// passthrough based on the result.
+// interactive element. Toggles mouse-event passthrough based on the result.
 static void hitTestPoint(CGFloat cssX, CGFloat cssY) {
     if (!gWebView || !gWindow) return;
     NSString *js = [NSString stringWithFormat:
@@ -84,48 +83,10 @@ static void enableClickThrough() {
             }];
     });
 }
-
-// goHotkeyFired is implemented in Go (//export goHotkeyFired).
-extern void goHotkeyFired(void);
-
-// enableGlobalHotkey 注册 Cmd+Shift+P 的全局 NSEvent 监听器，直接调用 Go 导出函数。
-static void enableGlobalHotkey() {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        NSEventMask keyMask = NSEventMaskKeyDown;
-        [NSEvent addGlobalMonitorForEventsMatchingMask:keyMask
-            handler:^(NSEvent *evt) {
-                // keyCode 35 = P, flags & (Cmd|Shift)
-                NSEventModifierFlags flags = evt.modifierFlags &
-                    (NSEventModifierFlagCommand | NSEventModifierFlagShift);
-                if (evt.keyCode == 35 &&
-                    flags == (NSEventModifierFlagCommand | NSEventModifierFlagShift)) {
-                    dispatch_async(dispatch_get_main_queue(), ^{
-                        goHotkeyFired();
-                    });
-                }
-            }];
-    });
-}
 */
 import "C"
 
 // enableClickThrough installs per-pixel click-through for the main window.
 func enableClickThrough() {
 	C.enableClickThrough()
-}
-
-// hotkeyHandler is set by RegisterHotkeyCallback and called from C on Cmd+Shift+P.
-var hotkeyHandler func()
-
-//export goHotkeyFired
-func goHotkeyFired() {
-	if hotkeyHandler != nil {
-		hotkeyHandler()
-	}
-}
-
-// RegisterHotkeyCallback registers fn to be called when Cmd+Shift+P is pressed globally.
-func RegisterHotkeyCallback(fn func()) {
-	hotkeyHandler = fn
-	C.enableGlobalHotkey()
 }

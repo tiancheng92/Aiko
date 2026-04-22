@@ -17,7 +17,7 @@ const emit = defineEmits(['close'])
 const cfg = ref({
   LLMBaseURL: '', LLMAPIKey: '', LLMModel: '', EmbeddingModel: '',
   Live2DModel: 'hiyori',
-  SystemPrompt: '', ShortTermLimit: 30, SkillsDir: '', Hotkey: 'Cmd+Shift+P',
+  SystemPrompt: '', ShortTermLimit: 30, SkillsDir: '',
   EmbeddingDim: 1536,
   PetSize: 0,
   ChatWidth: 0,
