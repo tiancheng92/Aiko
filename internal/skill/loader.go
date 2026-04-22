@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
 
 	localbackend "github.com/cloudwego/eino-ext/adk/backend/local"
 	"github.com/cloudwego/eino/adk"
@@ -16,7 +19,7 @@ import (
 func NewMiddleware(ctx context.Context, skillsDirs []string) (adk.ChatModelAgentMiddleware, error) {
 	var backends []skill.Backend
 	for _, dir := range skillsDirs {
-		b, err := backendForDir(ctx, dir)
+		b, err := backendForDir(ctx, expandHome(dir))
 		if err != nil {
 			return nil, err
 		}
@@ -37,8 +40,11 @@ func NewMiddleware(ctx context.Context, skillsDirs []string) (adk.ChatModelAgent
 }
 
 // backendForDir creates a filesystem skill.Backend for a single directory.
-// Returns nil, nil if dir does not exist.
+// Returns nil, nil if dir does not exist or is not a directory.
 func backendForDir(ctx context.Context, dir string) (skill.Backend, error) {
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		return nil, nil
+	}
 	lb, err := localbackend.NewBackend(ctx, &localbackend.Config{})
 	if err != nil {
 		return nil, err
@@ -48,7 +54,6 @@ func backendForDir(ctx context.Context, dir string) (skill.Backend, error) {
 		BaseDir: dir,
 	})
 	if err != nil {
-		// Non-existent base dir produces an error; log and skip.
 		slog.Warn("skill: skipping directory", "dir", dir, "err", err)
 		return nil, nil
 	}
@@ -95,4 +100,16 @@ func (m *multiBackend) Get(ctx context.Context, name string) (skill.Skill, error
 		}
 	}
 	return skill.Skill{}, fmt.Errorf("skill %q not found", name)
+}
+
+// expandHome replaces a leading "~" with the current user's home directory.
+func expandHome(path string) string {
+	if !strings.HasPrefix(path, "~") {
+		return path
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+	return filepath.Join(home, path[1:])
 }
