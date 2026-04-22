@@ -76,6 +76,9 @@ static ToolsLocationResult gToolsLocResult;
         gToolsLocResult.status = 1;
         strncpy(gToolsLocResult.errMsg, "location permission denied", 255);
         dispatch_semaphore_signal(self.sem);
+    } else if (status == kCLAuthorizationStatusAuthorized) {
+        // Authorization just granted — (re)start location updates.
+        [self.mgr startUpdatingLocation];
     }
 }
 
