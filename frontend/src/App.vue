@@ -3,8 +3,9 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import Live2DPet from './components/Live2DPet.vue'
 import ChatBubble from './components/ChatBubble.vue'
 import SettingsWindow from './components/SettingsWindow.vue'
-import { MissingRequiredConfig } from '../wailsjs/go/main/App'
-import { EventsOn } from '../wailsjs/runtime/runtime'
+import NotificationBubble from './components/NotificationBubble.vue'
+import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown } from '../wailsjs/go/main/App'
+import { EventsOn, EventsEmit } from '../wailsjs/runtime/runtime'
 
 const bubbleOpen = ref(false)
 const settingsOpen = ref(false)
@@ -22,11 +23,17 @@ async function waitForRuntime() {
 onMounted(async () => {
   await waitForRuntime()
   const missing = await MissingRequiredConfig()
+  const firstLaunch = await IsFirstLaunch()
+  if (firstLaunch) {
+    await MarkWelcomeShown()
+    // Show welcome notification bubble above the pet.
+    EventsEmit('notification:show', {
+      title: '你好！我是你的桌面宠物 ✨',
+      message: '请先在设置中配置 LLM 接口，然后就可以开始聊天了~',
+    })
+  }
   if (missing && missing.length > 0) {
-    // Open the chat bubble first so the welcome message is visible,
-    // then open settings after a short delay so it doesn't cover the greeting.
-    bubbleOpen.value = true
-    setTimeout(() => { settingsOpen.value = true }, 1200)
+    setTimeout(() => { settingsOpen.value = true }, firstLaunch ? 2500 : 0)
   }
   offToggle = EventsOn('bubble:toggle', () => { bubbleOpen.value = !bubbleOpen.value })
 })
@@ -61,5 +68,10 @@ function openSettings() {
   <SettingsWindow
     v-if="settingsOpen"
     @close="settingsOpen = false"
+  />
+  <NotificationBubble
+    :pet-pos="ballPos"
+    :pet-size="ballSize"
+    :bubble-open="bubbleOpen"
   />
 </template>
