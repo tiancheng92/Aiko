@@ -34,7 +34,7 @@ type Agent struct {
 
 // New constructs an Agent with a ReAct runner backed by the given chat model,
 // memory stores, and optional tools. longMem may be nil when vector memory is
-// not configured.
+// not configured. skillMW may be nil when no skills are configured.
 func New(
 	ctx context.Context,
 	chatModel model.ToolCallingChatModel,
@@ -43,6 +43,7 @@ func New(
 	tools []tool.BaseTool,
 	cfg *config.Config,
 	mw middleware.Middleware,
+	skillMW adk.ChatModelAgentMiddleware,
 ) (*Agent, error) {
 	// Apply middleware chain to all tools if provided.
 	if mw != nil && len(tools) > 0 {
@@ -62,6 +63,10 @@ func New(
 				Tools: tools,
 			},
 		}
+	}
+
+	if skillMW != nil {
+		agentCfg.Handlers = append(agentCfg.Handlers, skillMW)
 	}
 
 	cma, err := adk.NewChatModelAgent(ctx, agentCfg)

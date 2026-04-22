@@ -203,14 +203,15 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	}
 
 	contextTools := internaltools.AllContextual(a.permStore, knowledgeSt, sched)
-	skillTools, err := skill.LoadAll(a.cfg.SkillsDirs)
+	mcpTools := mcp.LoadTools(ctx, a.mcpStore)
+	allTools := append(builtinTools, contextTools...)
+	allTools = append(allTools, mcpTools...)
+
+	// Build skill middleware from configured directories.
+	skillMW, err := skill.NewMiddleware(ctx, a.cfg.SkillsDirs)
 	if err != nil {
 		return fmt.Errorf("load skills: %w", err)
 	}
-	mcpTools := mcp.LoadTools(ctx, a.mcpStore)
-	allTools := append(builtinTools, contextTools...)
-	allTools = append(allTools, skillTools...)
-	allTools = append(allTools, mcpTools...)
 
 	// Middleware chain: logging -> retry -> error recovery (outermost first)
 	mw := middleware.Chain(
@@ -219,7 +220,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		middleware.ErrorRecovery(),
 	)
 
-	newAgent, err := agent.New(ctx, chatModel, a.shortMem, longMem, allTools, a.cfg, mw)
+	newAgent, err := agent.New(ctx, chatModel, a.shortMem, longMem, allTools, a.cfg, mw, skillMW)
 	if err != nil {
 		return fmt.Errorf("new agent: %w", err)
 	}
