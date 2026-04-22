@@ -54,7 +54,11 @@ func (t *GetLocationTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 func (t *GetLocationTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (string, error) {
 	lat, lon, accuracy, err := coreLocation()
 	if err == nil {
-		return fmt.Sprintf("来源: CoreLocation (GPS)\n坐标: %.6f, %.6f\n精度: %.0f 米", lat, lon, accuracy), nil
+		result := fmt.Sprintf("来源: CoreLocation (GPS)\n坐标: %.6f, %.6f\n精度: %.0f 米", lat, lon, accuracy)
+		if addr := reverseGeocode(lat, lon); addr != "" {
+			result += "\n地址: " + addr
+		}
+		return result, nil
 	}
 
 	// Fallback: IP geolocation.

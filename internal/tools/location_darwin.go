@@ -11,6 +11,8 @@ package tools
 #import <Foundation/Foundation.h>
 #include <string.h>
 
+// ---- Location result -------------------------------------------------------
+
 typedef struct {
     double lat;
     double lon;
@@ -31,7 +33,6 @@ static ToolsLocationResult gToolsLocResult;
 - (ToolsLocationResult)fetchWithTimeout:(double)secs {
     memset(&gToolsLocResult, 0, sizeof(gToolsLocResult));
     self.sem = dispatch_semaphore_create(0);
-
     dispatch_async(dispatch_get_main_queue(), ^{
         self.mgr = [[CLLocationManager alloc] init];
         self.mgr.delegate = self;
@@ -39,13 +40,11 @@ static ToolsLocationResult gToolsLocResult;
         [self.mgr requestWhenInUseAuthorization];
         [self.mgr startUpdatingLocation];
     });
-
     long timedOut = dispatch_semaphore_wait(
         self.sem,
         dispatch_time(DISPATCH_TIME_NOW, (int64_t)(secs * NSEC_PER_SEC))
     );
     dispatch_async(dispatch_get_main_queue(), ^{ [self.mgr stopUpdatingLocation]; });
-
     if (timedOut) {
         gToolsLocResult.status = 2;
         strncpy(gToolsLocResult.errMsg, "location request timed out", 255);
@@ -86,12 +85,55 @@ static ToolsLocationResult getToolsCoreLocation() {
     ToolsCLLocationHelper *h = [[ToolsCLLocationHelper alloc] init];
     return [h fetchWithTimeout:10.0];
 }
+
+// ---- Reverse geocode result ------------------------------------------------
+
+typedef struct {
+    char address[512];
+    int  status; // 0=success 2=error
+    char errMsg[256];
+} ToolsGeocoderResult;
+
+static ToolsGeocoderResult gToolsGeoResult;
+
+static ToolsGeocoderResult reverseGeocode(double lat, double lon) {
+    memset(&gToolsGeoResult, 0, sizeof(gToolsGeoResult));
+    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+
+    CLLocation *loc = [[CLLocation alloc] initWithLatitude:lat longitude:lon];
+    CLGeocoder *geo = [[CLGeocoder alloc] init];
+
+    [geo reverseGeocodeLocation:loc completionHandler:^(NSArray<CLPlacemark *> *placemarks, NSError *error) {
+        if (error || placemarks.count == 0) {
+            gToolsGeoResult.status = 2;
+            const char *msg = error ? error.localizedDescription.UTF8String : "no placemark";
+            strncpy(gToolsGeoResult.errMsg, msg ? msg : "unknown", 255);
+        } else {
+            CLPlacemark *p = placemarks.firstObject;
+            // Build a human-readable address from components.
+            NSMutableArray *parts = [NSMutableArray array];
+            if (p.country)            [parts addObject:p.country];
+            if (p.administrativeArea) [parts addObject:p.administrativeArea];
+            if (p.locality)           [parts addObject:p.locality];
+            if (p.subLocality)        [parts addObject:p.subLocality];
+            if (p.thoroughfare)       [parts addObject:p.thoroughfare];
+            if (p.subThoroughfare)    [parts addObject:p.subThoroughfare];
+            NSString *addr = [parts componentsJoinedByString:@" "];
+            strncpy(gToolsGeoResult.address, addr.UTF8String ? addr.UTF8String : "", 511);
+            gToolsGeoResult.status = 0;
+        }
+        dispatch_semaphore_signal(sem);
+    }];
+
+    dispatch_semaphore_wait(sem,
+        dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)));
+    return gToolsGeoResult;
+}
 */
 import "C"
 import "fmt"
 
 // coreLocation fetches the device's GPS location via CoreLocation on macOS.
-// Returns lat, lon, accuracy (metres), and error.
 func coreLocation() (lat, lon, accuracy float64, err error) {
 	r := C.getToolsCoreLocation()
 	switch r.status {
@@ -102,4 +144,14 @@ func coreLocation() (lat, lon, accuracy float64, err error) {
 	default:
 		return 0, 0, 0, fmt.Errorf("%s", C.GoString(&r.errMsg[0]))
 	}
+}
+
+// reverseGeocode converts GPS coordinates to a human-readable address via CLGeocoder.
+// Returns empty string if geocoding fails (non-fatal).
+func reverseGeocode(lat, lon float64) string {
+	r := C.reverseGeocode(C.double(lat), C.double(lon))
+	if r.status != 0 {
+		return ""
+	}
+	return C.GoString(&r.address[0])
 }
