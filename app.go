@@ -88,8 +88,6 @@ func (a *App) startup(ctx context.Context) {
 	for _, t := range []internaltools.Tool{
 		&internaltools.SearchKnowledgeTool{},
 		&internaltools.CronTool{},
-		// Pre-register lark tool so it appears in settings even before lark-cli is detected.
-		internaltools.WrapLarkTool(&lark.Tool{}),
 	} {
 		_ = a.permStore.EnsureRow(toolsCtx, t)
 	}
@@ -205,17 +203,6 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	}
 
 	contextTools := internaltools.AllContextual(a.permStore, knowledgeSt, sched)
-	// Inject lark tool if lark-cli is configured or discoverable.
-	larkCLIPath := a.cfg.LarkCLIPath
-	if larkCLIPath == "" {
-		larkCLIPath = lark.FindCLI()
-	}
-	if larkCLIPath != "" {
-		larkClient := lark.NewClient(larkCLIPath)
-		larkTool := internaltools.WrapLarkTool(&lark.Tool{Client: larkClient})
-		_ = a.permStore.EnsureRow(ctx, larkTool)
-		contextTools = append(contextTools, internaltools.ToEino(larkTool, a.permStore))
-	}
 	skillTools, err := skill.LoadAll(a.cfg.SkillsDir)
 	if err != nil {
 		return fmt.Errorf("load skills: %w", err)
@@ -617,30 +604,18 @@ func (a *App) RunCronJobNow(id int64) error {
 
 // LarkStatus returns the output of `lark-cli auth status`.
 func (a *App) LarkStatus() (string, error) {
-	a.mu.RLock()
-	cliPath := a.cfg.LarkCLIPath
-	a.mu.RUnlock()
-	if cliPath == "" {
-		cliPath = lark.FindCLI()
-	}
+	cliPath := lark.FindCLI()
 	if cliPath == "" {
 		return "", fmt.Errorf("lark-cli 未安装，请运行：npm install -g @larksuite/cli")
 	}
-	c := lark.NewClient(cliPath)
-	return c.Status(a.ctx)
+	return lark.NewClient(cliPath).Status(a.ctx)
 }
 
 // LarkRunCommand executes an arbitrary lark-cli command string and returns stdout.
 func (a *App) LarkRunCommand(args string) (string, error) {
-	a.mu.RLock()
-	cliPath := a.cfg.LarkCLIPath
-	a.mu.RUnlock()
-	if cliPath == "" {
-		cliPath = lark.FindCLI()
-	}
+	cliPath := lark.FindCLI()
 	if cliPath == "" {
 		return "", fmt.Errorf("lark-cli 未安装")
 	}
-	c := lark.NewClient(cliPath)
-	return c.Run(a.ctx, strings.Fields(args)...)
+	return lark.NewClient(cliPath).Run(a.ctx, strings.Fields(args)...)
 }

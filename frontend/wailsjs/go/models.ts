@@ -13,7 +13,6 @@ export namespace config {
 	    PetSize: number;
 	    ChatWidth: number;
 	    ChatHeight: number;
-	    LarkCLIPath: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -33,7 +32,6 @@ export namespace config {
 	        this.PetSize = source["PetSize"];
 	        this.ChatWidth = source["ChatWidth"];
 	        this.ChatHeight = source["ChatHeight"];
-	        this.LarkCLIPath = source["LarkCLIPath"];
 	    }
 	}
 

@@ -633,14 +633,12 @@ async function fetchLarkStatus() {
 
         <!-- 飞书 lark-cli -->
         <div v-if="activeTab === 'lark'" class="tab-pane">
-          <label>lark-cli 路径
-            <div class="url-row">
-              <input v-model="cfg.LarkCLIPath" placeholder="留空自动从 PATH 查找（lark-cli）" />
-              <button class="fetch-btn" @click="fetchLarkStatus" :disabled="larkStatusLoading">
-                {{ larkStatusLoading ? '检测中...' : '检测状态' }}
-              </button>
-            </div>
-          </label>
+          <div class="url-row" style="margin-bottom:8px">
+            <span style="flex:1;font-size:12px;color:#9ca3af">lark-cli 路径由 PATH 自动查找</span>
+            <button class="fetch-btn" @click="fetchLarkStatus" :disabled="larkStatusLoading">
+              {{ larkStatusLoading ? '检测中...' : '检测状态' }}
+            </button>
+          </div>
 
           <div v-if="larkStatus" class="lark-status lark-status--ok">
             <pre>{{ larkStatus }}</pre>
@@ -683,8 +681,7 @@ async function fetchLarkStatus() {
           </div>
 
           <p class="lark-hint">
-            配置完成后，AI 可通过 <code>lark</code> 工具操作飞书，例如：发消息、查日历、读文档等。<br>
-            在「工具权限」中启用 <strong>lark</strong> 工具后生效。
+            配置完成后，AI 可通过 lark-cli 操作飞书，例如：发消息、查日历、读文档等。
           </p>
         </div>
       </div>
