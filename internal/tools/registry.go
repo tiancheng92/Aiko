@@ -49,6 +49,7 @@ func All() []Tool {
 		&GetOSInfoTool{},
 		&GetHardwareInfoTool{},
 		&GetNetworkStatusTool{},
+		&GetLocationTool{},
 		&WebSearchTool{},
 		&WebFetchTool{},
 	}
