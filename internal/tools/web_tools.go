@@ -11,18 +11,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/schema"
 	"golang.org/x/net/html"
 )
 
 const (
-	webTimeout    = 15 * time.Second
-	fetchTimeout  = 30 * time.Second
-	maxBodyBytes  = 2 << 20 // 2 MiB
-	userAgent     = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+	webTimeout      = 15 * time.Second
+	fetchTimeout    = 30 * time.Second
+	maxBodyBytes    = 2 << 20 // 2 MiB
+	userAgent       = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 	defaultMaxChars = 8000
 )
 
-// Pre-compiled regexes for better performance
+// Pre-compiled regexes for better performance.
 var (
 	reScript     = regexp.MustCompile(`(?i)<script[\s\S]*?</script>`)
 	reStyle      = regexp.MustCompile(`(?i)<style[\s\S]*?</style>`)
@@ -34,22 +36,32 @@ var (
 // WebSearchTool searches the web via DuckDuckGo HTML endpoint.
 type WebSearchTool struct{}
 
-// Name returns the tool name.
-func (t *WebSearchTool) Name() string { return "web_search" }
-
-// Description returns the tool description.
-func (t *WebSearchTool) Description() string {
-	return `使用多种搜索引擎搜索互联网，返回相关结果。支持 DuckDuckGo。参数: {"query":"搜索词","num_results":5,"time_range":"w"}`
-}
-
-// Permission returns the permission level required to use this tool.
+func (t *WebSearchTool) Name() string                { return "web_search" }
 func (t *WebSearchTool) Permission() PermissionLevel { return PermProtected }
 
-// Execute queries DuckDuckGo HTML search and returns formatted results.
-func (t *WebSearchTool) Execute(ctx context.Context, args map[string]any) ToolResult {
+// Info returns the eino tool schema for web_search.
+func (t *WebSearchTool) Info(_ context.Context) (*schema.ToolInfo, error) {
+	return infoFromSchema(t.Name(), "使用 DuckDuckGo 搜索互联网，返回相关结果摘要",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     schema.String,
+				Desc:     "搜索词",
+				Required: true,
+			},
+			"num_results": {
+				Type: schema.Integer,
+				Desc: "返回结果数量，默认 5，最多 10",
+			},
+		},
+	), nil
+}
+
+// InvokableRun queries DuckDuckGo HTML search and returns formatted results.
+func (t *WebSearchTool) InvokableRun(ctx context.Context, input string, _ ...tool.Option) (string, error) {
+	args := parseArgs(input)
 	query, _ := args["query"].(string)
 	if query == "" {
-		return ToolResult{Content: "请提供搜索词"}
+		return "请提供搜索词", nil
 	}
 	numResults := 5
 	if n, ok := args["num_results"].(float64); ok && n > 0 {
@@ -65,28 +77,27 @@ func (t *WebSearchTool) Execute(ctx context.Context, args map[string]any) ToolRe
 
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, searchURL, nil)
 	if err != nil {
-		return ToolResult{Error: fmt.Errorf("build search request: %w", err)}
+		return "", fmt.Errorf("build search request: %w", err)
 	}
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
-	req.Header.Set("Accept-Encoding", "gzip, deflate")
 	req.Header.Set("DNT", "1")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return ToolResult{Error: fmt.Errorf("search request failed: %w", err)}
+		return "", fmt.Errorf("search request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
 	if err != nil {
-		return ToolResult{Error: fmt.Errorf("read search response: %w", err)}
+		return "", fmt.Errorf("read search response: %w", err)
 	}
 
 	results := parseDDGResults(string(body), numResults)
 	if len(results) == 0 {
-		return ToolResult{Content: "未找到搜索结果"}
+		return "未找到搜索结果", nil
 	}
 
 	var sb strings.Builder
@@ -94,7 +105,7 @@ func (t *WebSearchTool) Execute(ctx context.Context, args map[string]any) ToolRe
 	for i, r := range results {
 		fmt.Fprintf(&sb, "%d. **%s**\n   %s\n   %s\n\n", i+1, r.title, r.snippet, r.url)
 	}
-	return ToolResult{Content: sb.String()}
+	return sb.String(), nil
 }
 
 type ddgResult struct {
@@ -104,14 +115,11 @@ type ddgResult struct {
 }
 
 // parseDDGResults extracts search results from DuckDuckGo's HTML response.
-// DDG HTML format: results are in <div class="result"> containing
-// <a class="result__a"> for title/url and <a class="result__snippet"> for snippet.
 func parseDDGResults(body string, max int) []ddgResult {
 	doc, err := html.Parse(strings.NewReader(body))
 	if err != nil {
 		return nil
 	}
-
 	var results []ddgResult
 	var walk func(*html.Node)
 	walk = func(n *html.Node) {
@@ -187,22 +195,32 @@ func textContent(n *html.Node) string {
 // WebFetchTool fetches a URL and returns its content as plain text.
 type WebFetchTool struct{}
 
-// Name returns the tool name.
-func (t *WebFetchTool) Name() string { return "web_fetch" }
-
-// Description returns the tool description.
-func (t *WebFetchTool) Description() string {
-	return `抓取指定 URL 的网页内容，返回去除 HTML 标签后的纯文本。参数: {"url":"完整URL","max_chars":8000}`
-}
-
-// Permission returns the permission level required to use this tool.
+func (t *WebFetchTool) Name() string                { return "web_fetch" }
 func (t *WebFetchTool) Permission() PermissionLevel { return PermProtected }
 
-// Execute fetches the given URL and returns stripped plain text.
-func (t *WebFetchTool) Execute(ctx context.Context, args map[string]any) ToolResult {
+// Info returns the eino tool schema for web_fetch.
+func (t *WebFetchTool) Info(_ context.Context) (*schema.ToolInfo, error) {
+	return infoFromSchema(t.Name(), "抓取指定 URL 的网页内容，返回去除 HTML 标签后的纯文本",
+		map[string]*schema.ParameterInfo{
+			"url": {
+				Type:     schema.String,
+				Desc:     "要抓取的完整 URL",
+				Required: true,
+			},
+			"max_chars": {
+				Type: schema.Integer,
+				Desc: "返回文本的最大字符数，默认 8000，最多 50000",
+			},
+		},
+	), nil
+}
+
+// InvokableRun fetches the given URL and returns stripped plain text.
+func (t *WebFetchTool) InvokableRun(ctx context.Context, input string, _ ...tool.Option) (string, error) {
+	args := parseArgs(input)
 	targetURL, _ := args["url"].(string)
 	if targetURL == "" {
-		return ToolResult{Content: "请提供 URL"}
+		return "请提供 URL", nil
 	}
 	if !strings.HasPrefix(targetURL, "http://") && !strings.HasPrefix(targetURL, "https://") {
 		targetURL = "https://" + targetURL
@@ -220,23 +238,22 @@ func (t *WebFetchTool) Execute(ctx context.Context, args map[string]any) ToolRes
 
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, targetURL, nil)
 	if err != nil {
-		return ToolResult{Error: fmt.Errorf("build fetch request: %w", err)}
+		return "", fmt.Errorf("build fetch request: %w", err)
 	}
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
-	req.Header.Set("Accept-Encoding", "gzip, deflate")
 	req.Header.Set("DNT", "1")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return ToolResult{Error: fmt.Errorf("fetch failed: %w", err)}
+		return "", fmt.Errorf("fetch failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
 	if err != nil {
-		return ToolResult{Error: fmt.Errorf("read response: %w", err)}
+		return "", fmt.Errorf("read response: %w", err)
 	}
 
 	text := htmlToText(string(body))
@@ -244,23 +261,17 @@ func (t *WebFetchTool) Execute(ctx context.Context, args map[string]any) ToolRes
 		text = string([]rune(text)[:maxChars]) + "\n...(已截断)"
 	}
 	if text == "" {
-		return ToolResult{Content: fmt.Sprintf("无法从 %s 提取文本内容", targetURL)}
+		return fmt.Sprintf("无法从 %s 提取文本内容", targetURL), nil
 	}
-	return ToolResult{Content: fmt.Sprintf("URL: %s\n\n%s", targetURL, text)}
+	return fmt.Sprintf("URL: %s\n\n%s", targetURL, text), nil
 }
 
-// htmlToText converts HTML to plain text using regex for better performance.
+// htmlToText converts HTML to plain text using regex pipeline.
 func htmlToText(body string) string {
-	// Remove script and style elements first
 	text := reScript.ReplaceAllString(body, "")
 	text = reStyle.ReplaceAllString(text, "")
-
-	// Remove HTML tags
 	text = reTags.ReplaceAllString(text, " ")
-
-	// Normalize whitespace
 	text = reWhitespace.ReplaceAllString(text, " ")
 	text = reBlankLines.ReplaceAllString(text, "\n\n")
-
 	return strings.TrimSpace(text)
 }

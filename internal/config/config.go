@@ -18,6 +18,8 @@ type Config struct {
 	SkillsDir      string
 	Hotkey         string
 	PetSize        int // 宠物显示尺寸（像素），0 表示自动根据屏幕高度计算
+	ChatWidth      int // 聊天框宽度（像素），0 表示使用默认值
+	ChatHeight     int // 聊天框高度（像素），0 表示使用默认值
 }
 
 type Store struct{ db *sql.DB }
@@ -58,6 +60,8 @@ func (s *Store) Load() (*Config, error) {
 	cfg.EmbeddingDim = parseInt(m["embedding_dim"], 1536)
 	cfg.ShortTermLimit = parseInt(m["short_term_limit"], 30)
 	cfg.PetSize = parseInt(m["pet_size"], 0)
+	cfg.ChatWidth = parseInt(m["chat_width"], 0)
+	cfg.ChatHeight = parseInt(m["chat_height"], 0)
 	return cfg, nil
 }
 
@@ -75,6 +79,8 @@ func (s *Store) Save(cfg *Config) error {
 		"hotkey":           cfg.Hotkey,
 		"live2d_model":     cfg.Live2DModel,
 		"pet_size":         strconv.Itoa(cfg.PetSize),
+		"chat_width":       strconv.Itoa(cfg.ChatWidth),
+		"chat_height":      strconv.Itoa(cfg.ChatHeight),
 	}
 	tx, err := s.db.Begin()
 	if err != nil {

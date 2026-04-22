@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/schema"
+
 	"desktop-pet/internal/knowledge"
 )
 
@@ -14,37 +17,43 @@ type SearchKnowledgeTool struct {
 	KnowledgeSt *knowledge.Store
 }
 
-// Name returns the tool name.
-func (t *SearchKnowledgeTool) Name() string { return "search_knowledge" }
-
-// Description returns the tool description for the AI.
-func (t *SearchKnowledgeTool) Description() string {
-	return `搜索已导入的知识库文档，返回与查询最相关的段落。参数 JSON: {"query":"<搜索词>"}`
-}
-
-// Permission returns the permission level required to run this tool.
+func (t *SearchKnowledgeTool) Name() string             { return "search_knowledge" }
 func (t *SearchKnowledgeTool) Permission() PermissionLevel { return PermPublic }
 
-// Execute searches the knowledge store for the given query string.
-func (t *SearchKnowledgeTool) Execute(ctx context.Context, args map[string]any) ToolResult {
+// Info returns the eino tool schema for search_knowledge.
+func (t *SearchKnowledgeTool) Info(_ context.Context) (*schema.ToolInfo, error) {
+	return infoFromSchema(t.Name(), "搜索已导入的知识库文档，返回与查询最相关的段落",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     schema.String,
+				Desc:     "搜索词或问题",
+				Required: true,
+			},
+		},
+	), nil
+}
+
+// InvokableRun searches the knowledge store for the given query string.
+func (t *SearchKnowledgeTool) InvokableRun(ctx context.Context, input string, _ ...tool.Option) (string, error) {
 	if t.KnowledgeSt == nil {
-		return ToolResult{Content: "知识库未启用（需配置 Embedding 模型并导入文档）"}
+		return "知识库未启用（需配置 Embedding 模型并导入文档）", nil
 	}
+	args := parseArgs(input)
 	query, _ := args["query"].(string)
 	if query == "" {
-		return ToolResult{Content: "请提供搜索词"}
+		return "请提供搜索词", nil
 	}
 	results, err := t.KnowledgeSt.Search(ctx, query, 5)
 	if err != nil {
-		return ToolResult{Error: fmt.Errorf("search knowledge: %w", err)}
+		return "", fmt.Errorf("search knowledge: %w", err)
 	}
 	if len(results) == 0 {
-		return ToolResult{Content: "知识库中未找到相关内容"}
+		return "知识库中未找到相关内容", nil
 	}
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("找到 %d 条相关知识库内容：\n\n", len(results)))
+	fmt.Fprintf(&sb, "找到 %d 条相关知识库内容：\n\n", len(results))
 	for i, r := range results {
-		sb.WriteString(fmt.Sprintf("--- 片段 %d ---\n%s\n\n", i+1, r))
+		fmt.Fprintf(&sb, "--- 片段 %d ---\n%s\n\n", i+1, r)
 	}
-	return ToolResult{Content: sb.String()}
+	return sb.String(), nil
 }

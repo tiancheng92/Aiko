@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { SendMessage, GetMessages, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown } from '../../wailsjs/go/main/App'
-import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
+import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 import { marked, Renderer } from 'marked'
 import hljs from 'highlight.js/lib/core'
 import javascript from 'highlight.js/lib/languages/javascript'
@@ -30,10 +30,45 @@ renderer.code = ({ text, lang }) => {
     ? hljs.highlight(text, { language }).value
     : hljs.highlightAuto(text).value
   const cls = language ? `hljs language-${language}` : 'hljs'
-  return `<pre><code class="${cls}">${highlighted}</code></pre>`
+  // Add copy button to code blocks
+  const escaped = text.replace(/`/g, '&#96;')
+  return `<div class="code-block"><div class="code-header"><span class="code-lang">${language || 'text'}</span><button class="code-copy" onclick="navigator.clipboard.writeText(decodeURIComponent(atob(this.dataset.code)));this.textContent='✓';setTimeout(()=>this.textContent='复制',2000)" data-code="${btoa(encodeURIComponent(text))}">复制</button></div><pre><code class="${cls}">${highlighted}</code></pre></div>`
+}
+renderer.link = ({ href, title, text }) => {
+  // Resolve DDG redirect URLs to the actual destination
+  const realHref = extractRealUrl(href) || href
+  const display = text && text !== href ? text : shortenUrl(realHref)
+  const safeHref = realHref.replace(/"/g, '&quot;')
+  const titleAttr = title ? ` title="${title}"` : ''
+  return `<a href="${safeHref}"${titleAttr} target="_blank" rel="noopener">${display}</a>`
 }
 
 marked.use({ renderer, breaks: true, gfm: true })
+
+/** extractRealUrl unwraps DuckDuckGo redirect URLs (//duckduckgo.com/l/?uddg=...). */
+function extractRealUrl(href) {
+  if (!href) return null
+  // Handle protocol-relative DDG redirects
+  const full = href.startsWith('//') ? 'https:' + href : href
+  try {
+    const u = new URL(full)
+    if (u.hostname.includes('duckduckgo.com') && u.searchParams.has('uddg')) {
+      return decodeURIComponent(u.searchParams.get('uddg'))
+    }
+  } catch {}
+  return null
+}
+
+/** shortenUrl returns a readable short form of a URL (hostname + truncated path). */
+function shortenUrl(url) {
+  try {
+    const u = new URL(url.startsWith('//') ? 'https:' + url : url)
+    const path = u.pathname.length > 30 ? u.pathname.slice(0, 28) + '…' : u.pathname
+    return u.hostname + (path !== '/' ? path : '')
+  } catch {
+    return url.length > 50 ? url.slice(0, 48) + '…' : url
+  }
+}
 
 const messages = ref([])
 const input = ref('')
@@ -108,10 +143,19 @@ onMounted(async () => {
 
 onUnmounted(() => { offToken?.(); offDone?.(); offError?.(); offClear?.() })
 
-/** renderMarkdown converts markdown text to HTML. */
+/** renderMarkdown converts markdown text to sanitized HTML. */
 function renderMarkdown(text) {
   if (!text) return ''
-  return marked(text)
+  // Replace bare DDG redirect URLs with the real destination so marked's
+  // autolink / link renderer can display them cleanly.
+  const processed = text.replace(
+    /(?<![(\[])(?:https?:)?\/\/(?:html\.)?duckduckgo\.com\/l\/\?[^\s)>\]]+/g,
+    (match) => {
+      const real = extractRealUrl(match.startsWith('//') ? 'https:' + match : match)
+      return real || match
+    }
+  )
+  return marked(processed)
 }
 
 /** copyMessage copies the message content to clipboard. */
@@ -146,7 +190,14 @@ async function send() {
   }
 }
 
-/** scrollToBottom scrolls the message list to the bottom on the next tick. */
+/** onMessagesClick intercepts link clicks and opens them in the system browser. */
+function onMessagesClick(e) {
+  const a = e.target.closest('a[href]')
+  if (!a) return
+  e.preventDefault()
+  const href = a.getAttribute('href')
+  if (href) BrowserOpenURL(href)
+}
 function scrollToBottom() {
   nextTick(() => {
     if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
@@ -156,7 +207,7 @@ function scrollToBottom() {
 
 <template>
   <div class="chat-panel">
-    <div class="messages" ref="messagesEl">
+    <div class="messages" ref="messagesEl" @click="onMessagesClick">
       <div v-for="(m, i) in messages" :key="i" :class="['msg', m.role]">
         <div class="bubble-wrap">
           <span v-if="m.role !== 'assistant'" class="bubble">
@@ -293,15 +344,45 @@ function scrollToBottom() {
 .copy-btn:hover { background: rgba(75, 85, 99, 0.9); color: #f9fafb; }
 
 /* Markdown prose */
-.bubble.markdown :deep(p) { margin: 0 0 6px; }
+.bubble.markdown :deep(p) { margin: 0 0 8px; }
 .bubble.markdown :deep(p:last-child) { margin-bottom: 0; }
+
+/* Code blocks */
+.bubble.markdown :deep(.code-block) {
+  margin: 8px 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.bubble.markdown :deep(.code-header) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px;
+  background: rgba(255,255,255,0.05);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.bubble.markdown :deep(.code-lang) {
+  font-size: 11px;
+  color: rgba(165,180,252,0.7);
+  font-family: 'Fira Code', monospace;
+}
+.bubble.markdown :deep(.code-copy) {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: rgba(99,102,241,0.2);
+  color: #a5b4fc;
+  border: 1px solid rgba(99,102,241,0.3);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.bubble.markdown :deep(.code-copy:hover) { background: rgba(99,102,241,0.35); }
 .bubble.markdown :deep(pre) {
   background: rgba(10, 10, 20, 0.6);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 8px;
   padding: 10px 12px;
   overflow-x: auto;
-  margin: 6px 0;
+  margin: 0;
 }
 .bubble.markdown :deep(code) { font-family: 'Fira Code', 'JetBrains Mono', monospace; font-size: 12px; }
 .bubble.markdown :deep(pre code) { background: none; padding: 0; }
@@ -312,26 +393,43 @@ function scrollToBottom() {
   border-radius: 4px;
   font-size: 12px;
 }
-.bubble.markdown :deep(ul), .bubble.markdown :deep(ol) { padding-left: 18px; margin: 4px 0; }
-.bubble.markdown :deep(li) { margin: 2px 0; }
+
+/* Lists */
+.bubble.markdown :deep(ul), .bubble.markdown :deep(ol) { padding-left: 20px; margin: 4px 0 8px; }
+.bubble.markdown :deep(li) { margin: 3px 0; line-height: 1.6; }
+.bubble.markdown :deep(li > ul), .bubble.markdown :deep(li > ol) { margin: 2px 0; }
+
+/* Blockquote */
 .bubble.markdown :deep(blockquote) {
   border-left: 3px solid #6366f1;
-  margin: 6px 0;
-  padding-left: 10px;
+  margin: 8px 0;
+  padding: 6px 10px;
   color: #9ca3af;
-  background: rgba(99, 102, 241, 0.05);
+  background: rgba(99, 102, 241, 0.06);
   border-radius: 0 6px 6px 0;
 }
-.bubble.markdown :deep(h1), .bubble.markdown :deep(h2), .bubble.markdown :deep(h3) {
-  margin: 8px 0 4px; font-size: 14px; color: #f9fafb;
+
+/* Headings */
+.bubble.markdown :deep(h1) { margin: 10px 0 6px; font-size: 16px; color: #f9fafb; font-weight: 700; }
+.bubble.markdown :deep(h2) { margin: 10px 0 5px; font-size: 15px; color: #f9fafb; font-weight: 700; }
+.bubble.markdown :deep(h3) { margin: 8px 0 4px; font-size: 14px; color: #e5e7eb; font-weight: 600; }
+.bubble.markdown :deep(hr) { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 10px 0; }
+
+/* Links — break long URLs so they don't overflow the bubble */
+.bubble.markdown :deep(a) {
+  color: #818cf8;
+  text-decoration: none;
+  word-break: break-all;
 }
-.bubble.markdown :deep(a) { color: #818cf8; text-decoration: none; }
-.bubble.markdown :deep(a:hover) { text-decoration: underline; }
-.bubble.markdown :deep(table) { border-collapse: collapse; margin: 6px 0; font-size: 12px; width: 100%; }
-.bubble.markdown :deep(th) { background: rgba(255,255,255,0.05); }
+.bubble.markdown :deep(a:hover) { text-decoration: underline; color: #a5b4fc; }
+
+/* Tables */
+.bubble.markdown :deep(table) { border-collapse: collapse; margin: 8px 0; font-size: 12px; width: 100%; }
+.bubble.markdown :deep(th) { background: rgba(255,255,255,0.05); font-weight: 600; }
 .bubble.markdown :deep(th), .bubble.markdown :deep(td) {
   border: 1px solid rgba(255,255,255,0.08);
-  padding: 4px 8px;
+  padding: 5px 10px;
+  text-align: left;
 }
 
 /* Input row */

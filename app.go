@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
+	json "github.com/bytedance/sonic"
 	"errors"
 	"fmt"
 	"io"
@@ -84,12 +84,9 @@ func (a *App) startup(ctx context.Context) {
 		_ = a.permStore.EnsureRow(toolsCtx, t)
 	}
 	// Ensure contextual tool permission rows (store not needed for row creation).
-	_ = a.permStore.EnsureRow(toolsCtx, &internaltools.SearchKnowledgeTool{})
 	for _, t := range []internaltools.Tool{
 		&internaltools.SearchKnowledgeTool{},
-		&internaltools.CreateCronJobTool{},
-		&internaltools.ListCronJobsTool{},
-		&internaltools.DeleteCronJobTool{},
+		&internaltools.CronTool{},
 	} {
 		_ = a.permStore.EnsureRow(toolsCtx, t)
 	}
@@ -571,4 +568,40 @@ func (a *App) UpdateMCPServer(cfg mcp.ServerConfig) error {
 // DeleteMCPServer removes an MCP server configuration by ID.
 func (a *App) DeleteMCPServer(id int64) error {
 	return a.mcpStore.Delete(a.ctx, id)
+}
+
+// ListCronJobs returns all scheduled jobs.
+func (a *App) ListCronJobs() ([]scheduler.Job, error) {
+	return a.scheduler.ListJobs(a.ctx)
+}
+
+// CreateCronJob creates a new scheduled job.
+func (a *App) CreateCronJob(name, description, schedule, prompt string) (scheduler.Job, error) {
+	return a.scheduler.CreateJob(a.ctx, name, description, schedule, prompt)
+}
+
+// UpdateCronJob updates an existing scheduled job.
+func (a *App) UpdateCronJob(id int64, name, description, schedule, prompt string) (scheduler.Job, error) {
+	return a.scheduler.UpdateJob(a.ctx, id, name, description, schedule, prompt)
+}
+
+// DeleteCronJob removes a scheduled job by ID.
+func (a *App) DeleteCronJob(id int64) error {
+	return a.scheduler.DeleteJob(a.ctx, id)
+}
+
+// SetCronJobEnabled enables or disables a scheduled job.
+func (a *App) SetCronJobEnabled(id int64, enabled bool) error {
+	return a.scheduler.SetJobEnabled(a.ctx, id, enabled)
+}
+
+// RunCronJobNow fires a scheduled job immediately regardless of its schedule.
+func (a *App) RunCronJobNow(id int64) error {
+	a.mu.RLock()
+	sched := a.scheduler
+	a.mu.RUnlock()
+	if sched == nil {
+		return fmt.Errorf("scheduler not ready")
+	}
+	return sched.RunJobNow(id)
 }

@@ -3,7 +3,7 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
+	json "github.com/bytedance/sonic"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -11,6 +11,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 	mcpgo "github.com/mark3labs/mcp-go/client"
+	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -55,7 +56,20 @@ func connectAndDiscover(ctx context.Context, cfg ServerConfig) ([]tool.BaseTool,
 		if cfg.URL == "" {
 			return nil, fmt.Errorf("sse transport requires a url")
 		}
-		client, err = mcpgo.NewSSEMCPClient(cfg.URL)
+		var opts []transport.ClientOption
+		if len(cfg.Headers) > 0 {
+			opts = append(opts, mcpgo.WithHeaders(cfg.Headers))
+		}
+		client, err = mcpgo.NewSSEMCPClient(cfg.URL, opts...)
+	case "http":
+		if cfg.URL == "" {
+			return nil, fmt.Errorf("http transport requires a url")
+		}
+		var opts []transport.StreamableHTTPCOption
+		if len(cfg.Headers) > 0 {
+			opts = append(opts, transport.WithHTTPHeaders(cfg.Headers))
+		}
+		client, err = mcpgo.NewStreamableHttpClient(cfg.URL, opts...)
 	default:
 		return nil, fmt.Errorf("unknown transport %q", cfg.Transport)
 	}

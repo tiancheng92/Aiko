@@ -93,6 +93,30 @@ func (s *Scheduler) CreateJob(ctx context.Context, name, description, schedule, 
     return j, nil
 }
 
+// RunJobNow fires a job immediately regardless of its schedule.
+func (s *Scheduler) RunJobNow(id int64) error {
+	jobs, err := s.ListJobs(context.Background())
+	if err != nil {
+		return err
+	}
+	for _, j := range jobs {
+		if j.ID == id {
+			go func(job Job) {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				defer cancel()
+				_, _ = s.db.ExecContext(ctx, `UPDATE cron_jobs SET last_run=? WHERE id=?`, time.Now(), job.ID)
+				slog.Info("cron job fired manually", "job", job.Name)
+				result, err := s.chatFn(ctx, job.Prompt)
+				if s.onResult != nil {
+					s.onResult(job, result, err)
+				}
+			}(j)
+			return nil
+		}
+	}
+	return fmt.Errorf("job %d not found", id)
+}
+
 // DeleteJob removes a job from cron and from the DB.
 func (s *Scheduler) DeleteJob(ctx context.Context, id int64) error {
     s.mu.Lock()
@@ -103,6 +127,73 @@ func (s *Scheduler) DeleteJob(ctx context.Context, id int64) error {
     s.mu.Unlock()
     _, err := s.db.ExecContext(ctx, `DELETE FROM cron_jobs WHERE id = ?`, id)
     return err
+}
+
+// UpdateJob persists name/description/schedule/prompt changes for an existing job
+// and reschedules it in the cron engine.
+func (s *Scheduler) UpdateJob(ctx context.Context, id int64, name, description, schedule, prompt string) (Job, error) {
+    if _, err := cron.ParseStandard(schedule); err != nil {
+        return Job{}, fmt.Errorf("invalid cron expression %q: %w", schedule, err)
+    }
+    _, err := s.db.ExecContext(ctx,
+        `UPDATE cron_jobs SET name=?, description=?, schedule=?, prompt=? WHERE id=?`,
+        name, description, schedule, prompt, id)
+    if err != nil {
+        return Job{}, fmt.Errorf("update job: %w", err)
+    }
+    jobs, err := s.ListJobs(ctx)
+    if err != nil {
+        return Job{}, err
+    }
+    var updated Job
+    for _, j := range jobs {
+        if j.ID == id {
+            updated = j
+            break
+        }
+    }
+    // Reschedule: remove old entry then re-add if enabled.
+    s.mu.Lock()
+    if eid, ok := s.entryIDs[id]; ok {
+        s.cr.Remove(eid)
+        delete(s.entryIDs, id)
+    }
+    s.mu.Unlock()
+    if updated.Enabled {
+        if err := s.scheduleJob(updated); err != nil {
+            return updated, fmt.Errorf("reschedule job: %w", err)
+        }
+    }
+    return updated, nil
+}
+
+// SetJobEnabled enables or disables a scheduled job.
+func (s *Scheduler) SetJobEnabled(ctx context.Context, id int64, enabled bool) error {
+    v := 0
+    if enabled {
+        v = 1
+    }
+    if _, err := s.db.ExecContext(ctx, `UPDATE cron_jobs SET enabled=? WHERE id=?`, v, id); err != nil {
+        return fmt.Errorf("set job enabled: %w", err)
+    }
+    s.mu.Lock()
+    if eid, ok := s.entryIDs[id]; ok {
+        s.cr.Remove(eid)
+        delete(s.entryIDs, id)
+    }
+    s.mu.Unlock()
+    if enabled {
+        jobs, err := s.ListJobs(ctx)
+        if err != nil {
+            return err
+        }
+        for _, j := range jobs {
+            if j.ID == id {
+                return s.scheduleJob(j)
+            }
+        }
+    }
+    return nil
 }
 
 // ListJobs returns all jobs ordered by created_at.

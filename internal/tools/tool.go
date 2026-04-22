@@ -2,7 +2,10 @@
 package tools
 
 import (
-	"context"
+	json "github.com/bytedance/sonic"
+
+	"github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/schema"
 )
 
 // PermissionLevel describes how much trust a tool requires.
@@ -13,28 +16,33 @@ const (
 	PermPublic PermissionLevel = "public"
 	// PermProtected tools require one-time user approval stored in the DB.
 	PermProtected PermissionLevel = "protected"
-	// PermRestricted tools require explicit user confirmation on every invocation.
-	// Reserved for future use (e.g. location, microphone access).
-	PermRestricted PermissionLevel = "restricted"
 )
 
-// ToolResult is the structured output of a tool invocation.
-type ToolResult struct {
-	// Content is the human-readable result returned to the LLM.
-	Content string
-	// Error is non-nil when the tool failed but execution should continue.
-	Error error
-}
-
-// Tool is the common interface for all built-in tools.
+// Tool combines eino's InvokableTool with permission declaration and a stable
+// name accessor used by the permission store.
 type Tool interface {
-	// Name returns the unique snake_case tool name exposed to the LLM.
+	tool.InvokableTool
+	// Name returns the stable snake_case name used in permission storage.
 	Name() string
-	// Description returns a concise description used in LLM prompts.
-	Description() string
 	// Permission returns the required permission level.
 	Permission() PermissionLevel
-	// Execute runs the tool and returns a result. A returned error inside
-	// ToolResult.Error is non-fatal; the caller should surface it gracefully.
-	Execute(ctx context.Context, args map[string]any) ToolResult
+}
+
+// infoFromSchema is a helper to build a *schema.ToolInfo from name, desc and params.
+func infoFromSchema(name, desc string, params map[string]*schema.ParameterInfo) *schema.ToolInfo {
+	return &schema.ToolInfo{
+		Name:        name,
+		Desc:        desc,
+		ParamsOneOf: schema.NewParamsOneOfByParams(params),
+	}
+}
+
+// parseArgs unmarshals the JSON input string into a map, returning an empty map on failure.
+func parseArgs(input string) map[string]any {
+	args := map[string]any{}
+	if input == "" || input == "{}" {
+		return args
+	}
+	_ = json.Unmarshal([]byte(input), &args)
+	return args
 }

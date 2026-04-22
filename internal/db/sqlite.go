@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -81,9 +82,18 @@ func migrate(db *sql.DB) error {
 		    command     TEXT,
 		    args        TEXT,
 		    url         TEXT,
+		    headers     TEXT,
 		    enabled     INTEGER NOT NULL DEFAULT 1,
 		    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+	// Idempotent column addition for databases created before headers was introduced.
+	_, altErr := db.Exec(`ALTER TABLE mcp_servers ADD COLUMN headers TEXT`)
+	if altErr != nil && !strings.Contains(altErr.Error(), "duplicate column") {
+		return fmt.Errorf("alter mcp_servers add headers: %w", altErr)
+	}
+	return nil
 }

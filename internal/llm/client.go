@@ -15,7 +15,6 @@ import (
 )
 
 // NewChatModel creates an eino ToolCallingChatModel from config.
-// The openai implementation satisfies both model.ChatModel and model.ToolCallingChatModel.
 func NewChatModel(ctx context.Context, cfg *config.Config) (model.ToolCallingChatModel, error) {
 	if cfg.LLMBaseURL == "" || cfg.LLMModel == "" {
 		return nil, fmt.Errorf("llm_base_url and llm_model are required")
@@ -46,7 +45,7 @@ type Summarizer interface {
 
 // llmSummarizer calls the chat model with a fixed summarization prompt.
 type llmSummarizer struct {
-	model model.ChatModel
+	model model.ToolCallingChatModel
 }
 
 // NewSummarizer creates a Summarizer backed by the chat model.

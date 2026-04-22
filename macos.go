@@ -71,7 +71,7 @@ static void enableClickThrough() {
         [gWindow setOpaque:NO];
         [gWindow setBackgroundColor:[NSColor clearColor]];
 
-        // Global monitor fires when our window ignores events and they go to other apps.
+        // Monitor mouse-moved and drag events.
         NSEventMask mask = NSEventMaskMouseMoved | NSEventMaskLeftMouseDragged;
         gGlobalMonitor = [NSEvent addGlobalMonitorForEventsMatchingMask:mask
             handler:^(NSEvent *evt) { handleScreenPoint([NSEvent mouseLocation]); }];

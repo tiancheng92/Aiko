@@ -1,9 +1,9 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import ChatPanel from './ChatPanel.vue'
 import ContextMenu from './ContextMenu.vue'
-import { EventsEmit } from '../../wailsjs/runtime/runtime'
-import { ExportChatHistory } from '../../wailsjs/go/main/App'
+import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
+import { ExportChatHistory, GetConfig } from '../../wailsjs/go/main/App'
 
 const props = defineProps({
   ballPos:  { type: Object, default: () => ({ x: -1, y: -1 }) },
@@ -11,9 +11,33 @@ const props = defineProps({
 })
 const emit = defineEmits(['close', 'open-settings'])
 
-// Mirror CSS clamp so the JS position matches the rendered size exactly.
-const bubbleW = computed(() => Math.min(520, Math.max(340, window.innerWidth  * 0.24)))
-const bubbleH = computed(() => Math.min(680, Math.max(400, window.innerHeight * 0.58)))
+const DEFAULT_W = Math.min(520, Math.max(340, Math.round(window.innerWidth  * 0.24)))
+const DEFAULT_H = Math.min(680, Math.max(400, Math.round(window.innerHeight * 0.58)))
+
+const bubbleW = ref(DEFAULT_W)
+const bubbleH = ref(DEFAULT_H)
+
+/** applySize updates bubble dimensions; 0 means revert to default. */
+function applySize({ width, height }) {
+  bubbleW.value = width  >= 300 ? width  : DEFAULT_W
+  bubbleH.value = height >= 320 ? height : DEFAULT_H
+}
+
+let offSizeChange = null
+
+onMounted(async () => {
+  try {
+    const cfg = await GetConfig()
+    applySize({ width: cfg.ChatWidth, height: cfg.ChatHeight })
+  } catch (e) {
+    console.error('load chat size failed:', e)
+  }
+  offSizeChange = EventsOn('config:chat:size:changed', applySize)
+})
+
+onUnmounted(() => {
+  offSizeChange?.()
+})
 
 /** pos aligns the bubble's right edge to the ball's right edge, sitting above the ball. */
 const pos = computed(() => {
@@ -27,12 +51,14 @@ const pos = computed(() => {
   }
 })
 
+// ─── Context menu ────────────────────────────────────────────────────────────
+
 const chatMenuRef = ref(null)
 const chatMenuItems = computed(() => [
   { icon: '💾', label: '导出聊天记录', action: exportHistory },
   { icon: '🗑️', label: '清空聊天历史', action: clearHistory },
   { divider: true },
-  { icon: '⚙️', label: '打开设置', action: () => emit('open-settings') },
+  { icon: '⚙️', label: '打开设置',      action: () => emit('open-settings') },
 ])
 
 /** clearHistory broadcasts a clear event to ChatPanel. */
@@ -57,7 +83,16 @@ function onBubbleContextMenu(e) {
 </script>
 
 <template>
-  <div class="chat-bubble" :style="{ left: pos.x + 'px', top: pos.y + 'px' }" @contextmenu="onBubbleContextMenu">
+  <div
+    class="chat-bubble"
+    :style="{
+      left:   pos.x + 'px',
+      top:    pos.y + 'px',
+      width:  bubbleW + 'px',
+      height: bubbleH + 'px',
+    }"
+    @contextmenu="onBubbleContextMenu"
+  >
     <div class="title-bar">
       <span class="title">聊天</span>
       <button class="close-btn" @click="$emit('close')">✕</button>
@@ -72,8 +107,10 @@ function onBubbleContextMenu(e) {
 <style scoped>
 .chat-bubble {
   position: fixed;
-  width: clamp(340px, 24vw, 520px);
-  height: clamp(400px, 58vh, 680px);
+  min-width: 300px;
+  max-width: 800px;
+  min-height: 320px;
+  max-height: 900px;
   background: rgba(15, 18, 30, 0.82);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
