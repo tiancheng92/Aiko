@@ -284,7 +284,7 @@ async function toggleMCPServer(srv) {
           <label>宠物大小
             <div class="size-row">
               <input
-                type="range" min="100" max="400" step="10"
+                type="range" min="100" max="600" step="10"
                 :value="cfg.PetSize || 200"
                 @input="previewPetSize"
               />
