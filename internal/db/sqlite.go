@@ -95,5 +95,23 @@ func migrate(db *sql.DB) error {
 	if altErr != nil && !strings.Contains(altErr.Error(), "duplicate column") {
 		return fmt.Errorf("alter mcp_servers add headers: %w", altErr)
 	}
+
+	// model_profiles: each row is a named LLM configuration.
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS model_profiles (
+			id              INTEGER PRIMARY KEY AUTOINCREMENT,
+			name            TEXT NOT NULL UNIQUE,
+			provider        TEXT NOT NULL DEFAULT 'openai',
+			base_url        TEXT NOT NULL DEFAULT '',
+			api_key         TEXT NOT NULL DEFAULT '',
+			model           TEXT NOT NULL DEFAULT '',
+			embedding_model TEXT NOT NULL DEFAULT '',
+			embedding_dim   INTEGER NOT NULL DEFAULT 1536,
+			created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+	`)
+	if err != nil {
+		return fmt.Errorf("create model_profiles: %w", err)
+	}
 	return nil
 }

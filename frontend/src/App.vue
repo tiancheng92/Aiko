@@ -11,7 +11,10 @@ const bubbleOpen = ref(false)
 const settingsOpen = ref(false)
 const ballPos  = ref({ x: -1, y: -1 })
 const ballSize = ref(160)
-let offToggle
+let offToggle, offToken, offDone, offError, offSettings
+
+// Accumulates tokens when chat bubble is closed.
+let pendingTokens = ''
 
 /** waitForRuntime polls until the Wails Go bridge is available. */
 async function waitForRuntime() {
@@ -26,23 +29,57 @@ onMounted(async () => {
   const firstLaunch = await IsFirstLaunch()
   if (firstLaunch) {
     await MarkWelcomeShown()
-    // Show welcome notification bubble above the pet.
     EventsEmit('notification:show', {
       title: '你好！我是你的桌面宠物 ✨',
       message: '请先在设置中配置 LLM 接口，然后就可以开始聊天了~',
     })
   }
-  if (missing && missing.length > 0) {
-    setTimeout(() => { settingsOpen.value = true }, firstLaunch ? 2500 : 0)
-  }
   offToggle = EventsOn('bubble:toggle', () => { bubbleOpen.value = !bubbleOpen.value })
+  offSettings = EventsOn('settings:open', () => { settingsOpen.value = true })
+
+  // Always listen for chat stream events so we can show a notification
+  // when the chat bubble is closed (e.g. scheduler-triggered replies).
+  offToken = EventsOn('chat:token', (token) => {
+    if (!bubbleOpen.value) {
+      pendingTokens += token
+    }
+  })
+
+  offDone = EventsOn('chat:done', () => {
+    if (!bubbleOpen.value && pendingTokens.trim()) {
+      EventsEmit('notification:show', {
+        title: '✨ (=^･ω･^=)',
+        message: pendingTokens.trim(),
+      })
+    }
+    pendingTokens = ''
+  })
+
+  offError = EventsOn('chat:error', (err) => {
+    if (!bubbleOpen.value) {
+      pendingTokens = ''
+      EventsEmit('notification:show', {
+        title: '😿 出错了',
+        message: err,
+      })
+    }
+  })
 })
 
-onUnmounted(() => { offToggle?.() })
+onUnmounted(() => {
+  offToggle?.()
+  offToken?.()
+  offDone?.()
+  offError?.()
+  offSettings?.()
+})
 
 /** toggleBubble flips the chat bubble open/close state. */
 function toggleBubble() {
   bubbleOpen.value = !bubbleOpen.value
+  // Discard any pending tokens when user opens the bubble —
+  // the ChatPanel will show the streamed content directly.
+  if (bubbleOpen.value) pendingTokens = ''
 }
 
 /** openSettings opens the settings window. */
@@ -72,6 +109,5 @@ function openSettings() {
   <NotificationBubble
     :pet-pos="ballPos"
     :pet-size="ballSize"
-    :bubble-open="bubbleOpen"
   />
 </template>

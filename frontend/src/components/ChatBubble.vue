@@ -111,14 +111,15 @@ function onBubbleContextMenu(e) {
   max-width: 800px;
   min-height: 320px;
   max-height: 900px;
-  background: rgba(15, 18, 30, 0.82);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(12, 15, 26, 0.55);
+  backdrop-filter: blur(40px) saturate(200%) brightness(0.9);
+  -webkit-backdrop-filter: blur(40px) saturate(200%) brightness(0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 20px;
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.6),
-    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+    0 12px 40px rgba(0, 0, 0, 0.5),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset,
+    0 0 0 0.5px rgba(255,255,255,0.04) inset;
   display: flex;
   flex-direction: column;
   z-index: 9998;

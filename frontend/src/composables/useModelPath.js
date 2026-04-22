@@ -4,6 +4,7 @@ import { EventsOn } from '../../wailsjs/runtime/runtime'
 
 const currentModel = ref('hiyori')
 const availableModels = ref([])
+let listenerRegistered = false
 
 /** Capitalize uppercases the first character of a string. */
 function capitalize(s) {
@@ -11,12 +12,14 @@ function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-EventsOn('config:model:changed', (name) => {
-  currentModel.value = name
-})
-
 /** useModelPath provides reactive Live2D model state. */
 export function useModelPath() {
+  if (!listenerRegistered) {
+    listenerRegistered = true
+    EventsOn('config:model:changed', (name) => {
+      currentModel.value = name
+    })
+  }
   /** modelPath is the full URL path to the model3.json file. */
   const modelPath = computed(
     () => `/live2d/${currentModel.value}/${capitalize(currentModel.value)}.model3.json`

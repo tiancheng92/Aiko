@@ -48,6 +48,7 @@ func All() []Tool {
 		&FormatTimeTool{},
 		&GetOSInfoTool{},
 		&GetHardwareInfoTool{},
+		&GetSystemStatsTool{},
 		&GetNetworkStatusTool{},
 		&GetLocationTool{},
 		&GetWeatherTool{},

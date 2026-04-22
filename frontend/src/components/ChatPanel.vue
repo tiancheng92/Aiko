@@ -36,6 +36,16 @@ renderer.code = ({ text, lang }) => {
   const escaped = text.replace(/`/g, '&#96;')
   return `<div class="code-block"><div class="code-header"><span class="code-lang">${language || 'text'}</span><button class="code-copy" onclick="navigator.clipboard.writeText(decodeURIComponent(atob(this.dataset.code)));this.textContent='✓';setTimeout(()=>this.textContent='复制',2000)" data-code="${btoa(encodeURIComponent(text))}">复制</button></div><pre><code class="${cls}">${highlighted}</code></pre></div>`
 }
+renderer.table = (token) => {
+  const alignStyle = (align) => align ? ` style="text-align:${align}"` : ''
+  const headerHtml = token.header.map(cell =>
+    `<th${alignStyle(cell.align)}>${marked.parseInline(cell.text)}</th>`
+  ).join('')
+  const rowsHtml = token.rows.map(row =>
+    `<tr>${row.map(cell => `<td${alignStyle(cell.align)}>${marked.parseInline(cell.text)}</td>`).join('')}</tr>`
+  ).join('')
+  return `<div class="table-wrapper"><table><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></div>`
+}
 renderer.link = ({ href, title, text }) => {
   // Resolve DDG redirect URLs to the actual destination
   const realHref = extractRealUrl(href) || href
@@ -79,11 +89,20 @@ const loading = ref(false)
 const messagesEl = ref(null)
 const copiedIdx = ref(null)
 
+/** formatTime formats a datetime string or Date to YYYY-MM-DD HH:mm:ss. */
+function formatTime(ts) {
+  if (!ts) return ''
+  const d = ts instanceof Date ? ts : new Date(ts.replace(' ', 'T'))
+  if (isNaN(d)) return ''
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
 let offToken, offDone, offError, offClear
 
 onMounted(async () => {
   const history = await GetMessages(50)
-  messages.value = (history || []).map(m => ({ role: m.Role, content: m.Content }))
+  messages.value = (history || []).map(m => ({ role: m.Role, content: m.Content, time: m.CreatedAt }))
   scrollToBottom()
 
   // Show welcome message on first launch when chat history is empty.
@@ -130,7 +149,7 @@ onMounted(async () => {
 
   offDone = EventsOn('chat:done', () => {
     const idx = messages.value.length - 1
-    if (idx >= 0) messages.value[idx] = { ...messages.value[idx], streaming: false }
+    if (idx >= 0) messages.value[idx] = { ...messages.value[idx], streaming: false, time: new Date() }
     loading.value = false
     EventsEmit('pet:state:change', 'idle')
   })
@@ -149,9 +168,12 @@ onUnmounted(() => { offToken?.(); offDone?.(); offError?.(); offClear?.() })
 /** renderMarkdown converts markdown text to sanitized HTML. */
 function renderMarkdown(text) {
   if (!text) return ''
+  // Strip LLM thinking blocks before rendering.
+  const stripped = text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim()
+  if (!stripped) return ''
   // Replace bare DDG redirect URLs with the real destination so marked's
   // autolink / link renderer can display them cleanly.
-  const processed = text.replace(
+  const processed = stripped.replace(
     /(?<![(\[])(?:https?:)?\/\/(?:html\.)?duckduckgo\.com\/l\/\?[^\s)>\]]+/g,
     (match) => {
       const real = extractRealUrl(match.startsWith('//') ? 'https:' + match : match)
@@ -178,7 +200,7 @@ async function send() {
   if (!text || loading.value) return
   input.value = ''
   loading.value = true
-  messages.value.push({ role: 'user', content: text })
+  messages.value.push({ role: 'user', content: text, time: new Date() })
   messages.value.push({ role: 'assistant', content: '', streaming: true, thinking: true })
   scrollToBottom()
   EventsEmit('pet:state:change', 'thinking')
@@ -213,15 +235,14 @@ function scrollToBottom() {
     <div class="messages" ref="messagesEl" @click="onMessagesClick">
       <div v-for="(m, i) in messages" :key="i" :class="['msg', m.role]">
         <div class="bubble-wrap">
-          <span v-if="m.role !== 'assistant'" class="bubble">
-            {{ m.content }}<span v-if="m.streaming" class="cursor">▋</span>
-          </span>
+          <div v-if="m.role !== 'assistant'" class="bubble markdown" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')"></div>
           <template v-else>
-            <div v-if="m.thinking" class="bubble thinking-bubble">
+            <div v-if="m.thinking || (m.streaming && !renderMarkdown(m.content))" class="bubble thinking-bubble">
               <span class="dot" /><span class="dot" /><span class="dot" />
             </div>
             <div v-else class="bubble markdown" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')" />
           </template>
+          <div v-if="m.time && !m.streaming && !m.thinking" class="msg-time">{{ formatTime(m.time) }}</div>
           <button
             v-if="m.role === 'assistant' && !m.streaming && !m.thinking"
             class="copy-btn"
@@ -267,33 +288,32 @@ function scrollToBottom() {
 .msg.assistant, .msg.system { justify-content: flex-start; }
 
 /* Wrap */
-.bubble-wrap { position: relative; max-width: 82%; display: flex; flex-direction: column; }
+.bubble-wrap { position: relative; max-width: 88%; display: flex; flex-direction: column; }
 .msg.user .bubble-wrap { align-items: flex-end; }
 
 /* Bubble base */
 .bubble {
-  padding: 9px 14px;
+  padding: 11px 16px;
   border-radius: 16px;
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 13.5px;
+  line-height: 1.65;
   word-break: break-word;
 }
 
 /* User bubble */
 .user .bubble {
-  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  background: linear-gradient(135deg, #0369a1, #0c4a6e);
   color: #fff;
   border-radius: 16px 16px 4px 16px;
-  white-space: pre-wrap;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.4);
+  box-shadow: 0 2px 12px rgba(3, 105, 161, 0.4);
 }
 
 /* Assistant bubble */
 .assistant .bubble {
-  background: rgba(55, 65, 81, 0.7);
+  background: rgba(255,255,255,0.06);
   color: #e5e7eb;
   border-radius: 16px 16px 16px 4px;
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
 }
 
 /* System / error bubble */
@@ -326,6 +346,17 @@ function scrollToBottom() {
   0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
   40% { transform: translateY(-5px); opacity: 1; }
 }
+
+/* Timestamp */
+.msg-time {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.28);
+  margin-top: 3px;
+  padding: 0 4px;
+  user-select: none;
+}
+.msg.user .msg-time { text-align: right; }
+.msg.assistant .msg-time { text-align: left; }
 
 /* Copy button */
 .copy-btn {
@@ -404,7 +435,7 @@ function scrollToBottom() {
 
 /* Blockquote */
 .bubble.markdown :deep(blockquote) {
-  border-left: 3px solid #6366f1;
+  border-left: 3px solid #0369a1;
   margin: 8px 0;
   padding: 6px 10px;
   color: #9ca3af;
@@ -427,12 +458,41 @@ function scrollToBottom() {
 .bubble.markdown :deep(a:hover) { text-decoration: underline; color: #a5b4fc; }
 
 /* Tables */
-.bubble.markdown :deep(table) { border-collapse: collapse; margin: 8px 0; font-size: 12px; width: 100%; }
-.bubble.markdown :deep(th) { background: rgba(255,255,255,0.05); font-weight: 600; }
+.bubble.markdown :deep(.table-wrapper) {
+  overflow-x: auto;
+  margin: 10px 0;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.bubble.markdown :deep(table) {
+  border-collapse: collapse;
+  font-size: 13px;
+  width: 100%;
+  min-width: 360px;
+}
+.bubble.markdown :deep(thead tr) {
+  background: rgba(255,255,255,0.07);
+}
+.bubble.markdown :deep(th) {
+  font-weight: 600;
+  white-space: nowrap;
+  color: rgba(255,255,255,0.9);
+}
 .bubble.markdown :deep(th), .bubble.markdown :deep(td) {
-  border: 1px solid rgba(255,255,255,0.08);
-  padding: 5px 10px;
+  border: none;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  padding: 8px 14px;
   text-align: left;
+  vertical-align: middle;
+}
+.bubble.markdown :deep(tbody tr:last-child td) {
+  border-bottom: none;
+}
+.bubble.markdown :deep(tbody tr:nth-child(even)) {
+  background: rgba(255,255,255,0.03);
+}
+.bubble.markdown :deep(tbody tr:hover) {
+  background: rgba(79,172,254,0.08);
 }
 
 /* KaTeX math — adapt to dark theme */
@@ -455,7 +515,7 @@ function scrollToBottom() {
 }
 .input-row textarea {
   flex: 1;
-  background: rgba(31, 41, 55, 0.6);
+  background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 10px;
   padding: 8px 12px;
@@ -467,10 +527,10 @@ function scrollToBottom() {
   transition: border-color 0.15s;
   line-height: 1.5;
 }
-.input-row textarea:focus { border-color: rgba(99, 102, 241, 0.6); }
+.input-row textarea:focus { border-color: rgba(3, 105, 161, 0.6); }
 .input-row textarea::placeholder { color: rgba(156, 163, 175, 0.5); }
 .input-row button {
-  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  background: linear-gradient(135deg, #0369a1, #0c4a6e);
   color: #fff;
   border: none;
   border-radius: 10px;
@@ -479,7 +539,7 @@ function scrollToBottom() {
   font-size: 13px;
   font-weight: 500;
   transition: opacity 0.15s, transform 0.1s;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
+  box-shadow: 0 2px 8px rgba(3, 105, 161, 0.4);
 }
 .input-row button:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
 .input-row button:active:not(:disabled) { transform: translateY(0); }

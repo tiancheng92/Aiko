@@ -4,6 +4,7 @@ export namespace config {
 	    LLMBaseURL: string;
 	    LLMAPIKey: string;
 	    LLMModel: string;
+	    LLMProvider: string;
 	    EmbeddingModel: string;
 	    Live2DModel: string;
 	    EmbeddingDim: number;
@@ -13,6 +14,7 @@ export namespace config {
 	    PetSize: number;
 	    ChatWidth: number;
 	    ChatHeight: number;
+	    ActiveProfileID: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -23,6 +25,7 @@ export namespace config {
 	        this.LLMBaseURL = source["LLMBaseURL"];
 	        this.LLMAPIKey = source["LLMAPIKey"];
 	        this.LLMModel = source["LLMModel"];
+	        this.LLMProvider = source["LLMProvider"];
 	        this.EmbeddingModel = source["EmbeddingModel"];
 	        this.Live2DModel = source["Live2DModel"];
 	        this.EmbeddingDim = source["EmbeddingDim"];
@@ -32,6 +35,33 @@ export namespace config {
 	        this.PetSize = source["PetSize"];
 	        this.ChatWidth = source["ChatWidth"];
 	        this.ChatHeight = source["ChatHeight"];
+	        this.ActiveProfileID = source["ActiveProfileID"];
+	    }
+	}
+	export class ModelProfile {
+	    id: number;
+	    name: string;
+	    provider: string;
+	    base_url: string;
+	    api_key: string;
+	    model: string;
+	    embedding_model: string;
+	    embedding_dim: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ModelProfile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.provider = source["provider"];
+	        this.base_url = source["base_url"];
+	        this.api_key = source["api_key"];
+	        this.model = source["model"];
+	        this.embedding_model = source["embedding_model"];
+	        this.embedding_dim = source["embedding_dim"];
 	    }
 	}
 

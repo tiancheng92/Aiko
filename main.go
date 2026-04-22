@@ -28,14 +28,27 @@ func main() {
 	app := NewApp()
 
 	appMenu := menu.NewMenu()
+
+	// Aiko 应用菜单（macOS 自动放在最左侧）
 	appMenu.Append(menu.AppMenu())
+
+	// 编辑菜单（提供剪切/复制/粘贴等标准快捷键）
 	appMenu.Append(menu.EditMenu())
-	appMenu.AddText("Toggle Pet", keys.Combo("p", keys.CmdOrCtrlKey, keys.ShiftKey), func(_ *menu.CallbackData) {
+
+	// 视图菜单
+	viewMenu := appMenu.AddSubmenu("View")
+	viewMenu.AddText("Toggle Chat", keys.Combo("p", keys.CmdOrCtrlKey, keys.ShiftKey), func(_ *menu.CallbackData) {
 		wailsruntime.EventsEmit(app.ctx, "bubble:toggle")
 	})
 
+	// 设置菜单
+	settingsMenu := appMenu.AddSubmenu("Settings")
+	settingsMenu.AddText("Preferences...", keys.CmdOrCtrl(","), func(_ *menu.CallbackData) {
+		wailsruntime.EventsEmit(app.ctx, "settings:open")
+	})
+
 	err := wails.Run(&options.App{
-		Title:            "Desktop Pet",
+		Title:            "Aiko",
 		Width:            1440,
 		Height:           900,
 		Frameless:        true,
@@ -49,8 +62,8 @@ func main() {
 			WebviewIsTransparent: true,
 			WindowIsTranslucent:  false,
 			About: &mac.AboutInfo{
-				Title:   "Desktop Pet",
-				Message: "Your AI companion on the desktop",
+				Title:   "Aiko",
+				Message: "Your AI companion on the desktop.\n\nPowered by eino · Built with Wails",
 			},
 		},
 	})

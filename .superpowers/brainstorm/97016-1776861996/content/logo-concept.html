@@ -1,0 +1,97 @@
+<h2>Logo 图形概念</h2>
+<p class="subtitle">天蓝冰晶配色 · 选择主视觉元素组合方向</p>
+
+<div class="cards">
+  <div class="card" data-choice="cat-circuit" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); height: 140px; border-radius: 12px; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden;">
+      <!-- Circuit lines decoration -->
+      <svg style="position:absolute;opacity:0.2;" width="160" height="140" viewBox="0 0 160 140">
+        <line x1="0" y1="30" x2="40" y2="30" stroke="white" stroke-width="1.5"/>
+        <circle cx="40" cy="30" r="3" fill="white"/>
+        <line x1="40" y1="30" x2="40" y2="60" stroke="white" stroke-width="1.5"/>
+        <line x1="120" y1="110" x2="160" y2="110" stroke="white" stroke-width="1.5"/>
+        <circle cx="120" cy="110" r="3" fill="white"/>
+        <line x1="120" y1="80" x2="120" y2="110" stroke="white" stroke-width="1.5"/>
+        <line x1="80" y1="0" x2="80" y2="20" stroke="white" stroke-width="1.5"/>
+        <circle cx="80" cy="20" r="3" fill="white"/>
+      </svg>
+      <div style="width:90px;height:90px;background:white;border-radius:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,0.15);position:relative;">
+        <svg width="56" height="56" viewBox="0 0 56 56">
+          <!-- Cat silhouette with circuit ear -->
+          <path d="M10 38 Q10 20 28 18 Q46 20 46 38 Q46 48 28 48 Q10 48 10 38Z" fill="#4facfe"/>
+          <!-- Ears -->
+          <path d="M14 22 L10 10 L22 16Z" fill="#4facfe"/>
+          <path d="M42 22 L46 10 L34 16Z" fill="#4facfe"/>
+          <!-- Circuit in ear -->
+          <line x1="44" y1="12" x2="40" y2="16" stroke="#00f2fe" stroke-width="1.5"/>
+          <circle cx="44" cy="12" r="2" fill="#00f2fe"/>
+          <!-- Eyes with glow -->
+          <circle cx="21" cy="32" r="4" fill="white"/>
+          <circle cx="35" cy="32" r="4" fill="white"/>
+          <circle cx="22" cy="31" r="2" fill="#1a6fdb"/>
+          <circle cx="36" cy="31" r="2" fill="#1a6fdb"/>
+          <!-- Shine dots -->
+          <circle cx="23" cy="30" r="0.8" fill="white"/>
+          <circle cx="37" cy="30" r="0.8" fill="white"/>
+          <!-- Smile -->
+          <path d="M24 38 Q28 41 32 38" stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+          <!-- Nose -->
+          <circle cx="28" cy="36" r="1.5" fill="white" opacity="0.8"/>
+        </svg>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A · 猫咪 + 电路</h3>
+      <p>圆润猫脸为主体，耳朵融入电路线条，科技感与萌感完美融合</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="paw-ai" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); height: 140px; border-radius: 12px; display:flex; align-items:center; justify-content:center;">
+      <div style="width:90px;height:90px;background:white;border-radius:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,0.15);">
+        <svg width="56" height="56" viewBox="0 0 56 56">
+          <!-- Paw print -->
+          <ellipse cx="28" cy="36" rx="12" ry="10" fill="#4facfe"/>
+          <ellipse cx="16" cy="26" rx="5.5" ry="5" fill="#4facfe"/>
+          <ellipse cx="40" cy="26" rx="5.5" ry="5" fill="#4facfe"/>
+          <ellipse cx="22" cy="20" rx="4.5" ry="4" fill="#4facfe"/>
+          <ellipse cx="34" cy="20" rx="4.5" ry="4" fill="#4facfe"/>
+          <!-- AI spark in center -->
+          <polygon points="28,26 29.5,31 34,31 30.5,33.5 32,38.5 28,35.5 24,38.5 25.5,33.5 22,31 26.5,31" fill="white" opacity="0.9"/>
+        </svg>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B · 爪印 + AI 星光</h3>
+      <p>宠物爪印轮廓中嵌入星光/闪电，简洁有力，识别度极高</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="bubble-pet" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); height: 140px; border-radius: 12px; display:flex; align-items:center; justify-content:center;">
+      <div style="width:90px;height:90px;background:white;border-radius:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,0.15);">
+        <svg width="56" height="56" viewBox="0 0 56 56">
+          <!-- Chat bubble -->
+          <rect x="8" y="8" width="40" height="30" rx="10" fill="#4facfe"/>
+          <path d="M18 38 L14 46 L26 40Z" fill="#4facfe"/>
+          <!-- Pet ears on bubble top -->
+          <path d="M13 12 L9 4 L18 10Z" fill="#00b4d8"/>
+          <path d="M43 12 L47 4 L38 10Z" fill="#00b4d8"/>
+          <!-- Dots / eyes in bubble -->
+          <circle cx="20" cy="23" r="3.5" fill="white"/>
+          <circle cx="36" cy="23" r="3.5" fill="white"/>
+          <circle cx="21" cy="22" r="1.5" fill="#1a6fdb"/>
+          <circle cx="37" cy="22" r="1.5" fill="#1a6fdb"/>
+          <!-- Thinking dots -->
+          <circle cx="26" cy="23" r="1.5" fill="white" opacity="0.6"/>
+          <circle cx="28" cy="23" r="1.5" fill="white" opacity="0.8"/>
+          <circle cx="30" cy="23" r="1.5" fill="white"/>
+        </svg>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C · 对话框宠物</h3>
+      <p>聊天气泡长出宠物耳朵，强调"AI 对话"核心功能，直观有趣</p>
+    </div>
+  </div>
+</div>

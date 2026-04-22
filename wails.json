@@ -1,7 +1,12 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
-  "name": "desktop-pet",
-  "outputfilename": "DesktopPet",
+  "name": "Aiko",
+  "outputfilename": "Aiko",
+  "info": {
+    "productName": "Aiko",
+    "productVersion": "1.0.0",
+    "copyright": "Copyright © 2025 xutiancheng"
+  },
   "frontend:install": "yarn install",
   "frontend:build": "yarn build",
   "frontend:dev:watcher": "yarn dev",

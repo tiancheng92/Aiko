@@ -37,7 +37,9 @@ static ToolsLocationResult gToolsLocResult;
         self.mgr = [[CLLocationManager alloc] init];
         self.mgr.delegate = self;
         self.mgr.desiredAccuracy = kCLLocationAccuracyBest;
-        [self.mgr requestWhenInUseAuthorization];
+        if (@available(macOS 10.15, *)) {
+            [self.mgr requestWhenInUseAuthorization];
+        }
         [self.mgr startUpdatingLocation];
     });
     long timedOut = dispatch_semaphore_wait(

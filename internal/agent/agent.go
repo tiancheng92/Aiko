@@ -2,11 +2,14 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
 
+	localbk "github.com/cloudwego/eino-ext/adk/backend/local"
 	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/adk/prebuilt/deep"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
@@ -49,34 +52,53 @@ func New(
 	if mw != nil && len(tools) > 0 {
 		tools = middleware.WrapAll(tools, mw)
 	}
-	agentCfg := &adk.ChatModelAgentConfig{
-		Name:          "desktop-pet",
-		Description:   "A desktop pet AI assistant",
-		Instruction:   cfg.SystemPrompt,
-		Model:         chatModel,
-		MaxIterations: 10,
+
+	backend, err := localbk.NewBackend(ctx, &localbk.Config{})
+	if err != nil {
+		return nil, err
+	}
+
+	var handlers []adk.ChatModelAgentMiddleware
+	if skillMW != nil {
+		handlers = append(handlers, skillMW)
+	}
+
+	deepCfg := &deep.Config{
+		Name:           "desktop-pet",
+		Description:    "A desktop pet AI assistant",
+		Instruction:    cfg.SystemPrompt,
+		ChatModel:      chatModel,
+		MaxIteration:   30,
+		Backend:        backend,
+		StreamingShell: backend,
+		Handlers:       handlers,
+		ModelRetryConfig: &adk.ModelRetryConfig{
+			MaxRetries: 5,
+			IsRetryAble: func(_ context.Context, err error) bool {
+				msg := err.Error()
+				return strings.Contains(msg, "429") ||
+					strings.Contains(msg, "Too Many Requests") ||
+					strings.Contains(msg, "rate limit")
+			},
+		},
 	}
 
 	if len(tools) > 0 {
-		agentCfg.ToolsConfig = adk.ToolsConfig{
+		deepCfg.ToolsConfig = adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
 				Tools: tools,
 			},
 		}
 	}
 
-	if skillMW != nil {
-		agentCfg.Handlers = append(agentCfg.Handlers, skillMW)
-	}
-
-	cma, err := adk.NewChatModelAgent(ctx, agentCfg)
+	agent, err := deep.New(ctx, deepCfg)
 	if err != nil {
 		return nil, err
 	}
 
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
-		Agent:           cma,
-		EnableStreaming:  true,
+		Agent:          agent,
+		EnableStreaming: true,
 	})
 
 	return &Agent{
@@ -96,8 +118,12 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 
 	go func() {
 		defer close(ch)
+		defer func() {
+			if r := recover(); r != nil {
+				ch <- StreamResult{Err: fmt.Errorf("agent panic: %v", r)}
+			}
+		}()
 
-		// Prepend recent history as context to the query.
 		history, err := a.buildHistoryPrefix(ctx, userInput)
 		if err != nil {
 			ch <- StreamResult{Err: err}
@@ -109,56 +135,12 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 			query = history + "\nUser: " + userInput
 		}
 
-		iter := a.runner.Query(ctx, query)
-
-		var sb strings.Builder
-		for {
-			event, ok := iter.Next()
-			if !ok {
-				break
-			}
-			if event.Err != nil {
-				ch <- StreamResult{Err: event.Err}
-				return
-			}
-			if event.Output == nil || event.Output.MessageOutput == nil {
-				continue
-			}
-
-			mo := event.Output.MessageOutput
-			if mo.IsStreaming {
-				// Drain the stream and forward tokens.
-				for {
-					msg, recvErr := mo.MessageStream.Recv()
-					if recvErr != nil {
-						if recvErr == io.EOF {
-							break
-						}
-						ch <- StreamResult{Err: recvErr}
-						return
-					}
-					if msg != nil && msg.Content != "" {
-						// Skip tool role messages and assistant messages that only contain tool calls.
-						if msg.Role == schema.Tool || len(msg.ToolCalls) > 0 {
-							continue
-						}
-						ch <- StreamResult{Token: msg.Content}
-						sb.WriteString(msg.Content)
-					}
-				}
-			} else if mo.Message != nil && mo.Message.Content != "" {
-				// Skip tool result messages and tool-call-only assistant messages.
-				if mo.Message.Role != schema.Tool && len(mo.Message.ToolCalls) == 0 {
-					ch <- StreamResult{Token: mo.Message.Content}
-				}
-				sb.WriteString(mo.Message.Content)
-			}
+		fullResponse, ok := drainRunner(ctx, a.runner, query, ch)
+		if !ok {
+			return
 		}
-		fullResponse := sb.String()
 
 		ch <- StreamResult{Done: true}
-
-		// Persist to memory asynchronously so we don't block the caller.
 		go a.persistAndMigrate(context.Background(), userInput, fullResponse)
 	}()
 
@@ -172,55 +154,72 @@ func (a *Agent) ChatDirect(ctx context.Context, prompt string) <-chan StreamResu
 
 	go func() {
 		defer close(ch)
-
-		iter := a.runner.Query(ctx, prompt)
-
-		var sb strings.Builder
-		for {
-			event, ok := iter.Next()
-			if !ok {
-				break
+		defer func() {
+			if r := recover(); r != nil {
+				ch <- StreamResult{Err: fmt.Errorf("agent panic: %v", r)}
 			}
-			if event.Err != nil {
-				ch <- StreamResult{Err: event.Err}
-				return
-			}
-			if event.Output == nil || event.Output.MessageOutput == nil {
-				continue
-			}
-			mo := event.Output.MessageOutput
-			if mo.IsStreaming {
-				for {
-					msg, recvErr := mo.MessageStream.Recv()
-					if recvErr != nil {
-						if recvErr == io.EOF {
-							break
-						}
-						ch <- StreamResult{Err: recvErr}
-						return
-					}
-					if msg != nil && msg.Content != "" {
-						// Skip tool role messages and assistant messages that only contain tool calls.
-						if msg.Role == schema.Tool || len(msg.ToolCalls) > 0 {
-							continue
-						}
-						ch <- StreamResult{Token: msg.Content}
-						sb.WriteString(msg.Content)
-					}
-				}
-			} else if mo.Message != nil && mo.Message.Content != "" {
-				// Skip tool result messages and tool-call-only assistant messages.
-				if mo.Message.Role != schema.Tool && len(mo.Message.ToolCalls) == 0 {
-					ch <- StreamResult{Token: mo.Message.Content}
-				}
-				sb.WriteString(mo.Message.Content)
-			}
+		}()
+		_, ok := drainRunner(ctx, a.runner, prompt, ch)
+		if !ok {
+			return
 		}
 		ch <- StreamResult{Done: true}
 		// NOTE: No persistAndMigrate call here — intentional.
 	}()
 
 	return ch
+}
+
+// drainRunner consumes all events from runner.Query, forwards tokens to ch,
+// and returns the accumulated response string. Returns (response, true) on
+// success or ("", false) after sending an error to ch.
+func drainRunner(ctx context.Context, runner *adk.Runner, query string, ch chan<- StreamResult) (string, bool) {
+	iter := runner.Query(ctx, query)
+	var sb strings.Builder
+
+	for {
+		event, ok := iter.Next()
+		if !ok {
+			break
+		}
+		if event.Err != nil {
+			ch <- StreamResult{Err: event.Err}
+			return "", false
+		}
+		if event.Output == nil || event.Output.MessageOutput == nil {
+			continue
+		}
+
+		mo := event.Output.MessageOutput
+		if mo.IsStreaming {
+			for {
+				msg, recvErr := mo.MessageStream.Recv()
+				if recvErr != nil {
+					if recvErr == io.EOF {
+						break
+					}
+					ch <- StreamResult{Err: recvErr}
+					return "", false
+				}
+				if msg == nil || msg.Content == "" {
+					continue
+				}
+				// Skip tool role messages and assistant messages that only contain tool calls.
+				if msg.Role == schema.Tool || len(msg.ToolCalls) > 0 {
+					continue
+				}
+				ch <- StreamResult{Token: msg.Content}
+				sb.WriteString(msg.Content)
+			}
+		} else if mo.Message != nil && mo.Message.Content != "" {
+			// Skip tool result messages and tool-call-only assistant messages.
+			if mo.Message.Role != schema.Tool && len(mo.Message.ToolCalls) == 0 {
+				ch <- StreamResult{Token: mo.Message.Content}
+				sb.WriteString(mo.Message.Content)
+			}
+		}
+	}
+	return sb.String(), true
 }
 
 // buildHistoryPrefix returns recent conversation history as a formatted string.
@@ -280,7 +279,6 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput, assistantReply
 		return
 	}
 
-	// Migrate oldest messages to long-term memory when over limit.
 	limit := a.cfg.ShortTermLimit
 	if limit <= 0 {
 		limit = 30

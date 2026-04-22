@@ -9,6 +9,8 @@ import {
   ListMCPServers, AddMCPServer, UpdateMCPServer, DeleteMCPServer,
   ListCronJobs, CreateCronJob, UpdateCronJob, DeleteCronJob, SetCronJobEnabled, RunCronJobNow,
   LarkStatus, LarkRunCommand,
+  ListModelProfiles, SaveModelProfile, DeleteModelProfile, ActivateModelProfile,
+  ListOpenRouterModels,
 } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { useModelPath } from '../composables/useModelPath.js'
@@ -23,6 +25,7 @@ const cfg = ref({
   PetSize: 0,
   ChatWidth: 0,
   ChatHeight: 0,
+  ActiveProfileID: 0,
 })
 const { availableModels, loadModels } = useModelPath()
 const toolPerms = ref([])   // [{ ToolName, Level, Granted }]
@@ -34,6 +37,15 @@ const activeTab = ref('model')  // 'model' | 'pet' | 'tools' | 'knowledge'
 
 const llmModels = ref([])       // fetched from /v1/models
 const fetchingModels = ref(false)
+
+// Model profiles
+const profiles = ref([])
+const activeProfileID = ref(0)
+const showProfileForm = ref(false)
+const profileForm = ref({ id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536 })
+const profileFormError = ref('')
+const profileModels = ref([])
+const fetchingProfileModels = ref(false)
 
 // MCP servers
 const mcpServers = ref([])
@@ -72,6 +84,7 @@ onMounted(async () => {
   await fetchMCPServers()
   await fetchCronJobs()
   fetchLarkStatus()
+  await fetchProfiles()
   offProgress = EventsOn('knowledge:progress', (p) => { importProgress.value = p })
   // Auto-fetch model list if URL is already configured.
   if (cfg.value.LLMBaseURL) fetchLLMModels()
@@ -91,6 +104,88 @@ async function fetchLLMModels() {
     llmModels.value = []
   } finally {
     fetchingModels.value = false
+  }
+}
+
+/** fetchProfiles loads all model profiles from the backend. */
+async function fetchProfiles() {
+  try {
+    profiles.value = await ListModelProfiles() || []
+    const loaded = await GetConfig()
+    activeProfileID.value = loaded?.ActiveProfileID || 0
+  } catch (e) {
+    console.error('fetchProfiles:', e)
+  }
+}
+
+/** openProfileForm opens the add-profile form with empty fields. */
+function openProfileForm() {
+  profileForm.value = { id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536 }
+  profileFormError.value = ''
+  profileModels.value = []
+  showProfileForm.value = true
+}
+
+/** editProfile opens the form pre-filled for an existing profile. */
+function editProfile(p) {
+  profileForm.value = { ...p }
+  profileFormError.value = ''
+  profileModels.value = []
+  showProfileForm.value = true
+}
+
+/** fetchProfileModels fetches models for the profile form's base_url. */
+async function fetchProfileModels() {
+  fetchingProfileModels.value = true
+  try {
+    if (profileForm.value.provider === 'openrouter') {
+      profileModels.value = await ListOpenRouterModels(profileForm.value.base_url, profileForm.value.api_key) || []
+    } else {
+      if (!profileForm.value.base_url) return
+      profileModels.value = await ListLLMModels(profileForm.value.base_url, profileForm.value.api_key) || []
+    }
+  } catch {
+    profileModels.value = []
+  } finally {
+    fetchingProfileModels.value = false
+  }
+}
+
+/** saveProfile creates or updates a profile. */
+async function saveProfile() {
+  profileFormError.value = ''
+  if (!profileForm.value.name.trim()) { profileFormError.value = '请输入配置名称'; return }
+  if (!profileForm.value.model.trim()) { profileFormError.value = '请输入模型名称'; return }
+  if (profileForm.value.provider === 'openai' && !profileForm.value.base_url.trim()) {
+    profileFormError.value = '请输入 Base URL'; return
+  }
+  try {
+    await SaveModelProfile({ ...profileForm.value })
+    showProfileForm.value = false
+    await fetchProfiles()
+  } catch (e) {
+    profileFormError.value = '保存失败: ' + e
+  }
+}
+
+/** activateProfile switches to the given profile. */
+async function activateProfile(id) {
+  try {
+    await ActivateModelProfile(id)
+    activeProfileID.value = id
+    statusMsg.value = '已切换模型配置'
+  } catch (e) {
+    statusMsg.value = '切换失败: ' + e
+  }
+}
+
+/** deleteProfile removes a profile by id. */
+async function deleteProfile(id) {
+  try {
+    await DeleteModelProfile(id)
+    await fetchProfiles()
+  } catch (e) {
+    statusMsg.value = '删除失败: ' + e
   }
 }
 
@@ -115,6 +210,33 @@ function resetChatSize() {
   EventsEmit('config:chat:size:changed', { width: 0, height: 0 })
 }
 
+const reloading = ref(false)
+
+/** reload re-fetches all config and data from the backend, discarding unsaved changes. */
+async function reload() {
+  reloading.value = true
+  statusMsg.value = ''
+  try {
+    const loaded = await GetConfig()
+    if (loaded) {
+      Object.assign(cfg.value, loaded)
+      cfg.value.SkillsDirs = Array.isArray(loaded.SkillsDirs)
+        ? loaded.SkillsDirs.join('\n')
+        : (loaded.SkillsDirs || '')
+    }
+    sources.value = await ListKnowledgeSources() || []
+    try { toolPerms.value = await GetToolPermissions() || [] } catch {}
+    await fetchMCPServers()
+    await fetchCronJobs()
+    await fetchProfiles()
+    statusMsg.value = '已刷新'
+  } catch (e) {
+    statusMsg.value = '刷新失败: ' + e
+  } finally {
+    reloading.value = false
+  }
+}
+
 /** save persists configuration to the backend. */
 async function save() {
   saving.value = true
@@ -126,6 +248,7 @@ async function save() {
       SkillsDirs: cfg.value.SkillsDirs
         ? cfg.value.SkillsDirs.split('\n').map(s => s.trim()).filter(Boolean)
         : [],
+      ActiveProfileID: activeProfileID.value,
     }
     await SaveConfig(payload)
     EventsEmit('config:model:changed', cfg.value.Live2DModel)
@@ -358,49 +481,103 @@ async function fetchLarkStatus() {
     <!-- Sidebar + content -->
     <div class="win-body">
       <nav class="win-sidebar">
-        <button :class="{ active: activeTab === 'model' }" @click="activeTab = 'model'">🤖 模型</button>
-        <button :class="{ active: activeTab === 'pet' }" @click="activeTab = 'pet'">🐾 宠物</button>
-        <button :class="{ active: activeTab === 'tools' }" @click="activeTab = 'tools'">🔧 工具权限</button>
-        <button :class="{ active: activeTab === 'knowledge' }" @click="activeTab = 'knowledge'">📚 知识库</button>
-        <button :class="{ active: activeTab === 'mcp' }" @click="activeTab = 'mcp'">🔌 MCP服务器</button>
-        <button :class="{ active: activeTab === 'cron' }" @click="activeTab = 'cron'">⏰ 定时任务</button>
-        <button :class="{ active: activeTab === 'lark' }" @click="activeTab = 'lark'">🪶 飞书</button>
+        <button :class="{ active: activeTab === 'model' }" @click="activeTab = 'model'">
+          <span class="nav-icon">🤖</span><span class="nav-label">模型</span>
+        </button>
+        <button :class="{ active: activeTab === 'pet' }" @click="activeTab = 'pet'">
+          <span class="nav-icon">🐾</span><span class="nav-label">桌宠</span>
+        </button>
+        <button :class="{ active: activeTab === 'tools' }" @click="activeTab = 'tools'">
+          <span class="nav-icon">🔧</span><span class="nav-label">工具权限</span>
+        </button>
+        <button :class="{ active: activeTab === 'knowledge' }" @click="activeTab = 'knowledge'">
+          <span class="nav-icon">📚</span><span class="nav-label">知识库</span>
+        </button>
+        <button :class="{ active: activeTab === 'mcp' }" @click="activeTab = 'mcp'">
+          <span class="nav-icon">🔌</span><span class="nav-label">MCP服务器</span>
+        </button>
+        <button :class="{ active: activeTab === 'cron' }" @click="activeTab = 'cron'">
+          <span class="nav-icon">⏰</span><span class="nav-label">定时任务</span>
+        </button>
+        <button :class="{ active: activeTab === 'lark' }" @click="activeTab = 'lark'">
+          <span class="nav-icon">🪶</span><span class="nav-label">飞书</span>
+        </button>
       </nav>
 
       <div class="win-content">
         <!-- 模型设置 -->
         <div v-if="activeTab === 'model'" class="tab-pane">
-          <label>Base URL
-            <div class="url-row">
-              <input v-model="cfg.LLMBaseURL" placeholder="http://localhost:11434/v1" />
-              <button class="fetch-btn" @click="fetchLLMModels" :disabled="fetchingModels || !cfg.LLMBaseURL">
-                {{ fetchingModels ? '获取中...' : '获取模型' }}
-              </button>
+          <div class="profile-header">
+            <span class="section-title">模型配置</span>
+            <button class="btn-add" @click="openProfileForm">+ 新增</button>
+          </div>
+
+          <div v-if="profiles.length === 0" class="empty-hint">暂无配置，点击「新增」添加第一个模型配置</div>
+
+          <div v-for="p in profiles" :key="p.id" :class="['profile-card', { active: p.id === activeProfileID }]">
+            <div class="profile-card-main">
+              <span class="profile-name">{{ p.name }}</span>
+              <span class="profile-meta">{{ p.provider }} · {{ p.model }}</span>
+              <span v-if="p.id === activeProfileID" class="profile-badge">使用中</span>
             </div>
-          </label>
-          <label>API Key<input v-model="cfg.LLMAPIKey" type="password" placeholder="（可选）" /></label>
-          <label>Model
-            <div class="select-row">
-              <select v-if="llmModels.length" v-model="cfg.LLMModel">
-                <option value="">-- 请选择模型 --</option>
-                <option v-for="m in llmModels" :key="m" :value="m">{{ m }}</option>
-              </select>
-              <input v-else v-model="cfg.LLMModel" placeholder="qwen2.5:7b" />
+            <div class="profile-card-actions">
+              <button v-if="p.id !== activeProfileID" class="btn-activate" @click="activateProfile(p.id)">激活</button>
+              <button class="btn-edit" @click="editProfile(p)">编辑</button>
+              <button class="btn-del" @click="deleteProfile(p.id)">删除</button>
             </div>
-          </label>
-          <label>Embedding Model
-            <div class="select-row">
-              <select v-if="llmModels.length" v-model="cfg.EmbeddingModel">
-                <option value="">-- 不使用 Embedding --</option>
-                <option v-for="m in llmModels" :key="m" :value="m">{{ m }}</option>
-              </select>
-              <input v-else v-model="cfg.EmbeddingModel" placeholder="nomic-embed-text（可选）" />
+          </div>
+
+          <!-- Profile form dialog -->
+          <div v-if="showProfileForm" class="modal-overlay" @click.self="showProfileForm = false">
+            <div class="modal-box">
+              <div class="modal-title">{{ profileForm.id ? '编辑配置' : '新增配置' }}</div>
+              <label>名称<input v-model="profileForm.name" placeholder="我的 OpenAI" /></label>
+              <label>Provider
+                <select v-model="profileForm.provider">
+                  <option value="openai">OpenAI 兼容</option>
+                  <option value="openrouter">OpenRouter</option>
+                </select>
+              </label>
+              <label>Base URL
+                <div class="url-row">
+                  <input
+                    v-model="profileForm.base_url"
+                    :placeholder="profileForm.provider === 'openrouter' ? 'https://openrouter.ai/api/v1（留空使用默认）' : 'http://localhost:11434/v1'"
+                  />
+                  <button class="fetch-btn" @click="fetchProfileModels" :disabled="fetchingProfileModels || (profileForm.provider !== 'openrouter' && !profileForm.base_url)">
+                    {{ fetchingProfileModels ? '获取中...' : '获取模型' }}
+                  </button>
+                </div>
+              </label>              <label>API Key<input v-model="profileForm.api_key" type="password" placeholder="（可选）" /></label>
+              <label>Model
+                <div class="select-row">
+                  <select v-if="profileModels.length" v-model="profileForm.model">
+                    <option value="">-- 请选择模型 --</option>
+                    <option v-for="m in profileModels" :key="m" :value="m">{{ m }}</option>
+                  </select>
+                  <input v-else v-model="profileForm.model" placeholder="gpt-4o" />
+                </div>
+              </label>
+              <label>Embedding Model
+                <div class="select-row">
+                  <select v-if="profileModels.length" v-model="profileForm.embedding_model">
+                    <option value="">-- 不使用 Embedding --</option>
+                    <option v-for="m in profileModels" :key="m" :value="m">{{ m }}</option>
+                  </select>
+                  <input v-else v-model="profileForm.embedding_model" placeholder="text-embedding-3-small（可选）" />
+                </div>
+              </label>
+              <label>Embedding 维度<input type="number" v-model.number="profileForm.embedding_dim" min="256" max="4096" /></label>
+              <div v-if="profileFormError" class="form-error">{{ profileFormError }}</div>
+              <div class="modal-actions">
+                <button class="btn-cancel" @click="showProfileForm = false">取消</button>
+                <button class="btn-save" @click="saveProfile">保存</button>
+              </div>
             </div>
-          </label>
-          <label>Embedding 维度<input type="number" v-model.number="cfg.EmbeddingDim" min="256" max="4096" /></label>
+          </div>
         </div>
 
-        <!-- 宠物设置 -->
+        <!-- 桌宠设置 -->
         <div v-if="activeTab === 'pet'" class="tab-pane">
           <label>Live2D 模型
             <div class="model-grid">
@@ -412,7 +589,7 @@ async function fetchLarkStatus() {
               >{{ m }}</button>
             </div>
           </label>
-          <label>宠物大小
+          <label>桌宠大小
             <div class="size-row">
               <input
                 type="range" min="100" max="600" step="10"
@@ -703,6 +880,7 @@ async function fetchLarkStatus() {
     <!-- Footer -->
     <div class="win-footer">
       <span class="status-msg">{{ statusMsg }}</span>
+      <button class="btn-reload" @click="reload" :disabled="reloading">{{ reloading ? '刷新中...' : '🔄 刷新' }}</button>
       <button @click="save" :disabled="saving">{{ saving ? '保存中...' : '保存' }}</button>
     </div>
   </div>
@@ -718,11 +896,10 @@ async function fetchLarkStatus() {
   background: rgba(13, 17, 28, 0.88);
   backdrop-filter: blur(24px) saturate(160%);
   -webkit-backdrop-filter: blur(24px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: none;
   border-radius: 16px;
   box-shadow:
-    0 24px 64px rgba(0, 0, 0, 0.8),
-    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+    0 24px 64px rgba(0, 0, 0, 0.8);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -760,31 +937,58 @@ async function fetchLarkStatus() {
 
 /* Sidebar */
 .win-sidebar {
-  width: 130px;
-  background: rgba(255, 255, 255, 0.02);
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  width: 100px;
+  background: rgba(0, 0, 0, 0.18);
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
   display: flex;
   flex-direction: column;
-  padding: 10px 6px;
-  gap: 2px;
+  padding: 8px 6px;
+  gap: 3px;
   flex-shrink: 0;
+  overflow-y: auto;
 }
 .win-sidebar button {
+  -webkit-appearance: none;
+  appearance: none;
   background: none;
   border: none;
-  color: rgba(156, 163, 175, 0.8);
-  padding: 9px 12px;
+  outline: none;
+  color: rgba(156, 163, 175, 0.6);
+  padding: 8px 4px;
   cursor: pointer;
-  font-size: 12px;
-  text-align: left;
-  border-radius: 8px;
-  transition: background 0.15s, color 0.15s;
+  font-size: 11px;
+  text-align: center;
+  border-radius: 9px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  width: 100%;
 }
-.win-sidebar button:hover { background: rgba(255,255,255,0.06); color: #f9fafb; }
+.win-sidebar button:focus,
+.win-sidebar button:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.win-sidebar button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.75);
+}
 .win-sidebar button.active {
   background: rgba(99, 102, 241, 0.15);
-  color: #a5b4fc;
-  font-weight: 500;
+  color: #c4b5fd;
+  font-weight: 600;
+}
+.nav-icon {
+  font-size: 18px;
+  line-height: 1;
+  display: block;
+}
+.nav-label {
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 /* Content */
@@ -839,6 +1043,51 @@ select {
 .select-row { display: flex; }
 .select-row select, .select-row input { flex: 1; }
 
+/* Model profiles */
+.profile-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.section-title { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.7); }
+.btn-add { padding: 4px 12px; background: rgba(59,130,246,0.7); border: none; border-radius: 6px; color: #fff; font-size: 12px; cursor: pointer; }
+.btn-add:hover { background: rgba(59,130,246,0.9); }
+.empty-hint { color: rgba(255,255,255,0.35); font-size: 12px; padding: 24px 0; text-align: center; }
+.profile-card {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px; margin-bottom: 8px;
+  background: rgba(255,255,255,0.04); border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.06);
+  transition: border-color 0.15s;
+}
+.profile-card.active { border-color: rgba(59,130,246,0.5); background: rgba(59,130,246,0.08); }
+.profile-card-main { display: flex; flex-direction: column; gap: 3px; }
+.profile-name { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.85); }
+.profile-meta { font-size: 11px; color: rgba(255,255,255,0.4); }
+.profile-badge { font-size: 10px; color: #60a5fa; font-weight: 600; }
+.profile-card-actions { display: flex; gap: 6px; }
+.btn-activate { padding: 3px 10px; background: rgba(34,197,94,0.2); border: 1px solid rgba(34,197,94,0.4); border-radius: 5px; color: #4ade80; font-size: 11px; cursor: pointer; }
+.btn-activate:hover { background: rgba(34,197,94,0.35); }
+.btn-edit { padding: 3px 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 5px; color: rgba(255,255,255,0.7); font-size: 11px; cursor: pointer; }
+.btn-edit:hover { background: rgba(255,255,255,0.1); }
+.btn-del { padding: 3px 10px; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.25); border-radius: 5px; color: #f87171; font-size: 11px; cursor: pointer; }
+.btn-del:hover { background: rgba(239,68,68,0.25); }
+
+/* Modal overlay for profile form */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-box {
+  background: #1e2433; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
+  padding: 20px; width: 360px; max-height: 80vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.modal-title { font-size: 14px; font-weight: 700; color: rgba(255,255,255,0.85); margin-bottom: 4px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.btn-cancel { padding: 5px 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: rgba(255,255,255,0.6); font-size: 12px; cursor: pointer; }
+.btn-cancel:hover { background: rgba(255,255,255,0.12); }
+.btn-save { padding: 5px 14px; background: rgba(59,130,246,0.7); border: none; border-radius: 6px; color: #fff; font-size: 12px; cursor: pointer; }
+.btn-save:hover { background: rgba(59,130,246,0.9); }
+.form-error { color: #f87171; font-size: 12px; }
+
 /* Tool permissions */
 .hint { color: rgba(107, 114, 128, 0.8); font-size: 12px; margin: 0 0 8px; line-height: 1.5; }
 .perm-row {
@@ -891,7 +1140,7 @@ button {
   font-size: 13px;
   font-weight: 500;
   transition: opacity 0.15s;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+  box-shadow: none;
 }
 button:hover:not(:disabled) { opacity: 0.9; }
 button:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
@@ -952,6 +1201,17 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
   background: rgba(255,255,255,0.01);
 }
 .status-msg { color: rgba(107, 114, 128, 0.8); font-size: 12px; flex: 1; }
+.btn-reload {
+  padding: 5px 12px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.6);
+  font-size: 12px;
+  cursor: pointer;
+}
+.btn-reload:hover:not(:disabled) { background: rgba(255,255,255,0.12); }
+.btn-reload:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* MCP Servers */
 .section-header {
@@ -1081,7 +1341,7 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
   cursor: pointer;
   font-size: 12px;
   font-weight: 500;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+  box-shadow: none;
 }
 .btn-secondary {
   background: rgba(55, 65, 81, 0.6);

@@ -36,9 +36,10 @@ import (
 
 // App is the main application struct. All exported methods are Wails bindings.
 type App struct {
-	ctx         context.Context
-	sqlDB       *sql.DB
-	configStore *config.Store
+	ctx          context.Context
+	sqlDB        *sql.DB
+	configStore  *config.Store
+	profileStore *config.ProfileStore
 	cfg         *config.Config
 	vectorDB    *chromem.DB
 	shortMem    *memory.ShortStore
@@ -73,6 +74,19 @@ func (a *App) startup(ctx context.Context) {
 	a.cfg, err = a.configStore.Load()
 	if err != nil {
 		panic(err)
+	}
+	// Apply active model profile if set.
+	profileStore := config.NewProfileStore(a.sqlDB)
+	a.profileStore = profileStore
+	if a.cfg.ActiveProfileID > 0 {
+		if p, perr := profileStore.Get(a.cfg.ActiveProfileID); perr == nil {
+			a.cfg.ApplyProfile(p)
+			slog.Info("startup: applied profile", "provider", p.Provider, "base_url", a.cfg.LLMBaseURL)
+			// Persist any defaults written back (e.g. OpenRouter base URL).
+			if perr2 := profileStore.Save(p); perr2 != nil {
+				slog.Warn("startup: save profile failed", "err", perr2)
+			}
+		}
 	}
 
 	a.shortMem = memory.NewShortStore(a.sqlDB)
@@ -243,11 +257,50 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 func (a *App) GetConfig() *config.Config { return a.cfg }
 
 // SaveConfig persists updated config and reinitializes LLM components.
+// LLM init errors are non-fatal (user may save non-LLM settings before configuring the model).
 func (a *App) SaveConfig(cfg *config.Config) error {
 	if err := a.configStore.Save(cfg); err != nil {
 		return err
 	}
 	a.cfg = cfg
+	if err := a.initLLMComponents(a.ctx); err != nil {
+		slog.Warn("SaveConfig: LLM reinit skipped", "err", err)
+	}
+	return nil
+}
+
+// ListModelProfiles returns all saved model profiles.
+func (a *App) ListModelProfiles() ([]config.ModelProfile, error) {
+	return a.profileStore.List()
+}
+
+// SaveModelProfile creates or updates a model profile.
+func (a *App) SaveModelProfile(p config.ModelProfile) (config.ModelProfile, error) {
+	if err := a.profileStore.Save(&p); err != nil {
+		return p, err
+	}
+	return p, nil
+}
+
+// DeleteModelProfile removes a model profile by id.
+func (a *App) DeleteModelProfile(id int64) error {
+	return a.profileStore.Delete(id)
+}
+
+// ActivateModelProfile switches to the given profile and reinitializes LLM components.
+func (a *App) ActivateModelProfile(id int64) error {
+	p, err := a.profileStore.Get(id)
+	if err != nil {
+		return err
+	}
+	a.cfg.ApplyProfile(p)
+	// Persist any defaults written back to the profile (e.g. OpenRouter base URL).
+	if err := a.profileStore.Save(p); err != nil {
+		slog.Warn("ActivateModelProfile: save profile failed", "err", err)
+	}
+	if err := a.configStore.Save(a.cfg); err != nil {
+		return err
+	}
 	return a.initLLMComponents(a.ctx)
 }
 
@@ -294,6 +347,7 @@ func (a *App) SendMessage(userInput string) error {
 	a.mu.RUnlock()
 
 	if ag == nil {
+		slog.Error("SendMessage: petAgent is nil", "input", userInput)
 		return fmt.Errorf("agent not initialized: complete settings first")
 	}
 	go func() {
@@ -406,12 +460,12 @@ func (a *App) ClearChatHistory() error {
 	if longMem != nil {
 		embedder, err := llm.NewEmbedder(a.ctx, a.cfg)
 		if err != nil {
-			return fmt.Errorf("rebuild embedder for clear: %w", err)
-		}
-		if err := longMem.DeleteAll(a.vectorDB, embedder); err != nil {
+			slog.Warn("ClearChatHistory: embedder init failed, skipping long-term memory clear", "err", err)
+		} else if err := longMem.DeleteAll(a.vectorDB, embedder); err != nil {
 			return fmt.Errorf("clear long-term memory: %w", err)
 		}
 	}
+	slog.Info("ClearChatHistory: done")
 	return nil
 }
 
@@ -549,6 +603,59 @@ func (a *App) ListLLMModels(baseURL, apiKey string) ([]string, error) {
 	return ids, nil
 }
 
+// ListOpenRouterModels fetches available models from OpenRouter's /api/v1/models/user endpoint.
+// baseURL defaults to "https://openrouter.ai/api/v1" when empty.
+func (a *App) ListOpenRouterModels(baseURL, apiKey string) ([]string, error) {
+	base := strings.TrimRight(baseURL, "/")
+	if base == "" {
+		base = "https://openrouter.ai/api/v1"
+	}
+	modelsURL := base + "/models/user"
+
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, modelsURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("server returned %d: %s", resp.StatusCode, body)
+	}
+
+	var result struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("parse response: %w", err)
+	}
+
+	ids := make([]string, 0, len(result.Data))
+	for _, m := range result.Data {
+		if m.ID != "" {
+			ids = append(ids, m.ID)
+		}
+	}
+	sort.Strings(ids)
+	return ids, nil
+}
+
 // ListMCPServers returns all configured MCP server entries.
 func (a *App) ListMCPServers() ([]mcp.ServerConfig, error) {
 	return a.mcpStore.List(a.ctx)
@@ -571,27 +678,57 @@ func (a *App) DeleteMCPServer(id int64) error {
 
 // ListCronJobs returns all scheduled jobs.
 func (a *App) ListCronJobs() ([]scheduler.Job, error) {
-	return a.scheduler.ListJobs(a.ctx)
+	a.mu.RLock()
+	sched := a.scheduler
+	a.mu.RUnlock()
+	if sched == nil {
+		return []scheduler.Job{}, nil
+	}
+	return sched.ListJobs(a.ctx)
 }
 
 // CreateCronJob creates a new scheduled job.
 func (a *App) CreateCronJob(name, description, schedule, prompt string) (scheduler.Job, error) {
-	return a.scheduler.CreateJob(a.ctx, name, description, schedule, prompt)
+	a.mu.RLock()
+	sched := a.scheduler
+	a.mu.RUnlock()
+	if sched == nil {
+		return scheduler.Job{}, fmt.Errorf("scheduler not ready")
+	}
+	return sched.CreateJob(a.ctx, name, description, schedule, prompt)
 }
 
 // UpdateCronJob updates an existing scheduled job.
 func (a *App) UpdateCronJob(id int64, name, description, schedule, prompt string) (scheduler.Job, error) {
-	return a.scheduler.UpdateJob(a.ctx, id, name, description, schedule, prompt)
+	a.mu.RLock()
+	sched := a.scheduler
+	a.mu.RUnlock()
+	if sched == nil {
+		return scheduler.Job{}, fmt.Errorf("scheduler not ready")
+	}
+	return sched.UpdateJob(a.ctx, id, name, description, schedule, prompt)
 }
 
 // DeleteCronJob removes a scheduled job by ID.
 func (a *App) DeleteCronJob(id int64) error {
-	return a.scheduler.DeleteJob(a.ctx, id)
+	a.mu.RLock()
+	sched := a.scheduler
+	a.mu.RUnlock()
+	if sched == nil {
+		return fmt.Errorf("scheduler not ready")
+	}
+	return sched.DeleteJob(a.ctx, id)
 }
 
 // SetCronJobEnabled enables or disables a scheduled job.
 func (a *App) SetCronJobEnabled(id int64, enabled bool) error {
-	return a.scheduler.SetJobEnabled(a.ctx, id, enabled)
+	a.mu.RLock()
+	sched := a.scheduler
+	a.mu.RUnlock()
+	if sched == nil {
+		return fmt.Errorf("scheduler not ready")
+	}
+	return sched.SetJobEnabled(a.ctx, id, enabled)
 }
 
 // RunCronJobNow fires a scheduled job immediately regardless of its schedule.

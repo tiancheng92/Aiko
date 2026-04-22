@@ -7,6 +7,8 @@ import {memory} from '../models';
 import {tools} from '../models';
 import {frontend} from '../models';
 
+export function ActivateModelProfile(arg1:number):Promise<void>;
+
 export function AddMCPServer(arg1:mcp.ServerConfig):Promise<mcp.ServerConfig>;
 
 export function ClearChatHistory():Promise<void>;
@@ -18,6 +20,8 @@ export function DeleteCronJob(arg1:number):Promise<void>;
 export function DeleteKnowledgeSource(arg1:string):Promise<void>;
 
 export function DeleteMCPServer(arg1:number):Promise<void>;
+
+export function DeleteModelProfile(arg1:number):Promise<void>;
 
 export function ExportChatHistory():Promise<void>;
 
@@ -49,6 +53,10 @@ export function ListLLMModels(arg1:string,arg2:string):Promise<Array<string>>;
 
 export function ListMCPServers():Promise<Array<mcp.ServerConfig>>;
 
+export function ListModelProfiles():Promise<Array<config.ModelProfile>>;
+
+export function ListOpenRouterModels(arg1:string,arg2:string):Promise<Array<string>>;
+
 export function MarkWelcomeShown():Promise<void>;
 
 export function MissingRequiredConfig():Promise<Array<string>>;
@@ -60,6 +68,8 @@ export function RunCronJobNow(arg1:number):Promise<void>;
 export function SaveBallPosition(arg1:number,arg2:number,arg3:number,arg4:number):Promise<void>;
 
 export function SaveConfig(arg1:config.Config):Promise<void>;
+
+export function SaveModelProfile(arg1:config.ModelProfile):Promise<config.ModelProfile>;
 
 export function SendMessage(arg1:string):Promise<void>;
 
