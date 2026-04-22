@@ -21,6 +21,8 @@ func All() []Tool {
 		&GetOSInfoTool{},
 		&GetHardwareInfoTool{},
 		&GetNetworkStatusTool{},
+		&WebSearchTool{},
+		&WebFetchTool{},
 	}
 }
 
