@@ -21,6 +21,10 @@
         <string>10.13.0</string>
         <key>NSHighResolutionCapable</key>
         <string>true</string>
+        <key>NSLocationWhenInUseUsageDescription</key>
+        <string>桌面宠物需要获取您的位置信息，以便提供天气、位置相关服务。</string>
+        <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+        <string>桌面宠物需要获取您的位置信息，以便提供天气、位置相关服务。</string>
         <key>NSHumanReadableCopyright</key>
         <string>{{.Info.Copyright}}</string>
         {{if .Info.FileAssociations}}
