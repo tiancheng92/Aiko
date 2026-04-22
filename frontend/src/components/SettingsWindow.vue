@@ -8,6 +8,7 @@ import {
   ListLLMModels,
   ListMCPServers, AddMCPServer, UpdateMCPServer, DeleteMCPServer,
   ListCronJobs, CreateCronJob, UpdateCronJob, DeleteCronJob, SetCronJobEnabled, RunCronJobNow,
+  LarkStatus, LarkRunCommand,
 } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { useModelPath } from '../composables/useModelPath.js'
@@ -46,6 +47,11 @@ const showCronForm = ref(false)
 const cronForm = ref({ id: 0, name: '', description: '', schedule: '', prompt: '' })
 const cronFormError = ref('')
 
+// Lark
+const larkStatus = ref('')
+const larkStatusLoading = ref(false)
+const larkStatusError = ref('')
+
 // Draggable window state
 const pos = ref({ x: Math.round(window.innerWidth / 2 - 300), y: Math.round(window.innerHeight / 2 - 250) })
 let dragStart = null
@@ -59,6 +65,7 @@ onMounted(async () => {
   try { toolPerms.value = await GetToolPermissions() || [] } catch {}
   await fetchMCPServers()
   await fetchCronJobs()
+  fetchLarkStatus()
   offProgress = EventsOn('knowledge:progress', (p) => { importProgress.value = p })
   // Auto-fetch model list if URL is already configured.
   if (cfg.value.LLMBaseURL) fetchLLMModels()
@@ -311,6 +318,20 @@ async function runCronJobNow(id) {
     statusMsg.value = '触发失败: ' + e
   }
 }
+
+/** fetchLarkStatus checks lark-cli auth status. */
+async function fetchLarkStatus() {
+  larkStatusLoading.value = true
+  larkStatusError.value = ''
+  try {
+    larkStatus.value = await LarkStatus()
+  } catch (e) {
+    larkStatusError.value = String(e)
+    larkStatus.value = ''
+  } finally {
+    larkStatusLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -330,6 +351,7 @@ async function runCronJobNow(id) {
         <button :class="{ active: activeTab === 'knowledge' }" @click="activeTab = 'knowledge'">📚 知识库</button>
         <button :class="{ active: activeTab === 'mcp' }" @click="activeTab = 'mcp'">🔌 MCP服务器</button>
         <button :class="{ active: activeTab === 'cron' }" @click="activeTab = 'cron'">⏰ 定时任务</button>
+        <button :class="{ active: activeTab === 'lark' }" @click="activeTab = 'lark'">🪶 飞书</button>
       </nav>
 
       <div class="win-content">
@@ -607,6 +629,63 @@ async function runCronJobNow(id) {
             </template>
           </div>
 
+        </div>
+
+        <!-- 飞书 lark-cli -->
+        <div v-if="activeTab === 'lark'" class="tab-pane">
+          <label>lark-cli 路径
+            <div class="url-row">
+              <input v-model="cfg.LarkCLIPath" placeholder="留空自动从 PATH 查找（lark-cli）" />
+              <button class="fetch-btn" @click="fetchLarkStatus" :disabled="larkStatusLoading">
+                {{ larkStatusLoading ? '检测中...' : '检测状态' }}
+              </button>
+            </div>
+          </label>
+
+          <div v-if="larkStatus" class="lark-status lark-status--ok">
+            <pre>{{ larkStatus }}</pre>
+          </div>
+          <div v-else-if="larkStatusError" class="lark-status lark-status--err">{{ larkStatusError }}</div>
+
+          <div class="section-header" style="margin-top:8px">
+            <h3>快速引导</h3>
+          </div>
+          <div class="lark-guide">
+            <div class="lark-guide-step">
+              <span class="lark-step-num">1</span>
+              <div class="lark-step-body">
+                <div class="lark-step-title">安装 lark-cli</div>
+                <code class="lark-code">npm install -g @larksuite/cli</code>
+              </div>
+            </div>
+            <div class="lark-guide-step">
+              <span class="lark-step-num">2</span>
+              <div class="lark-step-body">
+                <div class="lark-step-title">初始化应用凭证（App ID / App Secret）</div>
+                <code class="lark-code">lark-cli config init</code>
+                <p class="lark-step-hint">在终端中运行，按提示填入飞书开放平台的 App ID 与 App Secret</p>
+              </div>
+            </div>
+            <div class="lark-guide-step">
+              <span class="lark-step-num">3</span>
+              <div class="lark-step-body">
+                <div class="lark-step-title">登录（获取用户 Access Token）</div>
+                <code class="lark-code">lark-cli auth login --recommend</code>
+                <p class="lark-step-hint">浏览器扫码授权后即可以用户身份访问飞书</p>
+              </div>
+            </div>
+            <div class="lark-guide-step">
+              <span class="lark-step-num">4</span>
+              <div class="lark-step-body">
+                <div class="lark-step-title">完成后点击"检测状态"验证</div>
+              </div>
+            </div>
+          </div>
+
+          <p class="lark-hint">
+            配置完成后，AI 可通过 <code>lark</code> 工具操作飞书，例如：发消息、查日历、读文档等。<br>
+            在「工具权限」中启用 <strong>lark</strong> 工具后生效。
+          </p>
         </div>
       </div>
     </div>
@@ -1084,4 +1163,60 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
   display: flex; flex-direction: column; gap: 10px;
 }
 .cron-form h4 { margin: 0 0 4px; font-size: 13px; color: #f9fafb; }
+
+/* Lark tab */
+.lark-status {
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: 'Fira Code', monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.lark-status--ok  { background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2); color: #4ade80; }
+.lark-status--err { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); color: #f87171; }
+.lark-status pre { margin: 0; }
+.lark-guide { display: flex; flex-direction: column; gap: 10px; }
+.lark-guide-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 8px;
+}
+.lark-step-num {
+  flex-shrink: 0;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: rgba(99,102,241,0.25);
+  color: #a5b4fc;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.lark-step-body { display: flex; flex-direction: column; gap: 4px; }
+.lark-step-title { font-size: 12px; font-weight: 600; color: #f9fafb; }
+.lark-code {
+  display: inline-block;
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  padding: 2px 8px;
+  color: #e2e8f0;
+  user-select: text;
+}
+.lark-step-hint { font-size: 11px; color: #9ca3af; margin: 0; }
+.lark-hint {
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.6;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.02);
+  border-radius: 6px;
+}
+.lark-hint code { font-family: 'Fira Code', monospace; color: #a5b4fc; }
 </style>
