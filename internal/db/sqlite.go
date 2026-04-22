@@ -74,6 +74,16 @@ func migrate(db *sql.DB) error {
 		    last_run    DATETIME,
 		    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
+		CREATE TABLE IF NOT EXISTS mcp_servers (
+		    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+		    name        TEXT NOT NULL UNIQUE,
+		    transport   TEXT NOT NULL,
+		    command     TEXT,
+		    args        TEXT,
+		    url         TEXT,
+		    enabled     INTEGER NOT NULL DEFAULT 1,
+		    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
 	`)
 	return err
 }
