@@ -385,14 +385,16 @@ func (a *App) startScreenWatcher() {
 			n := getNumScreens()
 
 			foundIdx := -1
+			var foundFrame ScreenFrame
 			for i := 0; i < n && i < len(screens); i++ {
-				ox := getScreenOriginX(i)
-				oy := getScreenOriginY(i)
-				w := getScreenWidth(i)
-				h := getScreenHeight(i)
-				// macOS Y-up: check if mouse is within [ox, ox+w) x [oy, oy+h)
-				if mx >= ox && mx < ox+w && my >= oy && my < oy+h {
+				frame := getScreenFrame(i)
+				if !frame.Valid {
+					continue
+				}
+				if mx >= frame.OriginX && mx < frame.OriginX+frame.Width &&
+					my >= frame.OriginY && my < frame.OriginY+frame.Height {
 					foundIdx = i
+					foundFrame = frame
 					break
 				}
 			}
@@ -423,8 +425,9 @@ func (a *App) startScreenWatcher() {
 			// Wails primary screen top-left is (0,0). Secondary screens offset from there.
 			// macOS: origin is at bottom-left of the screen.
 			// Wails Y = primaryH - (screenOriginY + screenH)
-			originX := int(getScreenOriginX(foundIdx))
-			originY := primaryH - (int(getScreenOriginY(foundIdx)) + found.Size.Height)
+			// foundFrame.OriginX/Y and found.Size use the same logical-point coordinate space.
+			originX := int(foundFrame.OriginX)
+			originY := primaryH - (int(foundFrame.OriginY) + found.Size.Height)
 
 			wailsruntime.WindowSetSize(a.ctx, found.Size.Width, found.Size.Height)
 			wailsruntime.WindowSetPosition(a.ctx, originX, originY)

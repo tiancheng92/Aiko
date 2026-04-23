@@ -197,6 +197,28 @@ static CGFloat getScreenHeight(int n) {
     return [[screens objectAtIndex:n] frame].size.height;
 }
 
+typedef struct CScreenFrame {
+    CGFloat originX;
+    CGFloat originY;
+    CGFloat width;
+    CGFloat height;
+    int     valid; // 1 if index was in bounds, 0 otherwise
+} CScreenFrame;
+
+// getScreenFrame returns the frame of the nth NSScreen atomically.
+static CScreenFrame getScreenFrame(int n) {
+    NSArray<NSScreen *> *screens = [NSScreen screens];
+    CScreenFrame f = {0, 0, 0, 0, 0};
+    if (n < 0 || n >= (int)[screens count]) return f;
+    NSRect frame = [[screens objectAtIndex:n] frame];
+    f.originX = frame.origin.x;
+    f.originY = frame.origin.y;
+    f.width   = frame.size.width;
+    f.height  = frame.size.height;
+    f.valid   = 1;
+    return f;
+}
+
 // hasWindow returns 1 if gWindow is initialized.
 static int hasWindow() { return gWindow != nil ? 1 : 0; }
 
@@ -294,6 +316,27 @@ func getScreenWidth(n int) float64 { return float64(C.getScreenWidth(C.int(n))) 
 
 // getScreenHeight returns the height of the nth NSScreen.
 func getScreenHeight(n int) float64 { return float64(C.getScreenHeight(C.int(n))) }
+
+// ScreenFrame holds the macOS frame of a single screen.
+type ScreenFrame struct {
+	OriginX float64
+	OriginY float64
+	Width   float64
+	Height  float64
+	Valid   bool
+}
+
+// getScreenFrame returns the NSScreen frame for the nth screen atomically.
+func getScreenFrame(n int) ScreenFrame {
+	f := C.getScreenFrame(C.int(n))
+	return ScreenFrame{
+		OriginX: float64(f.originX),
+		OriginY: float64(f.originY),
+		Width:   float64(f.width),
+		Height:  float64(f.height),
+		Valid:   f.valid == 1,
+	}
+}
 
 // getMouseX returns the current mouse cursor X in macOS screen coordinates.
 func getMouseX() float64 { return float64(C.getMouseScreenX()) }
