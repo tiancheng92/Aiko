@@ -89,6 +89,8 @@ const loading = ref(false)
 const messagesEl = ref(null)
 const copiedIdx = ref(null)
 const textareaEl = ref(null)
+const isRecording = ref(false)
+const voiceHint = ref('')
 
 /** formatTime formats a datetime string or Date to YYYY-MM-DD HH:mm:ss. */
 function formatTime(ts) {
@@ -161,6 +163,37 @@ onMounted(async () => {
     messages.value.push({ role: 'system', content: '错误: ' + err })
     loading.value = false
     EventsEmit('pet:state:change', 'error')
+  })
+
+  EventsOn('voice:start', () => {
+    isRecording.value = true
+    voiceHint.value = ''
+    input.value = ''
+    nextTick(() => textareaEl.value?.focus())
+  })
+
+  EventsOn('voice:transcript', (text) => {
+    input.value = text
+    voiceHint.value = text
+  })
+
+  EventsOn('voice:end', () => {
+    isRecording.value = false
+    voiceHint.value = ''
+  })
+
+  EventsOn('voice:error', (errMsg) => {
+    isRecording.value = false
+    voiceHint.value = ''
+    input.value = ''
+    EventsEmit('notification:show', {
+      title: '🎙️ 语音识别失败',
+      message: errMsg === 'mic_denied'
+        ? '请在系统偏好设置中允许 Aiko 使用麦克风。'
+        : errMsg === 'speech_denied'
+          ? '请在系统偏好设置中允许 Aiko 使用语音识别。'
+          : `语音识别出错：${errMsg}`,
+    })
   })
 })
 
@@ -274,6 +307,18 @@ defineExpose({ focusInput, scrollToBottom })
         </div>
       </div>
     </div>
+      <!-- Voice recording status bar -->
+      <div v-if="isRecording" class="voice-hint-bar">
+        <span class="voice-hint-icon">🎙️</span>
+        <span class="voice-hint-text">
+          {{ voiceHint ? `"${voiceHint}"` : '正在聆听...' }}
+        </span>
+        <span class="voice-hint-dots">
+          <span />
+          <span />
+          <span />
+        </span>
+      </div>
     <div class="input-row">
       <textarea
         ref="textareaEl"
@@ -576,4 +621,53 @@ defineExpose({ focusInput, scrollToBottom })
 .input-row button:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
 .input-row button:active:not(:disabled) { transform: translateY(0); }
 .input-row button:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+
+/* ── Voice hint status bar ─────────────────────────────────── */
+.voice-hint-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(139, 92, 246, 0.15));
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  font-size: 13px;
+  color: rgba(200, 210, 255, 0.9);
+}
+
+.voice-hint-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.voice-hint-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-hint-dots {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.voice-hint-dots span {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #8b5cf6;
+  animation: dot-bounce 1.2s ease-in-out infinite;
+}
+
+.voice-hint-dots span:nth-child(2) { animation-delay: 0.2s; }
+.voice-hint-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes dot-bounce {
+  0%, 80%, 100% { transform: translateY(0);    opacity: 0.4; }
+  40%           { transform: translateY(-4px); opacity: 1; }
+}
 </style>
