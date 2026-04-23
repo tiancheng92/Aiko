@@ -46,6 +46,10 @@ export function GetBallPosition(arg1, arg2) {
   return window['go']['main']['App']['GetBallPosition'](arg1, arg2);
 }
 
+export function GetChatSize(arg1, arg2) {
+  return window['go']['main']['App']['GetChatSize'](arg1, arg2);
+}
+
 export function GetConfig() {
   return window['go']['main']['App']['GetConfig']();
 }
@@ -56,6 +60,14 @@ export function GetMessages(arg1) {
 
 export function GetMousePosition() {
   return window['go']['main']['App']['GetMousePosition']();
+}
+
+export function GetPetSize(arg1, arg2) {
+  return window['go']['main']['App']['GetPetSize'](arg1, arg2);
+}
+
+export function GetScreenList() {
+  return window['go']['main']['App']['GetScreenList']();
 }
 
 export function GetScreenSize() {
@@ -126,12 +138,20 @@ export function SaveBallPosition(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['SaveBallPosition'](arg1, arg2, arg3, arg4);
 }
 
+export function SaveChatSize(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['SaveChatSize'](arg1, arg2, arg3, arg4);
+}
+
 export function SaveConfig(arg1) {
   return window['go']['main']['App']['SaveConfig'](arg1);
 }
 
 export function SaveModelProfile(arg1) {
   return window['go']['main']['App']['SaveModelProfile'](arg1);
+}
+
+export function SavePetSize(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SavePetSize'](arg1, arg2, arg3);
 }
 
 export function SendMessage(arg1) {

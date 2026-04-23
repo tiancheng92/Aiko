@@ -102,6 +102,20 @@ export namespace main {
 	        this.y = source["y"];
 	    }
 	}
+	export class ScreenInfo {
+	    width: number;
+	    height: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ScreenInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.width = source["width"];
+	        this.height = source["height"];
+	    }
+	}
 
 }
 
