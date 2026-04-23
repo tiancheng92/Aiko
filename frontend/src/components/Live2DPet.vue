@@ -2,13 +2,17 @@
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import * as PIXI from 'pixi.js'
 import { Live2DModel, MotionPriority } from 'pixi-live2d-display/cubism4'
-import { GetBallPosition, SaveBallPosition, GetScreenSize, GetConfig, SaveConfig, GetMousePosition } from '../../wailsjs/go/main/App'
+import { GetBallPosition, SaveBallPosition, GetScreenSize, GetConfig, SaveConfig, GetMousePosition, GetPetSize } from '../../wailsjs/go/main/App'
 import { Quit, EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { usePetState } from '../composables/usePetState.js'
 import { useModelPath } from '../composables/useModelPath.js'
 import ContextMenu from './ContextMenu.vue'
 
 const emit = defineEmits(['click', 'position', 'ball-size', 'open-settings'])
+
+const props = defineProps({
+  activeScreen: { type: Object, default: () => ({ width: 0, height: 0 }) },
+})
 
 const pos = ref(null)
 const { petState } = usePetState()
@@ -159,14 +163,11 @@ onMounted(async () => {
     // Use configured size, or auto-calculate from screen height.
     let configuredSize = 0
     try {
-      const loadedCfg = await GetConfig()
-      if (loadedCfg?.PetSize > 0) configuredSize = loadedCfg.PetSize
+      configuredSize = await GetPetSize(sw.value, sh.value)
     } catch (e) {
-      console.warn('GetConfig for PetSize failed', e)
+      console.warn('GetPetSize failed', e)
     }
-    petSize.value = configuredSize > 0
-      ? configuredSize
-      : 350
+    petSize.value = configuredSize > 0 ? configuredSize : 350
     emit('ball-size', petSize.value)
 
     const [bx, by] = await GetBallPosition(sw.value, sh.value)
@@ -193,6 +194,33 @@ onMounted(async () => {
   // Listen for real-time pet size changes from settings.
   offSizeChange = EventsOn('config:pet:size:changed', (size) => {
     applySize(size)
+  })
+
+  EventsOn('screen:active:changed', async (info) => {
+    const w = info.width
+    const h = info.height
+    sw.value = w
+    sh.value = h
+
+    // Reload per-screen pet size.
+    try {
+      const size = await GetPetSize(w, h)
+      if (size > 0) applySize(size)
+    } catch (e) {
+      console.warn('screen:active:changed: GetPetSize failed', e)
+    }
+
+    // Reload per-screen position.
+    try {
+      const [bx, by] = await GetBallPosition(w, h)
+      if (bx >= 0 && by >= 0) {
+        pos.value = { x: bx, y: by }
+      } else {
+        pos.value = { x: w - petSize.value - 40, y: h - petSize.value - 40 }
+      }
+    } catch (e) {
+      console.warn('screen:active:changed: GetBallPosition failed', e)
+    }
   })
 })
 
