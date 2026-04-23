@@ -13,6 +13,9 @@ package main
 #import <Speech/Speech.h>
 #include <unistd.h>
 
+// Forward declaration — matches the CGO-generated signature in _cgo_export.h.
+extern void voiceTranscriptCallback(char *text);
+
 static id gGlobalMonitor    = nil;
 static id gLocalMonitor     = nil;
 static id gHotkeyMonitor    = nil;
@@ -24,10 +27,6 @@ static SFSpeechRecognizer        *gSpeechRecognizer  = nil;
 static SFSpeechAudioBufferRecognitionRequest *gRecogRequest = nil;
 static SFSpeechRecognitionTask   *gRecogTask         = nil;
 static AVAudioEngine             *gAudioEngine       = nil;
-
-// Forward declaration — implemented as CGO export in Go.
-// Must match the signature CGO generates (char*, not const char*).
-extern void voiceTranscriptCallback(char *text);
 
 // gHotkeyPipeFd is the write end of a pipe; Go reads from the read end.
 static int gHotkeyPipeFd = -1;
@@ -284,38 +283,20 @@ static int hasWindow() { return gWindow != nil ? 1 : 0; }
 // Results are delivered via voiceTranscriptCallback().
 static void startVoiceRecognition() {
     dispatch_async(dispatch_get_main_queue(), ^{
-        // Check microphone permission
-        if (@available(macOS 14.0, *)) {
-            AVAudioApplication *audioApp = [AVAudioApplication sharedInstance];
-            AVAudioApplicationRecordPermission perm = [audioApp recordPermission];
-            if (perm == AVAudioApplicationRecordPermissionUndetermined) {
-                [audioApp requestRecordPermissionWithCompletionHandler:^(BOOL granted) {
-                    if (granted) {
-                        startVoiceRecognition();
-                    } else {
-                        voiceTranscriptCallback("ERROR:mic_denied");
-                    }
-                }];
-                return;
-            } else if (perm == AVAudioApplicationRecordPermissionDenied) {
-                voiceTranscriptCallback("ERROR:mic_denied");
-                return;
-            }
-        } else {
-            AVAuthorizationStatus micStatus = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
-            if (micStatus == AVAuthorizationStatusNotDetermined) {
-                [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted) {
-                    if (granted) {
-                        startVoiceRecognition();
-                    } else {
-                        voiceTranscriptCallback("ERROR:mic_denied");
-                    }
-                }];
-                return;
-            } else if (micStatus == AVAuthorizationStatusDenied || micStatus == AVAuthorizationStatusRestricted) {
-                voiceTranscriptCallback("ERROR:mic_denied");
-                return;
-            }
+        // Check microphone permission (AVCaptureDevice works on all supported macOS versions)
+        AVAuthorizationStatus micStatus = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
+        if (micStatus == AVAuthorizationStatusNotDetermined) {
+            [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted) {
+                if (granted) {
+                    startVoiceRecognition();
+                } else {
+                    voiceTranscriptCallback("ERROR:mic_denied");
+                }
+            }];
+            return;
+        } else if (micStatus == AVAuthorizationStatusDenied || micStatus == AVAuthorizationStatusRestricted) {
+            voiceTranscriptCallback("ERROR:mic_denied");
+            return;
         }
 
         // Check speech recognition permission
@@ -356,7 +337,7 @@ static void startVoiceRecognition() {
         [gAudioEngine startAndReturnError:&startErr];
         if (startErr) {
             NSString *msg = [NSString stringWithFormat:@"ERROR:audio_engine:%@", startErr.localizedDescription];
-            voiceTranscriptCallback([msg UTF8String]);
+            voiceTranscriptCallback((char *)[msg UTF8String]);
             return;
         }
 
@@ -366,13 +347,13 @@ static void startVoiceRecognition() {
                     // Ignore cancellation errors (code 301) — they fire on normal stop
                     if (err.code != 301) {
                         NSString *msg = [NSString stringWithFormat:@"ERROR:recognition:%@", err.localizedDescription];
-                        voiceTranscriptCallback([msg UTF8String]);
+                        voiceTranscriptCallback((char *)[msg UTF8String]);
                     }
                     return;
                 }
                 if (result) {
                     NSString *text = result.bestTranscription.formattedString;
-                    voiceTranscriptCallback([text UTF8String]);
+                    voiceTranscriptCallback((char *)[text UTF8String]);
                 }
             }];
     });
