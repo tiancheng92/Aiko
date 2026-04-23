@@ -153,6 +153,16 @@ static CGFloat getWindowOriginX() { return gWindow ? gWindow.frame.origin.x : 0;
 static CGFloat getWindowOriginY() { return gWindow ? gWindow.frame.origin.y : 0; }
 // getWindowHeight returns the window height.
 static CGFloat getWindowHeight() { return gWindow ? gWindow.frame.size.height : 0; }
+// getCurrentScreenOriginX returns the X origin of the screen containing gWindow, in macOS screen coords.
+static CGFloat getCurrentScreenOriginX() {
+    if (!gWindow) return 0;
+    return gWindow.screen ? gWindow.screen.frame.origin.x : 0;
+}
+// getCurrentScreenOriginY returns the Y origin of the screen containing gWindow, in macOS screen coords.
+static CGFloat getCurrentScreenOriginY() {
+    if (!gWindow) return 0;
+    return gWindow.screen ? gWindow.screen.frame.origin.y : 0;
+}
 // hasWindow returns 1 if gWindow is initialized.
 static int hasWindow() { return gWindow != nil ? 1 : 0; }
 
@@ -229,6 +239,12 @@ func registerGlobalHotkey() {
 		}
 	}()
 }
+
+// getCurrentScreenOriginX returns the X origin of the screen that contains the main window.
+func getCurrentScreenOriginX() float64 { return float64(C.getCurrentScreenOriginX()) }
+
+// getCurrentScreenOriginY returns the Y origin of the screen that contains the main window.
+func getCurrentScreenOriginY() float64 { return float64(C.getCurrentScreenOriginY()) }
 
 // GetMousePosition returns the current mouse cursor position in CSS coordinates
 // (origin at window top-left, Y-down), matching position:fixed layout in the WebView.

@@ -146,6 +146,9 @@ func (a *App) startup(ctx context.Context) {
 	// Register global hotkey Shift+Cmd+P to toggle the chat bubble.
 	globalAppCtx = ctx
 	registerGlobalHotkey()
+
+	// Watch for mouse moving to a different screen and migrate the window.
+	a.startScreenWatcher()
 }
 
 // initLLMComponents initializes chat model, embedder, memory stores, skills, and agent.
@@ -354,6 +357,58 @@ func (a *App) GetScreenList() []ScreenInfo {
 		result = append(result, ScreenInfo{Width: s.Size.Width, Height: s.Size.Height})
 	}
 	return result
+}
+
+// startScreenWatcher polls the active screen every 500ms and migrates the Wails window
+// to the screen containing the cursor. Emits "screen:changed" when the active screen changes.
+func (a *App) startScreenWatcher() {
+	go func() {
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
+		for range ticker.C {
+			screens, err := wailsruntime.ScreenGetAll(a.ctx)
+			if err != nil {
+				slog.Warn("startScreenWatcher: ScreenGetAll failed", "err", err)
+				continue
+			}
+
+			var found *wailsruntime.Screen
+			for i := range screens {
+				if screens[i].IsCurrent {
+					found = &screens[i]
+					break
+				}
+			}
+			if found == nil {
+				continue
+			}
+
+			current := ScreenInfo{Width: found.Size.Width, Height: found.Size.Height}
+
+			a.mu.RLock()
+			same := a.activeScreen == current
+			a.mu.RUnlock()
+			if same {
+				continue
+			}
+
+			// Derive window position in Wails logical coords (Y-down from primary top-left).
+			// macOS Y-up origin → Wails Y-down: wailsY = primaryH - (screenOriginY + screenH)
+			primaryH := screens[0].Size.Height
+			originX := int(getCurrentScreenOriginX())
+			originY := primaryH - (int(getCurrentScreenOriginY()) + found.Size.Height)
+
+			wailsruntime.WindowSetSize(a.ctx, found.Size.Width, found.Size.Height)
+			wailsruntime.WindowSetPosition(a.ctx, originX, originY)
+
+			a.mu.Lock()
+			a.activeScreen = current
+			a.mu.Unlock()
+
+			wailsruntime.EventsEmit(a.ctx, "screen:changed", current)
+			slog.Info("startScreenWatcher: screen changed", "width", current.Width, "height", current.Height)
+		}
+	}()
 }
 
 // GetPetSize returns the saved pet height for the given screen resolution, or 0 if not set or on error.
