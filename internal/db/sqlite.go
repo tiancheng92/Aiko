@@ -15,7 +15,7 @@ func Open(dataDir string) (*sql.DB, error) {
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create data dir: %w", err)
 	}
-	dbPath := filepath.Join(dataDir, "desktop-pet.db")
+	dbPath := filepath.Join(dataDir, "aiko.db")
 	// Enable WAL mode and a 5-second busy timeout via DSN parameters so
 	// concurrent goroutines (agent, knowledge import, config save) never see
 	// "database is locked" errors.

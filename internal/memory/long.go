@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 	chromem "github.com/philippgille/chromem-go"
 
-	"desktop-pet/internal/llm"
+	"aiko/internal/llm"
 )
 
 // LongStore manages long-term conversation memory using chromem-go and SQLite metadata.

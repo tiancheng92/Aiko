@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	chromem "github.com/philippgille/chromem-go"
 
-	"desktop-pet/internal/memory"
+	"aiko/internal/memory"
 )
 
 // Store manages the knowledge base collection in chromem-go, with source

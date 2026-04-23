@@ -99,7 +99,7 @@ wails generate module  # 重新生成 Wails bindings
 
 ## 数据目录结构
 
-`~/.desktop-pet/`
+`~/.aiko/`
 - `pet.db` — SQLite 数据库（settings、messages、knowledge_sources、cron_jobs、model_profiles）
 - `vectors/` — chromem-go 持久化向量数据存储
 

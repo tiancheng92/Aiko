@@ -9,7 +9,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 
-	"desktop-pet/internal/scheduler"
+	"aiko/internal/scheduler"
 )
 
 // CronTool manages scheduled tasks with add/list/remove actions.

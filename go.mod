@@ -1,4 +1,4 @@
-module desktop-pet
+module aiko
 
 go 1.25.5
 

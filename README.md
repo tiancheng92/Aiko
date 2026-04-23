@@ -1,105 +1,280 @@
-# Desktop Pet
+# Aiko - AI 桌面宠物
 
-一个运行在 macOS 桌面上的 AI 宠物，基于 Wails + Vue 3 + Live2D 构建。
+<div align="center">
 
-## 功能
+<img src="build/appicon.png" alt="Aiko Logo" width="120" height="120">
 
-- **Live2D 角色** — 可拖拽的桌面宠物，支持多模型切换和表情动画
-- **AI 对话** — 基于 OpenAI 兼容接口的流式聊天，支持 Markdown 渲染和代码高亮
-- **工具调用** — 内置时间、系统信息、网络状态等工具，支持自定义 YAML 技能扩展
-- **长期记忆** — 向量数据库（chromem-go）存储对话摘要，语义检索增强上下文
-- **知识库** — 导入 txt/md/pdf/epub 文档，RAG 问答
-- **AI 中间件** — 日志 → 重试 → 错误恢复拦截器链，保障工具调用健壮性
-- **设置界面** — 拖拽式浮动窗口，支持模型选择、工具权限管理、知识库管理
-- **点击穿透** — macOS 原生透明窗口，鼠标悬停在宠物/对话框上才响应事件
+**你的 AI 伙伴，就在桌面上**
 
-## 技术栈
+[![Go Version](https://img.shields.io/badge/Go-1.25+-blue.svg)](https://golang.org/)
+[![Wails](https://img.shields.io/badge/Wails-v2-green.svg)](https://wails.io/)
+[![Vue](https://img.shields.io/badge/Vue-3-brightgreen.svg)](https://vuejs.org/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-| 层 | 技术 |
-|---|---|
-| 框架 | [Wails v2](https://wails.io) |
-| 后端 | Go 1.25 |
-| 前端 | Vue 3 + Vite（`<script setup>`） |
-| LLM | [eino](https://github.com/cloudwego/eino)（OpenAI 兼容） |
-| 向量库 | [chromem-go](https://github.com/philippgille/chromem-go) |
-| 数据库 | SQLite（modernc） |
-| Live2D | pixi-live2d-display 0.4 + PixiJS 6 |
+</div>
 
-## 快速开始
+## ✨ 特性
 
-### 前置条件
+- 🤖 **智能对话**：基于 eino ReAct Agent，支持多轮对话和工具调用
+- 🎭 **Live2D 宠物**：可爱的动画角色，支持多种模型和表情状态
+- 🛠️ **内置工具**：系统信息、网络状态、文件操作等实用工具
+- 📚 **知识库**：RAG 支持，可导入文档进行问答
+- ⏰ **定时任务**：支持 Cron 表达式的计划任务
+- 🔧 **MCP 协议**：兼容 Model Context Protocol，可扩展第三方工具
+- 🪶 **飞书集成**：通过 lark-cli 操作飞书（消息、日历、文档等）
+- 🎨 **毛玻璃 UI**：现代化深色主题界面
+- 🖱️ **点击穿透**：宠物不遮挡桌面操作，智能响应交互
+- 💾 **数据持久化**：SQLite 存储聊天记录，chromem-go 向量数据库
 
-- Go 1.21+
-- Node.js 18+ + Yarn
-- [Wails CLI](https://wails.io/docs/gettingstarted/installation)：`go install github.com/wailsapp/wails/v2/cmd/wails@latest`
-- macOS（点击穿透依赖 macOS Objective-C 实现）
+## 🏗️ 技术架构
+
+### 后端 (Go)
+
+**核心框架**
+- [Wails v2](https://wails.io/) - 跨平台桌面应用框架
+- [eino](https://github.com/cloudwego/eino) - 字节跳动 Agent Development Kit
+- [chromem-go](https://github.com/philippgille/chromem-go) - 纯 Go 向量数据库
+
+**AI & 模型**
+- 支持 OpenAI API 兼容接口 (OpenRouter, DeepSeek, 通义千问等)
+- 自定义 embedding 模型集成
+
+**数据存储**
+- [SQLite](https://sqlite.org/) - 轻量级关系数据库
+- [database/sql](https://pkg.go.dev/database/sql) - Go 标准数据库接口
+- [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) - 纯 Go SQLite 驱动
+
+**工具生态**
+- [robfig/cron/v3](https://pkg.go.dev/github.com/robfig/cron/v3) - Cron 任务调度
+- MCP (Model Context Protocol) - 工具协议标准
+- lark-cli - 飞书命令行工具集成
+
+### 前端 (Vue 3)
+
+**核心技术栈**
+- [Vue 3](https://vuejs.org/) - 渐进式 JavaScript 框架
+- [Vite](https://vitejs.dev/) - 现代构建工具
+- Composition API - Vue 3 响应式编程
+
+**UI 增强**
+- [marked](https://marked.js.org/) - Markdown 解析渲染
+- [marked-katex-extension](https://github.com/UziTech/marked-katex-extension) - LaTeX 数学公式扩展
+- [highlight.js](https://highlightjs.org/) - 代码语法高亮
+- [KaTeX](https://katex.org/) - 数学公式渲染
+- CSS3 backdrop-filter - 毛玻璃视觉效果
+
+**Live2D 集成**
+- Live2D Cubism SDK - 2D 角色动画渲染
+- WebGL Canvas - 硬件加速渲染
+
+### 平台特定
+
+**macOS 集成**
+- Objective-C CGO 桥接 - 点击穿透实现
+- Cocoa NSView - 原生窗口控制
+- Core Graphics - 像素级鼠标事件处理
+
+## 📋 兼容性
+
+### 当前支持平台
+- ✅ **macOS 10.15+** - 完整功能支持，包括点击穿透
+- ❌ **Windows** - 暂不支持（开发中）
+- ❌ **Linux** - 暂不支持（计划中）
+
+### Windows 用户
+由于点击穿透和窗口管理需要平台特定实现，Windows 版本正在开发中。请耐心等待后续版本，我们会尽快提供跨平台支持。
+
+## 🗺️ 下阶段计划
+
+### 语音功能 (v2.0)
+- 🎙️ **语音输入** - 支持语音转文字，与宠物语音对话
+- 🔊 **语音输出** - TTS 语音合成，宠物可以"说话"
+- 🎵 **声音个性化** - 多种音色选择，匹配宠物角色
+- 📱 **语音唤醒** - 支持语音指令唤醒和控制
+
+### 跨平台支持 (v2.1)
+- 🖥️ **Windows 版本** - 完整功能移植
+- 🐧 **Linux 版本** - 社区驱动支持
+
+## 🚀 快速开始
+
+### 环境要求
+
+- **Go 1.22+**
+- **Node.js 16+** (推荐使用 yarn)
+- **macOS 10.15+** (当前仅支持 macOS)
+- **Wails CLI**: `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
+
+### 安装依赖
+
+```bash
+# 克隆项目
+git clone git@github.com:tiancheng92/Aiko.git
+cd Aiko
+
+# 安装后端依赖
+go mod download
+
+# 安装前端依赖
+cd frontend && yarn install
+```
 
 ### 开发模式
 
 ```bash
+# 前端热重载开发
 wails dev
+
+# 仅检查后端编译
+go build ./...
+
+# 仅构建前端
+cd frontend && yarn build
 ```
 
-前端热重载地址：`http://localhost:34115`
-
-### 构建
+### 生产构建
 
 ```bash
+# 构建 macOS .app 应用
 wails build
+
+# 输出位置: build/bin/Aiko.app
 ```
 
-产物位于 `build/bin/`。
+## ⚙️ 配置
 
-## 配置
+首次启动需要在设置界面配置：
 
-首次启动后右键宠物 → **打开设置**，填写以下字段：
+1. **模型配置**: API Key、Base URL、模型名称
+2. **系统配置**: Live2D 模型、宠物大小、聊天框尺寸
+3. **工具权限**: 启用/禁用内置工具
+4. **知识库**: 导入文档建立 RAG 知识库
+5. **定时任务**: 创建 Cron 计划任务
+6. **飞书集成**: 配置 lark-cli 路径和认证
 
-| 字段 | 说明 | 必填 |
-|---|---|---|
-| Base URL | OpenAI 兼容端点，如 `http://localhost:11434/v1` | ✅ |
-| API Key | API 密钥（本地模型可留空） | — |
-| Model | 聊天模型名，可点击"获取模型"从接口拉取列表 | ✅ |
-| Embedding Model | 向量模型名（启用长期记忆/知识库需要） | — |
-| Embedding 维度 | 向量维度，默认 1536 | — |
-| System Prompt | 宠物人格提示词 | — |
-| Skills 目录 | 自定义工具 YAML 目录 | — |
+### 支持的 AI 提供商
 
-数据存储于 `~/.desktop-pet/`。
+- **OpenRouter**: 支持多种开源模型
+- **OpenAI**: GPT 系列模型
+- **DeepSeek**: 国产高性能模型
+- **通义千问**: 阿里云 AI 服务
+- **其他兼容 OpenAI API 的服务商**
 
-## 自定义技能
-
-在 Skills 目录下创建 YAML 文件即可添加自定义工具：
-
-```yaml
-name: weather
-description: 查询指定城市的天气
-parameters:
-  city:
-    type: string
-    description: 城市名称
-    required: true
-command: curl -s "wttr.in/{{.city}}?format=3"
-```
-
-## 项目结构
+## 📁 项目结构
 
 ```
-.
-├── app.go                  # Wails 绑定层（所有前端可调用方法）
-├── main.go                 # 应用入口，窗口配置
-├── macos.go                # macOS 点击穿透（Objective-C cgo）
+├── main.go                 # 应用入口
+├── app.go                  # Wails 绑定方法
+├── macos.go               # macOS 平台特定代码
 ├── internal/
-│   ├── agent/              # AI Agent（eino ReAct）
-│   │   └── middleware/     # 日志 / 重试 / 错误恢复中间件
-│   ├── config/             # 配置读写（SQLite）
-│   ├── db/                 # 数据库初始化与迁移
-│   ├── knowledge/          # 知识库导入与 RAG 检索
-│   ├── llm/                # ChatModel / Embedder 工厂
-│   ├── memory/             # 短期（SQLite）/ 长期（向量）记忆
-│   ├── skill/              # YAML 技能加载器
-│   └── tools/              # 内置工具（时间、系统、网络）
-└── frontend/
-    └── src/
-        ├── components/     # Vue 组件
-        └── composables/    # 可复用逻辑（useModelPath, usePetState）
+│   ├── agent/             # eino ReAct Agent
+│   ├── tools/             # 内置工具实现
+│   ├── memory/            # 短期/长期记忆
+│   ├── knowledge/         # RAG 知识库
+│   ├── config/            # 配置管理
+│   ├── db/                # SQLite 数据库
+│   ├── llm/               # LLM 抽象层
+│   ├── scheduler/         # Cron 任务调度
+│   └── mcp/               # MCP 协议实现
+├── frontend/
+│   ├── src/
+│   │   ├── components/    # Vue 组件
+│   │   ├── composables/   # 组合式 API
+│   │   └── wailsjs/       # Wails 生成的绑定
+│   └── dist/              # 构建输出
+└── build/                 # 构建资源和输出
 ```
+
+## 🤝 主要借鉴项目
+
+感谢这些优秀的开源项目为 Aiko 提供了灵感和技术基础：
+
+- [eino](https://github.com/cloudwego/eino) - Agent 框架设计思路
+- [chromem-go](https://github.com/philippgille/chromem-go) - 向量数据库实现
+- [Wails Community Examples](https://github.com/wailsapp/awesome-wails) - 桌面应用开发模式
+- [Live2D Web SDK](https://www.live2d.com/en/sdk/download/web/) - 角色渲染技术
+- [Claude Desktop](https://claude.ai/download) - AI 桌面应用交互设计
+- [MCP Specification](https://modelcontextprotocol.io/) - 工具协议标准
+
+## 🛠️ 开发说明
+
+### 添加新工具
+
+1. 在 `internal/tools/` 创建新工具文件
+2. 实现 `Tool` 接口：`Name()`, `Permission()`, `Info()`, `InvokableRun()`
+3. 在 `internal/tools/registry.go` 的 `All()` 中注册
+4. 同步更新 `AllEino()` 返回 eino 接口包装
+
+### 自定义 Live2D 模型
+
+1. 将模型文件放到 `frontend/public/live2d/` 目录
+2. 按照 Live2D Cubism SDK 格式组织文件
+3. 在设置界面选择对应模型目录名
+
+### MCP 工具扩展
+
+支持通过 MCP 协议集成外部工具，配置路径：设置 → MCP 服务器
+
+## ❓ 常见问题
+
+### 安装和运行
+**Q: 为什么只支持 macOS？**
+A: 点击穿透功能依赖 macOS 特定的 Objective-C API。Windows 和 Linux 版本正在开发中。
+
+**Q: 提示"开发者无法验证"怎么办？**
+A: 在系统偏好设置 → 安全性与隐私中允许运行，或使用 `xattr -cr Aiko.app` 命令。
+
+### 配置相关
+**Q: 支持哪些AI模型？**
+A: 支持所有兼容 OpenAI API 的服务，包括 OpenRouter、DeepSeek、通义千问等。
+
+**Q: 如何导入知识库文档？**
+A: 在设置界面选择"知识库"标签，支持 PDF、TXT、Markdown 等格式文档。
+
+### 功能使用
+**Q: 宠物不响应点击怎么办？**
+A: 检查点击穿透设置，确保在宠物的非透明区域点击。可在设置中调整响应区域。
+
+**Q: 如何添加自定义工具？**
+A: 可通过 MCP 协议扩展，或参考 `internal/tools/` 目录添加内置工具。
+
+更多问题请查看 [Issues](https://github.com/tiancheng92/Aiko/issues) 或创建新的讨论。
+
+## 🔒 隐私与安全
+
+- **本地数据存储**：所有聊天记录和配置均保存在本地 `~/.aiko/` 目录
+- **API 密钥安全**：配置信息加密存储，不会上传到服务器
+- **网络连接**：仅在AI对话和工具调用时连接外部API
+- **开源透明**：所有代码公开，可审计安全性
+
+## 📄 开源协议
+
+本项目基于 MIT 协议开源。详见 [LICENSE](LICENSE) 文件。
+
+## 🙏 致谢
+
+特别感谢：
+- 字节跳动 eino 团队提供的 Agent 开发框架
+- Wails 团队打造的优秀跨平台框架  
+- Live2D 团队的角色渲染技术支持
+- 所有贡献代码和建议的开发者们
+
+## 🤝 贡献者
+
+感谢所有为 Aiko 项目做出贡献的开发者们！
+
+<!-- 贡献者列表将自动更新 -->
+
+如果你想加入贡献者行列，请阅读我们的 [贡献指南](CONTRIBUTING.md)。
+
+---
+
+<div align="center">
+
+**如果这个项目对你有帮助，请给一个 ⭐ Star 支持一下！**
+
+[报告问题](https://github.com/tiancheng92/Aiko/issues) • 
+[功能建议](https://github.com/tiancheng92/Aiko/issues/new) • 
+[参与贡献](CONTRIBUTING.md)
+
+</div>

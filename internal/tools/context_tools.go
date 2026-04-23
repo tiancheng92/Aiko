@@ -9,7 +9,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 
-	"desktop-pet/internal/knowledge"
+	"aiko/internal/knowledge"
 )
 
 // SearchKnowledgeTool searches the knowledge base for relevant document chunks.

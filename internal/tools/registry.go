@@ -8,8 +8,8 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 
-	"desktop-pet/internal/knowledge"
-	"desktop-pet/internal/scheduler"
+	"aiko/internal/knowledge"
+	"aiko/internal/scheduler"
 )
 
 // permGate wraps a Tool with permission enforcement.

@@ -20,18 +20,18 @@ import (
 	chromem "github.com/philippgille/chromem-go"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"desktop-pet/internal/agent"
-	"desktop-pet/internal/agent/middleware"
-	"desktop-pet/internal/config"
-	"desktop-pet/internal/db"
-	"desktop-pet/internal/knowledge"
-	"desktop-pet/internal/llm"
-	"desktop-pet/internal/lark"
-	"desktop-pet/internal/mcp"
-	"desktop-pet/internal/memory"
-	"desktop-pet/internal/scheduler"
-	"desktop-pet/internal/skill"
-	internaltools "desktop-pet/internal/tools"
+	"aiko/internal/agent"
+	"aiko/internal/agent/middleware"
+	"aiko/internal/config"
+	"aiko/internal/db"
+	"aiko/internal/knowledge"
+	"aiko/internal/llm"
+	"aiko/internal/lark"
+	"aiko/internal/mcp"
+	"aiko/internal/memory"
+	"aiko/internal/scheduler"
+	"aiko/internal/skill"
+	internaltools "aiko/internal/tools"
 )
 
 // App is the main application struct. All exported methods are Wails bindings.
@@ -64,7 +64,7 @@ func (a *App) startup(ctx context.Context) {
 	if err != nil {
 		panic(fmt.Errorf("get home dir: %w", err))
 	}
-	dataDir := filepath.Join(home, ".desktop-pet")
+	dataDir := filepath.Join(home, ".aiko")
 
 	a.sqlDB, err = db.Open(dataDir)
 	if err != nil {
@@ -213,9 +213,6 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	sched := scheduler.New(a.sqlDB, chatFn, onResult)
 	if err := sched.Start(a.ctx); err != nil {
 		slog.Error("scheduler start failed", "err", err)
-	}
-	if err := sched.SeedDefaultJobs(a.ctx); err != nil {
-		slog.Warn("seed default jobs failed", "err", err)
 	}
 
 	contextTools := internaltools.AllContextual(a.permStore, knowledgeSt, sched)

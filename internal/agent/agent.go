@@ -15,9 +15,9 @@ import (
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 
-	"desktop-pet/internal/agent/middleware"
-	"desktop-pet/internal/config"
-	"desktop-pet/internal/memory"
+	"aiko/internal/agent/middleware"
+	"aiko/internal/config"
+	"aiko/internal/memory"
 )
 
 // StreamResult is a single streamed token or a terminal signal.
@@ -64,7 +64,7 @@ func New(
 	}
 
 	deepCfg := &deep.Config{
-		Name:           "desktop-pet",
+		Name:           "aiko",
 		Description:    "A desktop pet AI assistant",
 		Instruction:    cfg.SystemPrompt,
 		ChatModel:      chatModel,

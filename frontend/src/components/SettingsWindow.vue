@@ -624,7 +624,7 @@ async function fetchLarkStatus() {
           </label>
           <label>System Prompt<textarea v-model="cfg.SystemPrompt" rows="5" /></label>
           <label>短期记忆轮数（1-100）<input type="number" v-model.number="cfg.ShortTermLimit" min="1" max="100" /></label>
-          <label>Skills 目录<span class="field-hint">每行一个路径</span><textarea v-model="cfg.SkillsDirs" rows="3" placeholder="~/.desktop-pet/skills" /></label>
+          <label>Skills 目录<span class="field-hint">每行一个路径</span><textarea v-model="cfg.SkillsDirs" rows="3" placeholder="~/.aiko/skills" /></label>
         </div>
 
         <!-- 工具权限 -->
@@ -842,28 +842,33 @@ async function fetchLarkStatus() {
             <div class="lark-guide-step">
               <span class="lark-step-num">1</span>
               <div class="lark-step-body">
-                <div class="lark-step-title">安装 lark-cli</div>
+                <div class="lark-step-title">安装 CLI</div>
                 <code class="lark-code">npm install -g @larksuite/cli</code>
               </div>
             </div>
             <div class="lark-guide-step">
               <span class="lark-step-num">2</span>
               <div class="lark-step-body">
-                <div class="lark-step-title">初始化应用凭证（App ID / App Secret）</div>
-                <code class="lark-code">lark-cli config init</code>
-                <p class="lark-step-hint">在终端中运行，按提示填入飞书开放平台的 App ID 与 App Secret</p>
+                <div class="lark-step-title">安装 CLI SKILL（必需）</div>
+                <code class="lark-code">npx skills add larksuite/cli -y -g</code>
               </div>
             </div>
             <div class="lark-guide-step">
               <span class="lark-step-num">3</span>
               <div class="lark-step-body">
-                <div class="lark-step-title">登录（获取用户 Access Token）</div>
-                <code class="lark-code">lark-cli auth login --recommend</code>
-                <p class="lark-step-hint">浏览器扫码授权后即可以用户身份访问飞书</p>
+                <div class="lark-step-title">配置应用凭证（仅需一次，交互式引导完成）</div>
+                <code class="lark-code">lark-cli config init</code>
               </div>
             </div>
             <div class="lark-guide-step">
               <span class="lark-step-num">4</span>
+              <div class="lark-step-body">
+                <div class="lark-step-title">登录授权（--recommend 自动选择常用权限）</div>
+                <code class="lark-code">lark-cli auth login --recommend</code>
+              </div>
+            </div>
+            <div class="lark-guide-step">
+              <span class="lark-step-num">5</span>
               <div class="lark-step-body">
                 <div class="lark-step-title">完成后点击"检测状态"验证</div>
               </div>
@@ -871,7 +876,8 @@ async function fetchLarkStatus() {
           </div>
 
           <p class="lark-hint">
-            配置完成后，AI 可通过 lark-cli 操作飞书，例如：发消息、查日历、读文档等。
+            配置完成后，AI 可通过 lark-cli 操作飞书，例如：发消息、查日历、读文档等。<br>
+            <strong>注意：</strong>需在"模型"标签页的 Skills 目录中添加飞书 Skills 路径（通常为 <code>~/.agents/skills</code>）。
           </p>
         </div>
       </div>

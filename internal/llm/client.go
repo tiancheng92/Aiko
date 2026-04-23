@@ -12,7 +12,7 @@ import (
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 
-	"desktop-pet/internal/config"
+	"aiko/internal/config"
 )
 
 // NewChatModel creates an eino ToolCallingChatModel from config.
