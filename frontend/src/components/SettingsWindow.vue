@@ -11,11 +11,16 @@ import {
   LarkStatus, LarkRunCommand,
   ListModelProfiles, SaveModelProfile, DeleteModelProfile, ActivateModelProfile,
   ListOpenRouterModels,
+  SavePetSize, SaveChatSize,
 } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { useModelPath } from '../composables/useModelPath.js'
 
 const emit = defineEmits(['close'])
+
+const props = defineProps({
+  activeScreen: { type: Object, default: () => ({ width: 0, height: 0 }) },
+})
 
 const cfg = ref({
   LLMBaseURL: '', LLMAPIKey: '', LLMModel: '', EmbeddingModel: '',
@@ -189,25 +194,38 @@ async function deleteProfile(id) {
   }
 }
 
-/** previewPetSize emits a real-time size change event so the pet resizes without saving. */
+/** previewPetSize emits a real-time size change and persists for the active screen. */
 function previewPetSize(e) {
   const size = Number(e.target.value)
   cfg.value.PetSize = size
   EventsEmit('config:pet:size:changed', size)
+  const { width: sw, height: sh } = props.activeScreen
+  if (sw > 0 && sh > 0) {
+    SavePetSize(size, sw, sh).catch(err => console.warn('SavePetSize failed', err))
+  }
 }
 
-/** previewChatSize emits a real-time event so ChatBubble resizes without saving. */
+/** previewChatSize emits a real-time resize event and persists for the active screen. */
 function previewChatSize(field, e) {
   const val = Number(e.target.value)
   cfg.value[field] = val
   EventsEmit('config:chat:size:changed', { width: cfg.value.ChatWidth, height: cfg.value.ChatHeight })
+  const { width: sw, height: sh } = props.activeScreen
+  if (sw > 0 && sh > 0 && cfg.value.ChatWidth > 0 && cfg.value.ChatHeight > 0) {
+    SaveChatSize(cfg.value.ChatWidth, cfg.value.ChatHeight, sw, sh)
+      .catch(err => console.warn('SaveChatSize failed', err))
+  }
 }
 
-/** resetChatSize restores default chat bubble dimensions. */
+/** resetChatSize restores default chat bubble dimensions for the active screen. */
 function resetChatSize() {
   cfg.value.ChatWidth  = 0
   cfg.value.ChatHeight = 0
   EventsEmit('config:chat:size:changed', { width: 0, height: 0 })
+  const { width: sw, height: sh } = props.activeScreen
+  if (sw > 0 && sh > 0) {
+    SaveChatSize(0, 0, sw, sh).catch(err => console.warn('SaveChatSize failed', err))
+  }
 }
 
 const reloading = ref(false)
@@ -602,6 +620,9 @@ async function fetchLarkStatus() {
             <button class="btn-reset-size" @click="cfg.PetSize = 0; EventsEmit('config:pet:size:changed', 0)">重置为自动</button>
           </label>
           <label>聊天框宽度
+            <div class="screen-label" v-if="props.activeScreen.width > 0">
+              当前屏幕：{{ props.activeScreen.width }}×{{ props.activeScreen.height }}
+            </div>
             <div class="size-row">
               <input
                 type="range" min="300" max="800" step="10"
@@ -1499,4 +1520,10 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
   border-radius: 6px;
 }
 .lark-hint code { font-family: 'Fira Code', monospace; color: #a5b4fc; }
+
+.screen-label {
+  font-size: 11px;
+  color: rgba(255,255,255,0.45);
+  margin-bottom: 6px;
+}
 </style>
