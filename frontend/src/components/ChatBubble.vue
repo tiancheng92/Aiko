@@ -54,6 +54,7 @@ const pos = computed(() => {
 // ─── Context menu ────────────────────────────────────────────────────────────
 
 const chatMenuRef = ref(null)
+const chatPanelRef = ref(null)
 const chatMenuItems = computed(() => [
   { icon: '💾', label: '导出聊天记录', action: exportHistory },
   { icon: '🗑️', label: '清空聊天历史', action: clearHistory },
@@ -80,6 +81,13 @@ function onBubbleContextMenu(e) {
   e.preventDefault()
   chatMenuRef.value?.show(e.clientX, e.clientY)
 }
+
+/** focusInput delegates to the ChatPanel textarea focus. */
+function focusInput() {
+  chatPanelRef.value?.focusInput()
+}
+
+defineExpose({ focusInput })
 </script>
 
 <template>
@@ -98,7 +106,7 @@ function onBubbleContextMenu(e) {
       <button class="close-btn" @click="$emit('close')">✕</button>
     </div>
     <div class="content">
-      <ChatPanel />
+      <ChatPanel ref="chatPanelRef" />
     </div>
     <ContextMenu ref="chatMenuRef" :items="chatMenuItems" />
   </div>

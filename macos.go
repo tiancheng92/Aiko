@@ -4,15 +4,93 @@ package main
 
 /*
 #cgo CFLAGS: -x objective-c
-#cgo LDFLAGS: -framework Cocoa -framework WebKit
+#cgo LDFLAGS: -framework Cocoa -framework WebKit -framework ApplicationServices
 
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import <ApplicationServices/ApplicationServices.h>
+#include <unistd.h>
 
-static id gGlobalMonitor = nil;
-static id gLocalMonitor  = nil;
+static id gGlobalMonitor    = nil;
+static id gLocalMonitor     = nil;
+static id gHotkeyMonitor    = nil;
 static NSWindow  *gWindow  = nil;
 static WKWebView *gWebView = nil;
+
+// gHotkeyPipeFd is the write end of a pipe; Go reads from the read end.
+static int gHotkeyPipeFd = -1;
+
+// setHotkeyPipeFd stores the write-end fd so the monitor handler can signal Go.
+static void setHotkeyPipeFd(int fd) { gHotkeyPipeFd = fd; }
+
+// activateApp brings the application to the foreground on the main thread.
+static void activateApp() {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [NSApp activateIgnoringOtherApps:YES];
+    });
+}
+
+// registerGlobalHotkey installs a global NSEvent monitor for double-tap Option.
+// Requires Accessibility permission; prompts the user if not yet granted.
+// On match, writes a single byte to gHotkeyPipeFd — no CGO call-back needed.
+static void registerGlobalHotkey() {
+    // NSEventMaskFlagsChanged global monitors require Accessibility permission.
+    NSDictionary *opts = @{(__bridge id)kAXTrustedCheckOptionPrompt: @YES};
+    BOOL trusted = AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)opts);
+    if (!trusted) {
+        NSLog(@"[Aiko] Accessibility not granted yet; global hotkey inactive until relaunch.");
+    }
+
+    __block NSTimeInterval lastOptUp = 0;
+    __block BOOL optWasDown = NO;
+    __block BOOL justTriggered = NO;
+    const NSTimeInterval kDoubleTapInterval = 0.5;
+
+    void (^handler)(NSEvent *) = ^(NSEvent *evt) {
+        NSUInteger standardMask = NSEventModifierFlagOption
+                                | NSEventModifierFlagCommand
+                                | NSEventModifierFlagShift
+                                | NSEventModifierFlagControl
+                                | NSEventModifierFlagCapsLock
+                                | NSEventModifierFlagFunction;
+        NSUInteger std = evt.modifierFlags & standardMask;
+        BOOL optDown = (std == NSEventModifierFlagOption);
+        BOOL optUp   = !optDown && optWasDown && !(std & ~NSEventModifierFlagOption);
+
+        if (optUp) {
+            if (justTriggered) {
+                // Release of the triggering press — skip, don't start a new window.
+                justTriggered = NO;
+            } else if (lastOptUp == 0) {
+                lastOptUp = [NSDate timeIntervalSinceReferenceDate];
+            }
+        } else if (optDown && !optWasDown) {
+            if (lastOptUp > 0) {
+                NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+                if (now - lastOptUp <= kDoubleTapInterval) {
+                    if (gHotkeyPipeFd >= 0) {
+                        char b = 1;
+                        write(gHotkeyPipeFd, &b, 1);
+                    }
+                    justTriggered = YES;
+                }
+                lastOptUp = 0;
+            }
+        } else if (!optDown && !optUp) {
+            // Another modifier involved — reset.
+            lastOptUp = 0;
+            justTriggered = NO;
+        }
+        optWasDown = optDown;
+    };
+
+    // Global monitor: fires when another app is active.
+    gHotkeyMonitor = [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskFlagsChanged
+        handler:handler];
+    // Local monitor: fires when Aiko itself is the active app.
+    [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskFlagsChanged
+        handler:^NSEvent *(NSEvent *evt) { handler(evt); return evt; }];
+}
 
 // 🔧 调试开关：设为 1 禁用点击穿透，方便调试
 static int gDebugDisableHitTest = 0;
@@ -111,10 +189,45 @@ static void enableClickThrough() {
 }
 */
 import "C"
+import (
+	"log/slog"
+	"syscall"
+
+	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+)
 
 // enableClickThrough installs per-pixel click-through for the main window.
 func enableClickThrough() {
 	C.enableClickThrough()
+}
+
+// registerGlobalHotkey creates a pipe, passes the write-end to the ObjC monitor,
+// and starts a goroutine that reads from the read-end and emits bubble:toggle.
+// This avoids any C→Go callback, which causes SIGSEGV via CGO re-entry on m=0.
+func registerGlobalHotkey() {
+	var fds [2]int
+	if err := syscall.Pipe(fds[:]); err != nil {
+		slog.Error("registerGlobalHotkey: pipe failed", "err", err)
+		return
+	}
+	readFd, writeFd := fds[0], fds[1]
+
+	C.setHotkeyPipeFd(C.int(writeFd))
+	C.registerGlobalHotkey()
+
+	go func() {
+		buf := make([]byte, 1)
+		for {
+			n, err := syscall.Read(readFd, buf)
+			if err != nil || n == 0 {
+				return
+			}
+			if globalAppCtx != nil {
+				C.activateApp()
+				wailsruntime.EventsEmit(globalAppCtx, "bubble:toggle")
+			}
+		}
+	}()
 }
 
 // GetMousePosition returns the current mouse cursor position in CSS coordinates

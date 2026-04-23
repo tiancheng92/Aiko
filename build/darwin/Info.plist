@@ -25,6 +25,8 @@
         <string>桌面宠物需要获取您的位置信息，以便提供天气、位置相关服务。</string>
         <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
         <string>桌面宠物需要获取您的位置信息，以便提供天气、位置相关服务。</string>
+        <key>NSAccessibilityUsageDescription</key>
+        <string>Aiko 需要辅助功能权限以支持全局快捷键（⇧⌘P）唤起聊天框。</string>
         <key>NSHumanReadableCopyright</key>
         <string>{{.Info.Copyright}}</string>
         {{if .Info.FileAssociations}}

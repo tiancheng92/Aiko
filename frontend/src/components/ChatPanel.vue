@@ -88,6 +88,7 @@ const input = ref('')
 const loading = ref(false)
 const messagesEl = ref(null)
 const copiedIdx = ref(null)
+const textareaEl = ref(null)
 
 /** formatTime formats a datetime string or Date to YYYY-MM-DD HH:mm:ss. */
 function formatTime(ts) {
@@ -228,6 +229,13 @@ function scrollToBottom() {
     if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
   })
 }
+
+/** focusInput focuses the textarea input. */
+function focusInput() {
+  nextTick(() => { textareaEl.value?.focus() })
+}
+
+defineExpose({ focusInput })
 </script>
 
 <template>
@@ -268,6 +276,7 @@ function scrollToBottom() {
     </div>
     <div class="input-row">
       <textarea
+        ref="textareaEl"
         v-model="input"
         placeholder="输入消息... (Enter 发送)"
         rows="1"

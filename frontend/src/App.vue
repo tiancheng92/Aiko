@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import Live2DPet from './components/Live2DPet.vue'
 import ChatBubble from './components/ChatBubble.vue'
 import SettingsWindow from './components/SettingsWindow.vue'
@@ -11,6 +11,7 @@ const bubbleOpen = ref(false)
 const settingsOpen = ref(false)
 const ballPos  = ref({ x: -1, y: -1 })
 const ballSize = ref(160)
+const chatBubbleRef = ref(null)
 let offToggle, offToken, offDone, offError, offSettings
 
 // Accumulates tokens when chat bubble is closed.
@@ -34,7 +35,13 @@ onMounted(async () => {
       message: '请先在设置中配置 LLM 接口，然后就可以开始聊天了~',
     })
   }
-  offToggle = EventsOn('bubble:toggle', () => { bubbleOpen.value = !bubbleOpen.value })
+  offToggle = EventsOn('bubble:toggle', () => {
+    bubbleOpen.value = !bubbleOpen.value
+    if (bubbleOpen.value) {
+      pendingTokens = ''
+      nextTick(() => { chatBubbleRef.value?.focusInput() })
+    }
+  })
   offSettings = EventsOn('settings:open', () => { settingsOpen.value = true })
 
   // Always listen for chat stream events so we can show a notification
@@ -79,7 +86,10 @@ function toggleBubble() {
   bubbleOpen.value = !bubbleOpen.value
   // Discard any pending tokens when user opens the bubble —
   // the ChatPanel will show the streamed content directly.
-  if (bubbleOpen.value) pendingTokens = ''
+  if (bubbleOpen.value) {
+    pendingTokens = ''
+    nextTick(() => { chatBubbleRef.value?.focusInput() })
+  }
 }
 
 /** openSettings opens the settings window. */
@@ -96,6 +106,7 @@ function openSettings() {
     @open-settings="openSettings"
   />
   <ChatBubble
+    ref="chatBubbleRef"
     v-show="bubbleOpen"
     :ball-pos="ballPos"
     :ball-size="ballSize"
