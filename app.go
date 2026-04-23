@@ -359,29 +359,47 @@ func (a *App) GetScreenList() []ScreenInfo {
 	return result
 }
 
-// startScreenWatcher polls the active screen every 500ms and migrates the Wails window
+// startScreenWatcher polls the mouse position every 500ms and migrates the Wails window
 // to the screen containing the cursor. Emits "screen:changed" when the active screen changes.
 func (a *App) startScreenWatcher() {
 	go func() {
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
-		for range ticker.C {
+		for {
+			select {
+			case <-a.ctx.Done():
+				return
+			case <-ticker.C:
+			}
+
 			screens, err := wailsruntime.ScreenGetAll(a.ctx)
 			if err != nil {
 				slog.Warn("startScreenWatcher: ScreenGetAll failed", "err", err)
 				continue
 			}
 
-			var found *wailsruntime.Screen
-			for i := range screens {
-				if screens[i].IsCurrent {
-					found = &screens[i]
+			// Find which NSScreen contains the current mouse position.
+			// We match by index: NSScreen order matches wailsruntime.Screen order on darwin.
+			mx := getMouseX()
+			my := getMouseY()
+			n := getNumScreens()
+
+			foundIdx := -1
+			for i := 0; i < n && i < len(screens); i++ {
+				ox := getScreenOriginX(i)
+				oy := getScreenOriginY(i)
+				w := getScreenWidth(i)
+				h := getScreenHeight(i)
+				// macOS Y-up: check if mouse is within [ox, ox+w) x [oy, oy+h)
+				if mx >= ox && mx < ox+w && my >= oy && my < oy+h {
+					foundIdx = i
 					break
 				}
 			}
-			if found == nil {
+			if foundIdx < 0 || foundIdx >= len(screens) {
 				continue
 			}
+			found := &screens[foundIdx]
 
 			current := ScreenInfo{Width: found.Size.Width, Height: found.Size.Height}
 
@@ -392,11 +410,21 @@ func (a *App) startScreenWatcher() {
 				continue
 			}
 
-			// Derive window position in Wails logical coords (Y-down from primary top-left).
-			// macOS Y-up origin → Wails Y-down: wailsY = primaryH - (screenOriginY + screenH)
-			primaryH := screens[0].Size.Height
-			originX := int(getCurrentScreenOriginX())
-			originY := primaryH - (int(getCurrentScreenOriginY()) + found.Size.Height)
+			// Find primary screen height for Y coordinate conversion.
+			primaryH := found.Size.Height // fallback
+			for _, s := range screens {
+				if s.IsPrimary {
+					primaryH = s.Size.Height
+					break
+				}
+			}
+
+			// Convert macOS screen origin (Y-up, bottom-left) to Wails position (Y-down, top-left).
+			// Wails primary screen top-left is (0,0). Secondary screens offset from there.
+			// macOS: origin is at bottom-left of the screen.
+			// Wails Y = primaryH - (screenOriginY + screenH)
+			originX := int(getScreenOriginX(foundIdx))
+			originY := primaryH - (int(getScreenOriginY(foundIdx)) + found.Size.Height)
 
 			wailsruntime.WindowSetSize(a.ctx, found.Size.Width, found.Size.Height)
 			wailsruntime.WindowSetPosition(a.ctx, originX, originY)

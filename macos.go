@@ -163,6 +163,40 @@ static CGFloat getCurrentScreenOriginY() {
     if (!gWindow) return 0;
     return gWindow.screen ? gWindow.screen.frame.origin.y : 0;
 }
+
+// getNumScreens returns the number of connected screens.
+static int getNumScreens() {
+    return (int)[[NSScreen screens] count];
+}
+
+// getScreenOriginX returns the X origin of the nth screen (macOS Y-up coords).
+static CGFloat getScreenOriginX(int n) {
+    NSArray<NSScreen *> *screens = [NSScreen screens];
+    if (n < 0 || n >= (int)[screens count]) return 0;
+    return [[screens objectAtIndex:n] frame].origin.x;
+}
+
+// getScreenOriginY returns the Y origin of the nth screen (macOS Y-up coords).
+static CGFloat getScreenOriginY(int n) {
+    NSArray<NSScreen *> *screens = [NSScreen screens];
+    if (n < 0 || n >= (int)[screens count]) return 0;
+    return [[screens objectAtIndex:n] frame].origin.y;
+}
+
+// getScreenWidth returns the width of the nth screen.
+static CGFloat getScreenWidth(int n) {
+    NSArray<NSScreen *> *screens = [NSScreen screens];
+    if (n < 0 || n >= (int)[screens count]) return 0;
+    return [[screens objectAtIndex:n] frame].size.width;
+}
+
+// getScreenHeight returns the height of the nth screen.
+static CGFloat getScreenHeight(int n) {
+    NSArray<NSScreen *> *screens = [NSScreen screens];
+    if (n < 0 || n >= (int)[screens count]) return 0;
+    return [[screens objectAtIndex:n] frame].size.height;
+}
+
 // hasWindow returns 1 if gWindow is initialized.
 static int hasWindow() { return gWindow != nil ? 1 : 0; }
 
@@ -245,6 +279,27 @@ func getCurrentScreenOriginX() float64 { return float64(C.getCurrentScreenOrigin
 
 // getCurrentScreenOriginY returns the Y origin of the screen that contains the main window.
 func getCurrentScreenOriginY() float64 { return float64(C.getCurrentScreenOriginY()) }
+
+// getNumScreens returns the number of connected screens.
+func getNumScreens() int { return int(C.getNumScreens()) }
+
+// getScreenOriginX returns the X origin of the nth NSScreen in macOS screen coords.
+func getScreenOriginX(n int) float64 { return float64(C.getScreenOriginX(C.int(n))) }
+
+// getScreenOriginY returns the Y origin of the nth NSScreen in macOS screen coords.
+func getScreenOriginY(n int) float64 { return float64(C.getScreenOriginY(C.int(n))) }
+
+// getScreenWidth returns the width of the nth NSScreen.
+func getScreenWidth(n int) float64 { return float64(C.getScreenWidth(C.int(n))) }
+
+// getScreenHeight returns the height of the nth NSScreen.
+func getScreenHeight(n int) float64 { return float64(C.getScreenHeight(C.int(n))) }
+
+// getMouseX returns the current mouse cursor X in macOS screen coordinates.
+func getMouseX() float64 { return float64(C.getMouseScreenX()) }
+
+// getMouseY returns the current mouse cursor Y in macOS screen coordinates.
+func getMouseY() float64 { return float64(C.getMouseScreenY()) }
 
 // GetMousePosition returns the current mouse cursor position in CSS coordinates
 // (origin at window top-left, Y-down), matching position:fixed layout in the WebView.
