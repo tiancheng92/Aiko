@@ -219,6 +219,18 @@ static CScreenFrame getScreenFrame(int n) {
     return f;
 }
 
+// moveWindowToScreen moves gWindow to cover the nth NSScreen exactly.
+// Uses setFrame:display: to bypass Wails' relative-position coordinate conversion,
+// which is anchored to the current screen and cannot reliably move to another screen.
+static void moveWindowToScreen(int n) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSArray<NSScreen *> *screens = [NSScreen screens];
+        if (n < 0 || n >= (int)[screens count] || !gWindow) return;
+        NSRect frame = [[screens objectAtIndex:n] frame];
+        [gWindow setFrame:frame display:YES animate:NO];
+    });
+}
+
 // hasWindow returns 1 if gWindow is initialized.
 static int hasWindow() { return gWindow != nil ? 1 : 0; }
 
@@ -337,6 +349,10 @@ func getScreenFrame(n int) ScreenFrame {
 		Valid:   f.valid == 1,
 	}
 }
+
+// moveWindowToScreen moves the main window to cover the nth NSScreen exactly.
+// This bypasses Wails' WindowSetPosition which is relative to the current screen.
+func moveWindowToScreen(n int) { C.moveWindowToScreen(C.int(n)) }
 
 // getMouseX returns the current mouse cursor X in macOS screen coordinates.
 func getMouseX() float64 { return float64(C.getMouseScreenX()) }

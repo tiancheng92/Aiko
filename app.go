@@ -385,7 +385,6 @@ func (a *App) startScreenWatcher() {
 			n := getNumScreens()
 
 			foundIdx := -1
-			var foundFrame ScreenFrame
 			for i := 0; i < n && i < len(screens); i++ {
 				frame := getScreenFrame(i)
 				if !frame.Valid {
@@ -394,7 +393,6 @@ func (a *App) startScreenWatcher() {
 				if mx >= frame.OriginX && mx < frame.OriginX+frame.Width &&
 					my >= frame.OriginY && my < frame.OriginY+frame.Height {
 					foundIdx = i
-					foundFrame = frame
 					break
 				}
 			}
@@ -412,25 +410,10 @@ func (a *App) startScreenWatcher() {
 				continue
 			}
 
-			// Find primary screen height for Y coordinate conversion.
-			primaryH := found.Size.Height // fallback
-			for _, s := range screens {
-				if s.IsPrimary {
-					primaryH = s.Size.Height
-					break
-				}
-			}
-
-			// Convert macOS screen origin (Y-up, bottom-left) to Wails position (Y-down, top-left).
-			// Wails primary screen top-left is (0,0). Secondary screens offset from there.
-			// macOS: origin is at bottom-left of the screen.
-			// Wails Y = primaryH - (screenOriginY + screenH)
-			// foundFrame.OriginX/Y and found.Size use the same logical-point coordinate space.
-			originX := int(foundFrame.OriginX)
-			originY := primaryH - (int(foundFrame.OriginY) + found.Size.Height)
-
-			wailsruntime.WindowSetSize(a.ctx, found.Size.Width, found.Size.Height)
-			wailsruntime.WindowSetPosition(a.ctx, originX, originY)
+			// Move the window directly via CGO to bypass Wails' WindowSetPosition,
+			// which is relative to the current screen and cannot reliably migrate
+			// the window to a different screen.
+			moveWindowToScreen(foundIdx)
 
 			a.mu.Lock()
 			a.activeScreen = current
