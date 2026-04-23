@@ -12,6 +12,7 @@ import {
   ListModelProfiles, SaveModelProfile, DeleteModelProfile, ActivateModelProfile,
   ListOpenRouterModels,
   SavePetSize, SaveChatSize,
+  GetPetSize, GetChatSize,
 } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { useModelPath } from '../composables/useModelPath.js'
@@ -85,6 +86,20 @@ onMounted(async () => {
       : (loaded.SkillsDirs || '')
   }
   sources.value = await ListKnowledgeSources() || []
+  // Override PetSize / ChatWidth / ChatHeight with per-screen saved values so the
+  // settings UI shows the config that is actually active for the current screen.
+  const { width: sw, height: sh } = props.activeScreen
+  if (sw > 0 && sh > 0) {
+    try {
+      const petSize = await GetPetSize(sw, sh)
+      if (petSize > 0) cfg.value.PetSize = petSize
+    } catch (e) { console.warn('SettingsWindow: GetPetSize failed', e) }
+    try {
+      const [cw, ch] = await GetChatSize(sw, sh)
+      if (cw > 0) cfg.value.ChatWidth = cw
+      if (ch > 0) cfg.value.ChatHeight = ch
+    } catch (e) { console.warn('SettingsWindow: GetChatSize failed', e) }
+  }
   try { toolPerms.value = await GetToolPermissions() || [] } catch {}
   await fetchMCPServers()
   await fetchCronJobs()
