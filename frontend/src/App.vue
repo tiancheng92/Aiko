@@ -4,7 +4,7 @@ import Live2DPet from './components/Live2DPet.vue'
 import ChatBubble from './components/ChatBubble.vue'
 import SettingsWindow from './components/SettingsWindow.vue'
 import NotificationBubble from './components/NotificationBubble.vue'
-import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown } from '../wailsjs/go/main/App'
+import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize } from '../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../wailsjs/runtime/runtime'
 
 const bubbleOpen = ref(false)
@@ -12,6 +12,8 @@ const settingsOpen = ref(false)
 const ballPos  = ref({ x: -1, y: -1 })
 const ballSize = ref(160)
 const chatBubbleRef = ref(null)
+// activeScreen holds the current screen resolution; updated on screen:changed events.
+const activeScreen = ref({ width: 0, height: 0 })
 let offToggle, offToken, offDone, offError, offSettings
 
 // Accumulates tokens when chat bubble is closed.
@@ -26,6 +28,12 @@ async function waitForRuntime() {
 
 onMounted(async () => {
   await waitForRuntime()
+  try {
+    const [w, h] = await GetScreenSize()
+    if (w > 0 && h > 0) activeScreen.value = { width: w, height: h }
+  } catch (e) {
+    console.warn('App.vue: GetScreenSize failed', e)
+  }
   const missing = await MissingRequiredConfig()
   const firstLaunch = await IsFirstLaunch()
   if (firstLaunch) {
@@ -43,6 +51,10 @@ onMounted(async () => {
     }
   })
   offSettings = EventsOn('settings:open', () => { settingsOpen.value = true })
+  EventsOn('screen:changed', (info) => {
+    activeScreen.value = { width: info.width, height: info.height }
+    EventsEmit('screen:active:changed', info)
+  })
 
   // Always listen for chat stream events so we can show a notification
   // when the chat bubble is closed (e.g. scheduler-triggered replies).
@@ -100,6 +112,7 @@ function openSettings() {
 
 <template>
   <Live2DPet
+    :active-screen="activeScreen"
     @click="toggleBubble"
     @position="p => ballPos = p"
     @ball-size="s => ballSize = s"
@@ -110,11 +123,13 @@ function openSettings() {
     v-show="bubbleOpen"
     :ball-pos="ballPos"
     :ball-size="ballSize"
+    :active-screen="activeScreen"
     @close="bubbleOpen = false"
     @open-settings="openSettings"
   />
   <SettingsWindow
     v-if="settingsOpen"
+    :active-screen="activeScreen"
     @close="settingsOpen = false"
   />
   <NotificationBubble
