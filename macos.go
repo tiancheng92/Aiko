@@ -26,7 +26,8 @@ static SFSpeechRecognitionTask   *gRecogTask         = nil;
 static AVAudioEngine             *gAudioEngine       = nil;
 
 // Forward declaration — implemented as CGO export in Go.
-extern void voiceTranscriptCallback(const char *text);
+// Must match the signature CGO generates (char*, not const char*).
+extern void voiceTranscriptCallback(char *text);
 
 // gHotkeyPipeFd is the write end of a pipe; Go reads from the read end.
 static int gHotkeyPipeFd = -1;
@@ -56,6 +57,8 @@ static void registerGlobalHotkey() {
     __block BOOL optWasDown = NO;
     __block BOOL justTriggered = NO;
     const NSTimeInterval kDoubleTapInterval = 0.5;
+    __block BOOL gLongPressTriggered = NO;
+    __block dispatch_block_t gLongPressBlock = nil;
 
     void (^handler)(NSEvent *) = ^(NSEvent *evt) {
         NSUInteger standardMask = NSEventModifierFlagOption
@@ -69,16 +72,48 @@ static void registerGlobalHotkey() {
         BOOL optUp   = !optDown && optWasDown && !(std & ~NSEventModifierFlagOption);
 
         if (optUp) {
-            if (justTriggered) {
-                // Release of the triggering press — skip, don't start a new window.
+            // Cancel pending long-press timer (released before 1s)
+            if (gLongPressBlock) {
+                dispatch_block_cancel(gLongPressBlock);
+                gLongPressBlock = nil;
+            }
+            if (gLongPressTriggered) {
+                // Long-press release → stop recording
+                gLongPressTriggered = NO;
+                if (gHotkeyPipeFd >= 0) {
+                    char b = 3;
+                    write(gHotkeyPipeFd, &b, 1);
+                }
+            } else if (justTriggered) {
                 justTriggered = NO;
             } else if (lastOptUp == 0) {
                 lastOptUp = [NSDate timeIntervalSinceReferenceDate];
             }
         } else if (optDown && !optWasDown) {
+            // Start long-press timer (1 second)
+            dispatch_block_t blk = dispatch_block_create(0, ^{
+                if (optWasDown && !gLongPressTriggered) {
+                    gLongPressTriggered = YES;
+                    lastOptUp = 0; // cancel double-tap window
+                    if (gHotkeyPipeFd >= 0) {
+                        char b = 2;
+                        write(gHotkeyPipeFd, &b, 1);
+                    }
+                }
+            });
+            gLongPressBlock = blk;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), blk);
+
+            // Double-tap detection (only if long-press not yet triggered)
             if (lastOptUp > 0) {
                 NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
                 if (now - lastOptUp <= kDoubleTapInterval) {
+                    // Cancel the long-press timer — this is a double-tap, not a hold
+                    if (gLongPressBlock) {
+                        dispatch_block_cancel(gLongPressBlock);
+                        gLongPressBlock = nil;
+                    }
                     if (gHotkeyPipeFd >= 0) {
                         char b = 1;
                         write(gHotkeyPipeFd, &b, 1);
@@ -395,10 +430,27 @@ static void enableClickThrough() {
 import "C"
 import (
 	"log/slog"
+	"strings"
 	"syscall"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+// voiceTranscriptCallback is called from Objective-C on the main thread when
+// a partial or final STT result is available. It must be a CGO export.
+//
+//export voiceTranscriptCallback
+func voiceTranscriptCallback(text *C.char) {
+	if globalAppCtx == nil {
+		return
+	}
+	t := C.GoString(text)
+	if strings.HasPrefix(t, "ERROR:") {
+		wailsruntime.EventsEmit(globalAppCtx, "voice:error", t[6:])
+		return
+	}
+	wailsruntime.EventsEmit(globalAppCtx, "voice:transcript", t)
+}
 
 // enableClickThrough installs per-pixel click-through for the main window.
 func enableClickThrough() {
@@ -426,9 +478,22 @@ func registerGlobalHotkey() {
 			if err != nil || n == 0 {
 				return
 			}
-			if globalAppCtx != nil {
-				C.activateApp()
+			if globalAppCtx == nil {
+				continue
+			}
+			C.activateApp()
+			switch buf[0] {
+			case 1:
+				// 双击 Option — 切换气泡（现有行为）
 				wailsruntime.EventsEmit(globalAppCtx, "bubble:toggle")
+			case 2:
+				// 长按 Option ≥1s — 开始录音
+				wailsruntime.EventsEmit(globalAppCtx, "voice:start")
+				C.startVoiceRecognition()
+			case 3:
+				// Option 释放 — 停止录音
+				C.stopVoiceRecognition()
+				wailsruntime.EventsEmit(globalAppCtx, "voice:end")
 			}
 		}
 	}()
