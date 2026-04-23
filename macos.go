@@ -13,9 +13,6 @@ package main
 #import <Speech/Speech.h>
 #include <unistd.h>
 
-// Forward declaration — matches the CGO-generated signature in _cgo_export.h.
-extern void voiceTranscriptCallback(char *text);
-
 static id gGlobalMonitor    = nil;
 static id gLocalMonitor     = nil;
 static id gHotkeyMonitor    = nil;
@@ -33,6 +30,21 @@ static int gHotkeyPipeFd = -1;
 
 // setHotkeyPipeFd stores the write-end fd so the monitor handler can signal Go.
 static void setHotkeyPipeFd(int fd) { gHotkeyPipeFd = fd; }
+
+// gVoicePipeFd is the write end of a pipe used to send voice transcript strings to Go.
+static int gVoicePipeFd = -1;
+
+// setVoicePipeFd stores the write-end fd so STT callbacks can send text to Go.
+static void setVoicePipeFd(int fd) { gVoicePipeFd = fd; }
+
+// sendVoiceText writes a length-prefixed text message to the voice pipe.
+// Format: 4-byte little-endian uint32 length, followed by UTF-8 text bytes.
+static void sendVoiceText(const char *text) {
+    if (gVoicePipeFd < 0 || !text) return;
+    uint32_t len = (uint32_t)strlen(text);
+    write(gVoicePipeFd, &len, sizeof(uint32_t));
+    if (len > 0) write(gVoicePipeFd, text, len);
+}
 
 // activateApp brings the application to the foreground on the main thread.
 static void activateApp() {
@@ -290,12 +302,12 @@ static void startVoiceRecognition() {
                 if (granted) {
                     startVoiceRecognition();
                 } else {
-                    voiceTranscriptCallback("ERROR:mic_denied");
+                    sendVoiceText("ERROR:mic_denied");
                 }
             }];
             return;
         } else if (micStatus == AVAuthorizationStatusDenied || micStatus == AVAuthorizationStatusRestricted) {
-            voiceTranscriptCallback("ERROR:mic_denied");
+            sendVoiceText("ERROR:mic_denied");
             return;
         }
 
@@ -306,12 +318,12 @@ static void startVoiceRecognition() {
                 if (status == SFSpeechRecognizerAuthorizationStatusAuthorized) {
                     startVoiceRecognition();
                 } else {
-                    voiceTranscriptCallback("ERROR:speech_denied");
+                    sendVoiceText("ERROR:speech_denied");
                 }
             }];
             return;
         } else if (speechStatus != SFSpeechRecognizerAuthorizationStatusAuthorized) {
-            voiceTranscriptCallback("ERROR:speech_denied");
+            sendVoiceText("ERROR:speech_denied");
             return;
         }
 
@@ -337,7 +349,7 @@ static void startVoiceRecognition() {
         [gAudioEngine startAndReturnError:&startErr];
         if (startErr) {
             NSString *msg = [NSString stringWithFormat:@"ERROR:audio_engine:%@", startErr.localizedDescription];
-            voiceTranscriptCallback((char *)[msg UTF8String]);
+            sendVoiceText([msg UTF8String]);
             return;
         }
 
@@ -347,13 +359,13 @@ static void startVoiceRecognition() {
                     // Ignore cancellation errors (code 301) — they fire on normal stop
                     if (err.code != 301) {
                         NSString *msg = [NSString stringWithFormat:@"ERROR:recognition:%@", err.localizedDescription];
-                        voiceTranscriptCallback((char *)[msg UTF8String]);
+                        sendVoiceText([msg UTF8String]);
                     }
                     return;
                 }
                 if (result) {
                     NSString *text = result.bestTranscription.formattedString;
-                    voiceTranscriptCallback((char *)[text UTF8String]);
+                    sendVoiceText([text UTF8String]);
                 }
             }];
     });
@@ -410,28 +422,12 @@ static void enableClickThrough() {
 */
 import "C"
 import (
+	"encoding/binary"
 	"log/slog"
-	"strings"
 	"syscall"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
-
-// voiceTranscriptCallback is called from Objective-C on the main thread when
-// a partial or final STT result is available. It must be a CGO export.
-//
-//export voiceTranscriptCallback
-func voiceTranscriptCallback(text *C.char) {
-	if globalAppCtx == nil {
-		return
-	}
-	t := C.GoString(text)
-	if strings.HasPrefix(t, "ERROR:") {
-		wailsruntime.EventsEmit(globalAppCtx, "voice:error", t[6:])
-		return
-	}
-	wailsruntime.EventsEmit(globalAppCtx, "voice:transcript", t)
-}
 
 // enableClickThrough installs per-pixel click-through for the main window.
 func enableClickThrough() {
@@ -468,7 +464,7 @@ func registerGlobalHotkey() {
 				// 双击 Option — 切换气泡（现有行为）
 				wailsruntime.EventsEmit(globalAppCtx, "bubble:toggle")
 			case 2:
-				// 长按 Option ≥1s — 开始录音
+				// 长按 Option ≥1s — 开始录音，同时启动 voice pipe 监听
 				wailsruntime.EventsEmit(globalAppCtx, "voice:start")
 				C.startVoiceRecognition()
 			case 3:
@@ -478,6 +474,55 @@ func registerGlobalHotkey() {
 			}
 		}
 	}()
+
+	// Voice transcript pipe: ObjC sends length-prefixed UTF-8 strings.
+	var vfds [2]int
+	if err := syscall.Pipe(vfds[:]); err != nil {
+		slog.Error("registerGlobalHotkey: voice pipe failed", "err", err)
+		return
+	}
+	vReadFd, vWriteFd := vfds[0], vfds[1]
+	C.setVoicePipeFd(C.int(vWriteFd))
+
+	go func() {
+		lenBuf := make([]byte, 4)
+		for {
+			// Read 4-byte little-endian length prefix
+			if _, err := readFull(vReadFd, lenBuf); err != nil {
+				return
+			}
+			length := binary.LittleEndian.Uint32(lenBuf)
+			if length == 0 {
+				continue
+			}
+			textBuf := make([]byte, length)
+			if _, err := readFull(vReadFd, textBuf); err != nil {
+				return
+			}
+			if globalAppCtx == nil {
+				continue
+			}
+			text := string(textBuf)
+			if len(text) > 6 && text[:6] == "ERROR:" {
+				wailsruntime.EventsEmit(globalAppCtx, "voice:error", text[6:])
+			} else {
+				wailsruntime.EventsEmit(globalAppCtx, "voice:transcript", text)
+			}
+		}
+	}()
+}
+
+// readFull reads exactly len(buf) bytes from fd, handling partial reads.
+func readFull(fd int, buf []byte) (int, error) {
+	total := 0
+	for total < len(buf) {
+		n, err := syscall.Read(fd, buf[total:])
+		if err != nil || n == 0 {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
 }
 
 // getCurrentScreenOriginX returns the X origin of the screen that contains the main window.
