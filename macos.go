@@ -4,11 +4,13 @@ package main
 
 /*
 #cgo CFLAGS: -x objective-c
-#cgo LDFLAGS: -framework Cocoa -framework WebKit -framework ApplicationServices
+#cgo LDFLAGS: -framework Cocoa -framework WebKit -framework ApplicationServices -framework AVFoundation -framework Speech
 
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <ApplicationServices/ApplicationServices.h>
+#import <AVFoundation/AVFoundation.h>
+#import <Speech/Speech.h>
 #include <unistd.h>
 
 static id gGlobalMonitor    = nil;
@@ -16,6 +18,15 @@ static id gLocalMonitor     = nil;
 static id gHotkeyMonitor    = nil;
 static NSWindow  *gWindow  = nil;
 static WKWebView *gWebView = nil;
+
+// --- Voice Recognition globals ---
+static SFSpeechRecognizer        *gSpeechRecognizer  = nil;
+static SFSpeechAudioBufferRecognitionRequest *gRecogRequest = nil;
+static SFSpeechRecognitionTask   *gRecogTask         = nil;
+static AVAudioEngine             *gAudioEngine       = nil;
+
+// Forward declaration — implemented as CGO export in Go.
+extern void voiceTranscriptCallback(const char *text);
 
 // gHotkeyPipeFd is the write end of a pipe; Go reads from the read end.
 static int gHotkeyPipeFd = -1;
