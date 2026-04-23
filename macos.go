@@ -14,6 +14,9 @@ static id gLocalMonitor  = nil;
 static NSWindow  *gWindow  = nil;
 static WKWebView *gWebView = nil;
 
+// 🔧 调试开关：设为 1 禁用点击穿透，方便调试
+static int gDebugDisableHitTest = 0;
+
 // findWebView recursively searches a view hierarchy for a WKWebView.
 static WKWebView *findWebView(NSView *view) {
     if ([view isKindOfClass:[WKWebView class]]) return (WKWebView *)view;
@@ -28,6 +31,15 @@ static WKWebView *findWebView(NSView *view) {
 // interactive element. Toggles mouse-event passthrough based on the result.
 static void hitTestPoint(CGFloat cssX, CGFloat cssY) {
     if (!gWebView || !gWindow) return;
+
+    // 🔧 调试模式：禁用点击穿透
+    if (gDebugDisableHitTest) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [gWindow setIgnoresMouseEvents:NO]; // 总是接收鼠标事件
+        });
+        return;
+    }
+
     NSString *js = [NSString stringWithFormat:
         @"(function(x,y){"
          "var e=document.elementFromPoint(x,y);"
