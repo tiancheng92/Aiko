@@ -86,6 +86,25 @@ export namespace frontend {
 
 }
 
+export namespace main {
+	
+	export class MousePosition {
+	    x: number;
+	    y: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MousePosition(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.x = source["x"];
+	        this.y = source["y"];
+	    }
+	}
+
+}
+
 export namespace mcp {
 	
 	export class ServerConfig {

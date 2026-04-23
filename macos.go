@@ -64,6 +64,20 @@ static void handleScreenPoint(NSPoint screen) {
     hitTestPoint(cssX, cssY);
 }
 
+// getMouseScreenX returns the current mouse cursor X position in macOS screen coordinates (Y-up).
+static CGFloat getMouseScreenX() { return [NSEvent mouseLocation].x; }
+// getMouseScreenY returns the current mouse cursor Y position in macOS screen coordinates (Y-up).
+static CGFloat getMouseScreenY() { return [NSEvent mouseLocation].y; }
+
+// getWindowOriginX returns the window origin X in screen coordinates.
+static CGFloat getWindowOriginX() { return gWindow ? gWindow.frame.origin.x : 0; }
+// getWindowOriginY returns the window origin Y in screen coordinates.
+static CGFloat getWindowOriginY() { return gWindow ? gWindow.frame.origin.y : 0; }
+// getWindowHeight returns the window height.
+static CGFloat getWindowHeight() { return gWindow ? gWindow.frame.size.height : 0; }
+// hasWindow returns 1 if gWindow is initialized.
+static int hasWindow() { return gWindow != nil ? 1 : 0; }
+
 // enableClickThrough sets the window to ignore mouse events by default,
 // then installs global and local NSEvent monitors so that the window
 // temporarily accepts events only when the cursor is over interactive elements.
@@ -101,4 +115,22 @@ import "C"
 // enableClickThrough installs per-pixel click-through for the main window.
 func enableClickThrough() {
 	C.enableClickThrough()
+}
+
+// GetMousePosition returns the current mouse cursor position in CSS coordinates
+// (origin at window top-left, Y-down), matching position:fixed layout in the WebView.
+func GetMousePosition() (x, y float64) {
+	sx := float64(C.getMouseScreenX())
+	sy := float64(C.getMouseScreenY())
+	if C.hasWindow() == 0 {
+		return sx, sy
+	}
+	// Convert macOS screen coords (Y-up, origin at screen bottom-left) to
+	// CSS coords (Y-down, origin at window top-left).
+	ox := float64(C.getWindowOriginX())
+	oy := float64(C.getWindowOriginY())
+	h := float64(C.getWindowHeight())
+	x = sx - ox
+	y = h - (sy - oy)
+	return
 }

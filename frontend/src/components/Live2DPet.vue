@@ -2,7 +2,7 @@
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import * as PIXI from 'pixi.js'
 import { Live2DModel, MotionPriority } from 'pixi-live2d-display/cubism4'
-import { GetBallPosition, SaveBallPosition, GetScreenSize, GetConfig, SaveConfig } from '../../wailsjs/go/main/App'
+import { GetBallPosition, SaveBallPosition, GetScreenSize, GetConfig, SaveConfig, GetMousePosition } from '../../wailsjs/go/main/App'
 import { Quit, EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { usePetState } from '../composables/usePetState.js'
 import { useModelPath } from '../composables/useModelPath.js'
@@ -185,6 +185,7 @@ onMounted(async () => {
   await nextTick()
   try {
     await initPixi()
+    startGlobalMouseTracking()
   } catch (err) {
     console.error('Live2DPet PixiJS init failed:', err)
   }
@@ -236,8 +237,29 @@ watch(petState, (state) => {
   }
 })
 
+// Global mouse tracking via polling — works even when the app is not focused.
+let mouseTrackTimer = null
+const MOUSE_POLL_INTERVAL_MS = 50
+
+/** startGlobalMouseTracking polls the Go backend for the cursor position every 50 ms
+ *  and drives the Live2D eye/body focus, enabling tracking even when the window is unfocused. */
+function startGlobalMouseTracking() {
+  let lastX = -1, lastY = -1
+  mouseTrackTimer = setInterval(async () => {
+    if (!live2dModel || !canvasRef.value) return
+    try {
+      const { x, y } = await GetMousePosition()
+      if (x === lastX && y === lastY) return
+      lastX = x; lastY = y
+      const rect = canvasRef.value.getBoundingClientRect()
+      live2dModel.focus(x - rect.left, y - rect.top)
+    } catch (_) { /* ignore transient errors */ }
+  }, MOUSE_POLL_INTERVAL_MS)
+}
+
 onUnmounted(() => {
   mounted = false
+  if (mouseTrackTimer !== null) { clearInterval(mouseTrackTimer); mouseTrackTimer = null }
   offSizeChange?.()
   // Clean up any in-progress drag listeners to prevent ghost handlers.
   window.removeEventListener('mousemove', onMouseMove)

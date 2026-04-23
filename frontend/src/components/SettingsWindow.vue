@@ -886,7 +886,7 @@ async function fetchLarkStatus() {
     <!-- Footer -->
     <div class="win-footer">
       <span class="status-msg">{{ statusMsg }}</span>
-      <button class="btn-reload" @click="reload" :disabled="reloading">{{ reloading ? '刷新中...' : '🔄 刷新' }}</button>
+      <button class="btn-reload" @click="reload" :disabled="reloading">{{ reloading ? '刷新中...' : '刷新' }}</button>
       <button @click="save" :disabled="saving">{{ saving ? '保存中...' : '保存' }}</button>
     </div>
   </div>

@@ -4,6 +4,7 @@ import {mcp} from '../models';
 import {scheduler} from '../models';
 import {config} from '../models';
 import {memory} from '../models';
+import {main} from '../models';
 import {tools} from '../models';
 import {frontend} from '../models';
 
@@ -32,6 +33,8 @@ export function GetBallPosition(arg1:number,arg2:number):Promise<Array<number>>;
 export function GetConfig():Promise<config.Config>;
 
 export function GetMessages(arg1:number):Promise<Array<memory.Message>>;
+
+export function GetMousePosition():Promise<main.MousePosition>;
 
 export function GetScreenSize():Promise<Array<number>>;
 

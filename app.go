@@ -332,6 +332,19 @@ func (a *App) SaveBallPosition(x, y, screenW, screenH int) error {
 }
 
 // MissingRequiredConfig returns names of empty required config fields.
+// MousePosition holds the CSS coordinates of the mouse cursor.
+type MousePosition struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+// GetMousePosition returns the current mouse cursor position in CSS coordinates.
+// This works even when the app is not focused, enabling eye tracking while unfocused.
+func (a *App) GetMousePosition() MousePosition {
+	x, y := GetMousePosition()
+	return MousePosition{X: x, Y: y}
+}
+
 func (a *App) MissingRequiredConfig() []string {
 	return a.cfg.MissingRequired()
 }

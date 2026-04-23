@@ -54,6 +54,10 @@ export function GetMessages(arg1) {
   return window['go']['main']['App']['GetMessages'](arg1);
 }
 
+export function GetMousePosition() {
+  return window['go']['main']['App']['GetMousePosition']();
+}
+
 export function GetScreenSize() {
   return window['go']['main']['App']['GetScreenSize']();
 }

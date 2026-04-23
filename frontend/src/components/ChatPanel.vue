@@ -235,20 +235,34 @@ function scrollToBottom() {
     <div class="messages" ref="messagesEl" @click="onMessagesClick">
       <div v-for="(m, i) in messages" :key="i" :class="['msg', m.role]">
         <div class="bubble-wrap">
-          <div v-if="m.role !== 'assistant'" class="bubble markdown" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')"></div>
-          <template v-else>
-            <div v-if="m.thinking || (m.streaming && !renderMarkdown(m.content))" class="bubble thinking-bubble">
-              <span class="dot" /><span class="dot" /><span class="dot" />
-            </div>
-            <div v-else class="bubble markdown" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')" />
-          </template>
+          <div class="bubble-row">
+            <!-- User copy button: left of bubble -->
+            <button
+              v-if="m.role === 'user' && !m.streaming && !m.thinking"
+              class="copy-btn"
+              @click="copyMessage(i)"
+              :title="copiedIdx === i ? '已复制' : '复制'"
+            >{{ copiedIdx === i ? '✓' : '⎘' }}</button>
+
+            <!-- Bubble content -->
+
+            <div v-if="m.role !== 'assistant'" class="bubble markdown" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')"></div>
+            <template v-else>
+              <div v-if="m.thinking || (m.streaming && !renderMarkdown(m.content))" class="bubble thinking-bubble">
+                <span class="dot" /><span class="dot" /><span class="dot" />
+              </div>
+              <div v-else class="bubble markdown" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')" />
+            </template>
+
+            <!-- Assistant copy button: right of bubble -->
+            <button
+              v-if="m.role === 'assistant' && !m.streaming && !m.thinking"
+              class="copy-btn"
+              @click="copyMessage(i)"
+              :title="copiedIdx === i ? '已复制' : '复制'"
+            >{{ copiedIdx === i ? '✓' : '⎘' }}</button>
+          </div>
           <div v-if="m.time && !m.streaming && !m.thinking" class="msg-time">{{ formatTime(m.time) }}</div>
-          <button
-            v-if="m.role === 'assistant' && !m.streaming && !m.thinking"
-            class="copy-btn"
-            @click="copyMessage(i)"
-            :title="copiedIdx === i ? '已复制' : '复制'"
-          >{{ copiedIdx === i ? '✓' : '⎘' }}</button>
         </div>
       </div>
     </div>
@@ -288,8 +302,13 @@ function scrollToBottom() {
 .msg.assistant, .msg.system { justify-content: flex-start; }
 
 /* Wrap */
-.bubble-wrap { position: relative; max-width: 88%; display: flex; flex-direction: column; }
+.bubble-wrap { max-width: 88%; display: flex; flex-direction: column; }
 .msg.user .bubble-wrap { align-items: flex-end; }
+
+/* Bubble row: bubble + copy btn side by side */
+.bubble-row { display: flex; align-items: flex-start; gap: 6px; }
+.msg.user .bubble-row { flex-direction: row; }
+.msg.assistant .bubble-row { flex-direction: row; }
 
 /* Bubble base */
 .bubble {
@@ -360,21 +379,25 @@ function scrollToBottom() {
 
 /* Copy button */
 .copy-btn {
-  position: absolute;
-  top: 4px; right: -30px;
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 6px;
   background: rgba(55, 65, 81, 0.8);
   border: 1px solid rgba(255,255,255,0.08);
   color: rgba(156, 163, 175, 0.8);
   border-radius: 6px;
-  width: 24px; height: 24px;
+  width: 0;
+  height: 28px;
+  overflow: hidden;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 18px;
   display: flex; align-items: center; justify-content: center;
   opacity: 0;
-  transition: opacity 0.15s, background 0.15s;
+  outline: none;
   padding: 0;
+  transition: opacity 0.15s, width 0.15s, padding 0.15s;
 }
-.bubble-wrap:hover .copy-btn { opacity: 1; }
+.bubble-row:hover .copy-btn { opacity: 1; width: 32px; }
 .copy-btn:hover { background: rgba(75, 85, 99, 0.9); color: #f9fafb; }
 
 /* Markdown prose */
