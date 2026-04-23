@@ -47,8 +47,9 @@ type App struct {
 	mcpStore    *mcp.ServerStore
 
 	// mu guards fields that may be replaced on config save while agent goroutines run.
-	mu          sync.RWMutex
-	scheduler   *scheduler.Scheduler
+	mu           sync.RWMutex
+	activeScreen ScreenInfo // current screen under the mouse cursor, guarded by mu
+	scheduler    *scheduler.Scheduler
 	longMem     *memory.LongStore
 	knowledgeSt *knowledge.Store
 	petAgent    *agent.Agent
@@ -56,6 +57,12 @@ type App struct {
 
 // NewApp creates a new App instance.
 func NewApp() *App { return &App{} }
+
+// ScreenInfo holds the logical resolution of a screen.
+type ScreenInfo struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
+}
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
@@ -329,6 +336,72 @@ func (a *App) GetBallPosition(screenW, screenH int) []int {
 func (a *App) SaveBallPosition(x, y, screenW, screenH int) error {
 	key := fmt.Sprintf("ball_pos_%dx%d", screenW, screenH)
 	val := fmt.Sprintf("%d,%d", x, y)
+	_, err := a.sqlDB.ExecContext(a.ctx,
+		`INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+		key, val)
+	return err
+}
+
+// GetScreenList returns all connected screens as ScreenInfo values.
+func (a *App) GetScreenList() []ScreenInfo {
+	screens, err := wailsruntime.ScreenGetAll(a.ctx)
+	if err != nil {
+		return nil
+	}
+	result := make([]ScreenInfo, 0, len(screens))
+	for _, s := range screens {
+		result = append(result, ScreenInfo{Width: s.Size.Width, Height: s.Size.Height})
+	}
+	return result
+}
+
+// GetPetSize returns the saved pet height for the given screen resolution, or 0 if not set.
+func (a *App) GetPetSize(screenW, screenH int) int {
+	key := fmt.Sprintf("pet_size_%dx%d", screenW, screenH)
+	var val string
+	if err := a.sqlDB.QueryRowContext(a.ctx, `SELECT value FROM settings WHERE key=?`, key).Scan(&val); err != nil {
+		return 0
+	}
+	n, err := strconv.Atoi(val)
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+// SavePetSize persists the pet height for the given screen resolution.
+func (a *App) SavePetSize(size, screenW, screenH int) error {
+	key := fmt.Sprintf("pet_size_%dx%d", screenW, screenH)
+	_, err := a.sqlDB.ExecContext(a.ctx,
+		`INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+		key, strconv.Itoa(size))
+	return err
+}
+
+// GetChatSize returns the saved chat bubble [width, height] for the given screen resolution.
+// Returns [0, 0] if no size has been saved for that resolution yet.
+func (a *App) GetChatSize(screenW, screenH int) []int {
+	key := fmt.Sprintf("chat_size_%dx%d", screenW, screenH)
+	var val string
+	if err := a.sqlDB.QueryRowContext(a.ctx, `SELECT value FROM settings WHERE key=?`, key).Scan(&val); err != nil {
+		return []int{0, 0}
+	}
+	parts := strings.SplitN(val, ",", 2)
+	if len(parts) != 2 {
+		return []int{0, 0}
+	}
+	w, err1 := strconv.Atoi(parts[0])
+	h, err2 := strconv.Atoi(parts[1])
+	if err1 != nil || err2 != nil {
+		return []int{0, 0}
+	}
+	return []int{w, h}
+}
+
+// SaveChatSize persists the chat bubble dimensions for the given screen resolution.
+func (a *App) SaveChatSize(width, height, screenW, screenH int) error {
+	key := fmt.Sprintf("chat_size_%dx%d", screenW, screenH)
+	val := fmt.Sprintf("%d,%d", width, height)
 	_, err := a.sqlDB.ExecContext(a.ctx,
 		`INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
 		key, val)
