@@ -109,7 +109,12 @@ function focusInput() {
   chatPanelRef.value?.focusInput()
 }
 
-defineExpose({ focusInput })
+/** scrollToBottom delegates to the ChatPanel scroll-to-bottom. */
+function scrollToBottom() {
+  chatPanelRef.value?.scrollToBottom()
+}
+
+defineExpose({ focusInput, scrollToBottom })
 </script>
 
 <template>

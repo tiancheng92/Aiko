@@ -235,7 +235,7 @@ function focusInput() {
   nextTick(() => { textareaEl.value?.focus() })
 }
 
-defineExpose({ focusInput })
+defineExpose({ focusInput, scrollToBottom })
 </script>
 
 <template>

@@ -47,7 +47,10 @@ onMounted(async () => {
     bubbleOpen.value = !bubbleOpen.value
     if (bubbleOpen.value) {
       pendingTokens = ''
-      nextTick(() => { chatBubbleRef.value?.focusInput() })
+      nextTick(() => {
+        chatBubbleRef.value?.focusInput()
+        chatBubbleRef.value?.scrollToBottom()
+      })
     }
   })
   offSettings = EventsOn('settings:open', () => { settingsOpen.value = true })
@@ -100,7 +103,10 @@ function toggleBubble() {
   // the ChatPanel will show the streamed content directly.
   if (bubbleOpen.value) {
     pendingTokens = ''
-    nextTick(() => { chatBubbleRef.value?.focusInput() })
+    nextTick(() => {
+      chatBubbleRef.value?.focusInput()
+      chatBubbleRef.value?.scrollToBottom()
+    })
   }
 }
 
