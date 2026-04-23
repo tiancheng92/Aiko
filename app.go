@@ -346,6 +346,7 @@ func (a *App) SaveBallPosition(x, y, screenW, screenH int) error {
 func (a *App) GetScreenList() []ScreenInfo {
 	screens, err := wailsruntime.ScreenGetAll(a.ctx)
 	if err != nil {
+		slog.Warn("GetScreenList: ScreenGetAll failed", "err", err)
 		return nil
 	}
 	result := make([]ScreenInfo, 0, len(screens))
@@ -355,7 +356,7 @@ func (a *App) GetScreenList() []ScreenInfo {
 	return result
 }
 
-// GetPetSize returns the saved pet height for the given screen resolution, or 0 if not set.
+// GetPetSize returns the saved pet height for the given screen resolution, or 0 if not set or on error.
 func (a *App) GetPetSize(screenW, screenH int) int {
 	key := fmt.Sprintf("pet_size_%dx%d", screenW, screenH)
 	var val string
@@ -408,7 +409,6 @@ func (a *App) SaveChatSize(width, height, screenW, screenH int) error {
 	return err
 }
 
-// MissingRequiredConfig returns names of empty required config fields.
 // MousePosition holds the CSS coordinates of the mouse cursor.
 type MousePosition struct {
 	X float64 `json:"x"`
@@ -422,6 +422,7 @@ func (a *App) GetMousePosition() MousePosition {
 	return MousePosition{X: x, Y: y}
 }
 
+// MissingRequiredConfig returns names of empty required config fields.
 func (a *App) MissingRequiredConfig() []string {
 	return a.cfg.MissingRequired()
 }
