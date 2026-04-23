@@ -74,6 +74,7 @@ const larkStatusError = ref('')
 const pos = ref({ x: Math.round(window.innerWidth / 2 - 300), y: Math.round(window.innerHeight / 2 - 250) })
 let dragStart = null
 let offProgress = null
+let offScreen = null
 
 onMounted(async () => {
   loadModels()
@@ -106,11 +107,26 @@ onMounted(async () => {
   fetchLarkStatus()
   await fetchProfiles()
   offProgress = EventsOn('knowledge:progress', (p) => { importProgress.value = p })
+  // Refresh per-screen sizes when the user moves the mouse to a different screen.
+  offScreen = EventsOn('screen:active:changed', async (info) => {
+    try {
+      const petSize = await GetPetSize(info.width, info.height)
+      if (petSize > 0) cfg.value.PetSize = petSize
+    } catch (e) { console.warn('SettingsWindow screen:active:changed: GetPetSize failed', e) }
+    try {
+      const [cw, ch] = await GetChatSize(info.width, info.height)
+      if (cw > 0) cfg.value.ChatWidth = cw
+      if (ch > 0) cfg.value.ChatHeight = ch
+    } catch (e) { console.warn('SettingsWindow screen:active:changed: GetChatSize failed', e) }
+  })
   // Auto-fetch model list if URL is already configured.
   if (cfg.value.LLMBaseURL) fetchLLMModels()
 })
 
-onUnmounted(() => offProgress?.())
+onUnmounted(() => {
+  offProgress?.()
+  offScreen?.()
+})
 
 /** fetchLLMModels calls the backend with the current form values to list available models. */
 async function fetchLLMModels() {
