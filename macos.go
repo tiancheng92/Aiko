@@ -245,6 +245,121 @@ static void moveWindowToScreen(int n) {
 // hasWindow returns 1 if gWindow is initialized.
 static int hasWindow() { return gWindow != nil ? 1 : 0; }
 
+// startVoiceRecognition requests permissions and starts streaming STT.
+// Results are delivered via voiceTranscriptCallback().
+static void startVoiceRecognition() {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        // Check microphone permission
+        if (@available(macOS 14.0, *)) {
+            AVAudioApplication *audioApp = [AVAudioApplication sharedInstance];
+            AVAudioApplicationRecordPermission perm = [audioApp recordPermission];
+            if (perm == AVAudioApplicationRecordPermissionUndetermined) {
+                [audioApp requestRecordPermissionWithCompletionHandler:^(BOOL granted) {
+                    if (granted) {
+                        startVoiceRecognition();
+                    } else {
+                        voiceTranscriptCallback("ERROR:mic_denied");
+                    }
+                }];
+                return;
+            } else if (perm == AVAudioApplicationRecordPermissionDenied) {
+                voiceTranscriptCallback("ERROR:mic_denied");
+                return;
+            }
+        } else {
+            AVAuthorizationStatus micStatus = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
+            if (micStatus == AVAuthorizationStatusNotDetermined) {
+                [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted) {
+                    if (granted) {
+                        startVoiceRecognition();
+                    } else {
+                        voiceTranscriptCallback("ERROR:mic_denied");
+                    }
+                }];
+                return;
+            } else if (micStatus == AVAuthorizationStatusDenied || micStatus == AVAuthorizationStatusRestricted) {
+                voiceTranscriptCallback("ERROR:mic_denied");
+                return;
+            }
+        }
+
+        // Check speech recognition permission
+        SFSpeechRecognizerAuthorizationStatus speechStatus = [SFSpeechRecognizer authorizationStatus];
+        if (speechStatus == SFSpeechRecognizerAuthorizationStatusNotDetermined) {
+            [SFSpeechRecognizer requestAuthorization:^(SFSpeechRecognizerAuthorizationStatus status) {
+                if (status == SFSpeechRecognizerAuthorizationStatusAuthorized) {
+                    startVoiceRecognition();
+                } else {
+                    voiceTranscriptCallback("ERROR:speech_denied");
+                }
+            }];
+            return;
+        } else if (speechStatus != SFSpeechRecognizerAuthorizationStatusAuthorized) {
+            voiceTranscriptCallback("ERROR:speech_denied");
+            return;
+        }
+
+        // Initialize recognizer (prefer zh-CN, fallback to device locale)
+        gSpeechRecognizer = [[SFSpeechRecognizer alloc] initWithLocale:[NSLocale localeWithLocaleIdentifier:@"zh-CN"]];
+        if (!gSpeechRecognizer || !gSpeechRecognizer.available) {
+            gSpeechRecognizer = [SFSpeechRecognizer new];
+        }
+        gSpeechRecognizer.defaultTaskHint = SFSpeechRecognitionTaskHintDictation;
+
+        gAudioEngine = [AVAudioEngine new];
+        gRecogRequest = [SFSpeechAudioBufferRecognitionRequest new];
+        gRecogRequest.shouldReportPartialResults = YES;
+
+        AVAudioInputNode *inputNode = gAudioEngine.inputNode;
+        AVAudioFormat *fmt = [inputNode outputFormatForBus:0];
+
+        [inputNode installTapOnBus:0 bufferSize:1024 format:fmt block:^(AVAudioPCMBuffer *buf, AVAudioTime *when) {
+            [gRecogRequest appendAudioPCMBuffer:buf];
+        }];
+
+        NSError *startErr = nil;
+        [gAudioEngine startAndReturnError:&startErr];
+        if (startErr) {
+            NSString *msg = [NSString stringWithFormat:@"ERROR:audio_engine:%@", startErr.localizedDescription];
+            voiceTranscriptCallback([msg UTF8String]);
+            return;
+        }
+
+        gRecogTask = [gSpeechRecognizer recognitionTaskWithRequest:gRecogRequest
+            resultHandler:^(SFSpeechRecognitionResult *result, NSError *err) {
+                if (err) {
+                    // Ignore cancellation errors (code 301) — they fire on normal stop
+                    if (err.code != 301) {
+                        NSString *msg = [NSString stringWithFormat:@"ERROR:recognition:%@", err.localizedDescription];
+                        voiceTranscriptCallback([msg UTF8String]);
+                    }
+                    return;
+                }
+                if (result) {
+                    NSString *text = result.bestTranscription.formattedString;
+                    voiceTranscriptCallback([text UTF8String]);
+                }
+            }];
+    });
+}
+
+// stopVoiceRecognition ends the STT task and tears down the audio engine.
+static void stopVoiceRecognition() {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [gRecogTask finish];
+        gRecogTask = nil;
+
+        if (gAudioEngine.running) {
+            [gAudioEngine.inputNode removeTapOnBus:0];
+            [gAudioEngine stop];
+        }
+        [gRecogRequest endAudio];
+        gRecogRequest = nil;
+        gAudioEngine = nil;
+        gSpeechRecognizer = nil;
+    });
+}
+
 // enableClickThrough sets the window to ignore mouse events by default,
 // then installs global and local NSEvent monitors so that the window
 // temporarily accepts events only when the cursor is over interactive elements.
