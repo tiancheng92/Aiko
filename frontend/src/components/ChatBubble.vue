@@ -3,11 +3,12 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import ChatPanel from './ChatPanel.vue'
 import ContextMenu from './ContextMenu.vue'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
-import { ExportChatHistory, GetConfig } from '../../wailsjs/go/main/App'
+import { ExportChatHistory, GetChatSize, SaveChatSize } from '../../wailsjs/go/main/App'
 
 const props = defineProps({
   ballPos:  { type: Object, default: () => ({ x: -1, y: -1 }) },
   ballSize: { type: Number, default: 64 },
+  activeScreen: { type: Object, default: () => ({ width: 0, height: 0 }) },
 })
 const emit = defineEmits(['close', 'open-settings'])
 
@@ -21,18 +22,39 @@ const bubbleH = ref(DEFAULT_H)
 function applySize({ width, height }) {
   bubbleW.value = width  >= 300 ? width  : DEFAULT_W
   bubbleH.value = height >= 320 ? height : DEFAULT_H
+  // Persist whenever size changes after mount.
+  if (mounted) {
+    const sw = props.activeScreen.width
+    const sh = props.activeScreen.height
+    if (sw > 0 && sh > 0) {
+      SaveChatSize(bubbleW.value, bubbleH.value, sw, sh).catch(e =>
+        console.warn('SaveChatSize failed', e)
+      )
+    }
+  }
 }
 
 let offSizeChange = null
 
+let mounted = false
+
 onMounted(async () => {
   try {
-    const cfg = await GetConfig()
-    applySize({ width: cfg.ChatWidth, height: cfg.ChatHeight })
+    const [w, h] = await GetChatSize(props.activeScreen.width, props.activeScreen.height)
+    applySize({ width: w, height: h })
   } catch (e) {
     console.error('load chat size failed:', e)
   }
   offSizeChange = EventsOn('config:chat:size:changed', applySize)
+  EventsOn('screen:active:changed', async (info) => {
+    try {
+      const [w, h] = await GetChatSize(info.width, info.height)
+      applySize({ width: w, height: h })
+    } catch (e) {
+      console.warn('screen:active:changed: GetChatSize failed', e)
+    }
+  })
+  mounted = true
 })
 
 onUnmounted(() => {
