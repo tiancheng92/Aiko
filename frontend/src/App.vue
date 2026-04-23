@@ -96,7 +96,7 @@ function openSettings() {
     @open-settings="openSettings"
   />
   <ChatBubble
-    v-if="bubbleOpen"
+    v-show="bubbleOpen"
     :ball-pos="ballPos"
     :ball-size="ballSize"
     @close="bubbleOpen = false"
