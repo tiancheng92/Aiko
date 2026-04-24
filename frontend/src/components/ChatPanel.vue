@@ -193,6 +193,10 @@ onMounted(async () => {
   try { voiceAutoSend.value = await GetVoiceAutoSend() } catch {}
   try { soundsEnabled = await GetSoundsEnabled() } catch {}
 
+  EventsOn('config:sounds:changed', (val) => {
+    soundsEnabled = val
+  })
+
   EventsOn('voice:start', () => {
     isRecording.value = true
     voiceHint.value = ''

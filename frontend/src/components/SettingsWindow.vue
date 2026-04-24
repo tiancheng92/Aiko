@@ -574,10 +574,11 @@ async function toggleVoiceAutoSend() {
   }
 }
 
-/** toggleSoundsEnabled updates sound effects setting immediately. */
+/** toggleSoundsEnabled updates sound effects setting immediately and notifies ChatPanel. */
 async function toggleSoundsEnabled() {
   try {
     await SetSoundsEnabled(cfg.value.SoundsEnabled)
+    EventsEmit('config:sounds:changed', cfg.value.SoundsEnabled)
   } catch (e) {
     console.warn('toggleSoundsEnabled failed:', e)
   }
