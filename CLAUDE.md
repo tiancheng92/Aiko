@@ -108,6 +108,8 @@ wails generate module  # 重新生成 Wails bindings
 ### macOS 平台特定
 - `macos.go` 中的 Objective-C 代码负责按像素判断鼠标事件响应，实现点击穿透功能
 - **⚠️ 不要随意修改 hitTest 逻辑**，容易破坏点击穿透机制
+- `macos.go` 同时包含全局 Option 键监控：双击切换气泡，长按 ≥1s 触发语音录音（`startVoiceRecognition` / `stopVoiceRecognition`）
+- 语音识别使用 `AVAudioEngine` + `SFSpeechRecognizer`，结果通过 CGO exported callback 推送 Wails 事件
 
 ### 工具系统
 - 修改 `internal/tools/registry.go` 的 `All()` 后需同步更新 `AllEino()`（返回 eino Tool 接口列表）
@@ -125,11 +127,13 @@ wails generate module  # 重新生成 Wails bindings
 
 ### 技术创新点
 1. **点击穿透实现** - 通过 Objective-C CGO 实现像素级鼠标事件处理
-2. **eino Agent 集成** - 基于字节跳动 ADK 的工具调用和中间件系统
-3. **毛玻璃 UI 设计** - 现代化深色主题 + CSS backdrop-filter 效果
-4. **多模态内容渲染** - 支持 Markdown、LaTeX、代码高亮、表格等
-5. **RAG 知识库** - chromem-go 向量数据库 + 文档导入系统
-6. **MCP 协议支持** - 可扩展第三方工具生态
+2. **语音输入** - 长按 Option 键触发，AVAudioEngine + SFSpeechRecognizer 实时 STT，CGO callback 回传
+3. **Apple Intelligence 视觉特效** - 录音期间 4 层 Canvas conic-gradient 彩虹光边框 + 水波纹扩散动画
+4. **eino Agent 集成** - 基于字节跳动 ADK 的工具调用和中间件系统
+5. **毛玻璃 UI 设计** - 现代化深色主题 + CSS backdrop-filter 效果
+6. **多模态内容渲染** - 支持 Markdown、LaTeX、代码高亮、表格等
+7. **RAG 知识库** - chromem-go 向量数据库 + 文档导入系统
+8. **MCP 协议支持** - 可扩展第三方工具生态
 
 ### 借鉴的优秀项目
 - **架构设计** 借鉴了 [Wails Community Examples](https://github.com/wailsapp/awesome-wails)
@@ -148,27 +152,21 @@ wails generate module  # 重新生成 Wails bindings
 - ✅ 定时任务和工具权限系统
 - ✅ 飞书 lark-cli 集成
 - ✅ MCP 协议工具扩展
+- ✅ 语音输入（长按 Option，SFSpeechRecognizer STT）
 - ⚠️ 仅支持 macOS（使用私有 API，不兼容 App Store）
 - ❌ Windows/Linux 支持（开发中）
 
 ## 下阶段计划
 
-### 语音功能 (v2.0)
-- 🎙️ 语音输入 - STT 语音转文字，支持连续对话
+### 语音输出 (v2.1)
 - 🔊 语音输出 - TTS 文字转语音，宠物可发声
 - 🎵 音色选择 - 多种声音个性化选项
 - 📱 语音唤醒 - 支持"Hey Aiko"等唤醒指令
 
-**技术方案**：
-- 语音输入：集成 OpenAI Whisper API 或本地 whisper.cpp
-- 语音输出：系统 TTS API (macOS: AVSpeechSynthesizer) + 第三方语音服务
-- 音频处理：WebRTC VAD + 实时流式识别
-- 前端录音：MediaRecorder API + AudioContext
-
-### 跨平台支持 (v2.1)
+### 跨平台支持 (v2.2)
 - 🖥️ Windows 版本 - 重写点击穿透逻辑，使用 Win32 API
 - 🐧 Linux 版本 - X11/Wayland 窗口管理适配
 
 ---
 
-*最后更新：2026-04-23*
+*最后更新：2026-04-24*
