@@ -86,6 +86,13 @@ frontend/src/
 | `config:chat:size:changed` | frontend→frontend | 聊天框尺寸变更 |
 | `notification:show` | backend→frontend | 显示通知气泡 |
 | `settings:open` | any | 打开设置界面 |
+| `voice:start` | backend→frontend | 开始录音（Option 长按触发）|
+| `voice:transcript` | backend→frontend | 实时 partial STT 结果 |
+| `voice:final` | backend→frontend | isFinal STT 结果（可触发自动发送）|
+| `voice:end` | backend→frontend | 录音结束（Option 释放时立即触发）|
+| `voice:error` | backend→frontend | 语音识别错误 |
+| `sms:verification_code` | backend→frontend | 检测到验证码短信 |
+| `config:voice:auto-send:changed` | frontend→frontend | 语音自动发送开关状态变更 |
 
 ## 开发命令
 
@@ -111,7 +118,8 @@ wails generate module  # 重新生成 Wails bindings
 - `macos.go` 中的 Objective-C 代码负责按像素判断鼠标事件响应，实现点击穿透功能
 - **⚠️ 不要随意修改 hitTest 逻辑**，容易破坏点击穿透机制
 - `macos.go` 同时包含全局 Option 键监控：双击切换气泡，长按 ≥1s 触发语音录音（`startVoiceRecognition` / `stopVoiceRecognition`）
-- 语音识别使用 `AVAudioEngine` + `SFSpeechRecognizer`，结果通过 CGO exported callback 推送 Wails 事件
+- 语音识别使用 `AVAudioEngine` + `SFSpeechRecognizer`，partial 结果通过 voice pipe 推送 `voice:transcript` Wails 事件；`isFinal` 结果推送 `FINAL:<text>` → Go goroutine 转为 `voice:final` 事件
+- **voice:final vs voice:end**：`voice:end` 在 Option 释放时立即触发（停止 UI 动画）；`voice:final` 在 SFSpeechRecognition 异步完成后触发（携带最终文字）。若 `VoiceAutoSend` 开启，ChatPanel 收到 `voice:final` 后自动调用 `send()`
 - **macOS 系统集成首选 osascript**：Wails 的 `[NSApp run]` 占用主线程，任何需要主线程的 CGO API（AXUIElement、NSWorkspace 等）都不安全；改用 `exec.Command("osascript", "-e", ...)` 子进程调用 AppleScript，无线程限制
 
 ### 工具系统
@@ -141,7 +149,7 @@ wails generate module  # 重新生成 Wails bindings
 
 ### 技术创新点
 1. **点击穿透实现** - 通过 Objective-C CGO 实现像素级鼠标事件处理
-2. **语音输入** - 长按 Option 键触发，AVAudioEngine + SFSpeechRecognizer 实时 STT，CGO callback 回传
+2. **语音输入** - 长按 Option 键触发，AVAudioEngine + SFSpeechRecognizer 实时 STT；isFinal 结果走 FINAL: 前缀 pipe → voice:final 事件；支持「语音消息立刻发送」模式
 3. **Apple Intelligence 视觉特效** - 录音期间 4 层 Canvas conic-gradient 彩虹光边框 + 水波纹扩散动画
 4. **eino Agent 集成** - 基于字节跳动 ADK 的工具调用和中间件系统
 5. **毛玻璃 UI 设计** - 现代化深色主题 + CSS backdrop-filter 效果
@@ -168,7 +176,7 @@ wails generate module  # 重新生成 Wails bindings
 - ✅ 定时任务和工具权限系统
 - ✅ 飞书 lark-cli 集成
 - ✅ MCP 协议工具扩展（添加/编辑/删除后热重载）
-- ✅ 语音输入（长按 Option，SFSpeechRecognizer STT）
+- ✅ 语音输入（长按 Option，SFSpeechRecognizer STT，支持「立刻发送」模式）
 - ✅ 浏览器感知（osascript 获取当前 URL + 页面内容）
 - ✅ macOS 提醒事项读取与标记完成
 - ✅ 自我成长（用户画像、长期记忆、技能沉淀）
