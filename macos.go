@@ -292,7 +292,8 @@ static void moveWindowToScreen(int n) {
 static int hasWindow() { return gWindow != nil ? 1 : 0; }
 
 // startVoiceRecognition requests permissions and starts streaming STT.
-// Results are delivered via voiceTranscriptCallback().
+// Results are written to the voice pipe via sendVoiceText().
+// All ObjC exceptions are caught and forwarded as ERROR: messages.
 static void startVoiceRecognition() {
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
@@ -354,20 +355,26 @@ static void startVoiceRecognition() {
             return;
         }
 
+        // resultHandler runs on a Speech framework background thread — must catch all exceptions.
         gRecogTask = [gSpeechRecognizer recognitionTaskWithRequest:gRecogRequest
             resultHandler:^(SFSpeechRecognitionResult *result, NSError *err) {
-                if (err) {
-                    // Ignore cancellation errors (code 301) — they fire on normal stop
-                    if (err.code != 301) {
-                        NSString *msg = [NSString stringWithFormat:@"ERROR:recognition:%@", err.localizedDescription];
-                        sendVoiceText([msg UTF8String]);
+                @try {
+                    if (err) {
+                        // Ignore cancellation errors (code 301) — they fire on normal stop
+                        if (err.code != 301) {
+                            NSString *msg = [NSString stringWithFormat:@"ERROR:recognition:%@", err.localizedDescription];
+                            sendVoiceText([msg UTF8String]);
+                        }
+                        return;
                     }
-                    return;
-                }
-                if (result) {
-                    NSString *text = result.bestTranscription.formattedString;
-                    sendVoiceText([text UTF8String]);
-                }
+                    if (result) {
+                        NSString *text = result.bestTranscription.formattedString;
+                        sendVoiceText([text UTF8String]);
+                    }
+                } @catch (NSException *ex) {
+                    NSString *msg = [NSString stringWithFormat:@"ERROR:result_handler:%@: %@", ex.name, ex.reason];
+                    sendVoiceText([msg UTF8String]);
+                } @catch (...) {}
             }];
         } @catch (NSException *ex) {
             NSString *msg = [NSString stringWithFormat:@"ERROR:exception:%@: %@", ex.name, ex.reason];
@@ -377,16 +384,23 @@ static void startVoiceRecognition() {
 }
 
 // stopVoiceRecognition ends the STT task and tears down the audio engine.
+// Correct order: stop tap → stop engine → endAudio → finish task → nil globals.
 static void stopVoiceRecognition() {
     dispatch_async(dispatch_get_main_queue(), ^{
-        [gRecogTask finish];
+        @try {
+            // 1. Stop the audio tap first to prevent new buffers from being appended.
+            if (gAudioEngine && gAudioEngine.running) {
+                [gAudioEngine.inputNode removeTapOnBus:0];
+                [gAudioEngine stop];
+            }
+            // 2. Signal end of audio stream to the recognizer.
+            [gRecogRequest endAudio];
+            // 3. Ask the task to finalize with what it has received.
+            [gRecogTask finish];
+        } @catch (NSException *ex) {
+            NSLog(@"[Aiko] stopVoiceRecognition exception: %@: %@", ex.name, ex.reason);
+        } @catch (...) {}
         gRecogTask = nil;
-
-        if (gAudioEngine.running) {
-            [gAudioEngine.inputNode removeTapOnBus:0];
-            [gAudioEngine stop];
-        }
-        [gRecogRequest endAudio];
         gRecogRequest = nil;
         gAudioEngine = nil;
         gSpeechRecognizer = nil;
