@@ -292,6 +292,7 @@ func (a *App) GetConfig() *config.Config { return a.cfg }
 func (a *App) SaveConfig(cfg *config.Config) error {
 	// Preserve fields that are managed independently (not via the settings form).
 	cfg.SMSWatcherEnabled = a.cfg.SMSWatcherEnabled
+	cfg.VoiceAutoSend = a.cfg.VoiceAutoSend
 	if err := a.configStore.Save(cfg); err != nil {
 		return err
 	}
@@ -912,6 +913,22 @@ func (a *App) IsSMSWatcherRunning() bool {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.smsWatcher != nil
+}
+
+// GetVoiceAutoSend returns whether voice messages are sent automatically
+// after the final STT result arrives.
+func (a *App) GetVoiceAutoSend() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.cfg.VoiceAutoSend
+}
+
+// SetVoiceAutoSend sets the voice auto-send flag and persists it.
+func (a *App) SetVoiceAutoSend(enabled bool) error {
+	a.mu.Lock()
+	a.cfg.VoiceAutoSend = enabled
+	a.mu.Unlock()
+	return a.configStore.Save(a.cfg)
 }
 
 // AddMCPServer adds a new MCP server configuration and reloads tools.

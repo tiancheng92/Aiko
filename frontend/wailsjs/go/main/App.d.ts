@@ -46,6 +46,8 @@ export function GetScreenSize():Promise<Array<number>>;
 
 export function GetToolPermissions():Promise<Array<tools.PermissionRow>>;
 
+export function GetVoiceAutoSend():Promise<boolean>;
+
 export function ImportKnowledge(arg1:string):Promise<void>;
 
 export function IsFirstLaunch():Promise<boolean>;
@@ -91,6 +93,8 @@ export function SendMessage(arg1:string):Promise<void>;
 export function SetCronJobEnabled(arg1:number,arg2:boolean):Promise<void>;
 
 export function SetToolPermission(arg1:string,arg2:boolean):Promise<void>;
+
+export function SetVoiceAutoSend(arg1:boolean):Promise<void>;
 
 export function StartSMSWatcher():Promise<void>;
 

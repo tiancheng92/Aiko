@@ -78,6 +78,10 @@ export function GetToolPermissions() {
   return window['go']['main']['App']['GetToolPermissions']();
 }
 
+export function GetVoiceAutoSend() {
+  return window['go']['main']['App']['GetVoiceAutoSend']();
+}
+
 export function ImportKnowledge(arg1) {
   return window['go']['main']['App']['ImportKnowledge'](arg1);
 }
@@ -168,6 +172,10 @@ export function SetCronJobEnabled(arg1, arg2) {
 
 export function SetToolPermission(arg1, arg2) {
   return window['go']['main']['App']['SetToolPermission'](arg1, arg2);
+}
+
+export function SetVoiceAutoSend(arg1) {
+  return window['go']['main']['App']['SetVoiceAutoSend'](arg1);
 }
 
 export function StartSMSWatcher() {
