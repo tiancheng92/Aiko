@@ -295,6 +295,7 @@ static int hasWindow() { return gWindow != nil ? 1 : 0; }
 // Results are delivered via voiceTranscriptCallback().
 static void startVoiceRecognition() {
     dispatch_async(dispatch_get_main_queue(), ^{
+        @try {
         // Check microphone permission (AVCaptureDevice works on all supported macOS versions)
         AVAuthorizationStatus micStatus = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
         if (micStatus == AVAuthorizationStatusNotDetermined) {
@@ -342,7 +343,7 @@ static void startVoiceRecognition() {
         AVAudioFormat *fmt = [inputNode outputFormatForBus:0];
 
         [inputNode installTapOnBus:0 bufferSize:1024 format:fmt block:^(AVAudioPCMBuffer *buf, AVAudioTime *when) {
-            [gRecogRequest appendAudioPCMBuffer:buf];
+            @try { [gRecogRequest appendAudioPCMBuffer:buf]; } @catch (...) {}
         }];
 
         NSError *startErr = nil;
@@ -368,6 +369,10 @@ static void startVoiceRecognition() {
                     sendVoiceText([text UTF8String]);
                 }
             }];
+        } @catch (NSException *ex) {
+            NSString *msg = [NSString stringWithFormat:@"ERROR:exception:%@: %@", ex.name, ex.reason];
+            sendVoiceText([msg UTF8String]);
+        }
     });
 }
 
