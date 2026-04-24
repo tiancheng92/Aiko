@@ -26,6 +26,126 @@ let pendingTokens = ''
 const siriCanvases = [ref(null), ref(null), ref(null), ref(null)]
 let siriAnim = null
 
+// ── Water ripple canvas ──────────────────────────────────────
+const rippleCanvas = ref(null)
+let rippleAnim = null
+
+/**
+ * Ripple state — each ripple is spawned at the screen center,
+ * expands outward, and fades as it grows.
+ */
+function startRippleAnim() {
+  const canvas = rippleCanvas.value
+  if (!canvas) return
+  const ctx = canvas.getContext('2d')
+
+  function resize() {
+    canvas.width  = window.innerWidth
+    canvas.height = window.innerHeight
+  }
+  resize()
+  window.addEventListener('resize', resize)
+
+  const cx = () => canvas.width  / 2
+  const cy = () => canvas.height / 2
+
+  /**
+   * Water refraction simulation on transparent canvas.
+   * Each ring has a physical wave profile:
+   *   - Soft fill (lens interior — slightly lighter, like refracted light)
+   *   - Dark trough stroke just inside the crest (wave concave side)
+   *   - Bright crest highlight stroke (wave convex peak)
+   *   - Outer glow falloff
+   * The dark trough is what creates depth/refraction illusion even on transparency.
+   * 6 rings, non-uniform delays from reference CSS (.wave0–.wave5), 1s each.
+   */
+  const DURATION = 1000
+  const RINGS = [
+    { delay:    0, scale: 1.06 },
+    { delay:  200, scale: 1.02 },
+    { delay:  400, scale: 1.04 },
+    { delay:  500, scale: 1.01 },
+    { delay:  800, scale: 1.02 },
+    { delay: 1000, scale: 1.00 },
+  ]
+  const PERIOD  = DURATION + 1000   // 2000ms cycle
+  const START_R = 15
+  const END_R   = 150
+
+  let startTs = null
+
+  function frame(ts) {
+    if (!startTs) startTs = ts
+    const elapsed = ts - startTs
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.save()
+    ctx.globalAlpha = siriAlpha
+
+    const cycle = elapsed % PERIOD
+
+    // Draw back-to-front (wave5 first, wave0 last = on top)
+    for (let i = RINGS.length - 1; i >= 0; i--) {
+      const ring = RINGS[i]
+      const age  = cycle - ring.delay
+      if (age < 0 || age > DURATION) continue
+
+      const t = age / DURATION
+      const r = START_R + t * (END_R - START_R)
+      const fade = 1 - t   // opacity 1→0 (opac keyframe)
+
+      // ── 1. Lens interior fill ─────────────────────────────────
+      ctx.save()
+      ctx.beginPath()
+      ctx.arc(cx(), cy(), r, 0, Math.PI * 2)
+      ctx.clip()
+      const gradR = Math.min(canvas.width, canvas.height) * 0.5 * ring.scale
+      const lensGrad = ctx.createRadialGradient(cx(), cy(), 0, cx(), cy(), gradR)
+      lensGrad.addColorStop(0.0, `rgba(195,228,255,${0.10 * fade})`)
+      lensGrad.addColorStop(0.6, `rgba(195,228,255,${0.04 * fade})`)
+      lensGrad.addColorStop(1.0, 'rgba(195,228,255,0.00)')
+      ctx.fillStyle = lensGrad
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.restore()
+
+      // ── 2. Dark trough — inner shadow ────────────────────────
+      ctx.beginPath()
+      ctx.arc(cx(), cy(), Math.max(1, r - 2), 0, Math.PI * 2)
+      ctx.strokeStyle = `rgba(10,30,60,${0.22 * fade})`
+      ctx.lineWidth = 4
+      ctx.stroke()
+
+      // ── 3. Bright crest highlight ────────────────────────────
+      ctx.beginPath()
+      ctx.arc(cx(), cy(), r, 0, Math.PI * 2)
+      ctx.strokeStyle = `rgba(220,240,255,${0.85 * fade})`
+      ctx.lineWidth = 1.2
+      ctx.stroke()
+
+      // ── 4. Outer glow falloff ────────────────────────────────
+      const outerGrad = ctx.createRadialGradient(cx(), cy(), r, cx(), cy(), r + 10)
+      outerGrad.addColorStop(0, `rgba(195,228,255,${0.18 * fade})`)
+      outerGrad.addColorStop(1, 'rgba(195,228,255,0.00)')
+      ctx.beginPath()
+      ctx.arc(cx(), cy(), r + 10, 0, Math.PI * 2)
+      ctx.fillStyle = outerGrad
+      ctx.fill()
+    }
+
+    ctx.restore()
+    rippleAnim = requestAnimationFrame(frame)
+  }
+
+  rippleAnim = requestAnimationFrame(frame)
+  return () => {
+    cancelAnimationFrame(rippleAnim)
+    rippleAnim = null
+    window.removeEventListener('resize', resize)
+  }
+}
+
+let stopRippleAnim = null
+
 /**
  * Layer config — mirrors IOS.swift / WatchOS.swift:
  * each layer has independent interval + duration so they drift out of phase.
@@ -172,12 +292,15 @@ watch(voiceActive, async (active) => {
     siriAlphaTarget = 1
     siriMounted.value = true
     await nextTick()
-    stopSiriAnim = startSiriAnim()
+    stopSiriAnim  = startSiriAnim()
+    stopRippleAnim = startRippleAnim()
   } else {
     siriAlphaTarget = 0
     siriHideTimer = setTimeout(() => {
       stopSiriAnim?.()
-      stopSiriAnim = null
+      stopRippleAnim?.()
+      stopSiriAnim  = null
+      stopRippleAnim = null
       siriMounted.value = false
       siriHideTimer = null
     }, 600)
@@ -256,6 +379,7 @@ onUnmounted(() => {
   offToggle?.(); offToken?.(); offDone?.(); offError?.()
   offSettings?.(); offVoiceStart?.(); offVoiceEnd?.(); offVoiceError?.()
   stopSiriAnim?.()
+  stopRippleAnim?.()
   if (siriHideTimer) clearTimeout(siriHideTimer)
 })
 
@@ -316,15 +440,8 @@ function openSettings() {
     <canvas :ref="siriCanvases[3]" class="siri-canvas" style="filter: blur(2px);  opacity: 1.0;" />
   </div>
 
-  <div v-if="siriMounted" class="voice-wave">
-    <div
-      v-for="i in 3"
-      :key="i"
-      class="wave-ring"
-      :style="{ animationDelay: `${(i - 1) * 0.55}s` }"
-    />
-    <div class="wave-core" />
-  </div>
+  <!-- Water ripple canvas — realistic radial ripples drawn per-frame -->
+  <canvas v-if="siriMounted" ref="rippleCanvas" class="ripple-canvas" />
 </template>
 
 <style scoped>
@@ -342,47 +459,11 @@ function openSettings() {
   pointer-events: none;
 }
 
-/* ── Centered circular wave rings ──────────────────────────── */
-.voice-wave {
+/* ── Water ripple canvas ─────────────────────────────────────── */
+.ripple-canvas {
   position: fixed;
   inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   pointer-events: none;
   z-index: 9999;
-}
-
-.wave-core {
-  position: absolute;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: radial-gradient(circle, #ffffff 0%, #BC82F3 60%, transparent 100%);
-  box-shadow: 0 0 12px 4px rgba(188, 130, 243, 0.8),
-              0 0 24px 8px rgba(141, 159, 255, 0.4);
-  animation: core-pulse 1.6s ease-in-out infinite;
-}
-
-@keyframes core-pulse {
-  0%, 100% { transform: scale(1);   opacity: 1; }
-  50%       { transform: scale(1.3); opacity: 0.8; }
-}
-
-.wave-ring {
-  position: absolute;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(188, 130, 243, 0.6);
-  animation: wave-expand 1.65s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
-}
-
-.wave-ring:nth-child(2) { border-color: rgba(141, 159, 255, 0.5); }
-.wave-ring:nth-child(3) { border-color: rgba(245, 185, 234, 0.4); }
-
-@keyframes wave-expand {
-  0%   { transform: scale(1);   opacity: 0.7; }
-  100% { transform: scale(4.5); opacity: 0; }
 }
 </style>
