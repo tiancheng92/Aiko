@@ -63,6 +63,10 @@
           {{end}}
         </array>
         {{end}}
+        <key>NSMicrophoneUsageDescription</key>
+        <string>Aiko 需要麦克风权限以接收语音输入。</string>
+        <key>NSSpeechRecognitionUsageDescription</key>
+        <string>Aiko 需要语音识别权限以将您的语音转换为文字。</string>
         <key>NSAppTransportSecurity</key>
         <dict>
             <key>NSAllowsLocalNetworking</key>

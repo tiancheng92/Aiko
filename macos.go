@@ -53,10 +53,28 @@ static void activateApp() {
     });
 }
 
+// aikoLogException writes exception info to /tmp/aiko_crash.log for diagnosis.
+static void aikoLogException(NSString *context, NSException *ex) {
+    NSString *msg = [NSString stringWithFormat:@"[Aiko] EXCEPTION in %@: %@: %@\nStack: %@\n",
+        context, ex.name, ex.reason, [ex.callStackSymbols componentsJoinedByString:@"\n"]];
+    NSLog(@"%@", msg);
+    NSString *path = @"/tmp/aiko_crash.log";
+    NSString *existing = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil] ?: @"";
+    [[existing stringByAppendingString:msg] writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    sendVoiceText([[NSString stringWithFormat:@"ERROR:exception:%@: %@", ex.name, ex.reason] UTF8String]);
+}
+
+// aikoUncaughtExceptionHandler is the last-resort handler before AppKit calls abort().
+static void aikoUncaughtExceptionHandler(NSException *ex) {
+    aikoLogException(@"uncaught", ex);
+}
+
 // registerGlobalHotkey installs a global NSEvent monitor for double-tap Option.
 // Requires Accessibility permission; prompts the user if not yet granted.
 // On match, writes a single byte to gHotkeyPipeFd — no CGO call-back needed.
 static void registerGlobalHotkey() {
+    NSSetUncaughtExceptionHandler(aikoUncaughtExceptionHandler);
+
     // NSEventMaskFlagsChanged global monitors require Accessibility permission.
     NSDictionary *opts = @{(__bridge id)kAXTrustedCheckOptionPrompt: @YES};
     BOOL trusted = AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)opts);
@@ -72,6 +90,7 @@ static void registerGlobalHotkey() {
     __block dispatch_block_t gLongPressBlock = nil;
 
     void (^handler)(NSEvent *) = ^(NSEvent *evt) {
+        @try {
         NSUInteger standardMask = NSEventModifierFlagOption
                                 | NSEventModifierFlagCommand
                                 | NSEventModifierFlagShift
@@ -103,14 +122,19 @@ static void registerGlobalHotkey() {
         } else if (optDown && !optWasDown) {
             // Start long-press timer (1 second)
             dispatch_block_t blk = dispatch_block_create(0, ^{
-                if (optWasDown && !gLongPressTriggered) {
-                    gLongPressTriggered = YES;
-                    lastOptUp = 0; // cancel double-tap window
-                    if (gHotkeyPipeFd >= 0) {
-                        char b = 2;
-                        write(gHotkeyPipeFd, &b, 1);
+                @try {
+                    if (!gLongPressTriggered) {
+                        gLongPressTriggered = YES;
+                        lastOptUp = 0; // cancel double-tap window
+                        if (gHotkeyPipeFd >= 0) {
+                            char b = 2;
+                            write(gHotkeyPipeFd, &b, 1);
+                        }
                     }
-                }
+                    gLongPressBlock = nil;
+                } @catch (NSException *ex) {
+                    aikoLogException(@"longPressTimer", ex);
+                } @catch (...) {}
             });
             gLongPressBlock = blk;
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
@@ -139,6 +163,9 @@ static void registerGlobalHotkey() {
             justTriggered = NO;
         }
         optWasDown = optDown;
+        } @catch (NSException *ex) {
+            aikoLogException(@"hotkeyHandler", ex);
+        } @catch (...) {}
     };
 
     // Global monitor: fires when another app is active.
