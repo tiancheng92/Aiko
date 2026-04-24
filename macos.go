@@ -470,7 +470,12 @@ static void startVoiceRecognition() {
                     }
                     if (result) {
                         NSString *text = result.bestTranscription.formattedString;
-                        sendVoiceText([text UTF8String]);
+                        if (result.isFinal) {
+                            NSString *msg = [NSString stringWithFormat:@"FINAL:%@", text];
+                            sendVoiceText([msg UTF8String]);
+                        } else {
+                            sendVoiceText([text UTF8String]);
+                        }
                     }
                 } @catch (NSException *ex) {
                     NSString *msg = [NSString stringWithFormat:@"ERROR:result_handler:%@: %@", ex.name, ex.reason];
@@ -544,6 +549,7 @@ import "C"
 import (
 	"encoding/binary"
 	"log/slog"
+	"strings"
 	"syscall"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -623,7 +629,9 @@ func registerGlobalHotkey() {
 				continue
 			}
 			text := string(textBuf)
-			if len(text) > 6 && text[:6] == "ERROR:" {
+			if strings.HasPrefix(text, "FINAL:") {
+				wailsruntime.EventsEmit(globalAppCtx, "voice:final", text[6:])
+			} else if len(text) > 6 && text[:6] == "ERROR:" {
 				wailsruntime.EventsEmit(globalAppCtx, "voice:error", text[6:])
 			} else {
 				wailsruntime.EventsEmit(globalAppCtx, "voice:transcript", text)
