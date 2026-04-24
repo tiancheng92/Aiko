@@ -55,6 +55,7 @@ type App struct {
 	knowledgeSt *knowledge.Store
 	petAgent    *agent.Agent
 	smsWatcher  *sms.Watcher // guarded by mu
+	chatCancel   context.CancelFunc // cancels the current in-flight SendMessage; guarded by mu
 }
 
 // NewApp creates a new App instance.
@@ -293,6 +294,7 @@ func (a *App) SaveConfig(cfg *config.Config) error {
 	// Preserve fields that are managed independently (not via the settings form).
 	cfg.SMSWatcherEnabled = a.cfg.SMSWatcherEnabled
 	cfg.VoiceAutoSend = a.cfg.VoiceAutoSend
+	cfg.SoundsEnabled = a.cfg.SoundsEnabled
 	if err := a.configStore.Save(cfg); err != nil {
 		return err
 	}
@@ -518,17 +520,40 @@ func (a *App) MissingRequiredConfig() []string {
 
 // SendMessage sends a user message and streams response tokens as Wails events.
 // Events emitted: "chat:token" (string), "chat:done" (""), "chat:error" (string).
+// Any in-flight request is cancelled before starting the new one.
 func (a *App) SendMessage(userInput string) error {
+	// Cancel any previous in-flight request.
+	a.mu.Lock()
+	if a.chatCancel != nil {
+		a.chatCancel()
+		a.chatCancel = nil
+	}
+	chatCtx, cancel := context.WithCancel(a.ctx)
+	a.chatCancel = cancel
+	a.mu.Unlock()
+
 	a.mu.RLock()
 	ag := a.petAgent
 	a.mu.RUnlock()
 
 	if ag == nil {
+		a.mu.Lock()
+		a.chatCancel = nil
+		a.mu.Unlock()
+		cancel()
 		slog.Error("SendMessage: petAgent is nil", "input", userInput)
 		return fmt.Errorf("agent not initialized: complete settings first")
 	}
 	go func() {
-		ch := ag.Chat(a.ctx, userInput)
+		defer func() {
+			a.mu.Lock()
+			// Only clear chatCancel if it's still ours (a newer call may have replaced it).
+			if a.chatCancel != nil {
+				a.chatCancel = nil
+			}
+			a.mu.Unlock()
+		}()
+		ch := ag.Chat(chatCtx, userInput)
 		for result := range ch {
 			if result.Err != nil {
 				wailsruntime.EventsEmit(a.ctx, "chat:error", result.Err.Error())
@@ -915,6 +940,17 @@ func (a *App) IsSMSWatcherRunning() bool {
 	return a.smsWatcher != nil
 }
 
+// StopGeneration cancels the current in-flight chat stream.
+// The frontend is responsible for marking the interrupted messages as ghost bubbles.
+func (a *App) StopGeneration() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.chatCancel != nil {
+		a.chatCancel()
+		a.chatCancel = nil
+	}
+}
+
 // GetVoiceAutoSend returns whether voice messages are sent automatically
 // after the final STT result arrives.
 func (a *App) GetVoiceAutoSend() bool {
@@ -927,6 +963,21 @@ func (a *App) GetVoiceAutoSend() bool {
 func (a *App) SetVoiceAutoSend(enabled bool) error {
 	a.mu.Lock()
 	a.cfg.VoiceAutoSend = enabled
+	a.mu.Unlock()
+	return a.configStore.Save(a.cfg)
+}
+
+// GetSoundsEnabled returns whether chat sound effects are enabled.
+func (a *App) GetSoundsEnabled() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.cfg.SoundsEnabled
+}
+
+// SetSoundsEnabled sets the sounds enabled flag and persists it.
+func (a *App) SetSoundsEnabled(enabled bool) error {
+	a.mu.Lock()
+	a.cfg.SoundsEnabled = enabled
 	a.mu.Unlock()
 	return a.configStore.Save(a.cfg)
 }

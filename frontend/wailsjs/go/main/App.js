@@ -74,6 +74,10 @@ export function GetScreenSize() {
   return window['go']['main']['App']['GetScreenSize']();
 }
 
+export function GetSoundsEnabled() {
+  return window['go']['main']['App']['GetSoundsEnabled']();
+}
+
 export function GetToolPermissions() {
   return window['go']['main']['App']['GetToolPermissions']();
 }
@@ -170,6 +174,10 @@ export function SetCronJobEnabled(arg1, arg2) {
   return window['go']['main']['App']['SetCronJobEnabled'](arg1, arg2);
 }
 
+export function SetSoundsEnabled(arg1) {
+  return window['go']['main']['App']['SetSoundsEnabled'](arg1);
+}
+
 export function SetToolPermission(arg1, arg2) {
   return window['go']['main']['App']['SetToolPermission'](arg1, arg2);
 }
@@ -180,6 +188,10 @@ export function SetVoiceAutoSend(arg1) {
 
 export function StartSMSWatcher() {
   return window['go']['main']['App']['StartSMSWatcher']();
+}
+
+export function StopGeneration() {
+  return window['go']['main']['App']['StopGeneration']();
 }
 
 export function StopSMSWatcher() {

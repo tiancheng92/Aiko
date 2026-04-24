@@ -44,6 +44,8 @@ export function GetScreenList():Promise<Array<main.ScreenInfo>>;
 
 export function GetScreenSize():Promise<Array<number>>;
 
+export function GetSoundsEnabled():Promise<boolean>;
+
 export function GetToolPermissions():Promise<Array<tools.PermissionRow>>;
 
 export function GetVoiceAutoSend():Promise<boolean>;
@@ -92,11 +94,15 @@ export function SendMessage(arg1:string):Promise<void>;
 
 export function SetCronJobEnabled(arg1:number,arg2:boolean):Promise<void>;
 
+export function SetSoundsEnabled(arg1:boolean):Promise<void>;
+
 export function SetToolPermission(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetVoiceAutoSend(arg1:boolean):Promise<void>;
 
 export function StartSMSWatcher():Promise<void>;
+
+export function StopGeneration():Promise<void>;
 
 export function StopSMSWatcher():Promise<void>;
 

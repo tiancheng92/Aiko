@@ -21,6 +21,7 @@ type Config struct {
 	NudgeInterval  int      // 每隔多少轮触发一次 self-growth nudge，0 表示使用默认值 5
 	SMSWatcherEnabled bool   // 是否启用 SMS 短信监听（macOS 仅支持）
 	VoiceAutoSend      bool   // 语音识别完成后是否自动发送消息
+	SoundsEnabled       bool   // 是否启用聊天音效
 	SkillsDirs     []string // skills 目录列表，支持多个路径
 	PetSize        int // 宠物显示尺寸（像素），0 表示自动根据屏幕高度计算
 	ChatWidth      int // 聊天框宽度（像素），0 表示使用默认值
@@ -75,6 +76,7 @@ func (s *Store) Load() (*Config, error) {
 	cfg.ActiveProfileID = int64(parseInt(m["active_profile_id"], 0))
 	cfg.SMSWatcherEnabled = m["sms_watcher_enabled"] == "true"
 	cfg.VoiceAutoSend = m["voice_auto_send"] == "true"
+	cfg.SoundsEnabled = m["sounds_enabled"] == "true"
 	return cfg, nil
 }
 
@@ -102,6 +104,7 @@ func (s *Store) Save(cfg *Config) error {
 		"active_profile_id": strconv.FormatInt(cfg.ActiveProfileID, 10),
 		"sms_watcher_enabled": strconv.FormatBool(cfg.SMSWatcherEnabled),
 		"voice_auto_send": strconv.FormatBool(cfg.VoiceAutoSend),
+		"sounds_enabled": strconv.FormatBool(cfg.SoundsEnabled),
 	}
 	tx, err := s.db.Begin()
 	if err != nil {
