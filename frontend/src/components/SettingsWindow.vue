@@ -380,6 +380,22 @@ function openMCPForm() {
   showMCPForm.value = true
 }
 
+/** editMCPServer pre-fills the form with an existing server's data. */
+function editMCPServer(srv) {
+  mcpForm.value = {
+    id: srv.id,
+    name: srv.name,
+    transport: srv.transport,
+    command: srv.command || '',
+    args: Array.isArray(srv.args) ? srv.args.join(' ') : (srv.args || ''),
+    url: srv.url || '',
+    headers: srv.headers ? Object.entries(srv.headers).map(([k, v]) => `${k}: ${v}`).join('\n') : '',
+    enabled: srv.enabled,
+  }
+  mcpFormError.value = ''
+  showMCPForm.value = true
+}
+
 /** saveMCPServer adds or updates an MCP server. */
 async function saveMCPServer() {
   mcpFormError.value = ''
@@ -732,6 +748,7 @@ async function fetchLarkStatus() {
               <button class="btn-toggle" :class="{ active: srv.enabled }" @click="toggleMCPServer(srv)">
                 {{ srv.enabled ? '已启用' : '已禁用' }}
               </button>
+              <button class="btn-small" @click="editMCPServer(srv)">编辑</button>
               <button class="btn-danger-small" @click="deleteMCPServer(srv.id)">删除</button>
             </div>
           </div>

@@ -102,6 +102,8 @@ wails generate module  # 重新生成 Wails bindings
 `~/.aiko/`
 - `pet.db` — SQLite 数据库（settings、messages、knowledge_sources、cron_jobs、model_profiles）
 - `vectors/` — chromem-go 持久化向量数据存储
+- `USER.md` — 用户画像文档（由 `update_user_profile` 工具自动维护）
+- `auto-skills/` — Agent 自动沉淀的可复用技能（YAML 格式，由 `save_skill` 工具写入）
 
 ## 重要注意事项
 
@@ -110,12 +112,24 @@ wails generate module  # 重新生成 Wails bindings
 - **⚠️ 不要随意修改 hitTest 逻辑**，容易破坏点击穿透机制
 - `macos.go` 同时包含全局 Option 键监控：双击切换气泡，长按 ≥1s 触发语音录音（`startVoiceRecognition` / `stopVoiceRecognition`）
 - 语音识别使用 `AVAudioEngine` + `SFSpeechRecognizer`，结果通过 CGO exported callback 推送 Wails 事件
+- **macOS 系统集成首选 osascript**：Wails 的 `[NSApp run]` 占用主线程，任何需要主线程的 CGO API（AXUIElement、NSWorkspace 等）都不安全；改用 `exec.Command("osascript", "-e", ...)` 子进程调用 AppleScript，无线程限制
 
 ### 工具系统
-- 修改 `internal/tools/registry.go` 的 `All()` 后需同步更新 `AllEino()`（返回 eino Tool 接口列表）
-- 新工具需要在 `All()` 和 `AllEino()` 两处注册
+- 新增内置工具只需在 `registry.go` 的 `All()` 中注册；`AllEino()` 会自动遍历 `All()` 并包装，**无需单独修改 `AllEino()`**
+- 有运行时依赖（知识库、调度器、长期记忆等）的工具在 `AllContextual()` 中注册
+- macOS 专属工具用 `//go:build darwin` / `//go:build !darwin` 分平台实现（non-darwin 提供 stub）
+- **osascript 模式**：所有 macOS 系统集成（浏览器 URL、提醒事项等）使用 `exec.Command("osascript", "-e", script)` 子进程方式，**不要使用 CGO AXUIElement / AppKit API**，原因是 Wails 已占用主线程，CGO 的 `dispatch_sync(main_queue)` 会死锁
 
-### 并发安全
+### MCP 热重载
+- `app.go` 的 `AddMCPServer`、`UpdateMCPServer`、`DeleteMCPServer` 在 DB 操作完成后会立即调用 `initLLMComponents` 重建 Agent，使新配置立即生效，无需重启应用
+- 前端设置界面支持编辑已有 MCP 服务器（`editMCPServer` 函数预填充表单，`saveMCPServer` 根据是否有 `id` 决定调 Add 还是 Update）
+
+### 自我成长系统
+- `NudgeInterval`（配置项）控制 Agent 每隔 N 轮对话后自动触发沉淀提示
+- 相关工具：`save_memory`（保存长期记忆事实）、`update_user_profile`（更新 `~/.aiko/USER.md` 用户画像）、`save_skill`（保存可复用技能到 `~/.aiko/auto-skills/`）
+- 这三个工具在 `AllContextual()` 中注册，需要运行时依赖注入
+
+
 - `app.go` 的 `initLLMComponents` 可能并发调用（SaveConfig 触发配置变更时）
 - 所有涉及 `a.petAgent`、`a.longMem`、`a.knowledgeSt` 字段的更新必须在 `a.mu.Lock()` 保护下完成
 
@@ -133,7 +147,9 @@ wails generate module  # 重新生成 Wails bindings
 5. **毛玻璃 UI 设计** - 现代化深色主题 + CSS backdrop-filter 效果
 6. **多模态内容渲染** - 支持 Markdown、LaTeX、代码高亮、表格等
 7. **RAG 知识库** - chromem-go 向量数据库 + 文档导入系统
-8. **MCP 协议支持** - 可扩展第三方工具生态
+8. **MCP 协议支持** - 可扩展第三方工具生态，支持热重载
+9. **osascript 系统集成** - 无 CGO 的 macOS 系统集成模式（浏览器 URL、提醒事项等）
+10. **自我成长系统** - 跨会话用户画像、记忆事实、可复用技能自动沉淀
 
 ### 借鉴的优秀项目
 - **架构设计** 借鉴了 [Wails Community Examples](https://github.com/wailsapp/awesome-wails)
@@ -151,8 +167,11 @@ wails generate module  # 重新生成 Wails bindings
 - ✅ RAG 知识库和文档导入
 - ✅ 定时任务和工具权限系统
 - ✅ 飞书 lark-cli 集成
-- ✅ MCP 协议工具扩展
+- ✅ MCP 协议工具扩展（添加/编辑/删除后热重载）
 - ✅ 语音输入（长按 Option，SFSpeechRecognizer STT）
+- ✅ 浏览器感知（osascript 获取当前 URL + 页面内容）
+- ✅ macOS 提醒事项读取与标记完成
+- ✅ 自我成长（用户画像、长期记忆、技能沉淀）
 - ⚠️ 仅支持 macOS（使用私有 API，不兼容 App Store）
 - ❌ Windows/Linux 支持（开发中）
 

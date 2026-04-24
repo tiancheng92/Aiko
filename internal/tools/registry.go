@@ -55,6 +55,9 @@ func All() []Tool {
 		&GetWeatherTool{},
 		&WebSearchTool{},
 		&WebFetchTool{},
+		&GetBrowserURLTool{},
+		&GetRemindersTool{},
+		&CompleteReminderTool{},
 	}
 }
 

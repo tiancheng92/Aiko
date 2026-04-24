@@ -37,10 +37,9 @@ static ToolsLocationResult gToolsLocResult;
         self.mgr = [[CLLocationManager alloc] init];
         self.mgr.delegate = self;
         self.mgr.desiredAccuracy = kCLLocationAccuracyBest;
-        if (@available(macOS 10.15, *)) {
-            [self.mgr requestWhenInUseAuthorization];
-        }
-        [self.mgr startUpdatingLocation];
+        // requestWhenInUseAuthorization triggers locationManagerDidChangeAuthorization:
+        // which will call startUpdatingLocation once permission is confirmed.
+        [self.mgr requestWhenInUseAuthorization];
     });
     long timedOut = dispatch_semaphore_wait(
         self.sem,
@@ -71,8 +70,10 @@ static ToolsLocationResult gToolsLocResult;
     dispatch_semaphore_signal(self.sem);
 }
 
-- (void)locationManager:(CLLocationManager *)manager
-    didChangeAuthorizationStatus:(CLAuthorizationStatus)status {
+// locationManagerDidChangeAuthorization: replaces the deprecated
+// didChangeAuthorizationStatus: (deprecated macOS 14 / iOS 14).
+- (void)locationManagerDidChangeAuthorization:(CLLocationManager *)manager {
+    CLAuthorizationStatus status = manager.authorizationStatus;
     if (status == kCLAuthorizationStatusDenied ||
         status == kCLAuthorizationStatusRestricted) {
         gToolsLocResult.status = 1;
@@ -91,49 +92,6 @@ static ToolsLocationResult getToolsCoreLocation() {
     return [h fetchWithTimeout:10.0];
 }
 
-// ---- Reverse geocode result ------------------------------------------------
-
-typedef struct {
-    char address[512];
-    int  status; // 0=success 2=error
-    char errMsg[256];
-} ToolsGeocoderResult;
-
-static ToolsGeocoderResult gToolsGeoResult;
-
-static ToolsGeocoderResult reverseGeocode(double lat, double lon) {
-    memset(&gToolsGeoResult, 0, sizeof(gToolsGeoResult));
-    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
-
-    CLLocation *loc = [[CLLocation alloc] initWithLatitude:lat longitude:lon];
-    CLGeocoder *geo = [[CLGeocoder alloc] init];
-
-    [geo reverseGeocodeLocation:loc completionHandler:^(NSArray<CLPlacemark *> *placemarks, NSError *error) {
-        if (error || placemarks.count == 0) {
-            gToolsGeoResult.status = 2;
-            const char *msg = error ? error.localizedDescription.UTF8String : "no placemark";
-            strncpy(gToolsGeoResult.errMsg, msg ? msg : "unknown", 255);
-        } else {
-            CLPlacemark *p = placemarks.firstObject;
-            // Build a human-readable address from components.
-            NSMutableArray *parts = [NSMutableArray array];
-            if (p.country)            [parts addObject:p.country];
-            if (p.administrativeArea) [parts addObject:p.administrativeArea];
-            if (p.locality)           [parts addObject:p.locality];
-            if (p.subLocality)        [parts addObject:p.subLocality];
-            if (p.thoroughfare)       [parts addObject:p.thoroughfare];
-            if (p.subThoroughfare)    [parts addObject:p.subThoroughfare];
-            NSString *addr = [parts componentsJoinedByString:@" "];
-            strncpy(gToolsGeoResult.address, addr.UTF8String ? addr.UTF8String : "", 511);
-            gToolsGeoResult.status = 0;
-        }
-        dispatch_semaphore_signal(sem);
-    }];
-
-    dispatch_semaphore_wait(sem,
-        dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)));
-    return gToolsGeoResult;
-}
 */
 import "C"
 import (
@@ -168,14 +126,4 @@ func clErrorMessage(raw string) string {
 	default:
 		return raw
 	}
-}
-
-// reverseGeocode converts GPS coordinates to a human-readable address via CLGeocoder.
-// Returns empty string if geocoding fails (non-fatal).
-func reverseGeocode(lat, lon float64) string {
-	r := C.reverseGeocode(C.double(lat), C.double(lon))
-	if r.status != 0 {
-		return ""
-	}
-	return C.GoString(&r.address[0])
 }

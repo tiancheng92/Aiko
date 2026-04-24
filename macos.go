@@ -69,7 +69,33 @@ static void aikoUncaughtExceptionHandler(NSException *ex) {
     aikoLogException(@"uncaught", ex);
 }
 
-// registerGlobalHotkey installs a global NSEvent monitor for double-tap Option.
+// Static globals shared with the CGEventTap C callback (blocks cannot be used
+// directly in C function pointers).
+static volatile BOOL gTapOptDown   = NO;  // mirrors optWasDown for the tap callback
+static volatile BOOL gTapComboSeen = NO;  // set by tap when a key is pressed while opt is held
+static dispatch_block_t gTapLongPressBlock = nil; // reference so the tap can cancel it
+static CFMachPortRef gEventTapPort = NULL; // kept for re-enable on timeout
+
+// aikoKeyTap is the CGEventTap callback. It runs on the main run-loop and sees
+// ALL key events (including those consumed by the system, e.g. opt+space for
+// input-method switching or Spotlight) before NSEvent global monitors do.
+static CGEventRef aikoKeyTap(CGEventTapProxy proxy, CGEventType type,
+                              CGEventRef event, void *info) {
+    if (type == kCGEventTapDisabledByTimeout || type == kCGEventTapDisabledByUserInput) {
+        if (gEventTapPort) CGEventTapEnable(gEventTapPort, true);
+        return event;
+    }
+    if (type == kCGEventKeyDown && gTapOptDown && !gTapComboSeen) {
+        gTapComboSeen = YES;
+        if (gTapLongPressBlock) {
+            dispatch_block_cancel(gTapLongPressBlock);
+            gTapLongPressBlock = nil;
+        }
+    }
+    return event;
+}
+
+
 // Requires Accessibility permission; prompts the user if not yet granted.
 // On match, writes a single byte to gHotkeyPipeFd — no CGO call-back needed.
 static void registerGlobalHotkey() {
@@ -88,6 +114,47 @@ static void registerGlobalHotkey() {
     const NSTimeInterval kDoubleTapInterval = 0.5;
     __block BOOL gLongPressTriggered = NO;
     __block dispatch_block_t gLongPressBlock = nil;
+    __block BOOL optComboDetected = NO; // set when a non-opt key is pressed while opt is held
+
+    // cancelLongPress cancels the pending long-press timer and, if recording already
+    // started, sends the stop signal. Call this whenever a combo is detected.
+    void (^cancelLongPress)(void) = ^{
+        if (gLongPressBlock) {
+            dispatch_block_cancel(gLongPressBlock);
+            gLongPressBlock = nil;
+            gTapLongPressBlock = nil;
+        }
+        if (gLongPressTriggered) {
+            gLongPressTriggered = NO;
+            if (gHotkeyPipeFd >= 0) {
+                char b = 3;
+                write(gHotkeyPipeFd, &b, 1);
+            }
+        }
+        lastOptUp = 0;
+        justTriggered = NO;
+    };
+
+    // Install a CGEventTap to catch keyDown events at the HID level — this fires
+    // even for system-consumed keys (opt+space, opt+tab, etc.) that NSEvent
+    // global monitors never see. The tap callback sets gTapComboSeen which the
+    // flagsChanged handler reads on the main queue.
+    CGEventMask tapMask = CGEventMaskBit(kCGEventKeyDown);
+    CFMachPortRef tap = CGEventTapCreate(kCGSessionEventTap,
+                                         kCGHeadInsertEventTap,
+                                         kCGEventTapOptionDefault,
+                                         tapMask,
+                                         aikoKeyTap,
+                                         NULL);
+    if (tap) {
+        gEventTapPort = tap;
+        CFRunLoopSourceRef src = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0);
+        CFRunLoopAddSource(CFRunLoopGetMain(), src, kCFRunLoopCommonModes);
+        CGEventTapEnable(tap, true);
+        CFRelease(src);
+    } else {
+        NSLog(@"[Aiko] CGEventTap creation failed (Accessibility not granted?)");
+    }
 
     void (^handler)(NSEvent *) = ^(NSEvent *evt) {
         @try {
@@ -102,25 +169,34 @@ static void registerGlobalHotkey() {
         BOOL optUp   = !optDown && optWasDown && !(std & ~NSEventModifierFlagOption);
 
         if (optUp) {
-            // Cancel pending long-press timer (released before 1s)
-            if (gLongPressBlock) {
-                dispatch_block_cancel(gLongPressBlock);
-                gLongPressBlock = nil;
-            }
-            if (gLongPressTriggered) {
+            if (gTapComboSeen) {
+                // This opt release is part of a combo — ignore entirely.
+                gTapComboSeen = NO;
+                optComboDetected = NO;
+            } else if (gLongPressTriggered) {
                 // Long-press release → stop recording
                 gLongPressTriggered = NO;
                 if (gHotkeyPipeFd >= 0) {
                     char b = 3;
                     write(gHotkeyPipeFd, &b, 1);
                 }
-            } else if (justTriggered) {
-                justTriggered = NO;
-            } else if (lastOptUp == 0) {
-                lastOptUp = [NSDate timeIntervalSinceReferenceDate];
+            } else {
+                // Cancel pending long-press timer (released before 1s)
+                if (gLongPressBlock) {
+                    dispatch_block_cancel(gLongPressBlock);
+                    gLongPressBlock = nil;
+                }
+                if (justTriggered) {
+                    justTriggered = NO;
+                } else if (lastOptUp == 0) {
+                    lastOptUp = [NSDate timeIntervalSinceReferenceDate];
+                }
             }
         } else if (optDown && !optWasDown) {
-            // Start long-press timer (1 second)
+            // Fresh Option press — reset combo flags and start long-press timer.
+            optComboDetected = NO;
+            gTapComboSeen = NO;
+            gTapOptDown = YES;
             dispatch_block_t blk = dispatch_block_create(0, ^{
                 @try {
                     if (!gLongPressTriggered) {
@@ -137,6 +213,7 @@ static void registerGlobalHotkey() {
                 } @catch (...) {}
             });
             gLongPressBlock = blk;
+            gTapLongPressBlock = blk;
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), blk);
 
@@ -158,11 +235,13 @@ static void registerGlobalHotkey() {
                 lastOptUp = 0;
             }
         } else if (!optDown && !optUp) {
-            // Another modifier involved — reset.
-            lastOptUp = 0;
-            justTriggered = NO;
+            // Another modifier key involved (e.g. opt+cmd) — cancel and reset.
+            cancelLongPress();
+            optComboDetected = YES;
+            gTapComboSeen = YES;
         }
         optWasDown = optDown;
+        gTapOptDown = optDown;
         } @catch (NSException *ex) {
             aikoLogException(@"hotkeyHandler", ex);
         } @catch (...) {}

@@ -18,10 +18,13 @@
 - 🤖 **智能对话**：基于 eino ReAct Agent，支持多轮对话和工具调用
 - 🎭 **Live2D 宠物**：可爱的动画角色，支持多种模型和表情状态
 - 🎙️ **语音输入**：长按 Option 键触发，macOS 原生 SFSpeechRecognizer 实时语音转文字
-- 🛠️ **内置工具**：系统信息、网络状态、文件操作等实用工具
+- 🧠 **自我成长**：跨会话积累用户画像、记忆事实、自动沉淀可复用技能
+- 🛠️ **内置工具**：系统信息、网络状态、天气、位置、网页抓取等实用工具
+- 🌐 **浏览器感知**：通过 osascript 读取当前浏览器 URL 并抓取页面内容
+- 📅 **系统集成**：读取 macOS 提醒事项、标记完成，更多系统 App 集成进行中
 - 📚 **知识库**：RAG 支持，可导入文档进行问答
 - ⏰ **定时任务**：支持 Cron 表达式的计划任务
-- 🔧 **MCP 协议**：兼容 Model Context Protocol，可扩展第三方工具
+- 🔧 **MCP 协议**：兼容 Model Context Protocol，可扩展第三方工具，添加后热重载无需重启
 - 🪶 **飞书集成**：通过 lark-cli 操作飞书（消息、日历、文档等）
 - 🎨 **毛玻璃 UI**：现代化深色主题界面，录音时呈现 Apple Intelligence 风格彩虹光边框
 - 🖱️ **点击穿透**：宠物不遮挡桌面操作，智能响应交互
@@ -75,6 +78,7 @@
 - Cocoa NSView - 原生窗口控制
 - Core Graphics - 像素级鼠标事件处理
 - AVAudioEngine + SFSpeechRecognizer - 实时语音识别
+- osascript - 浏览器 URL 读取、提醒事项读写等系统 App 集成
 
 ## 📋 兼容性
 
@@ -151,7 +155,9 @@ wails build
 3. **工具权限**: 启用/禁用内置工具
 4. **知识库**: 导入文档建立 RAG 知识库
 5. **定时任务**: 创建 Cron 计划任务
-6. **飞书集成**: 配置 lark-cli 路径和认证
+6. **MCP 服务器**: 接入外部 MCP 工具（添加/编辑/删除后热重载）
+7. **飞书集成**: 配置 lark-cli 路径和认证
+8. **自我成长**: 配置 Nudge 间隔（每隔 N 轮提示 Agent 沉淀知识）
 
 ### 语音输入
 
@@ -173,15 +179,16 @@ wails build
 ```
 ├── main.go                 # 应用入口
 ├── app.go                  # Wails 绑定方法
-├── macos.go               # macOS 平台特定代码
+├── macos.go               # macOS 平台特定代码（点击穿透、语音识别）
 ├── internal/
 │   ├── agent/             # eino ReAct Agent
-│   ├── tools/             # 内置工具实现
-│   ├── memory/            # 短期/长期记忆
+│   ├── tools/             # 内置工具实现（含 osascript 系统集成）
+│   ├── skill/             # YAML 自定义技能
+│   ├── memory/            # 短期(SQLite) / 长期(chromem-go) 记忆
 │   ├── knowledge/         # RAG 知识库
 │   ├── config/            # 配置管理
-│   ├── db/                # SQLite 数据库
-│   ├── llm/               # LLM 抽象层
+│   ├── db/                # SQLite Schema 迁移
+│   ├── llm/               # LLM / Embedder 抽象层
 │   ├── scheduler/         # Cron 任务调度
 │   └── mcp/               # MCP 协议实现
 ├── frontend/
@@ -208,10 +215,10 @@ wails build
 
 ### 添加新工具
 
-1. 在 `internal/tools/` 创建新工具文件
+1. 在 `internal/tools/` 创建新工具文件（macOS 专属工具使用 `_darwin.go` / `_other.go` 分平台）
 2. 实现 `Tool` 接口：`Name()`, `Permission()`, `Info()`, `InvokableRun()`
-3. 在 `internal/tools/registry.go` 的 `All()` 中注册
-4. 同步更新 `AllEino()` 返回 eino 接口包装
+3. 在 `internal/tools/registry.go` 的 `All()` 中注册（`AllEino()` 会自动包装，无需单独修改）
+4. macOS 系统集成优先使用 `osascript` 子进程方式，避免 CGO 主线程冲突
 
 ### 自定义 Live2D 模型
 
