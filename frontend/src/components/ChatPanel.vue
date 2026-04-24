@@ -15,6 +15,9 @@ import json from 'highlight.js/lib/languages/json'
 import css from 'highlight.js/lib/languages/css'
 import xml from 'highlight.js/lib/languages/xml'
 import 'highlight.js/styles/github-dark.css'
+import { useSounds } from '../composables/useSounds'
+import { useTypingScheduler } from '../composables/useTypingScheduler'
+import { GetSoundsEnabled } from '../../wailsjs/go/main/App'
 
 hljs.registerLanguage('javascript', javascript)
 hljs.registerLanguage('typescript', typescript)
@@ -93,6 +96,29 @@ const isRecording = ref(false)
 const voiceHint = ref('')
 const voiceAutoSend = ref(false)
 const isStreaming = ref(false)
+const { playSend, playReceive, playError } = useSounds()
+let soundsEnabled = false
+
+/** applyToken appends a token to the last streaming assistant message. */
+function applyToken(token) {
+  // Remove thinking placeholder on first real token.
+  const thinkIdx = messages.value.findLastIndex(m => m.thinking)
+  if (thinkIdx >= 0) messages.value.splice(thinkIdx, 1)
+
+  const idx = messages.value.length - 1
+  const last = messages.value[idx]
+  if (last && last.role === 'assistant' && last.streaming) {
+    messages.value[idx] = { ...last, content: last.content + token }
+  } else {
+    messages.value.push({ role: 'assistant', content: token, streaming: true })
+    EventsEmit('pet:state:change', 'speaking')
+  }
+  scrollToBottom()
+}
+
+const typingScheduler = useTypingScheduler(applyToken)
+
+let firstTokenThisTurn = true
 
 /** formatTime formats a datetime string or Date to YYYY-MM-DD HH:mm:ss. */
 function formatTime(ts) {
@@ -137,22 +163,15 @@ onMounted(async () => {
   })
 
   offToken = EventsOn('chat:token', (token) => {
-    // Remove thinking placeholder on first real token.
-    const thinkIdx = messages.value.findLastIndex(m => m.thinking)
-    if (thinkIdx >= 0) messages.value.splice(thinkIdx, 1)
-
-    const idx = messages.value.length - 1
-    const last = messages.value[idx]
-    if (last && last.role === 'assistant' && last.streaming) {
-      messages.value[idx] = { ...last, content: last.content + token }
-    } else {
-      messages.value.push({ role: 'assistant', content: token, streaming: true })
-      EventsEmit('pet:state:change', 'speaking')
+    if (firstTokenThisTurn) {
+      firstTokenThisTurn = false
+      if (soundsEnabled) playReceive()
     }
-    scrollToBottom()
+    typingScheduler.enqueue(token)
   })
 
   offDone = EventsOn('chat:done', () => {
+    typingScheduler.flush()
     const idx = messages.value.length - 1
     if (idx >= 0) messages.value[idx] = { ...messages.value[idx], streaming: false, time: new Date() }
     loading.value = false
@@ -161,15 +180,18 @@ onMounted(async () => {
   })
 
   offError = EventsOn('chat:error', (err) => {
+    typingScheduler.clear()
     const thinkIdx = messages.value.findLastIndex(m => m.thinking)
     if (thinkIdx >= 0) messages.value.splice(thinkIdx, 1)
     messages.value.push({ role: 'system', content: '错误: ' + err })
     loading.value = false
     isStreaming.value = false
+    if (soundsEnabled) playError()
     EventsEmit('pet:state:change', 'error')
   })
 
   try { voiceAutoSend.value = await GetVoiceAutoSend() } catch {}
+  try { soundsEnabled = await GetSoundsEnabled() } catch {}
 
   EventsOn('voice:start', () => {
     isRecording.value = true
@@ -253,6 +275,8 @@ async function send() {
   input.value = ''
   loading.value = true
   isStreaming.value = true
+  firstTokenThisTurn = true
+  if (soundsEnabled) playSend()
   messages.value.push({ role: 'user', content: text, time: new Date() })
   messages.value.push({ role: 'assistant', content: '', streaming: true, thinking: true })
   scrollToBottom()
@@ -274,6 +298,7 @@ async function send() {
 async function stopGeneration() {
   try {
     await StopGeneration()
+    typingScheduler.clear()
   } catch (e) {
     console.warn('StopGeneration failed:', e)
   }
