@@ -12,6 +12,7 @@ export namespace config {
 	    ShortTermLimit: number;
 	    NudgeInterval: number;
 	    SMSWatcherEnabled: boolean;
+	    VoiceAutoSend: boolean;
 	    SkillsDirs: string[];
 	    PetSize: number;
 	    ChatWidth: number;
@@ -35,6 +36,7 @@ export namespace config {
 	        this.ShortTermLimit = source["ShortTermLimit"];
 	        this.NudgeInterval = source["NudgeInterval"];
 	        this.SMSWatcherEnabled = source["SMSWatcherEnabled"];
+	        this.VoiceAutoSend = source["VoiceAutoSend"];
 	        this.SkillsDirs = source["SkillsDirs"];
 	        this.PetSize = source["PetSize"];
 	        this.ChatWidth = source["ChatWidth"];
