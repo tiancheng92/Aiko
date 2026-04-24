@@ -18,6 +18,7 @@ type Config struct {
 	EmbeddingDim   int
 	SystemPrompt   string
 	ShortTermLimit int
+	NudgeInterval  int      // 每隔多少轮触发一次 self-growth nudge，0 表示使用默认值 5
 	SkillsDirs     []string // skills 目录列表，支持多个路径
 	PetSize        int // 宠物显示尺寸（像素），0 表示自动根据屏幕高度计算
 	ChatWidth      int // 聊天框宽度（像素），0 表示使用默认值
@@ -62,6 +63,10 @@ func (s *Store) Load() (*Config, error) {
 	}
 	cfg.EmbeddingDim = parseInt(m["embedding_dim"], 1536)
 	cfg.ShortTermLimit = parseInt(m["short_term_limit"], 30)
+	cfg.NudgeInterval = parseInt(m["nudge_interval"], 5)
+	if cfg.NudgeInterval <= 0 {
+		cfg.NudgeInterval = 5
+	}
 	cfg.PetSize = parseInt(m["pet_size"], 0)
 	cfg.ChatWidth = parseInt(m["chat_width"], 0)
 	cfg.ChatHeight = parseInt(m["chat_height"], 0)
@@ -84,6 +89,7 @@ func (s *Store) Save(cfg *Config) error {
 		"embedding_dim":     strconv.Itoa(cfg.EmbeddingDim),
 		"system_prompt":     cfg.SystemPrompt,
 		"short_term_limit":  strconv.Itoa(cfg.ShortTermLimit),
+		"nudge_interval":    strconv.Itoa(cfg.NudgeInterval),
 		"skills_dirs":       joinLines(cfg.SkillsDirs),
 		"live2d_model":      cfg.Live2DModel,
 		"pet_size":          strconv.Itoa(cfg.PetSize),
