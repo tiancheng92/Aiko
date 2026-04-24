@@ -9,6 +9,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"aiko/internal/knowledge"
+	"aiko/internal/memory"
 	"aiko/internal/scheduler"
 )
 
@@ -72,10 +73,15 @@ func AllContextual(
 	permStore *PermissionStore,
 	knowledgeSt *knowledge.Store,
 	sched *scheduler.Scheduler,
+	longMem *memory.LongStore,
+	dataDir string,
 ) []tool.BaseTool {
 	contextTools := []Tool{
 		&SearchKnowledgeTool{KnowledgeSt: knowledgeSt},
 		&CronTool{Scheduler: sched},
+		&SaveMemoryTool{LongMem: longMem},
+		&UpdateUserProfileTool{DataDir: dataDir},
+		&SaveSkillTool{DataDir: dataDir},
 	}
 	result := make([]tool.BaseTool, len(contextTools))
 	for i, t := range contextTools {

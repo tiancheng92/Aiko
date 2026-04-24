@@ -10,6 +10,7 @@ export namespace config {
 	    EmbeddingDim: number;
 	    SystemPrompt: string;
 	    ShortTermLimit: number;
+	    NudgeInterval: number;
 	    SkillsDirs: string[];
 	    PetSize: number;
 	    ChatWidth: number;
@@ -31,6 +32,7 @@ export namespace config {
 	        this.EmbeddingDim = source["EmbeddingDim"];
 	        this.SystemPrompt = source["SystemPrompt"];
 	        this.ShortTermLimit = source["ShortTermLimit"];
+	        this.NudgeInterval = source["NudgeInterval"];
 	        this.SkillsDirs = source["SkillsDirs"];
 	        this.PetSize = source["PetSize"];
 	        this.ChatWidth = source["ChatWidth"];
