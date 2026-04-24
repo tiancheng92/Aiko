@@ -111,6 +111,9 @@ func (a *App) startup(ctx context.Context) {
 	for _, t := range []internaltools.Tool{
 		&internaltools.SearchKnowledgeTool{},
 		&internaltools.CronTool{},
+		&internaltools.SaveMemoryTool{},
+		&internaltools.UpdateUserProfileTool{},
+		&internaltools.SaveSkillTool{},
 	} {
 		_ = a.permStore.EnsureRow(toolsCtx, t)
 	}
@@ -154,6 +157,12 @@ func (a *App) startup(ctx context.Context) {
 // initLLMComponents initializes chat model, embedder, memory stores, skills, and agent.
 // Callers must NOT hold mu when calling this function.
 func (a *App) initLLMComponents(ctx context.Context) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("get home dir: %w", err)
+	}
+	dataDir := filepath.Join(home, ".aiko")
+
 	chatModel, err := llm.NewChatModel(ctx, a.cfg)
 	if err != nil {
 		return fmt.Errorf("new chat model: %w", err)
@@ -229,13 +238,15 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		slog.Error("scheduler start failed", "err", err)
 	}
 
-	contextTools := internaltools.AllContextual(a.permStore, knowledgeSt, sched)
+	contextTools := internaltools.AllContextual(a.permStore, knowledgeSt, sched, longMem, dataDir)
 	mcpTools := mcp.LoadTools(ctx, a.mcpStore)
 	allTools := append(builtinTools, contextTools...)
 	allTools = append(allTools, mcpTools...)
 
 	// Build skill middleware from configured directories.
-	skillMW, err := skill.NewMiddleware(ctx, a.cfg.SkillsDirs)
+	autoSkillsDir := filepath.Join(dataDir, "auto-skills")
+	skillDirs := append(append([]string{}, a.cfg.SkillsDirs...), autoSkillsDir)
+	skillMW, err := skill.NewMiddleware(ctx, skillDirs)
 	if err != nil {
 		return fmt.Errorf("load skills: %w", err)
 	}
@@ -247,7 +258,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		middleware.ErrorRecovery(),
 	)
 
-	newAgent, err := agent.New(ctx, chatModel, a.shortMem, longMem, allTools, a.cfg, mw, skillMW)
+	newAgent, err := agent.New(ctx, chatModel, a.shortMem, longMem, allTools, a.cfg, mw, skillMW, dataDir)
 	if err != nil {
 		return fmt.Errorf("new agent: %w", err)
 	}
