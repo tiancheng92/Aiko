@@ -58,6 +58,8 @@ func All() []Tool {
 		&GetBrowserURLTool{},
 		&GetRemindersTool{},
 		&CompleteReminderTool{},
+		&GetMailsTool{},
+		&GetMailContentTool{},
 	}
 }
 
