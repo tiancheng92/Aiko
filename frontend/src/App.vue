@@ -167,19 +167,34 @@ function openSettings() {
   />
 
   <!-- Voice recording visual effects: Siri border + wave rings -->
-  <div class="siri-border" :class="{ active: voiceActive }" />
+  <div class="siri-border" :class="{ active: voiceActive }">
+    <div class="siri-border-inner" />
+  </div>
   <div v-if="voiceActive" class="voice-wave">
     <div
-      v-for="i in 4"
+      v-for="i in 3"
       :key="i"
       class="wave-ring"
-      :style="{ animationDelay: `${(i - 1) * 0.3}s` }"
+      :style="{ animationDelay: `${(i - 1) * 0.55}s` }"
     />
+    <div class="wave-core" />
   </div>
 </template>
 
 <style scoped>
-/* ── Siri-style screen border glow ─────────────────────────── */
+/* ── Apple Intelligence Siri border ────────────────────────── */
+/*
+ * Technique: rotating conic-gradient mask + blur bloom.
+ * The outer div clips to screen edges; the inner pseudo creates
+ * the rotating gradient. A second blurred copy gives the glow bloom.
+ */
+
+@property --siri-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
 .siri-border {
   position: fixed;
   inset: 0;
@@ -187,20 +202,81 @@ function openSettings() {
   z-index: 9998;
   border-radius: 12px;
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.5s ease;
 }
 
 .siri-border.active {
   opacity: 1;
-  animation: siri-border-flow 3s linear infinite;
 }
 
-@keyframes siri-border-flow {
-  0%   { box-shadow: 0 0 20px 4px #3b82f6, inset 0 0 0 3px #3b82f6; }
-  25%  { box-shadow: 0 0 20px 4px #8b5cf6, inset 0 0 0 3px #8b5cf6; }
-  50%  { box-shadow: 0 0 20px 4px #ec4899, inset 0 0 0 3px #ec4899; }
-  75%  { box-shadow: 0 0 20px 4px #f97316, inset 0 0 0 3px #f97316; }
-  100% { box-shadow: 0 0 20px 4px #3b82f6, inset 0 0 0 3px #3b82f6; }
+/* Sharp border layer */
+.siri-border.active::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  padding: 3px;
+  background: conic-gradient(
+    from var(--siri-angle),
+    transparent 0deg,
+    transparent 60deg,
+    #bf5af2 80deg,
+    #ffffff 100deg,
+    #0a84ff 130deg,
+    #32d74b 155deg,
+    transparent 180deg,
+    transparent 230deg,
+    #ff375f 255deg,
+    #ff9f0a 275deg,
+    transparent 310deg,
+    transparent 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: siri-rotate 3s linear infinite;
+}
+
+/* Blurred glow bloom layer */
+.siri-border.active::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 14px;
+  padding: 6px;
+  background: conic-gradient(
+    from var(--siri-angle),
+    transparent 0deg,
+    transparent 60deg,
+    #bf5af2 80deg,
+    #ffffff 100deg,
+    #0a84ff 130deg,
+    #32d74b 155deg,
+    transparent 180deg,
+    transparent 230deg,
+    #ff375f 255deg,
+    #ff9f0a 275deg,
+    transparent 310deg,
+    transparent 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  filter: blur(8px);
+  opacity: 0.7;
+  animation: siri-rotate 3s linear infinite;
+}
+
+.siri-border-inner {
+  display: none;
+}
+
+@keyframes siri-rotate {
+  to { --siri-angle: 360deg; }
 }
 
 /* ── Centered circular wave rings ──────────────────────────── */
@@ -214,17 +290,38 @@ function openSettings() {
   z-index: 9997;
 }
 
-.wave-ring {
+/* Core glowing dot */
+.wave-core {
   position: absolute;
-  width: 80px;
-  height: 80px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  border: 2px solid #8b5cf6;
-  animation: wave-pulse 1.6s ease-out infinite;
+  background: radial-gradient(circle, #ffffff 0%, #0a84ff 60%, transparent 100%);
+  box-shadow: 0 0 12px 4px rgba(10, 132, 255, 0.8),
+              0 0 24px 8px rgba(191, 90, 242, 0.4);
+  animation: core-pulse 1.6s ease-in-out infinite;
 }
 
-@keyframes wave-pulse {
-  0%   { transform: scale(1);   opacity: 0.6; }
-  100% { transform: scale(3);   opacity: 0; }
+@keyframes core-pulse {
+  0%, 100% { transform: scale(1);   opacity: 1; }
+  50%       { transform: scale(1.3); opacity: 0.8; }
+}
+
+/* Expanding rings */
+.wave-ring {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(10, 132, 255, 0.6);
+  animation: wave-expand 1.65s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+}
+
+.wave-ring:nth-child(2) { border-color: rgba(191, 90, 242, 0.5); }
+.wave-ring:nth-child(3) { border-color: rgba(255, 55, 95, 0.4); }
+
+@keyframes wave-expand {
+  0%   { transform: scale(1);   opacity: 0.7; }
+  100% { transform: scale(4.5); opacity: 0; }
 }
 </style>
