@@ -318,15 +318,34 @@ static void moveWindowToScreen(int n) {
 // hasWindow returns 1 if gWindow is initialized.
 static int hasWindow() { return gWindow != nil ? 1 : 0; }
 
+// aikoTrace writes a diagnostic step marker to /tmp/aiko_trace.log.
+static void aikoTrace(const char *step) {
+    NSString *msg = [NSString stringWithFormat:@"[%@] TRACE: %s\n",
+        [NSDate date], step];
+    NSString *path = @"/tmp/aiko_trace.log";
+    NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:path];
+    if (!fh) {
+        [@"" writeToFile:path atomically:NO encoding:NSUTF8StringEncoding error:nil];
+        fh = [NSFileHandle fileHandleForWritingAtPath:path];
+    }
+    [fh seekToEndOfFile];
+    [fh writeData:[msg dataUsingEncoding:NSUTF8StringEncoding]];
+    [fh closeFile];
+    NSLog(@"%@", msg);
+}
+
 // startVoiceRecognition requests permissions and starts streaming STT.
 // Results are written to the voice pipe via sendVoiceText().
 // All ObjC exceptions are caught and forwarded as ERROR: messages.
 static void startVoiceRecognition() {
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
+        aikoTrace("startVoiceRecognition: enter");
         // Check microphone permission (AVCaptureDevice works on all supported macOS versions)
         AVAuthorizationStatus micStatus = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
+        aikoTrace("startVoiceRecognition: got micStatus");
         if (micStatus == AVAuthorizationStatusNotDetermined) {
+            aikoTrace("startVoiceRecognition: requesting mic permission");
             [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted) {
                 if (granted) {
                     startVoiceRecognition();
@@ -339,10 +358,13 @@ static void startVoiceRecognition() {
             sendVoiceText("ERROR:mic_denied");
             return;
         }
+        aikoTrace("startVoiceRecognition: mic authorized");
 
         // Check speech recognition permission
         SFSpeechRecognizerAuthorizationStatus speechStatus = [SFSpeechRecognizer authorizationStatus];
+        aikoTrace("startVoiceRecognition: got speechStatus");
         if (speechStatus == SFSpeechRecognizerAuthorizationStatusNotDetermined) {
+            aikoTrace("startVoiceRecognition: requesting speech permission");
             [SFSpeechRecognizer requestAuthorization:^(SFSpeechRecognizerAuthorizationStatus status) {
                 if (status == SFSpeechRecognizerAuthorizationStatusAuthorized) {
                     startVoiceRecognition();
@@ -355,6 +377,7 @@ static void startVoiceRecognition() {
             sendVoiceText("ERROR:speech_denied");
             return;
         }
+        aikoTrace("startVoiceRecognition: speech authorized");
 
         // Initialize recognizer (prefer zh-CN, fallback to device locale)
         gSpeechRecognizer = [[SFSpeechRecognizer alloc] initWithLocale:[NSLocale localeWithLocaleIdentifier:@"zh-CN"]];
@@ -362,17 +385,22 @@ static void startVoiceRecognition() {
             gSpeechRecognizer = [SFSpeechRecognizer new];
         }
         gSpeechRecognizer.defaultTaskHint = SFSpeechRecognitionTaskHintDictation;
+        aikoTrace("startVoiceRecognition: recognizer ready");
 
         gAudioEngine = [AVAudioEngine new];
         gRecogRequest = [SFSpeechAudioBufferRecognitionRequest new];
         gRecogRequest.shouldReportPartialResults = YES;
+        aikoTrace("startVoiceRecognition: about to access inputNode");
 
         AVAudioInputNode *inputNode = gAudioEngine.inputNode;
+        aikoTrace("startVoiceRecognition: got inputNode");
         AVAudioFormat *fmt = [inputNode outputFormatForBus:0];
+        aikoTrace("startVoiceRecognition: got format");
 
         [inputNode installTapOnBus:0 bufferSize:1024 format:fmt block:^(AVAudioPCMBuffer *buf, AVAudioTime *when) {
             @try { [gRecogRequest appendAudioPCMBuffer:buf]; } @catch (...) {}
         }];
+        aikoTrace("startVoiceRecognition: tap installed");
 
         NSError *startErr = nil;
         [gAudioEngine startAndReturnError:&startErr];
@@ -381,6 +409,7 @@ static void startVoiceRecognition() {
             sendVoiceText([msg UTF8String]);
             return;
         }
+        aikoTrace("startVoiceRecognition: engine started");
 
         // resultHandler runs on a Speech framework background thread — must catch all exceptions.
         gRecogTask = [gSpeechRecognizer recognitionTaskWithRequest:gRecogRequest
@@ -403,8 +432,10 @@ static void startVoiceRecognition() {
                     sendVoiceText([msg UTF8String]);
                 } @catch (...) {}
             }];
+        aikoTrace("startVoiceRecognition: recognition task started");
         } @catch (NSException *ex) {
             NSString *msg = [NSString stringWithFormat:@"ERROR:exception:%@: %@", ex.name, ex.reason];
+            aikoTrace([msg UTF8String]);
             sendVoiceText([msg UTF8String]);
         }
     });
