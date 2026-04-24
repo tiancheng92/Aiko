@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { SendMessage, GetMessages, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown } from '../../wailsjs/go/main/App'
+import { SendMessage, GetMessages, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 import { marked, Renderer } from 'marked'
 import markedKatex from 'marked-katex-extension'
@@ -91,6 +91,7 @@ const copiedIdx = ref(null)
 const textareaEl = ref(null)
 const isRecording = ref(false)
 const voiceHint = ref('')
+const voiceAutoSend = ref(false)
 
 /** formatTime formats a datetime string or Date to YYYY-MM-DD HH:mm:ss. */
 function formatTime(ts) {
@@ -165,6 +166,8 @@ onMounted(async () => {
     EventsEmit('pet:state:change', 'error')
   })
 
+  try { voiceAutoSend.value = await GetVoiceAutoSend() } catch {}
+
   EventsOn('voice:start', () => {
     isRecording.value = true
     voiceHint.value = ''
@@ -182,6 +185,14 @@ onMounted(async () => {
     voiceHint.value = ''
   })
 
+  EventsOn('voice:final', (text) => {
+    input.value = text
+    voiceHint.value = ''
+    if (voiceAutoSend.value && text.trim()) {
+      send()
+    }
+  })
+
   EventsOn('voice:error', (errMsg) => {
     isRecording.value = false
     voiceHint.value = ''
@@ -194,6 +205,10 @@ onMounted(async () => {
           ? '请在系统偏好设置中允许 Aiko 使用语音识别。'
           : `语音识别出错：${errMsg}`,
     })
+  })
+
+  EventsOn('config:voice:auto-send:changed', (val) => {
+    voiceAutoSend.value = val
   })
 })
 
