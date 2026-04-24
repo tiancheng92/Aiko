@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import Live2DPet from './components/Live2DPet.vue'
 import ChatBubble from './components/ChatBubble.vue'
 import SettingsWindow from './components/SettingsWindow.vue'
@@ -12,14 +12,177 @@ const settingsOpen = ref(false)
 const ballPos  = ref({ x: -1, y: -1 })
 const ballSize = ref(160)
 const chatBubbleRef = ref(null)
-// activeScreen holds the current screen resolution; updated on screen:changed events.
 const activeScreen = ref({ width: 0, height: 0 })
 let offToggle, offToken, offDone, offError, offSettings
 const voiceActive = ref(false)
+const siriMounted = ref(false)   // controls v-if (keeps DOM alive during fade-out)
+const siriVisible = ref(false)   // controls CSS transition class
+let siriHideTimer = null
 let offVoiceStart, offVoiceEnd, offVoiceError
-
-// Accumulates tokens when chat bubble is closed.
 let pendingTokens = ''
+
+// ── Apple Intelligence border ────────────────────────────────
+// 4 canvas refs, one per layer (each gets its own CSS blur)
+const siriCanvases = [ref(null), ref(null), ref(null), ref(null)]
+let siriAnim = null
+
+/**
+ * Layer config — mirrors IOS.swift / WatchOS.swift:
+ * each layer has independent interval + duration so they drift out of phase.
+ * cssBlur is applied as CSS filter on the canvas element (reliable in all webviews).
+ */
+const LAYER_CONFIGS = [
+  { interval: 500, duration: 1000, lineWidth: 30, cssBlur: 30, alpha: 0.65 }, // outer bloom
+  { interval: 400, duration: 800,  lineWidth: 16, cssBlur: 14, alpha: 0.80 }, // mid glow
+  { interval: 300, duration: 600,  lineWidth:  9, cssBlur:  6, alpha: 0.90 }, // tight glow
+  { interval: 250, duration: 500,  lineWidth:  3, cssBlur:  0, alpha: 1.00 }, // sharp border
+]
+
+/** Apple Intelligence palette (from jacobamobin's implementation) */
+const SIRI_COLORS = ['#BC82F3', '#F5B9EA', '#8D9FFF', '#FF6778', '#FFBA71', '#C686FF']
+
+/** Parse hex to [r,g,b]. */
+function hexToRgb(hex) {
+  const n = parseInt(hex.replace('#', ''), 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
+/** Lerp two hex colors. */
+function lerpColor(c1, c2, t) {
+  const [r1,g1,b1] = hexToRgb(c1), [r2,g2,b2] = hexToRgb(c2)
+  return `rgb(${Math.round(r1+(r2-r1)*t)},${Math.round(g1+(g2-g1)*t)},${Math.round(b1+(b2-b1)*t)})`
+}
+
+/** easeInOut cubic. */
+function ease(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t }
+
+/**
+ * Generate random gradient stops sorted by position —
+ * mirrors GlowEffect.generateGradientStops() in IOS.swift.
+ */
+function randomStops() {
+  return SIRI_COLORS
+    .map(color => ({ color, pos: Math.random() }))
+    .sort((a, b) => a.pos - b.pos)
+}
+
+/** Interpolate between two stop arrays. */
+function interpStops(from, to, t) {
+  return from.map((s, i) => ({
+    color: lerpColor(s.color, to[i].color, t),
+    pos: s.pos + (to[i].pos - s.pos) * t,
+  }))
+}
+
+/** Draw a conic-gradient stroke on one canvas with global alpha for fade in/out. */
+function drawStroke(canvas, stops, lineWidth, globalAlpha = 1) {
+  const ctx = canvas.getContext('2d')
+  const w = canvas.width, h = canvas.height
+  ctx.clearRect(0, 0, w, h)
+  if (globalAlpha <= 0) return
+
+  const inset = lineWidth / 2
+  const r = 12
+  const x = inset, y = inset
+  const bw = w - inset * 2, bh = h - inset * 2
+
+  const grad = ctx.createConicGradient(0, w / 2, h / 2)
+  stops.forEach(s => grad.addColorStop(Math.min(Math.max(s.pos, 0), 1), s.color))
+
+  ctx.globalAlpha = globalAlpha
+  ctx.lineWidth = lineWidth
+  ctx.strokeStyle = grad
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.lineTo(x + bw - r, y)
+  ctx.arcTo(x + bw, y, x + bw, y + r, r)
+  ctx.lineTo(x + bw, y + bh - r)
+  ctx.arcTo(x + bw, y + bh, x + bw - r, y + bh, r)
+  ctx.lineTo(x + r, y + bh)
+  ctx.arcTo(x, y + bh, x, y + bh - r, r)
+  ctx.lineTo(x, y + r)
+  ctx.arcTo(x, y, x + r, y, r)
+  ctx.closePath()
+  ctx.stroke()
+}
+
+/** Start the animation — each layer morphs at its own pace. */
+function startSiriAnim() {
+  const canvases = siriCanvases.map(r => r.value)
+  if (canvases.some(c => !c)) return
+
+  const layers = LAYER_CONFIGS.map(cfg => ({
+    cfg,
+    current: randomStops(),
+    target: randomStops(),
+    phaseStart: null,
+  }))
+
+  function resize() {
+    canvases.forEach(c => {
+      c.width  = window.innerWidth
+      c.height = window.innerHeight
+    })
+  }
+  resize()
+  window.addEventListener('resize', resize)
+
+  function frame(ts) {
+    // Smoothly step alpha toward target each frame
+    siriAlpha += (siriAlphaTarget - siriAlpha) * 0.08
+    if (Math.abs(siriAlpha - siriAlphaTarget) < 0.002) siriAlpha = siriAlphaTarget
+
+    layers.forEach((lyr, i) => {
+      const { cfg } = lyr
+      if (lyr.phaseStart === null) lyr.phaseStart = ts
+      const elapsed = ts - lyr.phaseStart
+      let t = Math.min(elapsed / cfg.duration, 1)
+
+      if (t >= 1 && elapsed >= cfg.duration + cfg.interval) {
+        lyr.current    = lyr.target
+        lyr.target     = randomStops()
+        lyr.phaseStart = ts
+        t = 0
+      }
+
+      const stops = interpStops(lyr.current, lyr.target, ease(Math.min(t, 1)))
+      drawStroke(canvases[i], stops, cfg.lineWidth, siriAlpha)
+    })
+    siriAnim = requestAnimationFrame(frame)
+  }
+
+  siriAnim = requestAnimationFrame(frame)
+  return () => {
+    cancelAnimationFrame(siriAnim)
+    siriAnim = null
+    window.removeEventListener('resize', resize)
+  }
+}
+
+let stopSiriAnim = null
+// globalAlpha for canvas content: 0→1 on appear, 1→0 on disappear
+let siriAlpha = 0
+let siriAlphaTarget = 0
+const SIRI_FADE_SPEED = 1 / 30  // ~30 frames to full opacity at 60fps
+
+watch(voiceActive, async (active) => {
+  if (active) {
+    if (siriHideTimer) { clearTimeout(siriHideTimer); siriHideTimer = null }
+    siriAlpha = 0
+    siriAlphaTarget = 1
+    siriMounted.value = true
+    await nextTick()
+    stopSiriAnim = startSiriAnim()
+  } else {
+    siriAlphaTarget = 0
+    siriHideTimer = setTimeout(() => {
+      stopSiriAnim?.()
+      stopSiriAnim = null
+      siriMounted.value = false
+      siriHideTimer = null
+    }, 600)
+  }
+})
 
 /** waitForRuntime polls until the Wails Go bridge is available. */
 async function waitForRuntime() {
@@ -55,7 +218,7 @@ onMounted(async () => {
       })
     }
   })
-  offSettings = EventsOn('settings:open', () => { settingsOpen.value = true })
+  offSettings  = EventsOn('settings:open', () => { settingsOpen.value = true })
   offVoiceStart = EventsOn('voice:start', () => {
     if (!bubbleOpen.value) {
       bubbleOpen.value = true
@@ -66,64 +229,39 @@ onMounted(async () => {
     }
     voiceActive.value = true
   })
-
-  offVoiceEnd = EventsOn('voice:end', () => {
-    voiceActive.value = false
-  })
-
-  offVoiceError = EventsOn('voice:error', () => {
-    voiceActive.value = false
-  })
+  offVoiceEnd   = EventsOn('voice:end',   () => { voiceActive.value = false })
+  offVoiceError = EventsOn('voice:error', () => { voiceActive.value = false })
   EventsOn('screen:changed', (info) => {
     activeScreen.value = { width: info.width, height: info.height }
     EventsEmit('screen:active:changed', info)
   })
-
-  // Always listen for chat stream events so we can show a notification
-  // when the chat bubble is closed (e.g. scheduler-triggered replies).
   offToken = EventsOn('chat:token', (token) => {
-    if (!bubbleOpen.value) {
-      pendingTokens += token
-    }
+    if (!bubbleOpen.value) pendingTokens += token
   })
-
   offDone = EventsOn('chat:done', () => {
     if (!bubbleOpen.value && pendingTokens.trim()) {
-      EventsEmit('notification:show', {
-        title: '✨ (=^･ω･^=)',
-        message: pendingTokens.trim(),
-      })
+      EventsEmit('notification:show', { title: '✨ (=^･ω･^=)', message: pendingTokens.trim() })
     }
     pendingTokens = ''
   })
-
   offError = EventsOn('chat:error', (err) => {
     if (!bubbleOpen.value) {
       pendingTokens = ''
-      EventsEmit('notification:show', {
-        title: '😿 出错了',
-        message: err,
-      })
+      EventsEmit('notification:show', { title: '😿 出错了', message: err })
     }
   })
 })
 
 onUnmounted(() => {
-  offToggle?.()
-  offToken?.()
-  offDone?.()
-  offError?.()
-  offSettings?.()
-  offVoiceStart?.()
-  offVoiceEnd?.()
-  offVoiceError?.()
+  offToggle?.(); offToken?.(); offDone?.(); offError?.()
+  offSettings?.(); offVoiceStart?.(); offVoiceEnd?.(); offVoiceError?.()
+  stopSiriAnim?.()
+  if (siriHideTimer) clearTimeout(siriHideTimer)
 })
 
 /** toggleBubble flips the chat bubble open/close state. */
 function toggleBubble() {
   bubbleOpen.value = !bubbleOpen.value
-  // Discard any pending tokens when user opens the bubble —
-  // the ChatPanel will show the streamed content directly.
   if (bubbleOpen.value) {
     pendingTokens = ''
     nextTick(() => {
@@ -166,11 +304,19 @@ function openSettings() {
     :pet-size="ballSize"
   />
 
-  <!-- Voice recording visual effects: Siri border + wave rings -->
-  <div v-if="voiceActive" class="siri-outer">
-    <div class="siri-spinning" />
+  <!--
+    Apple Intelligence glow border — 4 canvas elements, each with its own CSS blur.
+    CSS filter on the element itself is the most reliable blur in all WebViews.
+    Each layer's gradient morphs independently (different interval/duration) → organic drift.
+  -->
+  <div v-if="siriMounted" class="siri-wrapper">
+    <canvas :ref="siriCanvases[0]" class="siri-canvas" style="filter: blur(30px); opacity: 0.65;" />
+    <canvas :ref="siriCanvases[1]" class="siri-canvas" style="filter: blur(14px); opacity: 0.80;" />
+    <canvas :ref="siriCanvases[2]" class="siri-canvas" style="filter: blur(6px);  opacity: 0.90;" />
+    <canvas :ref="siriCanvases[3]" class="siri-canvas" style="filter: blur(2px);  opacity: 1.0;" />
   </div>
-  <div v-if="voiceActive" class="voice-wave">
+
+  <div v-if="siriMounted" class="voice-wave">
     <div
       v-for="i in 3"
       :key="i"
@@ -182,62 +328,18 @@ function openSettings() {
 </template>
 
 <style scoped>
-/*
- * Siri border effect — based on Apple's spinning wheel technique:
- * A large Apple-color-wheel SVG rotates behind the screen, blurred heavily.
- * A white mask covers the center, leaving only the glowing edge visible.
- *
- * SVG: Apple spinning wheel with 6 colored segments (green/orange/purple/red/blue/yellow)
- */
-
-/* ── Container: clips to screen, no pointer events ─────────── */
-.siri-outer {
+/* ── Siri wrapper ───────────────────────────────────────────── */
+.siri-wrapper {
   position: fixed;
   inset: 0;
-  overflow: hidden;
   pointer-events: none;
   z-index: 9998;
-  border-radius: 12px;
 }
 
-/* ── The rotating Apple color wheel ────────────────────────── */
-.siri-spinning {
+.siri-canvas {
   position: absolute;
-  /* Centered, oversized so the wheel fills beyond screen edges */
-  width: 140%;
-  aspect-ratio: 1 / 1;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%) rotate(0deg) scale(1.5);
-  background-image: url("data:image/svg+xml,%3Csvg id='spinning' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 500 500'%3E%3Cdefs%3E%3Cstyle%3E.st0%7Bfill:%233bb44c%7D.st1%7Bfill:%23f79c1d%7D.st2%7Bfill:%23a95fa6%7D.st3%7Bfill:%23ee3c3c%7D.st4%7Bfill:%234791ce%7D.st5%7Bfill:%23f9d20a%7D%3C/style%3E%3C/defs%3E%3Cpath class='st1' d='M355.05,23.15c13.68,6.33,26.7,13.87,38.9,22.49,5.76,16.1,8.9,33.44,8.9,51.51,0,27.83-7.44,53.93-20.44,76.4-26.42,45.7-75.82,76.45-132.41,76.45,28.29-49,26.37-107.15,0-152.88-12.96-22.5-31.84-42-55.95-55.92-15.67-9.05-32.27-15-49.1-18.05C176.88,8.35,212.47.1,250,.1s73.12,8.25,105.05,23.05Z'/%3E%3Cpath class='st4' d='M250,250c-28.29,49-26.37,107.15,0,152.88,12.96,22.5,31.84,42,55.95,55.92,15.67,9.05,32.27,15,49.1,18.05-31.93,14.8-67.52,23.05-105.05,23.05s-73.12-8.25-105.05-23.05c-13.68-6.33-26.7-13.87-38.9-22.49-5.76-16.1-8.9-33.44-8.9-51.51,0-27.83,7.44-53.92,20.43-76.4h.01c26.42-45.7,75.82-76.45,132.41-76.45Z'/%3E%3Cpath class='st5' d='M250,97.12c26.37,45.73,28.29,103.88,0,152.88-28.29-49.01-79.62-76.41-132.41-76.45-25.96-.02-52.28,6.58-76.39,20.5-15.62,9.02-29.05,20.38-40.1,33.39,3.31-37.08,14.7-71.81,32.4-102.43,18.17-31.44,42.99-58.53,72.55-79.37,12.2-8.62,25.22-16.16,38.9-22.49,16.83,3.05,33.43,9,49.1,18.05,24.11,13.92,42.99,33.42,55.95,55.92Z'/%3E%3Cpath class='st3' d='M498.9,227.45c.66,7.43,1,14.94,1,22.55s-.34,15.13-1,22.56c-11.05,13.01-24.48,24.37-40.1,33.39-24.11,13.92-50.42,20.52-76.38,20.5h-.01c-52.79-.04-104.12-27.44-132.41-76.45,56.59,0,105.99-30.75,132.41-76.45,13-22.47,20.44-48.57,20.44-76.4,0-18.07-3.14-35.41-8.9-51.51,29.56,20.84,54.38,47.93,72.55,79.37,17.7,30.62,29.09,65.35,32.4,102.43h0Z'/%3E%3Cpath class='st2' d='M250,250c28.29,49.01,79.62,76.41,132.41,76.45h.01c25.96.02,52.27-6.58,76.38-20.5,15.62-9.02,29.05-20.38,40.1-33.39-3.31,37.08-14.7,71.81-32.4,102.43-18.17,31.44-42.99,58.53-72.55,79.37-12.2,8.62-25.22,16.16-38.9,22.49-16.83-3.05-33.43-9-49.1-18.05-24.11-13.92-42.99-33.42-55.95-55.92-26.37-45.73-28.29-103.88,0-152.88Z'/%3E%3Cpath class='st0' d='M106.05,454.36c-29.56-20.84-54.38-47.93-72.55-79.37-17.7-30.62-29.09-65.35-32.4-102.43-.66-7.43-1-14.95-1-22.56s.34-15.13,1-22.56c11.05-13.01,24.48-24.37,40.1-33.39,24.11-13.92,50.43-20.52,76.39-20.5,52.79.04,104.12,27.44,132.41,76.45-56.59,0-105.99,30.75-132.41,76.45h-.01c-12.99,22.48-20.43,48.57-20.43,76.4,0,18.07,3.14,35.41,8.9,51.51Z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: center center;
-  background-size: 150%;
-  filter: blur(50px);
-  animation: siri-rotate 10s linear infinite;
-}
-
-/* ── White mask: covers center, leaves glowing edge ─────────── */
-.siri-mask {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
-  border-radius: 8px;
-  /* Match the app background color */
-  background: transparent;
-  animation: siri-breathe 5s ease-in-out infinite;
-}
-
-@keyframes siri-rotate {
-  from { transform: translate(-50%, -50%) rotate(0deg) scale(1.5); }
-  to   { transform: translate(-50%, -50%) rotate(360deg) scale(1.5); }
-}
-
-@keyframes siri-breathe {
-  0%, 100% { top: 13px; left: 13px; right: 13px; bottom: 13px; }
-  50%       { top: 9px;  left: 9px;  right: 9px;  bottom: 9px; }
+  inset: 0;
+  pointer-events: none;
 }
 
 /* ── Centered circular wave rings ──────────────────────────── */
@@ -248,7 +350,7 @@ function openSettings() {
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  z-index: 9997;
+  z-index: 9999;
 }
 
 .wave-core {
@@ -256,9 +358,9 @@ function openSettings() {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: radial-gradient(circle, #ffffff 0%, #4791ce 60%, transparent 100%);
-  box-shadow: 0 0 12px 4px rgba(71, 145, 206, 0.8),
-              0 0 24px 8px rgba(169, 95, 166, 0.4);
+  background: radial-gradient(circle, #ffffff 0%, #BC82F3 60%, transparent 100%);
+  box-shadow: 0 0 12px 4px rgba(188, 130, 243, 0.8),
+              0 0 24px 8px rgba(141, 159, 255, 0.4);
   animation: core-pulse 1.6s ease-in-out infinite;
 }
 
@@ -272,12 +374,12 @@ function openSettings() {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  border: 1.5px solid rgba(71, 145, 206, 0.6);
+  border: 1.5px solid rgba(188, 130, 243, 0.6);
   animation: wave-expand 1.65s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
 }
 
-.wave-ring:nth-child(2) { border-color: rgba(169, 95, 166, 0.5); }
-.wave-ring:nth-child(3) { border-color: rgba(59, 180, 76, 0.4); }
+.wave-ring:nth-child(2) { border-color: rgba(141, 159, 255, 0.5); }
+.wave-ring:nth-child(3) { border-color: rgba(245, 185, 234, 0.4); }
 
 @keyframes wave-expand {
   0%   { transform: scale(1);   opacity: 0.7; }
