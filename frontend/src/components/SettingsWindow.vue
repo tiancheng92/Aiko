@@ -15,6 +15,7 @@ import {
   GetPetSize, GetChatSize,
   StartSMSWatcher, StopSMSWatcher, IsSMSWatcherRunning,
   GetVoiceAutoSend, SetVoiceAutoSend,
+  GetSoundsEnabled, SetSoundsEnabled,
 } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { useModelPath } from '../composables/useModelPath.js'
@@ -35,6 +36,7 @@ const cfg = ref({
   ChatHeight: 0,
   ActiveProfileID: 0,
   VoiceAutoSend: false,
+  SoundsEnabled: false,
 })
 const { availableModels, loadModels } = useModelPath()
 const toolPerms = ref([])   // [{ ToolName, Level, Granted }]
@@ -571,6 +573,15 @@ async function toggleVoiceAutoSend() {
     console.warn('toggleVoiceAutoSend failed:', e)
   }
 }
+
+/** toggleSoundsEnabled updates sound effects setting immediately. */
+async function toggleSoundsEnabled() {
+  try {
+    await SetSoundsEnabled(cfg.value.SoundsEnabled)
+  } catch (e) {
+    console.warn('toggleSoundsEnabled failed:', e)
+  }
+}
 </script>
 
 <template>
@@ -1041,6 +1052,16 @@ async function toggleVoiceAutoSend() {
             </label>
           </div>
           <p class="sms-desc" style="margin-top:4px">释放 Option 键后，等待转录完成并自动发送消息</p>
+
+          <!-- Sounds toggle -->
+          <div class="sms-toggle-row" style="margin-top:16px">
+            <span class="sms-status-label" style="flex:1">聊天音效</span>
+            <label class="voice-auto-send-switch">
+              <input type="checkbox" v-model="cfg.SoundsEnabled" @change="toggleSoundsEnabled" />
+              <span class="voice-auto-send-slider"></span>
+            </label>
+          </div>
+          <p class="sms-desc" style="margin-top:4px">发送、收到消息和出错时播放轻柔提示音</p>
         </div>
       </div>
     </div>
