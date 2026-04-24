@@ -42,6 +42,7 @@ main.go → app.go (Wails bindings)
     internal/config/               # 配置持久化(SQLite)
     internal/scheduler/            # Cron 定时任务
     internal/mcp/                  # MCP 协议实现
+    internal/sms/                  # 短信监听（fsnotify + 验证码识别）
     internal/db/                   # Schema 迁移管理
 ```
 
@@ -137,7 +138,7 @@ wails generate module  # 重新生成 Wails bindings
 - 相关工具：`save_memory`（保存长期记忆事实）、`update_user_profile`（更新 `~/.aiko/USER.md` 用户画像）、`save_skill`（保存可复用技能到 `~/.aiko/auto-skills/`）
 - 这三个工具在 `AllContextual()` 中注册，需要运行时依赖注入
 
-
+### 并发安全
 - `app.go` 的 `initLLMComponents` 可能并发调用（SaveConfig 触发配置变更时）
 - 所有涉及 `a.petAgent`、`a.longMem`、`a.knowledgeSt` 字段的更新必须在 `a.mu.Lock()` 保护下完成
 
@@ -179,6 +180,8 @@ wails generate module  # 重新生成 Wails bindings
 - ✅ 语音输入（长按 Option，SFSpeechRecognizer STT，支持「立刻发送」模式）
 - ✅ 浏览器感知（osascript 获取当前 URL + 页面内容）
 - ✅ macOS 提醒事项读取与标记完成
+- ✅ macOS 邮件读取（osascript 读取 Mail.app 邮件列表与正文）
+- ✅ 短信监听（fsnotify 监听 chat.db，自动识别验证码并复制到剪贴板）
 - ✅ 自我成长（用户画像、长期记忆、技能沉淀）
 - ⚠️ 仅支持 macOS（使用私有 API，不兼容 App Store）
 - ❌ Windows/Linux 支持（开发中）
