@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { SendMessage, GetMessages, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend } from '../../wailsjs/go/main/App'
+import { SendMessage, GetMessages, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 import { marked, Renderer } from 'marked'
 import markedKatex from 'marked-katex-extension'
@@ -92,6 +92,7 @@ const textareaEl = ref(null)
 const isRecording = ref(false)
 const voiceHint = ref('')
 const voiceAutoSend = ref(false)
+const isStreaming = ref(false)
 
 /** formatTime formats a datetime string or Date to YYYY-MM-DD HH:mm:ss. */
 function formatTime(ts) {
@@ -155,6 +156,7 @@ onMounted(async () => {
     const idx = messages.value.length - 1
     if (idx >= 0) messages.value[idx] = { ...messages.value[idx], streaming: false, time: new Date() }
     loading.value = false
+    isStreaming.value = false
     EventsEmit('pet:state:change', 'idle')
   })
 
@@ -163,6 +165,7 @@ onMounted(async () => {
     if (thinkIdx >= 0) messages.value.splice(thinkIdx, 1)
     messages.value.push({ role: 'system', content: '错误: ' + err })
     loading.value = false
+    isStreaming.value = false
     EventsEmit('pet:state:change', 'error')
   })
 
@@ -249,6 +252,7 @@ async function send() {
   if (!text || loading.value) return
   input.value = ''
   loading.value = true
+  isStreaming.value = true
   messages.value.push({ role: 'user', content: text, time: new Date() })
   messages.value.push({ role: 'assistant', content: '', streaming: true, thinking: true })
   scrollToBottom()
@@ -260,8 +264,36 @@ async function send() {
     if (idx >= 0) messages.value.splice(idx, 1)
     messages.value.push({ role: 'system', content: '发送失败: ' + e })
     loading.value = false
+    isStreaming.value = false
     EventsEmit('pet:state:change', 'error')
   }
+}
+
+/** stopGeneration cancels the current in-flight AI response and marks the interrupted
+ *  messages as ghost bubbles (visual only — not persisted, not sent to LLM context). */
+async function stopGeneration() {
+  try {
+    await StopGeneration()
+  } catch (e) {
+    console.warn('StopGeneration failed:', e)
+  }
+  isStreaming.value = false
+  loading.value = false
+
+  // Mark the last user message and last assistant message (thinking or streaming) as ghost.
+  const lastUser = messages.value.findLastIndex(m => m.role === 'user' && !m.ghost)
+  if (lastUser >= 0) messages.value[lastUser] = { ...messages.value[lastUser], ghost: true }
+
+  const lastAssistant = messages.value.findLastIndex(m => m.role === 'assistant' && !m.ghost)
+  if (lastAssistant >= 0) {
+    messages.value[lastAssistant] = {
+      ...messages.value[lastAssistant],
+      ghost: true,
+      streaming: false,
+      thinking: false,
+    }
+  }
+  EventsEmit('pet:state:change', 'idle')
 }
 
 /** onMessagesClick intercepts link clicks and opens them in the system browser. */
@@ -290,7 +322,7 @@ defineExpose({ focusInput, scrollToBottom })
   <div class="chat-panel">
     <div class="messages" ref="messagesEl" @click="onMessagesClick">
       <div v-for="(m, i) in messages" :key="i" :class="['msg', m.role]">
-        <div class="bubble-wrap">
+        <div class="bubble-wrap" :class="{ ghost: m.ghost }">
           <div class="bubble-row">
             <!-- User copy button: left of bubble -->
             <button
@@ -343,7 +375,8 @@ defineExpose({ focusInput, scrollToBottom })
         @keydown.enter.exact.prevent="send"
         :disabled="loading"
       />
-      <button @click="send" :disabled="loading">发送</button>
+      <button v-if="isStreaming" class="stop-btn" @click="stopGeneration">⏹ 停止</button>
+      <button v-else @click="send" :disabled="loading">发送</button>
     </div>
   </div>
 </template>
@@ -412,6 +445,33 @@ defineExpose({ focusInput, scrollToBottom })
   border-radius: 10px;
   font-size: 12px;
   white-space: pre-wrap;
+}
+
+/* Ghost bubbles: interrupted messages, visual only */
+.ghost .bubble {
+  opacity: 0.35;
+  font-style: italic;
+}
+.ghost .bubble::after {
+  content: ' ⊘';
+  font-size: 11px;
+  opacity: 0.6;
+  font-style: normal;
+}
+
+/* Stop button */
+.stop-btn {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.stop-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
 }
 
 /* Cursor blink */
