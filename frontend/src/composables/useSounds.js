@@ -54,5 +54,10 @@ export function useSounds() {
     playTone(220, 0.25, 'triangle', 0.1, 180)
   }
 
-  return { playSend, playReceive, playError }
+  /** playStop plays a short downward "tuk" for generation stop. */
+  function playStop() {
+    playTone(440, 0.1, 'sine', 0.12, 280)
+  }
+
+  return { playSend, playReceive, playError, playStop }
 }

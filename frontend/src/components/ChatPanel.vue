@@ -96,7 +96,7 @@ const isRecording = ref(false)
 const voiceHint = ref('')
 const voiceAutoSend = ref(false)
 const isStreaming = ref(false)
-const { playSend, playReceive, playError } = useSounds()
+const { playSend, playReceive, playError, playStop } = useSounds()
 let soundsEnabled = false
 
 /** applyToken appends a token to the last streaming assistant message. */
@@ -306,6 +306,7 @@ async function stopGeneration() {
   } catch (e) {
     console.warn('StopGeneration failed:', e)
   }
+  if (soundsEnabled) playStop()
   isStreaming.value = false
   loading.value = false
 
