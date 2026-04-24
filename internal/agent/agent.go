@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 
 	localbk "github.com/cloudwego/eino-ext/adk/backend/local"
 	"github.com/cloudwego/eino/adk"
@@ -36,7 +37,7 @@ type Agent struct {
 	longMem       *memory.LongStore
 	cfg           *config.Config
 	dataDir       string // ~/.aiko data directory, used to read USER.md
-	turnCount     int    // completed conversation turns (resets on restart)
+	turnCount     atomic.Int64 // completed conversation turns (resets on restart)
 	nudgeInterval int    // how often to trigger self-growth nudge
 }
 
@@ -290,7 +291,7 @@ func (a *Agent) buildHistoryPrefix(ctx context.Context, userInput string) (strin
 
 	// Append self-growth nudge if due.
 	var nudgeSection string
-	if a.nudgeInterval > 0 && a.turnCount > 0 && a.turnCount%a.nudgeInterval == 0 {
+	if a.nudgeInterval > 0 && a.turnCount.Load() > 0 && a.turnCount.Load()%int64(a.nudgeInterval) == 0 {
 		nudgeSection = `
 [SELF-GROWTH NUDGE]
 请在本次回复前，回顾刚才的对话，考虑是否需要：
@@ -364,5 +365,5 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput, assistantReply
 	if err := a.shortMem.DeleteByIDs(ids); err != nil {
 		slog.Error("delete migrated messages failed", "err", err)
 	}
-	a.turnCount++
+	a.turnCount.Add(1)
 }
