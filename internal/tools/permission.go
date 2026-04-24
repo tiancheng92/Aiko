@@ -4,6 +4,7 @@ package tools
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 )
 
@@ -27,7 +28,7 @@ func (s *PermissionStore) IsGranted(ctx context.Context, t Tool) (bool, error) {
 	err := s.db.QueryRowContext(ctx,
 		`SELECT granted FROM tool_permissions WHERE tool_name = ?`, t.Name(),
 	).Scan(&granted)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
 	if err != nil {

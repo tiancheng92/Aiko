@@ -77,6 +77,14 @@ func connectAndDiscover(ctx context.Context, cfg ServerConfig) ([]tool.BaseTool,
 		return nil, fmt.Errorf("create mcp client: %w", err)
 	}
 
+	// Start the transport connection before initialization.
+	// NewStdioMCPClient auto-starts for backward compatibility; SSE and HTTP do not.
+	if cfg.Transport != "stdio" {
+		if err := client.Start(ctx); err != nil {
+			return nil, fmt.Errorf("mcp transport start: %w", err)
+		}
+	}
+
 	initRequest := mcp.InitializeRequest{}
 	initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
 	initRequest.Params.ClientInfo = mcp.Implementation{

@@ -126,7 +126,8 @@ func (c *Config) ApplyProfile(p *ModelProfile) {
 // MissingRequired returns names of required fields that are empty.
 func (c *Config) MissingRequired() []string {
 	var missing []string
-	if c.LLMBaseURL == "" {
+	// OpenRouter has a built-in default base URL, so it's not required for that provider.
+	if c.LLMBaseURL == "" && c.LLMProvider != string(ProviderOpenRouter) {
 		missing = append(missing, "llm_base_url")
 	}
 	if c.LLMModel == "" {

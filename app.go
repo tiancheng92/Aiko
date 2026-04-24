@@ -365,6 +365,7 @@ func (a *App) startScreenWatcher() {
 	go func() {
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
+		lastFoundIdx := -1
 		for {
 			select {
 			case <-a.ctx.Done():
@@ -372,20 +373,13 @@ func (a *App) startScreenWatcher() {
 			case <-ticker.C:
 			}
 
-			screens, err := wailsruntime.ScreenGetAll(a.ctx)
-			if err != nil {
-				slog.Warn("startScreenWatcher: ScreenGetAll failed", "err", err)
-				continue
-			}
-
-			// Find which NSScreen contains the current mouse position.
-			// We match by index: NSScreen order matches wailsruntime.Screen order on darwin.
+			// Use CGO-only calls to locate the cursor's screen — no Wails IPC needed.
 			mx := getMouseX()
 			my := getMouseY()
 			n := getNumScreens()
 
 			foundIdx := -1
-			for i := 0; i < n && i < len(screens); i++ {
+			for i := 0; i < n; i++ {
 				frame := getScreenFrame(i)
 				if !frame.Valid {
 					continue
@@ -396,19 +390,22 @@ func (a *App) startScreenWatcher() {
 					break
 				}
 			}
-			if foundIdx < 0 || foundIdx >= len(screens) {
+			if foundIdx < 0 || foundIdx == lastFoundIdx {
+				continue
+			}
+			lastFoundIdx = foundIdx
+
+			// Screen changed — only now pay the cost of a Wails IPC call.
+			screens, err := wailsruntime.ScreenGetAll(a.ctx)
+			if err != nil {
+				slog.Warn("startScreenWatcher: ScreenGetAll failed", "err", err)
+				continue
+			}
+			if foundIdx >= len(screens) {
 				continue
 			}
 			found := &screens[foundIdx]
-
 			current := ScreenInfo{Width: found.Size.Width, Height: found.Size.Height}
-
-			a.mu.RLock()
-			same := a.activeScreen == current
-			a.mu.RUnlock()
-			if same {
-				continue
-			}
 
 			// Move the window directly via CGO to bypass Wails' WindowSetPosition,
 			// which is relative to the current screen and cannot reliably migrate

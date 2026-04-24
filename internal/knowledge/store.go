@@ -49,10 +49,11 @@ func (s *Store) AddChunk(ctx context.Context, text, source string, chunkIdx int)
 // Search returns top-k relevant chunks for the query.
 // Returns nil if the knowledge base is empty.
 func (s *Store) Search(ctx context.Context, query string, k int) ([]string, error) {
-	if s.col.Count() == 0 {
+	total := s.col.Count()
+	if total == 0 {
 		return nil, nil
 	}
-	n := min(k, s.col.Count())
+	n := min(k, total)
 	results, err := s.col.Query(ctx, query, n, nil, nil)
 	if err != nil {
 		return nil, err

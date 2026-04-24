@@ -259,21 +259,30 @@ func getRootDiskSize() (uint64, error) {
 	return sizeKB * 1024, nil // Convert KB to bytes
 }
 
+// getCPUUsage returns the current CPU usage percentage (0–100).
 func getCPUUsage() (float64, error) {
 	if runtime.GOOS == "darwin" {
-		// Use iostat to get CPU usage
+		// iostat output (macOS):
+		//           disk0       cpu     load average
+		//     KB/t  tps  MB/s  us sy id   1m   5m  15m
+		//    34.12    5  0.17   3  5 92  1.23 1.45 1.67
+		// Data row fields: KB/t(0) tps(1) MB/s(2) us(3) sy(4) id(5) ...
 		out, err := exec.Command("iostat", "-c", "1", "-n", "1").Output()
 		if err != nil {
 			return 0, err
 		}
-		lines := strings.Split(string(out), "\n")
-		for _, line := range lines {
+		for _, line := range strings.Split(string(out), "\n") {
 			fields := strings.Fields(line)
-			if len(fields) >= 6 && fields[0] != "us" && fields[0] != "" {
-				// Fields: us sy id (user system idle)
-				if idle, err := strconv.ParseFloat(fields[2], 64); err == nil {
-					return 100.0 - idle, nil
-				}
+			if len(fields) < 6 {
+				continue
+			}
+			// Data rows start with a float (KB/t); header rows start with letters.
+			if _, err := strconv.ParseFloat(fields[0], 64); err != nil {
+				continue
+			}
+			// fields[5] is the idle percentage
+			if idle, err := strconv.ParseFloat(fields[5], 64); err == nil {
+				return 100.0 - idle, nil
 			}
 		}
 	}

@@ -19,7 +19,7 @@ type ServerConfig struct {
 	URL       string            `json:"url"`       // sse / http
 	Headers   map[string]string `json:"headers"`   // sse / http optional request headers
 	Enabled   bool              `json:"enabled"`
-	CreatedAt time.Time         `json:"created_at"`
+	CreatedAt string            `json:"created_at"` // RFC3339; string so Wails can generate TS bindings
 }
 
 // ServerStore manages MCP server configurations in SQLite.
@@ -47,12 +47,14 @@ func (s *ServerStore) List(ctx context.Context) ([]ServerConfig, error) {
 	for rows.Next() {
 		var c ServerConfig
 		var argsJSON, headersJSON string
+		var createdAt time.Time
 		if err := rows.Scan(&c.ID, &c.Name, &c.Transport, &c.Command,
-			&argsJSON, &c.URL, &headersJSON, &c.Enabled, &c.CreatedAt); err != nil {
+			&argsJSON, &c.URL, &headersJSON, &c.Enabled, &createdAt); err != nil {
 			return nil, fmt.Errorf("scan mcp_server row: %w", err)
 		}
 		_ = json.Unmarshal([]byte(argsJSON), &c.Args)
 		_ = json.Unmarshal([]byte(headersJSON), &c.Headers)
+		c.CreatedAt = createdAt.Format(time.RFC3339)
 		cfgs = append(cfgs, c)
 	}
 	return cfgs, rows.Err()

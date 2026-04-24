@@ -2,6 +2,7 @@ package config
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 )
 
@@ -60,7 +61,7 @@ func (s *ProfileStore) Get(id int64) (*ModelProfile, error) {
 		FROM model_profiles WHERE id = ?`, id).
 		Scan(&p.ID, &p.Name, &p.Provider, &p.BaseURL, &p.APIKey,
 			&p.Model, &p.EmbeddingModel, &p.EmbeddingDim)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("profile %d not found", id)
 	}
 	return &p, err

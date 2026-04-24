@@ -99,11 +99,12 @@ func (l *LongStore) Search(ctx context.Context, query string, k int) ([]string, 
 	col := l.col
 	l.mu.RUnlock()
 
-	if col.Count() == 0 {
+	total := col.Count()
+	if total == 0 {
 		return nil, nil
 	}
 	// Fetch more candidates to allow re-ranking.
-	fetch := min(k*3, col.Count())
+	fetch := min(k*3, total)
 	results, err := col.Query(ctx, query, fetch, nil, nil)
 	if err != nil {
 		return nil, err

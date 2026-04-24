@@ -17,11 +17,11 @@ type Job struct {
     ID          int64
     Name        string
     Description string
-    Schedule    string // cron expression e.g. "0 8 * * *"
-    Prompt      string // the message to send to the agent
+    Schedule    string  // cron expression e.g. "0 8 * * *"
+    Prompt      string  // the message to send to the agent
     Enabled     bool
-    LastRun     *time.Time
-    CreatedAt   time.Time
+    LastRun     *string // RFC3339 or nil; string so Wails can generate TS bindings
+    CreatedAt   string  // RFC3339; string so Wails can generate TS bindings
 }
 
 // ResultFunc is called when a job fires, with the job and the agent's response.
@@ -211,14 +211,16 @@ func (s *Scheduler) ListJobs(ctx context.Context) ([]Job, error) {
         var j Job
         var enabled int
         var lastRun sql.NullTime
-        var createdAt string
+        var createdAt time.Time
         if err := rows.Scan(&j.ID, &j.Name, &j.Description, &j.Schedule, &j.Prompt, &enabled, &lastRun, &createdAt); err != nil {
             return nil, err
         }
         j.Enabled = enabled == 1
         if lastRun.Valid {
-            j.LastRun = &lastRun.Time
+            s := lastRun.Time.Format(time.RFC3339)
+            j.LastRun = &s
         }
+        j.CreatedAt = createdAt.Format(time.RFC3339)
         jobs = append(jobs, j)
     }
     return jobs, rows.Err()
