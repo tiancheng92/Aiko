@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 
 	localbk "github.com/cloudwego/eino-ext/adk/backend/local"
@@ -29,10 +31,13 @@ type StreamResult struct {
 
 // Agent wraps an eino ReAct agent with short/long-term memory integration.
 type Agent struct {
-	runner   *adk.Runner
-	shortMem *memory.ShortStore
-	longMem  *memory.LongStore
-	cfg      *config.Config
+	runner        *adk.Runner
+	shortMem      *memory.ShortStore
+	longMem       *memory.LongStore
+	cfg           *config.Config
+	dataDir       string // ~/.aiko data directory, used to read USER.md
+	turnCount     int    // completed conversation turns (resets on restart)
+	nudgeInterval int    // how often to trigger self-growth nudge
 }
 
 // New constructs an Agent with a ReAct runner backed by the given chat model,
@@ -47,6 +52,7 @@ func New(
 	cfg *config.Config,
 	mw middleware.Middleware,
 	skillMW adk.ChatModelAgentMiddleware,
+	dataDir string,
 ) (*Agent, error) {
 	// Apply middleware chain to all tools if provided.
 	if mw != nil && len(tools) > 0 {
@@ -101,11 +107,17 @@ func New(
 		EnableStreaming: true,
 	})
 
+	ni := cfg.NudgeInterval
+	if ni <= 0 {
+		ni = 5
+	}
 	return &Agent{
-		runner:   runner,
-		shortMem: shortMem,
-		longMem:  longMem,
-		cfg:      cfg,
+		runner:        runner,
+		shortMem:      shortMem,
+		longMem:       longMem,
+		cfg:           cfg,
+		dataDir:       dataDir,
+		nudgeInterval: ni,
 	}, nil
 }
 
@@ -222,15 +234,27 @@ func drainRunner(ctx context.Context, runner *adk.Runner, query string, ch chan<
 	return sb.String(), true
 }
 
-// buildHistoryPrefix returns recent conversation history as a formatted string.
+// buildHistoryPrefix returns recent conversation history as a formatted string,
+// prepended with USER.md profile (if available) and a self-growth nudge (if due).
 // Returns empty string if no history exists or an error occurs.
 // userInput is used as the semantic query for long-term memory retrieval.
 func (a *Agent) buildHistoryPrefix(ctx context.Context, userInput string) (string, error) {
-	if a.shortMem == nil {
-		return "", nil
+	// Read USER.md for user profile injection.
+	var profileSection string
+	if a.dataDir != "" {
+		profilePath := filepath.Join(a.dataDir, "USER.md")
+		if data, err := os.ReadFile(profilePath); err == nil && len(data) > 0 {
+			profileSection = "User Profile:\n" + string(data) + "\n"
+		} else if err != nil && !os.IsNotExist(err) {
+			slog.Warn("read USER.md failed", "err", err)
+		}
 	}
 
-	// Also inject relevant long-term memories if available.
+	if a.shortMem == nil {
+		return profileSection, nil
+	}
+
+	// Inject relevant long-term memories if available.
 	var longMemContext string
 	if a.longMem != nil {
 		results, err := a.longMem.Search(ctx, userInput, 3)
@@ -248,18 +272,37 @@ func (a *Agent) buildHistoryPrefix(ctx context.Context, userInput string) (strin
 	recent, err := a.shortMem.Recent(a.cfg.ShortTermLimit)
 	if err != nil {
 		slog.Warn("short memory Recent error", "err", err)
-		return longMemContext, nil
+		recent = nil
 	}
 
-	if len(recent) == 0 {
-		return longMemContext, nil
+	// Assemble history section.
+	var histSection string
+	if len(recent) > 0 {
+		histStr := memory.FormatBlock(recent)
+		if longMemContext != "" {
+			histSection = longMemContext + "\nRecent conversation:\n" + histStr
+		} else {
+			histSection = "Recent conversation:\n" + histStr
+		}
+	} else if longMemContext != "" {
+		histSection = longMemContext
 	}
 
-	histStr := memory.FormatBlock(recent)
-	if longMemContext != "" {
-		return longMemContext + "\nRecent conversation:\n" + histStr, nil
+	// Append self-growth nudge if due.
+	var nudgeSection string
+	if a.nudgeInterval > 0 && a.turnCount > 0 && a.turnCount%a.nudgeInterval == 0 {
+		nudgeSection = `
+[SELF-GROWTH NUDGE]
+请在本次回复前，回顾刚才的对话，考虑是否需要：
+1. 调用 save_memory 保存一条具体事实或偏好（一两句话，不需要摘要对话）
+2. 调用 update_user_profile 更新用户画像（发现了新的习惯/偏好/背景信息）
+3. 调用 save_skill 将本次解决的问题模式提炼为可复用技能
+如果都不需要，直接回复即可，无需解释。
+`
 	}
-	return "Recent conversation:\n" + histStr, nil
+
+	result := profileSection + histSection + nudgeSection
+	return result, nil
 }
 
 // persistAndMigrate saves user and assistant messages to SQLite, then checks
@@ -321,4 +364,5 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput, assistantReply
 	if err := a.shortMem.DeleteByIDs(ids); err != nil {
 		slog.Error("delete migrated messages failed", "err", err)
 	}
+	a.turnCount++
 }
