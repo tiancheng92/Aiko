@@ -19,6 +19,7 @@ type Config struct {
 	SystemPrompt   string
 	ShortTermLimit int
 	NudgeInterval  int      // 每隔多少轮触发一次 self-growth nudge，0 表示使用默认值 5
+	SMSWatcherEnabled bool   // 是否启用 SMS 短信监听（macOS 仅支持）
 	SkillsDirs     []string // skills 目录列表，支持多个路径
 	PetSize        int // 宠物显示尺寸（像素），0 表示自动根据屏幕高度计算
 	ChatWidth      int // 聊天框宽度（像素），0 表示使用默认值
@@ -71,6 +72,7 @@ func (s *Store) Load() (*Config, error) {
 	cfg.ChatWidth = parseInt(m["chat_width"], 0)
 	cfg.ChatHeight = parseInt(m["chat_height"], 0)
 	cfg.ActiveProfileID = int64(parseInt(m["active_profile_id"], 0))
+	cfg.SMSWatcherEnabled = m["sms_watcher_enabled"] == "true"
 	return cfg, nil
 }
 
@@ -96,6 +98,7 @@ func (s *Store) Save(cfg *Config) error {
 		"chat_width":        strconv.Itoa(cfg.ChatWidth),
 		"chat_height":       strconv.Itoa(cfg.ChatHeight),
 		"active_profile_id": strconv.FormatInt(cfg.ActiveProfileID, 10),
+		"sms_watcher_enabled": strconv.FormatBool(cfg.SMSWatcherEnabled),
 	}
 	tx, err := s.db.Begin()
 	if err != nil {

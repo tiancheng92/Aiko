@@ -11,6 +11,7 @@ export namespace config {
 	    SystemPrompt: string;
 	    ShortTermLimit: number;
 	    NudgeInterval: number;
+	    SMSWatcherEnabled: boolean;
 	    SkillsDirs: string[];
 	    PetSize: number;
 	    ChatWidth: number;
@@ -33,6 +34,7 @@ export namespace config {
 	        this.SystemPrompt = source["SystemPrompt"];
 	        this.ShortTermLimit = source["ShortTermLimit"];
 	        this.NudgeInterval = source["NudgeInterval"];
+	        this.SMSWatcherEnabled = source["SMSWatcherEnabled"];
 	        this.SkillsDirs = source["SkillsDirs"];
 	        this.PetSize = source["PetSize"];
 	        this.ChatWidth = source["ChatWidth"];

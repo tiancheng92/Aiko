@@ -86,6 +86,10 @@ export function IsFirstLaunch() {
   return window['go']['main']['App']['IsFirstLaunch']();
 }
 
+export function IsSMSWatcherRunning() {
+  return window['go']['main']['App']['IsSMSWatcherRunning']();
+}
+
 export function LarkRunCommand(arg1) {
   return window['go']['main']['App']['LarkRunCommand'](arg1);
 }
@@ -164,6 +168,14 @@ export function SetCronJobEnabled(arg1, arg2) {
 
 export function SetToolPermission(arg1, arg2) {
   return window['go']['main']['App']['SetToolPermission'](arg1, arg2);
+}
+
+export function StartSMSWatcher() {
+  return window['go']['main']['App']['StartSMSWatcher']();
+}
+
+export function StopSMSWatcher() {
+  return window['go']['main']['App']['StopSMSWatcher']();
 }
 
 export function UpdateCronJob(arg1, arg2, arg3, arg4, arg5) {

@@ -13,6 +13,7 @@ import {
   ListOpenRouterModels,
   SavePetSize, SaveChatSize,
   GetPetSize, GetChatSize,
+  StartSMSWatcher, StopSMSWatcher, IsSMSWatcherRunning,
 } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { useModelPath } from '../composables/useModelPath.js'
@@ -70,6 +71,11 @@ const larkStatus = ref('')
 const larkStatusLoading = ref(false)
 const larkStatusError = ref('')
 
+// SMS watcher
+const smsWatcherRunning = ref(false)
+const smsWatcherLoading = ref(false)
+const smsWatcherError = ref('')
+
 // Draggable window state
 const pos = ref({ x: Math.round(window.innerWidth / 2 - 300), y: Math.round(window.innerHeight / 2 - 250) })
 let dragStart = null
@@ -106,6 +112,7 @@ onMounted(async () => {
   await fetchCronJobs()
   fetchLarkStatus()
   await fetchProfiles()
+  smsWatcherRunning.value = await IsSMSWatcherRunning()
   offProgress = EventsOn('knowledge:progress', (p) => { importProgress.value = p })
   // Refresh per-screen sizes when the user moves the mouse to a different screen.
   offScreen = EventsOn('screen:active:changed', async (info) => {
@@ -533,6 +540,25 @@ async function fetchLarkStatus() {
     larkStatusLoading.value = false
   }
 }
+
+/** toggleSMSWatcher starts or stops the SMS verification code watcher. */
+async function toggleSMSWatcher() {
+  smsWatcherLoading.value = true
+  smsWatcherError.value = ''
+  try {
+    if (smsWatcherRunning.value) {
+      await StopSMSWatcher()
+      smsWatcherRunning.value = false
+    } else {
+      await StartSMSWatcher()
+      smsWatcherRunning.value = true
+    }
+  } catch (e) {
+    smsWatcherError.value = String(e)
+  } finally {
+    smsWatcherLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -566,6 +592,9 @@ async function fetchLarkStatus() {
         </button>
         <button :class="{ active: activeTab === 'lark' }" @click="activeTab = 'lark'">
           <span class="nav-icon">🪶</span><span class="nav-label">飞书</span>
+        </button>
+        <button :class="{ active: activeTab === 'sms' }" @click="activeTab = 'sms'">
+          <span class="nav-icon">📱</span><span class="nav-label">短信监听</span>
         </button>
       </nav>
 
@@ -949,6 +978,46 @@ async function fetchLarkStatus() {
             配置完成后，AI 可通过 lark-cli 操作飞书，例如：发消息、查日历、读文档等。<br>
             <strong>注意：</strong>需在"模型"标签页的 Skills 目录中添加飞书 Skills 路径（通常为 <code>~/.agents/skills</code>）。
           </p>
+        </div>
+
+        <!-- 短信监听 -->
+        <div v-if="activeTab === 'sms'" class="tab-pane">
+          <div class="section-header">
+            <h3>短信验证码监听</h3>
+          </div>
+          <p class="sms-desc">
+            监听 macOS 信息 App 的 SMS 短信，自动识别验证码并复制到剪贴板，同时弹出通知气泡。<br>
+            <strong>需要权限：</strong>系统设置 → 隐私与安全性 → <strong>完全磁盘访问权限</strong> → 授权 Aiko。
+          </p>
+
+          <div class="sms-toggle-row">
+            <span class="sms-status-dot" :class="smsWatcherRunning ? 'dot-on' : 'dot-off'"></span>
+            <span class="sms-status-label">{{ smsWatcherRunning ? '监听中' : '已停止' }}</span>
+            <button class="fetch-btn" @click="toggleSMSWatcher" :disabled="smsWatcherLoading">
+              {{ smsWatcherLoading ? '处理中...' : (smsWatcherRunning ? '停止监听' : '开启监听') }}
+            </button>
+          </div>
+
+          <div v-if="smsWatcherError" class="lark-status lark-status--err" style="margin-top:8px">
+            {{ smsWatcherError }}
+          </div>
+
+          <div class="sms-guide">
+            <div class="sms-guide-step">
+              <span class="lark-step-num">1</span>
+              <div class="lark-step-body">
+                <div class="lark-step-title">授予完全磁盘访问权限</div>
+                <p class="lark-step-desc">系统设置 → 隐私与安全性 → 完全磁盘访问权限 → 点击 + 添加 Aiko</p>
+              </div>
+            </div>
+            <div class="sms-guide-step">
+              <span class="lark-step-num">2</span>
+              <div class="lark-step-body">
+                <div class="lark-step-title">点击「开启监听」</div>
+                <p class="lark-step-desc">收到含验证码的短信后，验证码自动写入剪贴板并弹出通知。</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1575,4 +1644,29 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
   color: rgba(255,255,255,0.45);
   margin-bottom: 6px;
 }
+
+/* SMS watcher tab */
+.sms-desc {
+  font-size: 12px;
+  color: #9ca3af;
+  line-height: 1.6;
+  margin-bottom: 14px;
+}
+.sms-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.sms-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dot-on  { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+.dot-off { background: #6b7280; }
+.sms-status-label { font-size: 12px; color: #d1d5db; flex: 1; }
+.sms-guide { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.sms-guide-step { display: flex; align-items: flex-start; gap: 10px; }
 </style>

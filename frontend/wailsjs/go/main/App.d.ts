@@ -50,6 +50,8 @@ export function ImportKnowledge(arg1:string):Promise<void>;
 
 export function IsFirstLaunch():Promise<boolean>;
 
+export function IsSMSWatcherRunning():Promise<boolean>;
+
 export function LarkRunCommand(arg1:string):Promise<string>;
 
 export function LarkStatus():Promise<string>;
@@ -89,6 +91,10 @@ export function SendMessage(arg1:string):Promise<void>;
 export function SetCronJobEnabled(arg1:number,arg2:boolean):Promise<void>;
 
 export function SetToolPermission(arg1:string,arg2:boolean):Promise<void>;
+
+export function StartSMSWatcher():Promise<void>;
+
+export function StopSMSWatcher():Promise<void>;
 
 export function UpdateCronJob(arg1:number,arg2:string,arg3:string,arg4:string,arg5:string):Promise<scheduler.Job>;
 

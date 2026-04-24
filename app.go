@@ -31,6 +31,7 @@ import (
 	"aiko/internal/memory"
 	"aiko/internal/scheduler"
 	"aiko/internal/skill"
+	"aiko/internal/sms"
 	internaltools "aiko/internal/tools"
 )
 
@@ -53,6 +54,7 @@ type App struct {
 	longMem     *memory.LongStore
 	knowledgeSt *knowledge.Store
 	petAgent    *agent.Agent
+	smsWatcher  *sms.Watcher // guarded by mu
 }
 
 // NewApp creates a new App instance.
@@ -152,6 +154,13 @@ func (a *App) startup(ctx context.Context) {
 
 	// Watch for mouse moving to a different screen and migrate the window.
 	a.startScreenWatcher()
+
+	// Start SMS watcher if enabled in config.
+	if a.cfg.SMSWatcherEnabled {
+		if err := a.startSMSWatcher(); err != nil {
+			slog.Warn("SMS watcher start failed", "err", err)
+		}
+	}
 }
 
 // initLLMComponents initializes chat model, embedder, memory stores, skills, and agent.
@@ -281,6 +290,8 @@ func (a *App) GetConfig() *config.Config { return a.cfg }
 // SaveConfig persists updated config and reinitializes LLM components.
 // LLM init errors are non-fatal (user may save non-LLM settings before configuring the model).
 func (a *App) SaveConfig(cfg *config.Config) error {
+	// Preserve fields that are managed independently (not via the settings form).
+	cfg.SMSWatcherEnabled = a.cfg.SMSWatcherEnabled
 	if err := a.configStore.Save(cfg); err != nil {
 		return err
 	}
@@ -824,6 +835,83 @@ func (a *App) ListOpenRouterModels(baseURL, apiKey string) ([]string, error) {
 // ListMCPServers returns all configured MCP server entries.
 func (a *App) ListMCPServers() ([]mcp.ServerConfig, error) {
 	return a.mcpStore.List(a.ctx)
+}
+
+// shutdown is called by Wails when the application is closing.
+func (a *App) shutdown(_ context.Context) {
+	a.mu.Lock()
+	w := a.smsWatcher
+	a.smsWatcher = nil
+	a.mu.Unlock()
+	if w != nil {
+		w.Stop()
+	}
+}
+
+// startSMSWatcher creates and starts an SMS watcher, emitting verification code
+// events to the frontend and copying the code to the clipboard.
+// Caller must NOT hold a.mu.
+func (a *App) startSMSWatcher() error {
+	w, err := sms.NewWatcher(func(evt sms.Event) {
+		wailsruntime.ClipboardSetText(a.ctx, evt.Code)
+		wailsruntime.EventsEmit(a.ctx, "sms:verification_code", map[string]any{
+			"code":   evt.Code,
+			"sender": evt.Sender,
+			"text":   evt.Text,
+		})
+		wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
+			"title":   "📱 验证码：" + evt.Code,
+			"message": evt.Sender + "：" + evt.Text,
+		})
+	})
+	if err != nil {
+		return err
+	}
+	if err := w.Start(a.ctx); err != nil {
+		return err
+	}
+	a.mu.Lock()
+	a.smsWatcher = w
+	a.mu.Unlock()
+	return nil
+}
+
+// StartSMSWatcher enables SMS monitoring, persists the setting, and starts the watcher.
+func (a *App) StartSMSWatcher() error {
+	a.mu.RLock()
+	running := a.smsWatcher != nil
+	a.mu.RUnlock()
+	if running {
+		return nil // already running
+	}
+	a.cfg.SMSWatcherEnabled = true
+	if err := a.configStore.Save(a.cfg); err != nil {
+		return fmt.Errorf("save config: %w", err)
+	}
+	return a.startSMSWatcher()
+}
+
+// StopSMSWatcher disables SMS monitoring, persists the setting, and stops the watcher.
+func (a *App) StopSMSWatcher() error {
+	a.cfg.SMSWatcherEnabled = false
+	if err := a.configStore.Save(a.cfg); err != nil {
+		return fmt.Errorf("save config: %w", err)
+	}
+	a.mu.Lock()
+	w := a.smsWatcher
+	a.smsWatcher = nil
+	a.mu.Unlock()
+	if w != nil {
+		w.Stop()
+	}
+	return nil
+}
+
+// IsSMSWatcherRunning reports whether the SMS watcher is currently active.
+func (a *App) IsSMSWatcherRunning() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.smsWatcher != nil
 }
 
 // AddMCPServer adds a new MCP server configuration and reloads tools.
