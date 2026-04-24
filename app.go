@@ -55,7 +55,8 @@ type App struct {
 	knowledgeSt *knowledge.Store
 	petAgent    *agent.Agent
 	smsWatcher  *sms.Watcher // guarded by mu
-	chatCancel   context.CancelFunc // cancels the current in-flight SendMessage; guarded by mu
+	chatCancel      context.CancelFunc // cancels the current in-flight SendMessage; guarded by mu
+	chatGeneration  uint64             // incremented on each SendMessage; used to avoid stale cancel nils
 }
 
 // NewApp creates a new App instance.
@@ -530,6 +531,8 @@ func (a *App) SendMessage(userInput string) error {
 	}
 	chatCtx, cancel := context.WithCancel(a.ctx)
 	a.chatCancel = cancel
+	a.chatGeneration++
+	myGen := a.chatGeneration
 	a.mu.Unlock()
 
 	a.mu.RLock()
@@ -545,10 +548,10 @@ func (a *App) SendMessage(userInput string) error {
 		return fmt.Errorf("agent not initialized: complete settings first")
 	}
 	go func() {
+		defer cancel() // ensure context is always released
 		defer func() {
 			a.mu.Lock()
-			// Only clear chatCancel if it's still ours (a newer call may have replaced it).
-			if a.chatCancel != nil {
+			if a.chatGeneration == myGen {
 				a.chatCancel = nil
 			}
 			a.mu.Unlock()
