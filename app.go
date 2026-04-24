@@ -559,6 +559,10 @@ func (a *App) SendMessage(userInput string) error {
 		ch := ag.Chat(chatCtx, userInput)
 		for result := range ch {
 			if result.Err != nil {
+				// Ignore context cancellation — user triggered StopGeneration; frontend handles UI.
+				if errors.Is(result.Err, context.Canceled) {
+					return
+				}
 				wailsruntime.EventsEmit(a.ctx, "chat:error", result.Err.Error())
 				return
 			}
