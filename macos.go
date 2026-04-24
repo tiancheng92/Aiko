@@ -363,21 +363,16 @@ static void startVoiceRecognition() {
         // Check speech recognition permission
         SFSpeechRecognizerAuthorizationStatus speechStatus = [SFSpeechRecognizer authorizationStatus];
         aikoTrace("startVoiceRecognition: got speechStatus");
-        if (speechStatus == SFSpeechRecognizerAuthorizationStatusNotDetermined) {
-            aikoTrace("startVoiceRecognition: requesting speech permission");
-            [SFSpeechRecognizer requestAuthorization:^(SFSpeechRecognizerAuthorizationStatus status) {
-                if (status == SFSpeechRecognizerAuthorizationStatusAuthorized) {
-                    startVoiceRecognition();
-                } else {
-                    sendVoiceText("ERROR:speech_denied");
-                }
-            }];
-            return;
-        } else if (speechStatus != SFSpeechRecognizerAuthorizationStatusAuthorized) {
+        if (speechStatus == SFSpeechRecognizerAuthorizationStatusDenied ||
+            speechStatus == SFSpeechRecognizerAuthorizationStatusRestricted) {
             sendVoiceText("ERROR:speech_denied");
             return;
         }
-        aikoTrace("startVoiceRecognition: speech authorized");
+        // If NotDetermined, the system will request authorization automatically
+        // when the recognition task is created. Skipping explicit requestAuthorization:
+        // avoids a C-level abort() when NSSpeechRecognitionUsageDescription is missing
+        // from the dev bundle's embedded Info.plist.
+        aikoTrace("startVoiceRecognition: speech status ok (will prompt if needed)");
 
         // Initialize recognizer (prefer zh-CN, fallback to device locale)
         gSpeechRecognizer = [[SFSpeechRecognizer alloc] initWithLocale:[NSLocale localeWithLocaleIdentifier:@"zh-CN"]];
