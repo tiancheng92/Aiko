@@ -14,6 +14,7 @@ import {
   SavePetSize, SaveChatSize,
   GetPetSize, GetChatSize,
   StartSMSWatcher, StopSMSWatcher, IsSMSWatcherRunning,
+  GetVoiceAutoSend, SetVoiceAutoSend,
 } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { useModelPath } from '../composables/useModelPath.js'
@@ -33,6 +34,7 @@ const cfg = ref({
   ChatWidth: 0,
   ChatHeight: 0,
   ActiveProfileID: 0,
+  VoiceAutoSend: false,
 })
 const { availableModels, loadModels } = useModelPath()
 const toolPerms = ref([])   // [{ ToolName, Level, Granted }]
@@ -559,6 +561,16 @@ async function toggleSMSWatcher() {
     smsWatcherLoading.value = false
   }
 }
+
+/** toggleVoiceAutoSend updates voice auto-send setting immediately and notifies ChatPanel. */
+async function toggleVoiceAutoSend() {
+  try {
+    await SetVoiceAutoSend(cfg.value.VoiceAutoSend)
+    EventsEmit('config:voice:auto-send:changed', cfg.value.VoiceAutoSend)
+  } catch (e) {
+    console.warn('toggleVoiceAutoSend failed:', e)
+  }
+}
 </script>
 
 <template>
@@ -1018,6 +1030,17 @@ async function toggleSMSWatcher() {
               </div>
             </div>
           </div>
+
+          <!-- Voice auto-send toggle -->
+          <div class="settings-section-title" style="margin-top:20px">语音设置</div>
+          <div class="sms-toggle-row" style="margin-top:8px">
+            <span class="sms-status-label" style="flex:1">语音消息立刻发送</span>
+            <label class="voice-auto-send-switch">
+              <input type="checkbox" v-model="cfg.VoiceAutoSend" @change="toggleVoiceAutoSend" />
+              <span class="voice-auto-send-slider"></span>
+            </label>
+          </div>
+          <p class="sms-desc" style="margin-top:4px">释放 Option 键后，等待转录完成并自动发送消息</p>
         </div>
       </div>
     </div>
@@ -1669,4 +1692,32 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
 .sms-status-label { font-size: 12px; color: #d1d5db; flex: 1; }
 .sms-guide { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
 .sms-guide-step { display: flex; align-items: flex-start; gap: 10px; }
+.voice-auto-send-switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+  cursor: pointer;
+}
+.voice-auto-send-switch input { display: none; }
+.voice-auto-send-slider {
+  position: absolute;
+  inset: 0;
+  background: #374151;
+  border-radius: 11px;
+  transition: background 0.2s;
+}
+.voice-auto-send-slider::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 3px;
+  top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.voice-auto-send-switch input:checked + .voice-auto-send-slider { background: #6366f1; }
+.voice-auto-send-switch input:checked + .voice-auto-send-slider::before { transform: translateX(18px); }
 </style>
