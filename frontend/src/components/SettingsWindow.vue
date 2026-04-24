@@ -26,7 +26,7 @@ const props = defineProps({
 const cfg = ref({
   LLMBaseURL: '', LLMAPIKey: '', LLMModel: '', EmbeddingModel: '',
   Live2DModel: 'hiyori',
-  SystemPrompt: '', ShortTermLimit: 30, SkillsDirs: '',
+  SystemPrompt: '', ShortTermLimit: 30, NudgeInterval: 5, SkillsDirs: '',
   EmbeddingDim: 1536,
   PetSize: 0,
   ChatWidth: 0,
@@ -676,6 +676,7 @@ async function fetchLarkStatus() {
           </label>
           <label>System Prompt<textarea v-model="cfg.SystemPrompt" rows="5" /></label>
           <label>短期记忆轮数（1-100）<input type="number" v-model.number="cfg.ShortTermLimit" min="1" max="100" /></label>
+          <label>自我成长 Nudge 间隔（轮）<input type="number" v-model.number="cfg.NudgeInterval" min="1" max="100" /></label>
           <label>Skills 目录<span class="field-hint">每行一个路径</span><textarea v-model="cfg.SkillsDirs" rows="3" placeholder="~/.aiko/skills" /></label>
         </div>
 
