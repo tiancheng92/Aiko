@@ -5,6 +5,26 @@
             "Id": "Param107",
             "Value": 1.0,
             "Blend": "Add"
+        },
+        {
+            "Id": "Param133",
+            "Value": 1.0,
+            "Blend": "Add"
+        },
+        {
+            "Id": "Param134",
+            "Value": 1.0,
+            "Blend": "Add"
+        },
+        {
+            "Id": "Param135",
+            "Value": 1.0,
+            "Blend": "Add"
+        },
+        {
+            "Id": "Param136",
+            "Value": 1.0,
+            "Blend": "Add"
         }
     ]
 }

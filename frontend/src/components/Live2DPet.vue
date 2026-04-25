@@ -19,15 +19,25 @@ const { petState } = usePetState()
 const { currentModel, availableModels, modelPath, loadModels } = useModelPath()
 const petMenuRef = ref(null)
 
-// Expression cycle — index into a fixed list; pixi-live2d silently ignores unknown IDs.
-const EXPRESSIONS = ['f01', 'f02', 'f03', 'f04', 'f05']
+// Expression names are read dynamically from the loaded model's settings.
+// Falls back to an empty list if the model has no registered expressions.
+let modelExpressions = []
 let exprIdx = 0
 
 /** cycleExpression advances the Live2D model to the next expression in rotation. */
 function cycleExpression() {
-  if (!live2dModel) return
-  exprIdx = (exprIdx + 1) % EXPRESSIONS.length
-  live2dModel.expression(EXPRESSIONS[exprIdx])
+  if (!live2dModel || modelExpressions.length === 0) return
+  exprIdx = (exprIdx + 1) % modelExpressions.length
+  live2dModel.expression(modelExpressions[exprIdx])
+}
+
+/**
+ * namedExpr returns the expression name matching the given keyword (case-insensitive substring).
+ * Returns undefined if no match is found, which resets the expression when passed to live2dModel.expression().
+ */
+function namedExpr(keyword) {
+  if (!keyword) return undefined
+  return modelExpressions.find(n => n.includes(keyword))
 }
 
 /** switchToNextModel cycles availableModels and persists the selection. */
@@ -99,6 +109,11 @@ async function attachModel(path) {
     live2dModel = null
   }
   live2dModel = newModel
+  // Read expression names from the ExpressionManager's definitions (populated from model3.json).
+  const exprMgr = live2dModel.internalModel?.motionManager?.expressionManager
+  const defs = exprMgr?.definitions ?? live2dModel.internalModel?.settings?.expressions ?? []
+  modelExpressions = Array.isArray(defs) ? defs.map(e => e.Name ?? e.name).filter(Boolean) : []
+  exprIdx = 0
   pixiApp.stage.addChild(live2dModel)
   const scale = petSize.value / live2dModel.internalModel.originalHeight
   live2dModel.scale.set(scale)
@@ -243,19 +258,19 @@ watch(petState, (state) => {
   switch (state) {
     case 'thinking':
       live2dModel.motion('Idle', undefined, MotionPriority.NORMAL)
-      live2dModel.expression('f01')
+      live2dModel.expression(namedExpr('星星眼'))
       break
     case 'speaking':
       live2dModel.motion('TapBody', undefined, MotionPriority.FORCE)
-      live2dModel.expression('f02')
+      live2dModel.expression(namedExpr('爱心'))
       break
     case 'listening':
       live2dModel.motion('Idle', undefined, MotionPriority.NORMAL)
-      live2dModel.expression('f03')
+      live2dModel.expression(namedExpr('星星眼'))
       break
     case 'error':
       live2dModel.motion('TapBody', undefined, MotionPriority.FORCE)
-      live2dModel.expression('f04')
+      live2dModel.expression(namedExpr('生气'))
       break
     case 'idle':
     default:
