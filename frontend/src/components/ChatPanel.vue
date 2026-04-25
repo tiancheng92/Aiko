@@ -226,10 +226,12 @@ onMounted(async () => {
     soundsEnabled = val
   })
 
-  // TTS event listeners
-  // tts:done 仅表示 Go 端数据发送完毕；对于 sherpa（离线生成）实际播放可能还未结束，
-  // 因此这里只清 currentTTSAudio 的"待播"状态，activeTTSMsgId 由 audio.onended 或手动停止清除。
-  offTTSDone  = EventsOn('tts:done',  () => { /* 播放结束由 audio.onended 处理 */ })
+  // tts:done 表示 Go 端处理完毕。
+  // 对于有 audio bytes 的后端（kokoro），activeTTSMsgId 由 audio.onended 清除。
+  // 对于 SystemSpeaker（say），没有 tts:audio 事件，直接在 tts:done 里清除状态。
+  offTTSDone  = EventsOn('tts:done',  () => {
+    if (!currentTTSAudio) activeTTSMsgId.value = null
+  })
   offTTSError = EventsOn('tts:error', () => {
     activeTTSMsgId.value = null
     if (currentTTSAudio) { currentTTSAudio.pause(); currentTTSAudio = null }
@@ -429,16 +431,7 @@ defineExpose({ focusInput, scrollToBottom })
       <div v-for="(m, i) in messages" :key="i" :class="['msg', m.role]">
         <div class="bubble-wrap" :class="{ ghost: m.ghost }">
           <div class="bubble-row">
-            <!-- User copy button: left of bubble -->
-            <button
-              v-if="m.role === 'user' && !m.streaming && !m.thinking"
-              class="copy-btn"
-              @click="copyMessage(i)"
-              :title="copiedIdx === i ? '已复制' : '复制'"
-            >{{ copiedIdx === i ? '✓' : '⎘' }}</button>
-
             <!-- Bubble content -->
-
             <div v-if="m.role !== 'assistant'" class="bubble markdown" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')"></div>
             <template v-else>
               <div v-if="m.thinking || (m.streaming && !renderMarkdown(m.content))" :class="['bubble', 'thinking-bubble', { proactive: m.isProactive }]">
@@ -447,20 +440,29 @@ defineExpose({ focusInput, scrollToBottom })
               <div v-else :class="['bubble', 'markdown', { proactive: m.isProactive }]" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')" />
             </template>
 
-            <!-- Assistant copy button: right of bubble -->
-            <button
-              v-if="m.role === 'assistant' && !m.streaming && !m.thinking"
-              class="copy-btn"
-              @click="copyMessage(i)"
-              :title="copiedIdx === i ? '已复制' : '复制'"
-            >{{ copiedIdx === i ? '✓' : '⎘' }}</button>
-            <!-- TTS button: right of copy button for assistant messages -->
-            <button
-              v-if="m.role === 'assistant' && !m.streaming && !m.thinking"
-              class="tts-btn"
-              :title="activeTTSMsgId === i ? '停止朗读' : '朗读'"
-              @click="speakMessage(i)"
-            >{{ activeTTSMsgId === i ? '⏹' : '🔊' }}</button>
+            <!-- Action buttons: absolutely positioned, no layout impact -->
+            <div
+              v-if="!m.streaming && !m.thinking"
+              :class="['msg-actions', m.role]"
+            >
+              <button
+                class="msg-action-btn"
+                @click="copyMessage(i)"
+                :title="copiedIdx === i ? '已复制' : '复制'"
+              >
+                <svg v-if="copiedIdx !== i" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+              <button
+                v-if="m.role === 'assistant'"
+                class="msg-action-btn"
+                :title="activeTTSMsgId === i ? '停止朗读' : '朗读'"
+                @click="speakMessage(i)"
+              >
+                <svg v-if="activeTTSMsgId !== i" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+              </button>
+            </div>
           </div>
           <div v-if="m.time && !m.streaming && !m.thinking" class="msg-time">{{ formatTime(m.time) }}</div>
         </div>
@@ -519,10 +521,10 @@ defineExpose({ focusInput, scrollToBottom })
 .bubble-wrap { max-width: 88%; display: flex; flex-direction: column; }
 .msg.user .bubble-wrap { align-items: flex-end; }
 
-/* Bubble row: bubble + copy btn side by side */
-.bubble-row { display: flex; align-items: flex-start; gap: 6px; }
-.msg.user .bubble-row { flex-direction: row; }
-.msg.assistant .bubble-row { flex-direction: row; }
+/* Bubble row: relative container，按钮绝对定位不占空间 */
+.bubble-row { position: relative; display: inline-flex; }
+.msg.user .bubble-row { justify-content: flex-end; }
+.msg.assistant .bubble-row { justify-content: flex-start; }
 
 /* Bubble base */
 .bubble {
@@ -624,44 +626,36 @@ defineExpose({ focusInput, scrollToBottom })
 .msg.user .msg-time { text-align: right; }
 .msg.assistant .msg-time { text-align: left; }
 
-/* Copy button */
-.copy-btn {
-  flex-shrink: 0;
-  align-self: flex-start;
-  margin-top: 6px;
-  background: rgba(55, 65, 81, 0.8);
-  border: 1px solid rgba(255,255,255,0.08);
-  color: rgba(156, 163, 175, 0.8);
-  border-radius: 6px;
-  width: 0;
-  height: 28px;
-  overflow: hidden;
-  cursor: pointer;
-  font-size: 18px;
-  display: flex; align-items: center; justify-content: center;
+/* Action buttons: absolutely positioned outside bubble */
+.msg-actions {
+  position: absolute;
+  top: 6px;
+  display: flex;
+  gap: 4px;
   opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+.msg-actions.assistant { left: 100%; padding-left: 6px; }
+.msg-actions.user { right: 100%; padding-right: 6px; }
+.bubble-wrap:hover .msg-actions,
+.msg-actions:hover { opacity: 1; pointer-events: auto; }
+
+.msg-action-btn {
+  flex-shrink: 0;
+  background: rgba(55, 65, 81, 0.85);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(156, 163, 175, 0.9);
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
   outline: none;
   padding: 0;
-  transition: opacity 0.15s, width 0.15s, padding 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
-.bubble-row:hover .copy-btn { opacity: 1; width: 32px; }
-.copy-btn:hover { background: rgba(75, 85, 99, 0.9); color: #f9fafb; }
-
-.tts-btn {
-  flex-shrink: 0;
-  align-self: flex-start;
-  margin-top: 6px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 2px 4px;
-  font-size: 13px;
-  opacity: 0;
-  border-radius: 4px;
-  transition: opacity 0.15s;
-}
-.bubble-row:hover .tts-btn { opacity: 0.55; }
-.tts-btn:hover { opacity: 1; }
+.msg-action-btn:hover { background: rgba(75, 85, 99, 0.95); color: #f9fafb; }
 
 /* Markdown prose */
 .bubble.markdown :deep(p) { margin: 0 0 8px; }

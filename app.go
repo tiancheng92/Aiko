@@ -436,6 +436,14 @@ func (a *App) SaveModelProfile(p config.ModelProfile) (config.ModelProfile, erro
 	if p.ID == a.cfg.ActiveProfileID {
 		a.cfg.ApplyProfile(&p)
 		slog.Info("SaveModelProfile: applied to cfg", "voice", a.cfg.TTSVoice)
+		// 重建 TTS 实例，使 backend/voice/speed 变更立即生效。
+		newKey := a.cfg.TTSBackend + "|" + a.cfg.TTSModelDir
+		slog.Info("SaveModelProfile: tts rebuild check", "newKey", newKey, "oldKey", a.ttsBackendKey, "speakerNil", a.ttsSpeaker == nil)
+		if a.ttsSpeaker == nil || newKey != a.ttsBackendKey {
+			a.ttsSpeaker = tts.New(a.cfg.TTSBackend, a.cfg.TTSModelDir)
+			a.ttsBackendKey = newKey
+			slog.Info("SaveModelProfile: tts rebuilt", "type", fmt.Sprintf("%T", a.ttsSpeaker))
+		}
 	}
 	return p, nil
 }

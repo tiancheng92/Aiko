@@ -59,6 +59,7 @@ const activeProfileID = ref(0)
 const showProfileForm = ref(false)
 const profileForm = ref({ id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, tts_model_dir: '', tts_voice: '', tts_speed: 1.0, tts_backend: '' })
 const profileFormError = ref('')
+const profileFormSaving = ref(false)
 const profileModels = ref([])
 const fetchingProfileModels = ref(false)
 const kokoroTTSVoices = ref([])
@@ -207,18 +208,23 @@ async function fetchProfileModels() {
 
 /** saveProfile creates or updates a profile. */
 async function saveProfile() {
+  if (profileFormSaving.value) return
+  profileFormSaving.value = true
   profileFormError.value = ''
-  if (!profileForm.value.name.trim()) { profileFormError.value = '请输入配置名称'; return }
-  if (!profileForm.value.model.trim()) { profileFormError.value = '请输入模型名称'; return }
+  if (!profileForm.value.name.trim()) { profileFormError.value = '请输入配置名称'; profileFormSaving.value = false; return }
+  if (!profileForm.value.model.trim()) { profileFormError.value = '请输入模型名称'; profileFormSaving.value = false; return }
   if (profileForm.value.provider === 'openai' && !profileForm.value.base_url.trim()) {
-    profileFormError.value = '请输入 Base URL'; return
+    profileFormError.value = '请输入 Base URL'; profileFormSaving.value = false; return
   }
   try {
+    console.log('saveProfile payload:', JSON.stringify({ ...profileForm.value }))
     await SaveModelProfile({ ...profileForm.value })
     showProfileForm.value = false
     await fetchProfiles()
   } catch (e) {
     profileFormError.value = '保存失败: ' + e
+  } finally {
+    profileFormSaving.value = false
   }
 }
 
@@ -793,7 +799,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               <div v-if="profileFormError" class="form-error">{{ profileFormError }}</div>
               <div class="modal-actions">
                 <button class="btn-cancel" @click="showProfileForm = false">取消</button>
-                <button class="btn-save" @click="saveProfile">保存</button>
+                <button class="btn-save" @click="saveProfile" :disabled="profileFormSaving">{{ profileFormSaving ? '保存中…' : '保存' }}</button>
               </div>
             </div>
           </div>

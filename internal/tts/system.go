@@ -11,11 +11,22 @@ import (
 // Speak() plays audio directly on the backend; no bytes are returned.
 type SystemSpeaker struct{}
 
+// isKokoroVoice returns true if voice is a Kokoro-specific voice name (zf_/zm_ prefix),
+// which are not valid macOS say voices and must be ignored.
+func isKokoroVoice(voice string) bool {
+	return strings.HasPrefix(voice, "zf_") || strings.HasPrefix(voice, "zm_")
+}
+
 // Speak plays text using macOS say command. Returns nil bytes (plays directly).
 func (s *SystemSpeaker) Speak(ctx context.Context, text, voice string, speed float64) ([]byte, error) {
 	// Escape double quotes and backslashes in text to avoid injection via osascript
 	safe := strings.ReplaceAll(text, `\`, `\\`)
 	safe = strings.ReplaceAll(safe, `"`, `\"`)
+
+	// Ignore Kokoro-specific voice names (zf_*/zm_*) — they are invalid for macOS say.
+	if isKokoroVoice(voice) {
+		voice = ""
+	}
 
 	var script string
 	if voice != "" {
