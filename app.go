@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	chromem "github.com/philippgille/chromem-go"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -1209,6 +1210,62 @@ func (a *App) LarkRunCommand(args string) (string, error) {
 	return lark.NewClient(cliPath).Run(a.ctx, strings.Fields(args)...)
 }
 
+// stripNonSpeech removes emoji and kaomoji from text before TTS synthesis.
+// Emoji are identified by Unicode ranges (Emoji/Symbol/Misc blocks).
+// Kaomoji are matched by common bracket patterns like (=^･ω･^=) and (╥_╥).
+func stripNonSpeech(s string) string {
+	// Remove kaomoji: sequences starting with ( or ╥ etc. containing non-ASCII
+	// Use a simple rune scan: strip parenthesized runs that contain non-letter non-digit runes.
+	var buf strings.Builder
+	runes := []rune(s)
+	i := 0
+	for i < len(runes) {
+		r := runes[i]
+		// Detect emoji / symbols / misc unicode blocks
+		if isEmojiRune(r) {
+			i++
+			// Skip variation selectors and zero-width joiners that follow
+			for i < len(runes) && (runes[i] == 0xFE0F || runes[i] == 0x200D || (runes[i] >= 0x1F3FB && runes[i] <= 0x1F3FF)) {
+				i++
+			}
+			continue
+		}
+		// Detect kaomoji: opening paren followed by run with non-letter/digit content, closing paren
+		if (r == '(' || r == '（') && i+1 < len(runes) {
+			end := -1
+			hasKaomoji := false
+			for j := i + 1; j < len(runes) && j < i+20; j++ {
+				if runes[j] == ')' || runes[j] == '）' {
+					end = j
+					break
+				}
+				if !unicode.IsLetter(runes[j]) && !unicode.IsDigit(runes[j]) && !unicode.IsSpace(runes[j]) {
+					hasKaomoji = true
+				}
+			}
+			if end > 0 && hasKaomoji {
+				i = end + 1
+				continue
+			}
+		}
+		buf.WriteRune(r)
+		i++
+	}
+	// Collapse multiple spaces left behind
+	return strings.Join(strings.Fields(buf.String()), " ")
+}
+
+// isEmojiRune reports whether r is in an emoji/symbol Unicode range.
+func isEmojiRune(r rune) bool {
+	return (r >= 0x1F000 && r <= 0x1FFFF) || // Mahjong, dominoes, misc symbols & pictographs, emoticons, etc.
+		(r >= 0x2600 && r <= 0x27BF) || // Misc symbols, dingbats
+		(r >= 0x2300 && r <= 0x23FF) || // Misc technical
+		(r >= 0xFE00 && r <= 0xFE0F) || // Variation selectors
+		r == 0x200D || // Zero-width joiner
+		(r >= 0x1F900 && r <= 0x1F9FF) || // Supplemental symbols
+		(r >= 0x1FA00 && r <= 0x1FAFF) // Chess, symbols extended
+}
+
 // SpeakText synthesizes text to speech using the current TTS backend.
 // If text exceeds TTSSummarizeThreshold runes, it is first summarized by the LLM.
 // Audio bytes are emitted as tts:audio (base64 WAV); system speaker plays directly without tts:audio.
@@ -1252,7 +1309,7 @@ func (a *App) SpeakText(text string) error {
 			}
 		}
 
-		audioBytes, err := speaker.Speak(ctx, finalText, cfg.TTSVoice, cfg.TTSSpeed)
+		audioBytes, err := speaker.Speak(ctx, stripNonSpeech(finalText), cfg.TTSVoice, cfg.TTSSpeed)
 		if err != nil {
 			if ctx.Err() != nil {
 				wailsruntime.EventsEmit(a.ctx, "tts:done", nil)
