@@ -143,5 +143,15 @@ func migrate(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("recreate proactive_items: %w", err)
 	}
+	// TTS columns for model_profiles (idempotent)
+	for _, col := range []string{
+		`ALTER TABLE model_profiles ADD COLUMN tts_model TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE model_profiles ADD COLUMN tts_voice TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE model_profiles ADD COLUMN tts_speed REAL NOT NULL DEFAULT 1.0`,
+	} {
+		if _, err := db.Exec(col); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			return fmt.Errorf("alter model_profiles for tts: %w", err)
+		}
+	}
 	return nil
 }
