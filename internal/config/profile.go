@@ -24,10 +24,10 @@ type ModelProfile struct {
 	Model          string   `json:"model"`
 	EmbeddingModel string   `json:"embedding_model"`
 	EmbeddingDim   int      `json:"embedding_dim"`
-	TTSModel       string   `json:"tts_model"`
+	TTSModelDir    string   `json:"tts_model_dir"` // kokoro 模型目录（含 onnx/voices bin）
 	TTSVoice       string   `json:"tts_voice"`
 	TTSSpeed       float64  `json:"tts_speed"`
-	TTSBackend     string   `json:"tts_backend"` // "openai" | "sherpa" | ""（系统 say）
+	TTSBackend     string   `json:"tts_backend"` // "kokoro" | ""（系统 say）
 }
 
 // ProfileStore manages model_profiles rows.
@@ -51,7 +51,7 @@ func (s *ProfileStore) List() ([]ModelProfile, error) {
 		var p ModelProfile
 		if err := rows.Scan(&p.ID, &p.Name, &p.Provider, &p.BaseURL, &p.APIKey,
 			&p.Model, &p.EmbeddingModel, &p.EmbeddingDim,
-			&p.TTSModel, &p.TTSVoice, &p.TTSSpeed, &p.TTSBackend); err != nil {
+			&p.TTSModelDir, &p.TTSVoice, &p.TTSSpeed, &p.TTSBackend); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -68,7 +68,7 @@ func (s *ProfileStore) Get(id int64) (*ModelProfile, error) {
 		FROM model_profiles WHERE id = ?`, id).
 		Scan(&p.ID, &p.Name, &p.Provider, &p.BaseURL, &p.APIKey,
 			&p.Model, &p.EmbeddingModel, &p.EmbeddingDim,
-			&p.TTSModel, &p.TTSVoice, &p.TTSSpeed, &p.TTSBackend)
+			&p.TTSModelDir, &p.TTSVoice, &p.TTSSpeed, &p.TTSBackend)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("profile %d not found", id)
 	}
@@ -88,7 +88,7 @@ func (s *ProfileStore) Save(p *ModelProfile) error {
 			INSERT INTO model_profiles(name, provider, base_url, api_key, model, embedding_model, embedding_dim, tts_model, tts_voice, tts_speed, tts_backend)
 			VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
 			p.Name, p.Provider, p.BaseURL, p.APIKey, p.Model, p.EmbeddingModel, p.EmbeddingDim,
-			p.TTSModel, p.TTSVoice, p.TTSSpeed, p.TTSBackend)
+			p.TTSModelDir, p.TTSVoice, p.TTSSpeed, p.TTSBackend)
 		if err != nil {
 			return err
 		}
@@ -100,7 +100,7 @@ func (s *ProfileStore) Save(p *ModelProfile) error {
 			embedding_model=?, embedding_dim=?, tts_model=?, tts_voice=?, tts_speed=?, tts_backend=?
 		WHERE id=?`,
 		p.Name, p.Provider, p.BaseURL, p.APIKey, p.Model, p.EmbeddingModel, p.EmbeddingDim,
-		p.TTSModel, p.TTSVoice, p.TTSSpeed, p.TTSBackend, p.ID)
+		p.TTSModelDir, p.TTSVoice, p.TTSSpeed, p.TTSBackend, p.ID)
 	return err
 }
 

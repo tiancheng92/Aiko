@@ -19,7 +19,7 @@ export namespace config {
 	    ChatWidth: number;
 	    ChatHeight: number;
 	    ActiveProfileID: number;
-	    TTSModel: string;
+	    TTSModelDir: string;
 	    TTSVoice: string;
 	    TTSSpeed: number;
 	    TTSAutoPlay: boolean;
@@ -50,7 +50,7 @@ export namespace config {
 	        this.ChatWidth = source["ChatWidth"];
 	        this.ChatHeight = source["ChatHeight"];
 	        this.ActiveProfileID = source["ActiveProfileID"];
-	        this.TTSModel = source["TTSModel"];
+	        this.TTSModelDir = source["TTSModelDir"];
 	        this.TTSVoice = source["TTSVoice"];
 	        this.TTSSpeed = source["TTSSpeed"];
 	        this.TTSAutoPlay = source["TTSAutoPlay"];
@@ -67,7 +67,7 @@ export namespace config {
 	    model: string;
 	    embedding_model: string;
 	    embedding_dim: number;
-	    tts_model: string;
+	    tts_model_dir: string;
 	    tts_voice: string;
 	    tts_speed: number;
 	    tts_backend: string;
@@ -86,7 +86,7 @@ export namespace config {
 	        this.model = source["model"];
 	        this.embedding_model = source["embedding_model"];
 	        this.embedding_dim = source["embedding_dim"];
-	        this.tts_model = source["tts_model"];
+	        this.tts_model_dir = source["tts_model_dir"];
 	        this.tts_voice = source["tts_voice"];
 	        this.tts_speed = source["tts_speed"];
 	        this.tts_backend = source["tts_backend"];

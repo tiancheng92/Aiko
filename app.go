@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/base64"
@@ -11,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -62,6 +64,7 @@ type App struct {
 	chatCancel      context.CancelFunc // cancels the current in-flight SendMessage; guarded by mu
 	chatGeneration  uint64             // incremented on each SendMessage; used to avoid stale cancel nils
 	ttsSpeaker      tts.Speaker        // current TTS backend; replaced on profile switch
+	ttsBackendKey   string             // backend key; guards against redundant reloads
 	ttsCancel       context.CancelFunc // cancels in-flight SpeakText; guarded by mu
 	ttsGeneration   uint64             // incremented on each SpeakText call; used to avoid stale cancel nils
 	isChatVisible   bool               // tracks whether the chat panel is open; guarded by mu
@@ -375,7 +378,12 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	a.longMem = longMem
 	a.knowledgeSt = knowledgeSt
 	a.petAgent = newAgent
-	a.ttsSpeaker = tts.New(a.cfg.TTSBackend, a.cfg.LLMBaseURL, a.cfg.LLMAPIKey, a.cfg.TTSModel, a.sherpaModelDir())
+	// 只在 backend 或模型目录变化时重建 TTS 实例。
+	newKey := a.cfg.TTSBackend + "|" + a.cfg.TTSModelDir
+	if a.ttsSpeaker == nil || newKey != a.ttsBackendKey {
+		a.ttsSpeaker = tts.New(a.cfg.TTSBackend, a.cfg.TTSModelDir)
+		a.ttsBackendKey = newKey
+	}
 	engine := proactive.NewEngine(a, proactiveStore)
 	a.proactiveEngine = engine
 	a.mu.Unlock()
@@ -395,6 +403,12 @@ func (a *App) SaveConfig(cfg *config.Config) error {
 	cfg.VoiceAutoSend = a.cfg.VoiceAutoSend
 	cfg.SoundsEnabled = a.cfg.SoundsEnabled
 	cfg.TTSAutoPlay = a.cfg.TTSAutoPlay
+	// Preserve profile-derived fields so SaveConfig never clobbers them.
+	// These fields live in model_profiles, not settings, and are applied via ApplyProfile.
+	cfg.TTSVoice = a.cfg.TTSVoice
+	cfg.TTSSpeed = a.cfg.TTSSpeed
+	cfg.TTSBackend = a.cfg.TTSBackend
+	cfg.TTSModelDir = a.cfg.TTSModelDir
 	if err := a.configStore.Save(cfg); err != nil {
 		return err
 	}
@@ -411,9 +425,17 @@ func (a *App) ListModelProfiles() ([]config.ModelProfile, error) {
 }
 
 // SaveModelProfile creates or updates a model profile.
+// If the saved profile is the currently active one, cfg is updated in-place so
+// TTS voice/speed/backend changes take effect immediately without a full reinit.
 func (a *App) SaveModelProfile(p config.ModelProfile) (config.ModelProfile, error) {
+	slog.Info("SaveModelProfile", "id", p.ID, "backend", p.TTSBackend, "voice", p.TTSVoice, "speed", p.TTSSpeed, "activeID", a.cfg.ActiveProfileID)
 	if err := a.profileStore.Save(&p); err != nil {
 		return p, err
+	}
+	// Sync cfg when saving the active profile, so voice/speed/backend changes apply immediately.
+	if p.ID == a.cfg.ActiveProfileID {
+		a.cfg.ApplyProfile(&p)
+		slog.Info("SaveModelProfile: applied to cfg", "voice", a.cfg.TTSVoice)
 	}
 	return p, nil
 }
@@ -1283,7 +1305,7 @@ func (a *App) SpeakText(text string) error {
 	cfg := a.cfg
 	a.mu.Unlock()
 
-	slog.Info("tts: SpeakText called", "len", len([]rune(text)), "speaker", fmt.Sprintf("%T", speaker), "model", cfg.TTSModel, "voice", cfg.TTSVoice)
+	slog.Info("tts: SpeakText called", "backend", cfg.TTSBackend, "len", len([]rune(text)), "speaker", fmt.Sprintf("%T", speaker), "voice", cfg.TTSVoice)
 
 	if speaker == nil {
 		speaker = &tts.SystemSpeaker{}
@@ -1348,11 +1370,9 @@ func (a *App) StopTTS() {
 	}
 }
 
-// GetTTSVoices returns available voices for the given TTS configuration.
-// baseURL, apiKey, and model correspond to the profile being edited (may differ
-// from the active profile). When model is empty, macOS system voices are returned.
-func (a *App) GetTTSVoices(baseURL, apiKey, model string) ([]string, error) {
-	speaker := tts.New("", baseURL, apiKey, model, a.sherpaModelDir())
+// GetKokoroTTSVoices returns the static list of Kokoro Chinese voices.
+func (a *App) GetKokoroTTSVoices() ([]string, error) {
+	speaker := tts.New("kokoro", "")
 	return speaker.Voices(a.ctx)
 }
 
@@ -1367,19 +1387,112 @@ func (a *App) SetTTSAutoPlay(enabled bool) error {
 	return a.configStore.Save(a.cfg)
 }
 
-// sherpaModelDir 返回打包的 sherpa TTS 模型路径。
-// 开发模式下返回 vendor-sherpa/model；.app bundle 中返回 Contents/Resources/sherpa/model。
-func (a *App) sherpaModelDir() string {
-	exe, err := os.Executable()
+// SetupKokoroTTS 在后台异步安装 Kokoro TTS 环境：
+// 1. 创建 Python venv (~/.aiko/tts-venv)
+// 2. 升级 pip
+// 3. 安装 kokoro-onnx、misaki[zh]、soundfile
+// 4. 下载模型文件 kokoro-v1.0.onnx 和 voices-v1.0.bin
+// 进度通过 notification:show 事件汇报。方法立即返回 nil，安装在 goroutine 中运行。
+func (a *App) SetupKokoroTTS() error {
+	go func() {
+		notify := func(title, msg string) {
+			wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
+				"title": title, "message": msg,
+			})
+		}
+		home, _ := os.UserHomeDir()
+		venvDir := filepath.Join(home, ".aiko", "tts-venv")
+		modelsDir := filepath.Join(venvDir, "models")
+		pip := filepath.Join(venvDir, "bin", "pip")
+
+		// Step 0: check Python version (kokoro-onnx requires >= 3.10)
+		verOut, verErr := exec.Command("python3", "-c",
+			"import sys; v=sys.version_info; print(v.major,v.minor)").Output()
+		if verErr != nil {
+			notify("❌ TTS 安装失败", "未找到 python3，请先安装 Python 3.10+")
+			return
+		}
+		var major, minor int
+		fmt.Sscanf(strings.TrimSpace(string(verOut)), "%d %d", &major, &minor)
+		if major < 3 || (major == 3 && minor < 10) {
+			notify("❌ Python 版本过低",
+				fmt.Sprintf("当前 Python %d.%d，kokoro-onnx 需要 3.10+，请先升级 Python", major, minor))
+			return
+		}
+
+		// cleanup 在安装失败时删除不完整的 venv 目录，避免残留干扰下次安装。
+		cleanup := func(msg string) {
+			_ = os.RemoveAll(venvDir)
+			notify("❌ TTS 安装失败", msg)
+		}
+
+		// Step 1: venv
+		notify("🐍 Kokoro TTS", "创建 Python 虚拟环境…")
+		if err := run("python3", "-m", "venv", venvDir); err != nil {
+			cleanup(err.Error())
+			return
+		}
+
+		// Step 2: pip upgrade (best-effort)
+		_ = run(pip, "install", "--upgrade", "pip", "-q")
+
+		// Step 3: pip install
+		notify("📦 Kokoro TTS", "安装依赖包（约 1-2 分钟）…")
+		if err := run(pip, "install", "-q", "kokoro-onnx", "misaki[zh]", "soundfile"); err != nil {
+			cleanup(err.Error())
+			return
+		}
+
+		// Step 4: download models
+		if err := os.MkdirAll(modelsDir, 0755); err != nil {
+			cleanup(err.Error())
+			return
+		}
+		base := "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/"
+		for _, f := range []string{"kokoro-v1.0.onnx", "voices-v1.0.bin"} {
+			dst := filepath.Join(modelsDir, f)
+			if _, err := os.Stat(dst); err == nil {
+				continue // already exists, skip
+			}
+			notify("⬇️ Kokoro TTS", fmt.Sprintf("下载 %s…", f))
+			if err := downloadFile(dst, base+f); err != nil {
+				cleanup(err.Error())
+				return
+			}
+		}
+		notify("✅ Kokoro TTS", "环境安装完成！请保存配置即可使用。")
+	}()
+	return nil
+}
+
+// run 执行外部命令并等待完成，将 stderr 合并到错误信息中。
+func run(name string, args ...string) error {
+	var stderr bytes.Buffer
+	cmd := exec.Command(name, args...)
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%s: %w\n%s", name, err, stderr.String())
+	}
+	return nil
+}
+
+// downloadFile 通过 HTTP GET 将远程文件流式写入本地路径。
+func downloadFile(dst, url string) error {
+	resp, err := http.Get(url) //nolint:gosec
 	if err != nil {
-		return "vendor-sherpa/model"
+		return fmt.Errorf("下载失败: %w", err)
 	}
-	// macOS .app 结构：<name>.app/Contents/MacOS/<binary>
-	// 资源路径：        <name>.app/Contents/Resources/sherpa/model
-	contentsDir := filepath.Dir(filepath.Dir(exe))
-	bundled := filepath.Join(contentsDir, "Resources", "sherpa", "model")
-	if _, statErr := os.Stat(filepath.Join(bundled, "model.onnx")); statErr == nil {
-		return bundled
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("下载失败: HTTP %d", resp.StatusCode)
 	}
-	return "vendor-sherpa/model"
+	f, err := os.Create(dst)
+	if err != nil {
+		return fmt.Errorf("创建文件失败: %w", err)
+	}
+	defer f.Close()
+	if _, err := io.Copy(f, resp.Body); err != nil {
+		return fmt.Errorf("写入文件失败: %w", err)
+	}
+	return nil
 }

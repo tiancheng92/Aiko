@@ -44,6 +44,8 @@ export function GetChatSize(arg1:number,arg2:number):Promise<Array<number>>;
 
 export function GetConfig():Promise<config.Config>;
 
+export function GetKokoroTTSVoices():Promise<Array<string>>;
+
 export function GetMessages(arg1:number):Promise<Array<memory.Message>>;
 
 export function GetMousePosition():Promise<main.MousePosition>;
@@ -57,8 +59,6 @@ export function GetScreenSize():Promise<Array<number>>;
 export function GetSoundsEnabled():Promise<boolean>;
 
 export function GetTTSAutoPlay():Promise<boolean>;
-
-export function GetTTSVoices(arg1:string,arg2:string,arg3:string):Promise<Array<string>>;
 
 export function GetToolPermissions():Promise<Array<tools.PermissionRow>>;
 
@@ -121,6 +121,8 @@ export function SetTTSAutoPlay(arg1:boolean):Promise<void>;
 export function SetToolPermission(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetVoiceAutoSend(arg1:boolean):Promise<void>;
+
+export function SetupKokoroTTS():Promise<void>;
 
 export function SpeakText(arg1:string):Promise<void>;
 

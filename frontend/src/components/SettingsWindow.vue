@@ -16,7 +16,7 @@ import {
   StartSMSWatcher, StopSMSWatcher, IsSMSWatcherRunning,
   GetVoiceAutoSend, SetVoiceAutoSend,
   GetSoundsEnabled, SetSoundsEnabled,
-  GetTTSVoices, SetTTSAutoPlay,
+  GetKokoroTTSVoices, SetTTSAutoPlay, SetupKokoroTTS,
 } from '../../wailsjs/go/main/App'
 import { ListProactiveItems, DeleteProactiveItem } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
@@ -57,11 +57,12 @@ const fetchingModels = ref(false)
 const profiles = ref([])
 const activeProfileID = ref(0)
 const showProfileForm = ref(false)
-const profileForm = ref({ id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, tts_model: '', tts_voice: '', tts_speed: 1.0, tts_backend: '' })
+const profileForm = ref({ id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, tts_model_dir: '', tts_voice: '', tts_speed: 1.0, tts_backend: '' })
 const profileFormError = ref('')
 const profileModels = ref([])
 const fetchingProfileModels = ref(false)
-const ttsVoices = ref([])
+const kokoroTTSVoices = ref([])
+const kokoroInstalling = ref(false)
 
 // MCP servers
 const mcpServers = ref([])
@@ -172,10 +173,9 @@ async function fetchProfiles() {
 
 /** openProfileForm opens the add-profile form with empty fields. */
 function openProfileForm() {
-  profileForm.value = { id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, tts_model: '', tts_voice: '', tts_speed: 1.0, tts_backend: '' }
+  profileForm.value = { id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, tts_model_dir: '', tts_voice: '', tts_speed: 1.0, tts_backend: '' }
   profileFormError.value = ''
   profileModels.value = []
-  ttsVoices.value = []
   showProfileForm.value = true
 }
 
@@ -185,7 +185,7 @@ function editProfile(p) {
   profileFormError.value = ''
   profileModels.value = []
   showProfileForm.value = true
-  fetchTTSVoices()
+  fetchKokoroTTSVoices()
 }
 
 /** fetchProfileModels fetches models for the profile form's base_url. */
@@ -591,16 +591,17 @@ async function toggleSoundsEnabled() {
   }
 }
 
-/** fetchTTSVoices loads voice list for the profile currently being edited. */
-async function fetchTTSVoices() {
-  if (!profileForm.value.tts_model) { ttsVoices.value = []; return }
+/** fetchKokoroTTSVoices loads the static Kokoro voice list. */
+async function fetchKokoroTTSVoices() {
   try {
-    ttsVoices.value = await GetTTSVoices(
-      profileForm.value.base_url,
-      profileForm.value.api_key,
-      profileForm.value.tts_model,
-    ) || []
-  } catch { ttsVoices.value = [] }
+    kokoroTTSVoices.value = await GetKokoroTTSVoices() || []
+  } catch { kokoroTTSVoices.value = [] }
+}
+
+/** setupKokoroTTS 触发后台一键安装 Kokoro TTS 环境。 */
+async function setupKokoroTTS() {
+  kokoroInstalling.value = true
+  try { await SetupKokoroTTS() } finally { kokoroInstalling.value = false }
 }
 
 /** toggleTTSAutoPlay persists the auto-play TTS setting. */
@@ -763,42 +764,16 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 <label class="form-label">TTS 后端</label>
                 <select v-model="profileForm.tts_backend" class="form-input">
                   <option value="">系统（macOS say）</option>
-                  <option value="openai">OpenAI 兼容接口</option>
-                  <option value="sherpa">Sherpa-ONNX（本地打包）</option>
+                  <option value="kokoro">Kokoro-82M（动漫风中文）</option>
                 </select>
               </div>
 
-              <!-- OpenAI 后端专属字段 -->
-              <template v-if="profileForm.tts_backend === 'openai'">
-                <div class="form-group" style="margin-top:8px">
-                  <label>TTS Model</label>
-                  <select v-if="profileModels.length > 0" v-model="profileForm.tts_model" @change="fetchTTSVoices">
-                    <option value="">-- 留空则使用系统 say --</option>
-                    <option v-for="m in profileModels" :key="m" :value="m">{{ m }}</option>
-                  </select>
-                  <input v-else v-model="profileForm.tts_model" placeholder="留空则使用系统 say" @change="fetchTTSVoices" />
-                </div>
-                <div class="form-group" style="margin-top:8px">
-                  <label>TTS Voice</label>
-                  <select v-if="ttsVoices.length > 0" v-model="profileForm.tts_voice">
-                    <option value="">-- 选择声线 --</option>
-                    <option v-for="v in ttsVoices" :key="v" :value="v">{{ v }}</option>
-                  </select>
-                  <input v-else v-model="profileForm.tts_voice" placeholder="声线名称，如 tara" />
-                </div>
-                <div class="form-group" style="margin-top:8px">
-                  <label>TTS Speed（{{ profileForm.tts_speed }}x）</label>
-                  <input type="range" v-model.number="profileForm.tts_speed" min="0.5" max="2.0" step="0.1" style="width:100%" />
-                </div>
-              </template>
-
-              <!-- Sherpa 后端专属字段 -->
-              <template v-if="profileForm.tts_backend === 'sherpa'">
+              <!-- Kokoro 后端专属字段 -->
+              <template v-if="profileForm.tts_backend === 'kokoro'">
                 <div class="form-group" style="margin-top:8px">
                   <label class="form-label">声线</label>
                   <select v-model="profileForm.tts_voice" class="form-input">
-                    <option value="">default</option>
-                    <option v-for="i in 10" :key="i" :value="`speaker-${i - 1}`">speaker-{{ i - 1 }}</option>
+                    <option v-for="v in (kokoroTTSVoices.length ? kokoroTTSVoices : ['zf_xiaobei'])" :key="v" :value="v">{{ v }}</option>
                   </select>
                 </div>
                 <div class="form-group" style="margin-top:8px">
@@ -808,6 +783,11 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                     type="number" min="0.5" max="2.0" step="0.1"
                     class="form-input"
                   />
+                </div>
+                <div class="form-group" style="margin-top:12px">
+                  <button class="btn-setup" @click="setupKokoroTTS" :disabled="kokoroInstalling">
+                    {{ kokoroInstalling ? '安装中…' : '🔧 安装 / 检查 TTS 环境' }}
+                  </button>
                 </div>
               </template>
               <div v-if="profileFormError" class="form-error">{{ profileFormError }}</div>
@@ -1453,6 +1433,9 @@ select {
 .btn-cancel:hover { background: rgba(255,255,255,0.12); }
 .btn-save { padding: 5px 14px; background: rgba(59,130,246,0.7); border: none; border-radius: 6px; color: #fff; font-size: 12px; cursor: pointer; }
 .btn-save:hover { background: rgba(59,130,246,0.9); }
+.btn-setup { width: 100%; padding: 7px 0; background: rgba(59,130,246,0.7); border: none; border-radius: 6px; color: #fff; font-size: 12px; cursor: pointer; }
+.btn-setup:hover { background: rgba(59,130,246,0.9); }
+.btn-setup:disabled { background: rgba(59,130,246,0.35); cursor: not-allowed; }
 .form-error { color: #f87171; font-size: 12px; }
 
 /* Tool permissions */

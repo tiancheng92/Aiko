@@ -70,6 +70,10 @@ export function GetConfig() {
   return window['go']['main']['App']['GetConfig']();
 }
 
+export function GetKokoroTTSVoices() {
+  return window['go']['main']['App']['GetKokoroTTSVoices']();
+}
+
 export function GetMessages(arg1) {
   return window['go']['main']['App']['GetMessages'](arg1);
 }
@@ -96,10 +100,6 @@ export function GetSoundsEnabled() {
 
 export function GetTTSAutoPlay() {
   return window['go']['main']['App']['GetTTSAutoPlay']();
-}
-
-export function GetTTSVoices(arg1, arg2, arg3) {
-  return window['go']['main']['App']['GetTTSVoices'](arg1, arg2, arg3);
 }
 
 export function GetToolPermissions() {
@@ -224,6 +224,10 @@ export function SetToolPermission(arg1, arg2) {
 
 export function SetVoiceAutoSend(arg1) {
   return window['go']['main']['App']['SetVoiceAutoSend'](arg1);
+}
+
+export function SetupKokoroTTS() {
+  return window['go']['main']['App']['SetupKokoroTTS']();
 }
 
 export function SpeakText(arg1) {

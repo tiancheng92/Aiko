@@ -134,6 +134,8 @@ function formatTime(ts) {
 let proactiveStarted = false
 let offToken, offDone, offError, offClear, offProactiveStart, offProactiveMessage
 let offTTSDone, offTTSError, offTTSAudio
+/** @type {HTMLAudioElement|null} 当前正在播放的 TTS Audio 实例，用于暂停 */
+let currentTTSAudio = null
 
 onMounted(async () => {
   const history = await GetMessages(50)
@@ -225,15 +227,32 @@ onMounted(async () => {
   })
 
   // TTS event listeners
-  offTTSDone  = EventsOn('tts:done',  () => { activeTTSMsgId.value = null })
-  offTTSError = EventsOn('tts:error', () => { activeTTSMsgId.value = null })
+  // tts:done 仅表示 Go 端数据发送完毕；对于 sherpa（离线生成）实际播放可能还未结束，
+  // 因此这里只清 currentTTSAudio 的"待播"状态，activeTTSMsgId 由 audio.onended 或手动停止清除。
+  offTTSDone  = EventsOn('tts:done',  () => { /* 播放结束由 audio.onended 处理 */ })
+  offTTSError = EventsOn('tts:error', () => {
+    activeTTSMsgId.value = null
+    if (currentTTSAudio) { currentTTSAudio.pause(); currentTTSAudio = null }
+  })
   offTTSAudio = EventsOn('tts:audio', ({ data, format }) => {
+    // 停止上一段（若有）再播新的
+    if (currentTTSAudio) {
+      currentTTSAudio.pause()
+      currentTTSAudio = null
+    }
     const bytes = Uint8Array.from(atob(data), c => c.charCodeAt(0))
     const blob  = new Blob([bytes], { type: `audio/${format}` })
     const url   = URL.createObjectURL(blob)
     const audio = new Audio(url)
+    currentTTSAudio = audio
     audio.play()
-    audio.onended = () => URL.revokeObjectURL(url)
+    audio.onended = () => {
+      URL.revokeObjectURL(url)
+      if (currentTTSAudio === audio) {
+        currentTTSAudio = null
+        activeTTSMsgId.value = null
+      }
+    }
   })
 
   EventsOn('voice:start', () => {
@@ -314,6 +333,10 @@ async function copyMessage(idx) {
 /** speakMessage triggers TTS for a specific message; toggles stop if already speaking. */
 async function speakMessage(idx) {
   if (activeTTSMsgId.value === idx) {
+    if (currentTTSAudio) {
+      currentTTSAudio.pause()
+      currentTTSAudio = null
+    }
     await StopTTS()
     activeTTSMsgId.value = null
     return

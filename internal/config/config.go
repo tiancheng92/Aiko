@@ -27,12 +27,12 @@ type Config struct {
 	ChatWidth      int // 聊天框宽度（像素），0 表示使用默认值
 	ChatHeight     int // 聊天框高度（像素），0 表示使用默认值
 	ActiveProfileID int64 // 当前激活的 ModelProfile ID，0 表示未设置
-	TTSModel              string  // 从 active profile 复制，空则降级 say
+	TTSModelDir           string  // kokoro 模型目录（空则使用默认 ~/aiko-tts-venv/models）
 	TTSVoice              string  // 声线名
 	TTSSpeed              float64 // 语速，0.5–2.0
 	TTSAutoPlay           bool    // 外观与交互：chat:done 后自动朗读
 	TTSSummarizeThreshold int     // 摘要字数阈值，默认 200，0 表示禁用摘要
-	TTSBackend            string  // "openai" | "sherpa" | ""（系统 say）
+	TTSBackend            string  // "kokoro" | ""（系统 say）
 }
 
 type Store struct{ db *sql.DB }
@@ -146,7 +146,7 @@ func (c *Config) ApplyProfile(p *ModelProfile) {
 		c.LLMBaseURL = "https://openrouter.ai/api/v1"
 		p.BaseURL = c.LLMBaseURL
 	}
-	c.TTSModel = p.TTSModel
+	c.TTSModelDir = p.TTSModelDir
 	c.TTSVoice = p.TTSVoice
 	if p.TTSSpeed == 0 {
 		c.TTSSpeed = 1.0
