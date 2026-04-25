@@ -58,7 +58,7 @@ export function GetSoundsEnabled():Promise<boolean>;
 
 export function GetTTSAutoPlay():Promise<boolean>;
 
-export function GetTTSVoices():Promise<Array<string>>;
+export function GetTTSVoices(arg1:string,arg2:string,arg3:string):Promise<Array<string>>;
 
 export function GetToolPermissions():Promise<Array<tools.PermissionRow>>;
 

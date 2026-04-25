@@ -98,8 +98,8 @@ export function GetTTSAutoPlay() {
   return window['go']['main']['App']['GetTTSAutoPlay']();
 }
 
-export function GetTTSVoices() {
-  return window['go']['main']['App']['GetTTSVoices']();
+export function GetTTSVoices(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetTTSVoices'](arg1, arg2, arg3);
 }
 
 export function GetToolPermissions() {

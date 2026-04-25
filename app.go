@@ -62,6 +62,7 @@ type App struct {
 	chatGeneration  uint64             // incremented on each SendMessage; used to avoid stale cancel nils
 	ttsSpeaker      tts.Speaker        // current TTS backend; replaced on profile switch
 	ttsCancel       context.CancelFunc // cancels in-flight SpeakText; guarded by mu
+	ttsGeneration   uint64             // incremented on each SpeakText call; used to avoid stale cancel nils
 	isChatVisible   bool               // tracks whether the chat panel is open; guarded by mu
 	proactiveEngine *proactive.ProactiveEngine
 }
@@ -1217,6 +1218,8 @@ func (a *App) SpeakText(text string) error {
 	if a.ttsCancel != nil {
 		a.ttsCancel()
 	}
+	a.ttsGeneration++
+	myGen := a.ttsGeneration
 	ctx, cancel := context.WithCancel(a.ctx)
 	a.ttsCancel = cancel
 	speaker := a.ttsSpeaker
@@ -1230,9 +1233,13 @@ func (a *App) SpeakText(text string) error {
 	wailsruntime.EventsEmit(a.ctx, "tts:start", nil)
 
 	go func() {
+		// Only nil out ttsCancel if this goroutine's generation is still current,
+		// to avoid wiping a newer call's cancel when overlapping SpeakText calls race.
 		defer func() {
 			a.mu.Lock()
-			a.ttsCancel = nil
+			if a.ttsGeneration == myGen {
+				a.ttsCancel = nil
+			}
 			a.mu.Unlock()
 		}()
 
@@ -1278,14 +1285,11 @@ func (a *App) StopTTS() {
 	}
 }
 
-// GetTTSVoices returns available voices from the current TTS backend.
-func (a *App) GetTTSVoices() ([]string, error) {
-	a.mu.RLock()
-	speaker := a.ttsSpeaker
-	a.mu.RUnlock()
-	if speaker == nil {
-		speaker = &tts.SystemSpeaker{}
-	}
+// GetTTSVoices returns available voices for the given TTS configuration.
+// baseURL, apiKey, and model correspond to the profile being edited (may differ
+// from the active profile). When model is empty, macOS system voices are returned.
+func (a *App) GetTTSVoices(baseURL, apiKey, model string) ([]string, error) {
+	speaker := tts.New(baseURL, apiKey, model)
 	return speaker.Voices(a.ctx)
 }
 

@@ -591,11 +591,16 @@ async function toggleSoundsEnabled() {
   }
 }
 
-/** fetchTTSVoices loads voice list when TTS model is set. */
+/** fetchTTSVoices loads voice list for the profile currently being edited. */
 async function fetchTTSVoices() {
   if (!profileForm.value.tts_model) { ttsVoices.value = []; return }
-  try { ttsVoices.value = await GetTTSVoices() || [] }
-  catch { ttsVoices.value = [] }
+  try {
+    ttsVoices.value = await GetTTSVoices(
+      profileForm.value.base_url,
+      profileForm.value.api_key,
+      profileForm.value.tts_model,
+    ) || []
+  } catch { ttsVoices.value = [] }
 }
 
 /** toggleTTSAutoPlay persists the auto-play TTS setting. */
