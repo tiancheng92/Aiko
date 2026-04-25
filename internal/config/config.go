@@ -32,6 +32,7 @@ type Config struct {
 	TTSSpeed              float64 // 语速，0.5–2.0
 	TTSAutoPlay           bool    // 外观与交互：chat:done 后自动朗读
 	TTSSummarizeThreshold int     // 摘要字数阈值，默认 200，0 表示禁用摘要
+	TTSBackend            string  // "openai" | "sherpa" | ""（系统 say）
 }
 
 type Store struct{ db *sql.DB }
@@ -152,6 +153,7 @@ func (c *Config) ApplyProfile(p *ModelProfile) {
 	} else {
 		c.TTSSpeed = p.TTSSpeed
 	}
+	c.TTSBackend = p.TTSBackend
 }
 
 // MissingRequired returns names of required fields that are empty.

@@ -24,6 +24,7 @@ export namespace config {
 	    TTSSpeed: number;
 	    TTSAutoPlay: boolean;
 	    TTSSummarizeThreshold: number;
+	    TTSBackend: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -54,6 +55,7 @@ export namespace config {
 	        this.TTSSpeed = source["TTSSpeed"];
 	        this.TTSAutoPlay = source["TTSAutoPlay"];
 	        this.TTSSummarizeThreshold = source["TTSSummarizeThreshold"];
+	        this.TTSBackend = source["TTSBackend"];
 	    }
 	}
 	export class ModelProfile {
@@ -68,6 +70,7 @@ export namespace config {
 	    tts_model: string;
 	    tts_voice: string;
 	    tts_speed: number;
+	    tts_backend: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ModelProfile(source);
@@ -86,6 +89,7 @@ export namespace config {
 	        this.tts_model = source["tts_model"];
 	        this.tts_voice = source["tts_voice"];
 	        this.tts_speed = source["tts_speed"];
+	        this.tts_backend = source["tts_backend"];
 	    }
 	}
 
