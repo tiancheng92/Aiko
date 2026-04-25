@@ -1,6 +1,6 @@
 <!-- frontend/src/components/SettingsWindow.vue -->
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import {
   GetConfig, SaveConfig,
   ImportKnowledge, ListKnowledgeSources, DeleteKnowledgeSource,
@@ -45,7 +45,9 @@ const sources = ref([])
 const importProgress = ref(null)
 const saving = ref(false)
 const statusMsg = ref('')
-const activeTab = ref('model')  // 'model' | 'pet' | 'tools' | 'knowledge'
+const activeTab = ref('model')  // 'model' | 'ai' | 'appearance' | 'tools' | 'knowledge' | 'automation' | 'lark' | 'sms'
+const toolsSubTab = ref('mcp')         // 'mcp' | 'permissions'
+const automationSubTab = ref('cron')   // 'cron' | 'proactive'
 
 const llmModels = ref([])       // fetched from /v1/models
 const fetchingModels = ref(false)
@@ -621,6 +623,13 @@ function truncatePrompt(s, n) {
   return s.length > n ? s.slice(0, n) + '…' : s
 }
 
+const publicToolNames = computed(() =>
+  toolPerms.value.filter(p => p.Level === 'public').map(p => p.ToolName).join('、')
+)
+const protectedToolPerms = computed(() =>
+  toolPerms.value.filter(p => p.Level !== 'public')
+)
+
 watch(activeTab, v => { if (v === 'proactive') loadProactiveItems() })
 </script>
 
@@ -638,29 +647,26 @@ watch(activeTab, v => { if (v === 'proactive') loadProactiveItems() })
         <button :class="{ active: activeTab === 'model' }" @click="activeTab = 'model'">
           <span class="nav-icon">🤖</span><span class="nav-label">模型</span>
         </button>
-        <button :class="{ active: activeTab === 'pet' }" @click="activeTab = 'pet'">
-          <span class="nav-icon">🐾</span><span class="nav-label">桌宠</span>
+        <button :class="{ active: activeTab === 'ai' }" @click="activeTab = 'ai'">
+          <span class="nav-icon">🧠</span><span class="nav-label">AI</span>
+        </button>
+        <button :class="{ active: activeTab === 'appearance' }" @click="activeTab = 'appearance'">
+          <span class="nav-icon">🎨</span><span class="nav-label">外观与交互</span>
         </button>
         <button :class="{ active: activeTab === 'tools' }" @click="activeTab = 'tools'">
-          <span class="nav-icon">🔧</span><span class="nav-label">工具权限</span>
+          <span class="nav-icon">🔧</span><span class="nav-label">工具</span>
         </button>
         <button :class="{ active: activeTab === 'knowledge' }" @click="activeTab = 'knowledge'">
           <span class="nav-icon">📚</span><span class="nav-label">知识库</span>
         </button>
-        <button :class="{ active: activeTab === 'mcp' }" @click="activeTab = 'mcp'">
-          <span class="nav-icon">🔌</span><span class="nav-label">MCP服务器</span>
-        </button>
-        <button :class="{ active: activeTab === 'cron' }" @click="activeTab = 'cron'">
-          <span class="nav-icon">⏰</span><span class="nav-label">定时任务</span>
+        <button :class="{ active: activeTab === 'automation' }" @click="activeTab = 'automation'">
+          <span class="nav-icon">⏰</span><span class="nav-label">自动化</span>
         </button>
         <button :class="{ active: activeTab === 'lark' }" @click="activeTab = 'lark'">
           <span class="nav-icon">🪶</span><span class="nav-label">飞书</span>
         </button>
         <button :class="{ active: activeTab === 'sms' }" @click="activeTab = 'sms'">
           <span class="nav-icon">📱</span><span class="nav-label">短信监听</span>
-        </button>
-        <button :class="{ active: activeTab === 'proactive' }" @click="activeTab = 'proactive'">
-          <span class="nav-icon">🔔</span><span class="nav-label">提醒事项</span>
         </button>
       </nav>
 
