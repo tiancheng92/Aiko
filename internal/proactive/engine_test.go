@@ -2,6 +2,7 @@ package proactive_test
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -18,13 +19,14 @@ type mockApp struct {
 	emittedEvents   []string
 	chatVisible     bool
 	collectReturn   string
+	chatDirectErr   error
 }
 
 func (m *mockApp) ChatDirect(_ context.Context, prompt string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.chatDirectCalls = append(m.chatDirectCalls, prompt)
-	return nil
+	return m.chatDirectErr
 }
 
 func (m *mockApp) ChatDirectCollect(_ context.Context, prompt string) (string, error) {
@@ -46,12 +48,14 @@ func (m *mockApp) EmitEvent(name string, _ any) {
 	m.emittedEvents = append(m.emittedEvents, name)
 }
 
-// TestFireChatOpen verifies that Fire() calls ChatDirect and emits chat:proactive:start when chat is open.
+// TestFireChatOpen verifies Fire emits chat:proactive:start and calls ChatDirect when chat is open.
 func TestFireChatOpen(t *testing.T) {
 	app := &mockApp{chatVisible: true}
 	eng := proactive.NewEngine(app, nil)
 
-	eng.Fire(context.Background(), "good morning")
+	if err := eng.Fire(context.Background(), "good morning"); err != nil {
+		t.Fatalf("Fire returned error: %v", err)
+	}
 
 	app.mu.Lock()
 	defer app.mu.Unlock()
@@ -63,12 +67,14 @@ func TestFireChatOpen(t *testing.T) {
 	}
 }
 
-// TestFireChatClosed verifies that Fire() uses ChatDirectCollect and emits notification:show when chat is closed.
+// TestFireChatClosed verifies Fire uses ChatDirectCollect and emits notification:show when chat is closed.
 func TestFireChatClosed(t *testing.T) {
 	app := &mockApp{chatVisible: false, collectReturn: "evening greeting text"}
 	eng := proactive.NewEngine(app, nil)
 
-	eng.Fire(context.Background(), "good evening")
+	if err := eng.Fire(context.Background(), "good evening"); err != nil {
+		t.Fatalf("Fire returned error: %v", err)
+	}
 
 	app.mu.Lock()
 	defer app.mu.Unlock()
@@ -86,12 +92,14 @@ func TestFireChatClosed(t *testing.T) {
 	}
 }
 
-// TestFireChatClosedTruncates verifies that long responses are truncated to 80 runes.
+// TestFireChatClosedTruncates verifies long responses are truncated to 80 runes.
 func TestFireChatClosedTruncates(t *testing.T) {
 	long := "A very long proactive message that exceeds eighty characters in total length for testing truncation behavior here"
 	app := &mockApp{chatVisible: false, collectReturn: long}
 	eng := proactive.NewEngine(app, nil)
-	eng.Fire(context.Background(), "prompt")
+	if err := eng.Fire(context.Background(), "prompt"); err != nil {
+		t.Fatalf("Fire returned error: %v", err)
+	}
 
 	app.mu.Lock()
 	defer app.mu.Unlock()
@@ -106,8 +114,8 @@ func TestFireChatClosedTruncates(t *testing.T) {
 	}
 }
 
-// TestPollFiresDueItems verifies that Poll calls Fire for each due item and marks it fired.
-func TestPollFiresDueItems(t *testing.T) {
+// TestPollDeletesAfterFire verifies Poll deletes the row after successful Fire.
+func TestPollDeletesAfterFire(t *testing.T) {
 	database, err := db.Open(t.TempDir())
 	if err != nil {
 		t.Fatalf("open db: %v", err)
@@ -115,7 +123,6 @@ func TestPollFiresDueItems(t *testing.T) {
 	defer database.Close()
 	store := proactive.NewStore(database)
 
-	// Insert a due item.
 	if err := store.Insert(context.Background(), time.Now().Add(-time.Second), "follow up"); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
@@ -130,12 +137,53 @@ func TestPollFiresDueItems(t *testing.T) {
 		t.Errorf("expected 1 collect call, got %d", len(app.collectCalls))
 	}
 
-	// Verify item is now marked fired.
-	items, err := store.DueItems(context.Background(), time.Now())
+	// Verify item is deleted (not just marked fired).
+	items, err := store.List(context.Background())
 	if err != nil {
-		t.Fatalf("due items: %v", err)
+		t.Fatalf("list: %v", err)
 	}
 	if len(items) != 0 {
-		t.Errorf("expected item fired, got %d due items", len(items))
+		t.Errorf("expected item deleted, got %d items remaining", len(items))
+	}
+}
+
+// TestPollDeletesOnFireFailure verifies Poll deletes row and emits notification:show when Fire fails.
+func TestPollDeletesOnFireFailure(t *testing.T) {
+	database, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer database.Close()
+	store := proactive.NewStore(database)
+
+	if err := store.Insert(context.Background(), time.Now().Add(-time.Second), "fail prompt"); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	// ChatDirect returns error to simulate Fire failure.
+	app := &mockApp{chatVisible: true, chatDirectErr: errors.New("agent unavailable")}
+	eng := proactive.NewEngine(app, store)
+	eng.Poll(context.Background())
+
+	// Row must be deleted even on failure.
+	items, err := store.List(context.Background())
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(items) != 0 {
+		t.Errorf("expected item deleted on Fire failure, got %d items", len(items))
+	}
+
+	// notification:show must be emitted.
+	app.mu.Lock()
+	defer app.mu.Unlock()
+	found := false
+	for _, e := range app.emittedEvents {
+		if e == "notification:show" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected notification:show emitted on Fire failure, got %v", app.emittedEvents)
 	}
 }

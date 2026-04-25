@@ -2,6 +2,7 @@ package proactive
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 	"unicode/utf8"
@@ -10,9 +11,6 @@ import (
 )
 
 const (
-	greetingMorningPrompt = `你是桌面宠物 Aiko，现在是早上，主动向用户发一句温暖简短的早安问候（1-2句话，自然随意，不要过于正式）。不要提及你是AI。`
-	greetingEveningPrompt = `你是桌面宠物 Aiko，现在是晚上，主动向用户发一句轻松的晚间问候（1-2句话）。可以关心今天过得怎样。不要提及你是AI。`
-
 	// notifMaxRunes is the max rune length for notification messages.
 	notifMaxRunes = 80
 )
@@ -49,14 +47,6 @@ func NewEngine(app AppInterface, store Store) *ProactiveEngine {
 // Start registers cron jobs and begins the scheduler.
 // ctx is used as a base context for all fired messages.
 func (e *ProactiveEngine) Start(ctx context.Context) {
-	// Morning greeting at 09:00 local time.
-	_, _ = e.cron.AddFunc("0 9 * * *", func() {
-		e.Fire(ctx, greetingMorningPrompt)
-	})
-	// Evening check-in at 21:00 local time.
-	_, _ = e.cron.AddFunc("0 21 * * *", func() {
-		e.Fire(ctx, greetingEveningPrompt)
-	})
 	// Poll for due follow-up items every minute.
 	if e.store != nil {
 		_, _ = e.cron.AddFunc("* * * * *", func() {
@@ -74,20 +64,20 @@ func (e *ProactiveEngine) Stop() {
 // Fire delivers a proactive message using the given prompt.
 // If chat is open, it streams tokens to the frontend.
 // If chat is closed, it collects the response and shows a notification.
-func (e *ProactiveEngine) Fire(ctx context.Context, prompt string) {
+// Returns an error if the underlying chat call fails.
+func (e *ProactiveEngine) Fire(ctx context.Context, prompt string) error {
 	if e.app.IsChatVisible() {
 		// Emit sentinel so frontend can style the bubble.
 		e.app.EmitEvent("chat:proactive:start", nil)
 		if err := e.app.ChatDirect(ctx, prompt); err != nil {
-			slog.Warn("proactive fire: ChatDirect error", "err", err)
+			return fmt.Errorf("ChatDirect: %w", err)
 		}
-		return
+		return nil
 	}
 	// Chat is closed: collect and deliver via notification bubble.
 	text, err := e.app.ChatDirectCollect(ctx, prompt)
 	if err != nil {
-		slog.Warn("proactive fire: ChatDirectCollect error", "err", err)
-		return
+		return fmt.Errorf("ChatDirectCollect: %w", err)
 	}
 	if utf8.RuneCountInString(text) > notifMaxRunes {
 		runes := []rune(text)
@@ -97,25 +87,43 @@ func (e *ProactiveEngine) Fire(ctx context.Context, prompt string) {
 		"title":   "✨ (=^･ω･^=)",
 		"message": text,
 	})
+	return nil
 }
 
 // Poll queries the store for due items and fires each one.
+// The row is deleted before Fire is called to avoid double-firing.
+// If Fire fails, a failure notification is emitted.
 // Exported for testing.
 func (e *ProactiveEngine) Poll(ctx context.Context) {
 	if e.store == nil {
 		return
 	}
-	items, err := e.store.DueItems(ctx, time.Now())
+	items, err := e.store.DueItems(ctx, time.Now().UTC())
 	if err != nil {
 		slog.Warn("proactive poll: query due items", "err", err)
 		return
 	}
 	for _, item := range items {
-		// Delete before calling Fire to avoid double-firing if Fire is slow.
+		// Delete before Fire to prevent double-firing if Fire is slow.
 		if err := e.store.Delete(ctx, item.ID); err != nil {
 			slog.Warn("proactive poll: delete item", "id", item.ID, "err", err)
 			continue
 		}
-		e.Fire(ctx, item.Prompt)
+		if err := e.Fire(ctx, item.Prompt); err != nil {
+			slog.Warn("proactive poll: fire failed", "id", item.ID, "err", err)
+			e.app.EmitEvent("notification:show", map[string]any{
+				"title":   "提醒触发失败",
+				"message": truncate(item.Prompt, 30),
+			})
+		}
 	}
+}
+
+// truncate returns the first n runes of s. If s is longer, it appends "…".
+func truncate(s string, n int) string {
+	runes := []rune(s)
+	if len(runes) <= n {
+		return s
+	}
+	return string(runes[:n]) + "…"
 }
