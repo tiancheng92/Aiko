@@ -113,5 +113,19 @@ func migrate(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("create model_profiles: %w", err)
 	}
+
+	// proactive_items: one-shot proactive messages scheduled by the engine or agent tool.
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS proactive_items (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			trigger_at  DATETIME NOT NULL,
+			prompt      TEXT NOT NULL,
+			fired       BOOLEAN DEFAULT FALSE,
+			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+	`)
+	if err != nil {
+		return fmt.Errorf("create proactive_items: %w", err)
+	}
 	return nil
 }
