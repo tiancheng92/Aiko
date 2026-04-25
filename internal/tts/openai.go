@@ -71,14 +71,21 @@ func (s *OpenAISpeaker) Speak(ctx context.Context, text, voice string, speed flo
 	return data, nil
 }
 
-// Voices calls GET {baseURL}/v1/audio/voices. Returns empty list if endpoint absent.
+// knownOuteTTSVoices is the built-in voice list used when the server does not
+// expose a /v1/audio/voices endpoint (e.g. llama-swap + OuteTTS).
+var knownOuteTTSVoices = []string{
+	"tara", "leah", "jess", "leo", "dan", "mia", "zac", "zoe",
+}
+
+// Voices calls GET {baseURL}/v1/audio/voices?model=<model>.
+// Falls back to knownOuteTTSVoices when the endpoint is absent (404) or errors.
 func (s *OpenAISpeaker) Voices(ctx context.Context) ([]string, error) {
 	voicesURL := strings.TrimRight(s.baseURL, "/") + "/v1/audio/voices?model=" + s.model
 	slog.Info("tts: fetching voices", "url", voicesURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, voicesURL, nil)
 	if err != nil {
 		slog.Warn("tts: build voices request failed", "err", err)
-		return nil, nil //nolint:nilerr
+		return knownOuteTTSVoices, nil
 	}
 	if s.apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+s.apiKey)
@@ -87,16 +94,17 @@ func (s *OpenAISpeaker) Voices(ctx context.Context) ([]string, error) {
 	resp, err := s.httpClient().Do(req)
 	if err != nil {
 		slog.Warn("tts: voices request failed", "err", err)
-		return nil, nil
+		return knownOuteTTSVoices, nil
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, nil
+		return knownOuteTTSVoices, nil
 	}
 	slog.Info("tts: voices response", "status", resp.StatusCode, "body", string(raw))
 	if resp.StatusCode != http.StatusOK {
-		return nil, nil
+		slog.Info("tts: voices endpoint unavailable, using built-in list")
+		return knownOuteTTSVoices, nil
 	}
 
 	// Try {"voices": [...]} first, then {"data": [...]} (OpenAI-compatible variants).
@@ -118,11 +126,10 @@ func (s *OpenAISpeaker) Voices(ctx context.Context) ([]string, error) {
 		}
 		return voices, nil
 	}
-	// Last resort: try a plain string array
 	var r3 []string
 	if json.Unmarshal(raw, &r3) == nil && len(r3) > 0 {
 		return r3, nil
 	}
-	slog.Warn("tts: voices response did not match any known format")
-	return nil, nil
+	slog.Warn("tts: voices response did not match any known format, using built-in list")
+	return knownOuteTTSVoices, nil
 }
