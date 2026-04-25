@@ -1283,6 +1283,8 @@ func (a *App) SpeakText(text string) error {
 	cfg := a.cfg
 	a.mu.Unlock()
 
+	slog.Info("tts: SpeakText called", "len", len([]rune(text)), "speaker", fmt.Sprintf("%T", speaker), "model", cfg.TTSModel, "voice", cfg.TTSVoice)
+
 	if speaker == nil {
 		speaker = &tts.SystemSpeaker{}
 	}
@@ -1309,8 +1311,11 @@ func (a *App) SpeakText(text string) error {
 			}
 		}
 
-		audioBytes, err := speaker.Speak(ctx, stripNonSpeech(finalText), cfg.TTSVoice, cfg.TTSSpeed)
+		speakText := stripNonSpeech(finalText)
+		slog.Info("tts: calling Speak", "text_len", len([]rune(speakText)), "voice", cfg.TTSVoice, "speed", cfg.TTSSpeed)
+		audioBytes, err := speaker.Speak(ctx, speakText, cfg.TTSVoice, cfg.TTSSpeed)
 		if err != nil {
+			slog.Warn("tts: Speak error", "err", err)
 			if ctx.Err() != nil {
 				wailsruntime.EventsEmit(a.ctx, "tts:done", nil)
 				return
@@ -1319,6 +1324,7 @@ func (a *App) SpeakText(text string) error {
 			return
 		}
 
+		slog.Info("tts: Speak done", "audio_bytes", len(audioBytes))
 		if len(audioBytes) > 0 {
 			encoded := base64.StdEncoding.EncodeToString(audioBytes)
 			wailsruntime.EventsEmit(a.ctx, "tts:audio", map[string]string{
