@@ -96,6 +96,8 @@ func (a *App) ChatDirect(ctx context.Context, prompt string) error {
 	ch := ag.ChatDirect(ctx, prompt)
 	for r := range ch {
 		if r.Err != nil {
+			wailsruntime.EventsEmit(a.ctx, "chat:error", r.Err.Error())
+			wailsruntime.EventsEmit(a.ctx, "chat:done", nil)
 			return r.Err
 		}
 		if r.Done {
@@ -348,7 +350,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	a.proactiveEngine = engine
 	a.mu.Unlock()
 
-	engine.Start(ctx)
+	engine.Start(a.ctx)
 	return nil
 }
 
