@@ -69,6 +69,7 @@ func (t *ScheduleFollowupTool) InvokableRun(ctx context.Context, input string, _
 	if err != nil {
 		return fmt.Sprintf("时间格式无效，请使用 2006-01-02T15:04:05 格式，收到：%q", whenStr), nil
 	}
+	when = when.UTC()
 
 	now := time.Now()
 	if when.Before(now) {

@@ -40,6 +40,11 @@ func TestScheduleFollowupValidation(t *testing.T) {
 			input:   `{"when":"` + time.Now().Add(time.Hour).Format("2006-01-02T15:04:05") + `","message":""}`,
 			wantErr: "message",
 		},
+		{
+			name:    "malformed when rejected",
+			input:   `{"when":"not-a-date","message":"ping"}`,
+			wantErr: "格式",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
