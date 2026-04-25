@@ -29,6 +29,7 @@ import (
 	"aiko/internal/lark"
 	"aiko/internal/mcp"
 	"aiko/internal/memory"
+	"aiko/internal/proactive"
 	"aiko/internal/scheduler"
 	"aiko/internal/skill"
 	"aiko/internal/sms"
@@ -54,13 +55,68 @@ type App struct {
 	longMem     *memory.LongStore
 	knowledgeSt *knowledge.Store
 	petAgent    *agent.Agent
-	smsWatcher  *sms.Watcher // guarded by mu
+	smsWatcher      *sms.Watcher // guarded by mu
 	chatCancel      context.CancelFunc // cancels the current in-flight SendMessage; guarded by mu
 	chatGeneration  uint64             // incremented on each SendMessage; used to avoid stale cancel nils
+	isChatVisible   bool               // tracks whether the chat panel is open; guarded by mu
+	proactiveEngine *proactive.ProactiveEngine
 }
 
 // NewApp creates a new App instance.
 func NewApp() *App { return &App{} }
+
+// IsChatVisible returns whether the chat panel is currently visible.
+func (a *App) IsChatVisible() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.isChatVisible
+}
+
+// SetChatVisible updates the tracked chat-panel visibility state.
+// Called by the frontend when the chat bubble is opened or closed.
+func (a *App) SetChatVisible(visible bool) {
+	a.mu.Lock()
+	a.isChatVisible = visible
+	a.mu.Unlock()
+}
+
+// EmitEvent emits a Wails runtime event with the given name and payload.
+func (a *App) EmitEvent(name string, data any) {
+	wailsruntime.EventsEmit(a.ctx, name, data)
+}
+
+// ChatDirect streams a proactive AI response for the given prompt without saving to memory.
+func (a *App) ChatDirect(ctx context.Context, prompt string) error {
+	a.mu.RLock()
+	ag := a.petAgent
+	a.mu.RUnlock()
+	if ag == nil {
+		return fmt.Errorf("agent not initialized")
+	}
+	ch := ag.ChatDirect(ctx, prompt)
+	for r := range ch {
+		if r.Err != nil {
+			return r.Err
+		}
+		if r.Done {
+			break
+		}
+		wailsruntime.EventsEmit(a.ctx, "chat:token", r.Token)
+	}
+	wailsruntime.EventsEmit(a.ctx, "chat:done", nil)
+	return nil
+}
+
+// ChatDirectCollect runs a proactive AI generation and collects the full response text.
+func (a *App) ChatDirectCollect(ctx context.Context, prompt string) (string, error) {
+	a.mu.RLock()
+	ag := a.petAgent
+	a.mu.RUnlock()
+	if ag == nil {
+		return "", fmt.Errorf("agent not initialized")
+	}
+	return ag.ChatDirectCollect(ctx, prompt)
+}
 
 // ScreenInfo holds the logical resolution of a screen.
 type ScreenInfo struct {
@@ -251,8 +307,11 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 
 	contextTools := internaltools.AllContextual(a.permStore, knowledgeSt, sched, longMem, dataDir)
 	mcpTools := mcp.LoadTools(ctx, a.mcpStore)
+	proactiveStore := proactive.NewStore(a.sqlDB)
+	followupTool := internaltools.ToEino(proactive.NewScheduleFollowupTool(proactiveStore), a.permStore)
 	allTools := append(builtinTools, contextTools...)
 	allTools = append(allTools, mcpTools...)
+	allTools = append(allTools, followupTool)
 
 	// Build skill middleware from configured directories.
 	autoSkillsDir := filepath.Join(dataDir, "auto-skills")
@@ -278,11 +337,18 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	if a.scheduler != nil {
 		a.scheduler.Stop()
 	}
+	if a.proactiveEngine != nil {
+		a.proactiveEngine.Stop()
+	}
 	a.scheduler = sched
 	a.longMem = longMem
 	a.knowledgeSt = knowledgeSt
 	a.petAgent = newAgent
+	engine := proactive.NewEngine(a, proactiveStore)
+	a.proactiveEngine = engine
 	a.mu.Unlock()
+
+	engine.Start(ctx)
 	return nil
 }
 
@@ -875,9 +941,13 @@ func (a *App) shutdown(_ context.Context) {
 	a.mu.Lock()
 	w := a.smsWatcher
 	a.smsWatcher = nil
+	pe := a.proactiveEngine
 	a.mu.Unlock()
 	if w != nil {
 		w.Stop()
+	}
+	if pe != nil {
+		pe.Stop()
 	}
 }
 

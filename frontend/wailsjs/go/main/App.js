@@ -10,6 +10,14 @@ export function AddMCPServer(arg1) {
   return window['go']['main']['App']['AddMCPServer'](arg1);
 }
 
+export function ChatDirect(arg1, arg2) {
+  return window['go']['main']['App']['ChatDirect'](arg1, arg2);
+}
+
+export function ChatDirectCollect(arg1, arg2) {
+  return window['go']['main']['App']['ChatDirectCollect'](arg1, arg2);
+}
+
 export function ClearChatHistory() {
   return window['go']['main']['App']['ClearChatHistory']();
 }
@@ -32,6 +40,10 @@ export function DeleteMCPServer(arg1) {
 
 export function DeleteModelProfile(arg1) {
   return window['go']['main']['App']['DeleteModelProfile'](arg1);
+}
+
+export function EmitEvent(arg1, arg2) {
+  return window['go']['main']['App']['EmitEvent'](arg1, arg2);
 }
 
 export function ExportChatHistory() {
@@ -88,6 +100,10 @@ export function GetVoiceAutoSend() {
 
 export function ImportKnowledge(arg1) {
   return window['go']['main']['App']['ImportKnowledge'](arg1);
+}
+
+export function IsChatVisible() {
+  return window['go']['main']['App']['IsChatVisible']();
 }
 
 export function IsFirstLaunch() {
@@ -168,6 +184,10 @@ export function SavePetSize(arg1, arg2, arg3) {
 
 export function SendMessage(arg1) {
   return window['go']['main']['App']['SendMessage'](arg1);
+}
+
+export function SetChatVisible(arg1) {
+  return window['go']['main']['App']['SetChatVisible'](arg1);
 }
 
 export function SetCronJobEnabled(arg1, arg2) {
