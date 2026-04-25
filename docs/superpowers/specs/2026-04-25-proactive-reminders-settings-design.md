@@ -16,20 +16,19 @@
 
 ### 删除 `fired` 字段
 
-通过重建表的方式删除（SQLite 旧版本不可靠支持 `DROP COLUMN`）：
+直接删除旧表并重建：
 
 ```sql
-CREATE TABLE IF NOT EXISTS proactive_items_new (
+DROP TABLE IF EXISTS proactive_items;
+CREATE TABLE proactive_items (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     trigger_at  DATETIME NOT NULL,
     prompt      TEXT NOT NULL,
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
-INSERT INTO proactive_items_new (id, trigger_at, prompt, created_at)
-    SELECT id, trigger_at, prompt, created_at FROM proactive_items;
-DROP TABLE proactive_items;
-ALTER TABLE proactive_items_new RENAME TO proactive_items;
 ```
+
+历史数据不保留（待触发的提醒丢失可接受，用户重新让 Agent 安排即可）。
 
 迁移脚本追加到 `internal/db/sqlite.go` 的 `migrate()` 函数末尾。
 
