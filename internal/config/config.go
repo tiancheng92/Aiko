@@ -27,6 +27,11 @@ type Config struct {
 	ChatWidth      int // 聊天框宽度（像素），0 表示使用默认值
 	ChatHeight     int // 聊天框高度（像素），0 表示使用默认值
 	ActiveProfileID int64 // 当前激活的 ModelProfile ID，0 表示未设置
+	TTSModel              string  // 从 active profile 复制，空则降级 say
+	TTSVoice              string  // 声线名
+	TTSSpeed              float64 // 语速，0.5–2.0
+	TTSAutoPlay           bool    // 外观与交互：chat:done 后自动朗读
+	TTSSummarizeThreshold int     // 摘要字数阈值，默认 200，0 表示禁用摘要
 }
 
 type Store struct{ db *sql.DB }
@@ -77,6 +82,8 @@ func (s *Store) Load() (*Config, error) {
 	cfg.SMSWatcherEnabled = m["sms_watcher_enabled"] == "true"
 	cfg.VoiceAutoSend = m["voice_auto_send"] == "true"
 	cfg.SoundsEnabled = m["sounds_enabled"] == "true"
+	cfg.TTSAutoPlay = m["tts_auto_play"] == "true"
+	cfg.TTSSummarizeThreshold = parseInt(m["tts_summarize_threshold"], 200)
 	return cfg, nil
 }
 
@@ -105,6 +112,8 @@ func (s *Store) Save(cfg *Config) error {
 		"sms_watcher_enabled": strconv.FormatBool(cfg.SMSWatcherEnabled),
 		"voice_auto_send": strconv.FormatBool(cfg.VoiceAutoSend),
 		"sounds_enabled": strconv.FormatBool(cfg.SoundsEnabled),
+		"tts_auto_play":            strconv.FormatBool(cfg.TTSAutoPlay),
+		"tts_summarize_threshold":  strconv.Itoa(cfg.TTSSummarizeThreshold),
 	}
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -135,6 +144,13 @@ func (c *Config) ApplyProfile(p *ModelProfile) {
 	if c.LLMBaseURL == "" && c.LLMProvider == "openrouter" {
 		c.LLMBaseURL = "https://openrouter.ai/api/v1"
 		p.BaseURL = c.LLMBaseURL
+	}
+	c.TTSModel = p.TTSModel
+	c.TTSVoice = p.TTSVoice
+	if p.TTSSpeed == 0 {
+		c.TTSSpeed = 1.0
+	} else {
+		c.TTSSpeed = p.TTSSpeed
 	}
 }
 

@@ -24,6 +24,9 @@ type ModelProfile struct {
 	Model          string   `json:"model"`
 	EmbeddingModel string   `json:"embedding_model"`
 	EmbeddingDim   int      `json:"embedding_dim"`
+	TTSModel       string   `json:"tts_model"`
+	TTSVoice       string   `json:"tts_voice"`
+	TTSSpeed       float64  `json:"tts_speed"`
 }
 
 // ProfileStore manages model_profiles rows.
@@ -35,7 +38,8 @@ func NewProfileStore(db *sql.DB) *ProfileStore { return &ProfileStore{db: db} }
 // List returns all profiles ordered by id.
 func (s *ProfileStore) List() ([]ModelProfile, error) {
 	rows, err := s.db.Query(`
-		SELECT id, name, provider, base_url, api_key, model, embedding_model, embedding_dim
+		SELECT id, name, provider, base_url, api_key, model, embedding_model, embedding_dim,
+		       tts_model, tts_voice, tts_speed
 		FROM model_profiles ORDER BY id`)
 	if err != nil {
 		return nil, err
@@ -45,7 +49,8 @@ func (s *ProfileStore) List() ([]ModelProfile, error) {
 	for rows.Next() {
 		var p ModelProfile
 		if err := rows.Scan(&p.ID, &p.Name, &p.Provider, &p.BaseURL, &p.APIKey,
-			&p.Model, &p.EmbeddingModel, &p.EmbeddingDim); err != nil {
+			&p.Model, &p.EmbeddingModel, &p.EmbeddingDim,
+			&p.TTSModel, &p.TTSVoice, &p.TTSSpeed); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -57,10 +62,12 @@ func (s *ProfileStore) List() ([]ModelProfile, error) {
 func (s *ProfileStore) Get(id int64) (*ModelProfile, error) {
 	var p ModelProfile
 	err := s.db.QueryRow(`
-		SELECT id, name, provider, base_url, api_key, model, embedding_model, embedding_dim
+		SELECT id, name, provider, base_url, api_key, model, embedding_model, embedding_dim,
+		       tts_model, tts_voice, tts_speed
 		FROM model_profiles WHERE id = ?`, id).
 		Scan(&p.ID, &p.Name, &p.Provider, &p.BaseURL, &p.APIKey,
-			&p.Model, &p.EmbeddingModel, &p.EmbeddingDim)
+			&p.Model, &p.EmbeddingModel, &p.EmbeddingDim,
+			&p.TTSModel, &p.TTSVoice, &p.TTSSpeed)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("profile %d not found", id)
 	}
@@ -77,9 +84,10 @@ func (s *ProfileStore) Save(p *ModelProfile) error {
 	}
 	if p.ID == 0 {
 		res, err := s.db.Exec(`
-			INSERT INTO model_profiles(name, provider, base_url, api_key, model, embedding_model, embedding_dim)
-			VALUES (?,?,?,?,?,?,?)`,
-			p.Name, p.Provider, p.BaseURL, p.APIKey, p.Model, p.EmbeddingModel, p.EmbeddingDim)
+			INSERT INTO model_profiles(name, provider, base_url, api_key, model, embedding_model, embedding_dim, tts_model, tts_voice, tts_speed)
+			VALUES (?,?,?,?,?,?,?,?,?,?)`,
+			p.Name, p.Provider, p.BaseURL, p.APIKey, p.Model, p.EmbeddingModel, p.EmbeddingDim,
+			p.TTSModel, p.TTSVoice, p.TTSSpeed)
 		if err != nil {
 			return err
 		}
@@ -88,9 +96,10 @@ func (s *ProfileStore) Save(p *ModelProfile) error {
 	}
 	_, err := s.db.Exec(`
 		UPDATE model_profiles SET name=?, provider=?, base_url=?, api_key=?, model=?,
-			embedding_model=?, embedding_dim=?
+			embedding_model=?, embedding_dim=?, tts_model=?, tts_voice=?, tts_speed=?
 		WHERE id=?`,
-		p.Name, p.Provider, p.BaseURL, p.APIKey, p.Model, p.EmbeddingModel, p.EmbeddingDim, p.ID)
+		p.Name, p.Provider, p.BaseURL, p.APIKey, p.Model, p.EmbeddingModel, p.EmbeddingDim,
+		p.TTSModel, p.TTSVoice, p.TTSSpeed, p.ID)
 	return err
 }
 

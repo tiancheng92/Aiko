@@ -19,6 +19,11 @@ export namespace config {
 	    ChatWidth: number;
 	    ChatHeight: number;
 	    ActiveProfileID: number;
+	    TTSModel: string;
+	    TTSVoice: string;
+	    TTSSpeed: number;
+	    TTSAutoPlay: boolean;
+	    TTSSummarizeThreshold: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -44,6 +49,11 @@ export namespace config {
 	        this.ChatWidth = source["ChatWidth"];
 	        this.ChatHeight = source["ChatHeight"];
 	        this.ActiveProfileID = source["ActiveProfileID"];
+	        this.TTSModel = source["TTSModel"];
+	        this.TTSVoice = source["TTSVoice"];
+	        this.TTSSpeed = source["TTSSpeed"];
+	        this.TTSAutoPlay = source["TTSAutoPlay"];
+	        this.TTSSummarizeThreshold = source["TTSSummarizeThreshold"];
 	    }
 	}
 	export class ModelProfile {
@@ -55,6 +65,9 @@ export namespace config {
 	    model: string;
 	    embedding_model: string;
 	    embedding_dim: number;
+	    tts_model: string;
+	    tts_voice: string;
+	    tts_speed: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new ModelProfile(source);
@@ -70,6 +83,9 @@ export namespace config {
 	        this.model = source["model"];
 	        this.embedding_model = source["embedding_model"];
 	        this.embedding_dim = source["embedding_dim"];
+	        this.tts_model = source["tts_model"];
+	        this.tts_voice = source["tts_voice"];
+	        this.tts_speed = source["tts_speed"];
 	    }
 	}
 
