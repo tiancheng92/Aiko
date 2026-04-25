@@ -56,6 +56,10 @@ export function GetScreenSize():Promise<Array<number>>;
 
 export function GetSoundsEnabled():Promise<boolean>;
 
+export function GetTTSAutoPlay():Promise<boolean>;
+
+export function GetTTSVoices():Promise<Array<string>>;
+
 export function GetToolPermissions():Promise<Array<tools.PermissionRow>>;
 
 export function GetVoiceAutoSend():Promise<boolean>;
@@ -112,15 +116,21 @@ export function SetCronJobEnabled(arg1:number,arg2:boolean):Promise<void>;
 
 export function SetSoundsEnabled(arg1:boolean):Promise<void>;
 
+export function SetTTSAutoPlay(arg1:boolean):Promise<void>;
+
 export function SetToolPermission(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetVoiceAutoSend(arg1:boolean):Promise<void>;
+
+export function SpeakText(arg1:string):Promise<void>;
 
 export function StartSMSWatcher():Promise<void>;
 
 export function StopGeneration():Promise<void>;
 
 export function StopSMSWatcher():Promise<void>;
+
+export function StopTTS():Promise<void>;
 
 export function UpdateCronJob(arg1:number,arg2:string,arg3:string,arg4:string,arg5:string):Promise<scheduler.Job>;
 

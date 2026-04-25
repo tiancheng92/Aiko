@@ -16,6 +16,7 @@ import {
   StartSMSWatcher, StopSMSWatcher, IsSMSWatcherRunning,
   GetVoiceAutoSend, SetVoiceAutoSend,
   GetSoundsEnabled, SetSoundsEnabled,
+  GetTTSVoices, SetTTSAutoPlay,
 } from '../../wailsjs/go/main/App'
 import { ListProactiveItems, DeleteProactiveItem } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
@@ -56,10 +57,11 @@ const fetchingModels = ref(false)
 const profiles = ref([])
 const activeProfileID = ref(0)
 const showProfileForm = ref(false)
-const profileForm = ref({ id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536 })
+const profileForm = ref({ id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, tts_model: '', tts_voice: '', tts_speed: 1.0 })
 const profileFormError = ref('')
 const profileModels = ref([])
 const fetchingProfileModels = ref(false)
+const ttsVoices = ref([])
 
 // MCP servers
 const mcpServers = ref([])
@@ -170,9 +172,10 @@ async function fetchProfiles() {
 
 /** openProfileForm opens the add-profile form with empty fields. */
 function openProfileForm() {
-  profileForm.value = { id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536 }
+  profileForm.value = { id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, tts_model: '', tts_voice: '', tts_speed: 1.0 }
   profileFormError.value = ''
   profileModels.value = []
+  ttsVoices.value = []
   showProfileForm.value = true
 }
 
@@ -182,6 +185,7 @@ function editProfile(p) {
   profileFormError.value = ''
   profileModels.value = []
   showProfileForm.value = true
+  fetchTTSVoices()
 }
 
 /** fetchProfileModels fetches models for the profile form's base_url. */
@@ -587,6 +591,22 @@ async function toggleSoundsEnabled() {
   }
 }
 
+/** fetchTTSVoices loads voice list when TTS model is set. */
+async function fetchTTSVoices() {
+  if (!profileForm.value.tts_model) { ttsVoices.value = []; return }
+  try { ttsVoices.value = await GetTTSVoices() || [] }
+  catch { ttsVoices.value = [] }
+}
+
+/** toggleTTSAutoPlay persists the auto-play TTS setting. */
+async function toggleTTSAutoPlay() {
+  try {
+    await SetTTSAutoPlay(cfg.value.TTSAutoPlay)
+  } catch (e) {
+    console.warn('toggleTTSAutoPlay failed:', e)
+  }
+}
+
 // ── 提醒事项 ──────────────────────────────────────────────
 const proactiveItems = ref([])
 const proactiveError = ref('')
@@ -734,6 +754,22 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 </div>
               </label>
               <label>Embedding 维度<input type="number" v-model.number="profileForm.embedding_dim" min="256" max="4096" /></label>
+              <div class="form-group" style="margin-top:12px">
+                <label>TTS Model</label>
+                <input v-model="profileForm.tts_model" placeholder="留空则使用系统 say" @change="fetchTTSVoices" />
+              </div>
+              <div class="form-group" style="margin-top:8px">
+                <label>TTS Voice</label>
+                <select v-if="ttsVoices.length > 0" v-model="profileForm.tts_voice">
+                  <option value="">-- 选择声线 --</option>
+                  <option v-for="v in ttsVoices" :key="v" :value="v">{{ v }}</option>
+                </select>
+                <input v-else v-model="profileForm.tts_voice" placeholder="声线名称，如 tara" />
+              </div>
+              <div class="form-group" style="margin-top:8px">
+                <label>TTS Speed（{{ profileForm.tts_speed }}x）</label>
+                <input type="range" v-model.number="profileForm.tts_speed" min="0.5" max="2.0" step="0.1" style="width:100%" />
+              </div>
               <div v-if="profileFormError" class="form-error">{{ profileFormError }}</div>
               <div class="modal-actions">
                 <button class="btn-cancel" @click="showProfileForm = false">取消</button>
@@ -816,6 +852,14 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             </label>
           </div>
           <p class="sms-desc" style="margin-top:4px">发送、收到消息和出错时播放轻柔提示音</p>
+          <div class="sms-toggle-row" style="margin-top:16px">
+            <span class="sms-status-label" style="flex:1">自动朗读回复</span>
+            <label class="voice-auto-send-switch">
+              <input type="checkbox" v-model="cfg.TTSAutoPlay" @change="toggleTTSAutoPlay" />
+              <span class="voice-auto-send-slider"></span>
+            </label>
+          </div>
+          <p class="sms-desc" style="margin-top:4px">LLM 回复完成后自动朗读内容（需在 ModelProfile 中配置 TTS Model）</p>
         </div>
 
         <!-- 工具 -->

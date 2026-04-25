@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	json "github.com/bytedance/sonic"
 	"errors"
 	"fmt"
@@ -33,6 +34,7 @@ import (
 	"aiko/internal/scheduler"
 	"aiko/internal/skill"
 	"aiko/internal/sms"
+	"aiko/internal/tts"
 	internaltools "aiko/internal/tools"
 )
 
@@ -58,6 +60,8 @@ type App struct {
 	smsWatcher      *sms.Watcher // guarded by mu
 	chatCancel      context.CancelFunc // cancels the current in-flight SendMessage; guarded by mu
 	chatGeneration  uint64             // incremented on each SendMessage; used to avoid stale cancel nils
+	ttsSpeaker      tts.Speaker        // current TTS backend; replaced on profile switch
+	ttsCancel       context.CancelFunc // cancels in-flight SpeakText; guarded by mu
 	isChatVisible   bool               // tracks whether the chat panel is open; guarded by mu
 	proactiveEngine *proactive.ProactiveEngine
 }
@@ -369,6 +373,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	a.longMem = longMem
 	a.knowledgeSt = knowledgeSt
 	a.petAgent = newAgent
+	a.ttsSpeaker = tts.New(a.cfg.LLMBaseURL, a.cfg.LLMAPIKey, a.cfg.TTSModel)
 	engine := proactive.NewEngine(a, proactiveStore)
 	a.proactiveEngine = engine
 	a.mu.Unlock()
@@ -387,6 +392,7 @@ func (a *App) SaveConfig(cfg *config.Config) error {
 	cfg.SMSWatcherEnabled = a.cfg.SMSWatcherEnabled
 	cfg.VoiceAutoSend = a.cfg.VoiceAutoSend
 	cfg.SoundsEnabled = a.cfg.SoundsEnabled
+	cfg.TTSAutoPlay = a.cfg.TTSAutoPlay
 	if err := a.configStore.Save(cfg); err != nil {
 		return err
 	}
@@ -1200,4 +1206,96 @@ func (a *App) LarkRunCommand(args string) (string, error) {
 		return "", fmt.Errorf("lark-cli 未安装")
 	}
 	return lark.NewClient(cliPath).Run(a.ctx, strings.Fields(args)...)
+}
+
+// SpeakText synthesizes text to speech using the current TTS backend.
+// If text exceeds TTSSummarizeThreshold runes, it is first summarized by the LLM.
+// Audio bytes are emitted as tts:audio (base64 WAV); system speaker plays directly without tts:audio.
+// Events: tts:start, tts:audio (optional), tts:done, tts:error.
+func (a *App) SpeakText(text string) error {
+	a.mu.Lock()
+	if a.ttsCancel != nil {
+		a.ttsCancel()
+	}
+	ctx, cancel := context.WithCancel(a.ctx)
+	a.ttsCancel = cancel
+	speaker := a.ttsSpeaker
+	cfg := a.cfg
+	a.mu.Unlock()
+
+	if speaker == nil {
+		speaker = &tts.SystemSpeaker{}
+	}
+
+	wailsruntime.EventsEmit(a.ctx, "tts:start", nil)
+
+	go func() {
+		defer func() {
+			a.mu.Lock()
+			a.ttsCancel = nil
+			a.mu.Unlock()
+		}()
+
+		finalText := text
+		threshold := cfg.TTSSummarizeThreshold
+		if threshold > 0 && len([]rune(text)) > threshold {
+			summary, err := a.ChatDirectCollect(ctx, "请用简洁的中文口语总结以下内容，控制在100字以内，适合朗读：\n"+text)
+			if err == nil && strings.TrimSpace(summary) != "" {
+				finalText = strings.TrimSpace(summary)
+			}
+		}
+
+		audioBytes, err := speaker.Speak(ctx, finalText, cfg.TTSVoice, cfg.TTSSpeed)
+		if err != nil {
+			if ctx.Err() != nil {
+				wailsruntime.EventsEmit(a.ctx, "tts:done", nil)
+				return
+			}
+			wailsruntime.EventsEmit(a.ctx, "tts:error", err.Error())
+			return
+		}
+
+		if len(audioBytes) > 0 {
+			encoded := base64.StdEncoding.EncodeToString(audioBytes)
+			wailsruntime.EventsEmit(a.ctx, "tts:audio", map[string]string{
+				"data":   encoded,
+				"format": "wav",
+			})
+		}
+		wailsruntime.EventsEmit(a.ctx, "tts:done", nil)
+	}()
+
+	return nil
+}
+
+// StopTTS cancels any in-flight TTS synthesis or playback.
+func (a *App) StopTTS() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.ttsCancel != nil {
+		a.ttsCancel()
+		a.ttsCancel = nil
+	}
+}
+
+// GetTTSVoices returns available voices from the current TTS backend.
+func (a *App) GetTTSVoices() ([]string, error) {
+	a.mu.RLock()
+	speaker := a.ttsSpeaker
+	a.mu.RUnlock()
+	if speaker == nil {
+		speaker = &tts.SystemSpeaker{}
+	}
+	return speaker.Voices(a.ctx)
+}
+
+// GetTTSAutoPlay returns whether TTS auto-play is enabled.
+func (a *App) GetTTSAutoPlay() bool {
+	return a.cfg.TTSAutoPlay
+}
+
+// SetTTSAutoPlay sets TTS auto-play and persists it.
+func (a *App) SetTTSAutoPlay(enabled bool) error {
+	a.cfg.TTSAutoPlay = enabled
+	return a.configStore.Save(a.cfg)
 }

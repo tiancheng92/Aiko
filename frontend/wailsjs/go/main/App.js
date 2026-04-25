@@ -94,6 +94,14 @@ export function GetSoundsEnabled() {
   return window['go']['main']['App']['GetSoundsEnabled']();
 }
 
+export function GetTTSAutoPlay() {
+  return window['go']['main']['App']['GetTTSAutoPlay']();
+}
+
+export function GetTTSVoices() {
+  return window['go']['main']['App']['GetTTSVoices']();
+}
+
 export function GetToolPermissions() {
   return window['go']['main']['App']['GetToolPermissions']();
 }
@@ -206,12 +214,20 @@ export function SetSoundsEnabled(arg1) {
   return window['go']['main']['App']['SetSoundsEnabled'](arg1);
 }
 
+export function SetTTSAutoPlay(arg1) {
+  return window['go']['main']['App']['SetTTSAutoPlay'](arg1);
+}
+
 export function SetToolPermission(arg1, arg2) {
   return window['go']['main']['App']['SetToolPermission'](arg1, arg2);
 }
 
 export function SetVoiceAutoSend(arg1) {
   return window['go']['main']['App']['SetVoiceAutoSend'](arg1);
+}
+
+export function SpeakText(arg1) {
+  return window['go']['main']['App']['SpeakText'](arg1);
 }
 
 export function StartSMSWatcher() {
@@ -224,6 +240,10 @@ export function StopGeneration() {
 
 export function StopSMSWatcher() {
   return window['go']['main']['App']['StopSMSWatcher']();
+}
+
+export function StopTTS() {
+  return window['go']['main']['App']['StopTTS']();
 }
 
 export function UpdateCronJob(arg1, arg2, arg3, arg4, arg5) {

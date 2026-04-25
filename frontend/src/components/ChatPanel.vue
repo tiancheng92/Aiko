@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { SendMessage, GetMessages, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration } from '../../wailsjs/go/main/App'
+import { SendMessage, GetMessages, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 import { marked, Renderer } from 'marked'
 import markedKatex from 'marked-katex-extension'
@@ -96,6 +96,8 @@ const isRecording = ref(false)
 const voiceHint = ref('')
 const voiceAutoSend = ref(false)
 const isStreaming = ref(false)
+const activeTTSMsgId = ref(null)  // id of the message currently being spoken
+const cfg = ref(null)
 const { playSend, playReceive, playError, playStop } = useSounds()
 let soundsEnabled = false
 
@@ -131,6 +133,7 @@ function formatTime(ts) {
 
 let proactiveStarted = false
 let offToken, offDone, offError, offClear, offProactiveStart, offProactiveMessage
+let offTTSDone, offTTSError, offTTSAudio
 
 onMounted(async () => {
   const history = await GetMessages(50)
@@ -188,11 +191,17 @@ onMounted(async () => {
   offDone = EventsOn('chat:done', () => {
     typingScheduler.flush()
     const idx = messages.value.length - 1
+    const lastMsg = messages.value[idx]
     if (idx >= 0) messages.value[idx] = { ...messages.value[idx], streaming: false, time: new Date() }
     loading.value = false
     isStreaming.value = false
     proactiveStarted = false
     EventsEmit('pet:state:change', 'idle')
+    // Auto-play TTS if enabled and this is not a voice-triggered response
+    if (cfg.value?.TTSAutoPlay && lastMsg?.content && !isRecording.value) {
+      activeTTSMsgId.value = idx
+      SpeakText(lastMsg.content).catch(() => { activeTTSMsgId.value = null })
+    }
   })
 
   offError = EventsOn('chat:error', (err) => {
@@ -209,9 +218,22 @@ onMounted(async () => {
 
   try { voiceAutoSend.value = await GetVoiceAutoSend() } catch {}
   try { soundsEnabled = await GetSoundsEnabled() } catch {}
+  try { cfg.value = await GetConfig() } catch {}
 
   EventsOn('config:sounds:changed', (val) => {
     soundsEnabled = val
+  })
+
+  // TTS event listeners
+  offTTSDone  = EventsOn('tts:done',  () => { activeTTSMsgId.value = null })
+  offTTSError = EventsOn('tts:error', () => { activeTTSMsgId.value = null })
+  offTTSAudio = EventsOn('tts:audio', ({ data, format }) => {
+    const bytes = Uint8Array.from(atob(data), c => c.charCodeAt(0))
+    const blob  = new Blob([bytes], { type: `audio/${format}` })
+    const url   = URL.createObjectURL(blob)
+    const audio = new Audio(url)
+    audio.play()
+    audio.onended = () => URL.revokeObjectURL(url)
   })
 
   EventsOn('voice:start', () => {
@@ -258,7 +280,7 @@ onMounted(async () => {
   })
 })
 
-onUnmounted(() => { offToken?.(); offDone?.(); offError?.(); offClear?.(); offProactiveStart?.(); offProactiveMessage?.() })
+onUnmounted(() => { offToken?.(); offDone?.(); offError?.(); offClear?.(); offProactiveStart?.(); offProactiveMessage?.(); offTTSDone?.(); offTTSError?.(); offTTSAudio?.() })
 
 /** renderMarkdown converts markdown text to sanitized HTML. */
 function renderMarkdown(text) {
@@ -287,6 +309,19 @@ async function copyMessage(idx) {
     copiedIdx.value = idx
     setTimeout(() => { copiedIdx.value = null }, 2000)
   } catch {}
+}
+
+/** speakMessage triggers TTS for a specific message; toggles stop if already speaking. */
+async function speakMessage(idx) {
+  if (activeTTSMsgId.value === idx) {
+    await StopTTS()
+    activeTTSMsgId.value = null
+    return
+  }
+  activeTTSMsgId.value = idx
+  const m = messages.value[idx]
+  if (!m) return
+  SpeakText(m.content).catch(() => { activeTTSMsgId.value = null })
 }
 
 /** send submits the current input as a user message. */
@@ -396,6 +431,13 @@ defineExpose({ focusInput, scrollToBottom })
               @click="copyMessage(i)"
               :title="copiedIdx === i ? '已复制' : '复制'"
             >{{ copiedIdx === i ? '✓' : '⎘' }}</button>
+            <!-- TTS button: right of copy button for assistant messages -->
+            <button
+              v-if="m.role === 'assistant' && !m.streaming && !m.thinking"
+              class="tts-btn"
+              :title="activeTTSMsgId === i ? '停止朗读' : '朗读'"
+              @click="speakMessage(i)"
+            >{{ activeTTSMsgId === i ? '⏹' : '🔊' }}</button>
           </div>
           <div v-if="m.time && !m.streaming && !m.thinking" class="msg-time">{{ formatTime(m.time) }}</div>
         </div>
@@ -581,6 +623,22 @@ defineExpose({ focusInput, scrollToBottom })
 }
 .bubble-row:hover .copy-btn { opacity: 1; width: 32px; }
 .copy-btn:hover { background: rgba(75, 85, 99, 0.9); color: #f9fafb; }
+
+.tts-btn {
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 13px;
+  opacity: 0;
+  border-radius: 4px;
+  transition: opacity 0.15s;
+}
+.bubble-row:hover .tts-btn { opacity: 0.55; }
+.tts-btn:hover { opacity: 1; }
 
 /* Markdown prose */
 .bubble.markdown :deep(p) { margin: 0 0 8px; }
