@@ -761,7 +761,11 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               <label>Embedding 维度<input type="number" v-model.number="profileForm.embedding_dim" min="256" max="4096" /></label>
               <div class="form-group" style="margin-top:12px">
                 <label>TTS Model</label>
-                <input v-model="profileForm.tts_model" placeholder="留空则使用系统 say" @change="fetchTTSVoices" />
+                <select v-if="profileModels.length > 0" v-model="profileForm.tts_model" @change="fetchTTSVoices">
+                  <option value="">-- 留空则使用系统 say --</option>
+                  <option v-for="m in profileModels" :key="m" :value="m">{{ m }}</option>
+                </select>
+                <input v-else v-model="profileForm.tts_model" placeholder="留空则使用系统 say" @change="fetchTTSVoices" />
               </div>
               <div class="form-group" style="margin-top:8px">
                 <label>TTS Voice</label>
