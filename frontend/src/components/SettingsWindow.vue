@@ -57,7 +57,7 @@ const fetchingModels = ref(false)
 const profiles = ref([])
 const activeProfileID = ref(0)
 const showProfileForm = ref(false)
-const profileForm = ref({ id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, tts_model: '', tts_voice: '', tts_speed: 1.0 })
+const profileForm = ref({ id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, tts_model: '', tts_voice: '', tts_speed: 1.0, tts_backend: '' })
 const profileFormError = ref('')
 const profileModels = ref([])
 const fetchingProfileModels = ref(false)
@@ -172,7 +172,7 @@ async function fetchProfiles() {
 
 /** openProfileForm opens the add-profile form with empty fields. */
 function openProfileForm() {
-  profileForm.value = { id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, tts_model: '', tts_voice: '', tts_speed: 1.0 }
+  profileForm.value = { id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, tts_model: '', tts_voice: '', tts_speed: 1.0, tts_backend: '' }
   profileFormError.value = ''
   profileModels.value = []
   ttsVoices.value = []
@@ -181,7 +181,7 @@ function openProfileForm() {
 
 /** editProfile opens the form pre-filled for an existing profile. */
 function editProfile(p) {
-  profileForm.value = { ...p }
+  profileForm.value = { ...p, tts_backend: p.tts_backend || '' }
   profileFormError.value = ''
   profileModels.value = []
   showProfileForm.value = true
@@ -760,25 +760,56 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               </label>
               <label>Embedding 维度<input type="number" v-model.number="profileForm.embedding_dim" min="256" max="4096" /></label>
               <div class="form-group" style="margin-top:12px">
-                <label>TTS Model</label>
-                <select v-if="profileModels.length > 0" v-model="profileForm.tts_model" @change="fetchTTSVoices">
-                  <option value="">-- 留空则使用系统 say --</option>
-                  <option v-for="m in profileModels" :key="m" :value="m">{{ m }}</option>
+                <label class="form-label">TTS 后端</label>
+                <select v-model="profileForm.tts_backend" class="form-input">
+                  <option value="">系统（macOS say）</option>
+                  <option value="openai">OpenAI 兼容接口</option>
+                  <option value="sherpa">Sherpa-ONNX（本地打包）</option>
                 </select>
-                <input v-else v-model="profileForm.tts_model" placeholder="留空则使用系统 say" @change="fetchTTSVoices" />
               </div>
-              <div class="form-group" style="margin-top:8px">
-                <label>TTS Voice</label>
-                <select v-if="ttsVoices.length > 0" v-model="profileForm.tts_voice">
-                  <option value="">-- 选择声线 --</option>
-                  <option v-for="v in ttsVoices" :key="v" :value="v">{{ v }}</option>
-                </select>
-                <input v-else v-model="profileForm.tts_voice" placeholder="声线名称，如 tara" />
-              </div>
-              <div class="form-group" style="margin-top:8px">
-                <label>TTS Speed（{{ profileForm.tts_speed }}x）</label>
-                <input type="range" v-model.number="profileForm.tts_speed" min="0.5" max="2.0" step="0.1" style="width:100%" />
-              </div>
+
+              <!-- OpenAI 后端专属字段 -->
+              <template v-if="profileForm.tts_backend === 'openai'">
+                <div class="form-group" style="margin-top:8px">
+                  <label>TTS Model</label>
+                  <select v-if="profileModels.length > 0" v-model="profileForm.tts_model" @change="fetchTTSVoices">
+                    <option value="">-- 留空则使用系统 say --</option>
+                    <option v-for="m in profileModels" :key="m" :value="m">{{ m }}</option>
+                  </select>
+                  <input v-else v-model="profileForm.tts_model" placeholder="留空则使用系统 say" @change="fetchTTSVoices" />
+                </div>
+                <div class="form-group" style="margin-top:8px">
+                  <label>TTS Voice</label>
+                  <select v-if="ttsVoices.length > 0" v-model="profileForm.tts_voice">
+                    <option value="">-- 选择声线 --</option>
+                    <option v-for="v in ttsVoices" :key="v" :value="v">{{ v }}</option>
+                  </select>
+                  <input v-else v-model="profileForm.tts_voice" placeholder="声线名称，如 tara" />
+                </div>
+                <div class="form-group" style="margin-top:8px">
+                  <label>TTS Speed（{{ profileForm.tts_speed }}x）</label>
+                  <input type="range" v-model.number="profileForm.tts_speed" min="0.5" max="2.0" step="0.1" style="width:100%" />
+                </div>
+              </template>
+
+              <!-- Sherpa 后端专属字段 -->
+              <template v-if="profileForm.tts_backend === 'sherpa'">
+                <div class="form-group" style="margin-top:8px">
+                  <label class="form-label">声线</label>
+                  <select v-model="profileForm.tts_voice" class="form-input">
+                    <option value="">default</option>
+                    <option v-for="i in 10" :key="i" :value="`speaker-${i - 1}`">speaker-{{ i - 1 }}</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin-top:8px">
+                  <label class="form-label">语速</label>
+                  <input
+                    v-model.number="profileForm.tts_speed"
+                    type="number" min="0.5" max="2.0" step="0.1"
+                    class="form-input"
+                  />
+                </div>
+              </template>
               <div v-if="profileFormError" class="form-error">{{ profileFormError }}</div>
               <div class="modal-actions">
                 <button class="btn-cancel" @click="showProfileForm = false">取消</button>
