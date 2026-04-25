@@ -1221,8 +1221,8 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 .settings-win {
   position: fixed;
   z-index: 99990;
-  width: 840px;
-  height: 720px;
+  width: 940px;
+  height: 820px;
   background: rgba(12, 15, 26, 0.55);
   backdrop-filter: blur(40px) saturate(200%) brightness(0.9);
   -webkit-backdrop-filter: blur(40px) saturate(200%) brightness(0.9);
