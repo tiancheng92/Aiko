@@ -7,6 +7,7 @@ import {config} from '../models';
 import {memory} from '../models';
 import {main} from '../models';
 import {tools} from '../models';
+import {proactive} from '../models';
 import {frontend} from '../models';
 
 export function ActivateModelProfile(arg1:number):Promise<void>;
@@ -28,6 +29,8 @@ export function DeleteKnowledgeSource(arg1:string):Promise<void>;
 export function DeleteMCPServer(arg1:number):Promise<void>;
 
 export function DeleteModelProfile(arg1:number):Promise<void>;
+
+export function DeleteProactiveItem(arg1:number):Promise<void>;
 
 export function EmitEvent(arg1:string,arg2:any):Promise<void>;
 
@@ -80,6 +83,8 @@ export function ListMCPServers():Promise<Array<mcp.ServerConfig>>;
 export function ListModelProfiles():Promise<Array<config.ModelProfile>>;
 
 export function ListOpenRouterModels(arg1:string,arg2:string):Promise<Array<string>>;
+
+export function ListProactiveItems():Promise<Array<proactive.Item>>;
 
 export function MarkWelcomeShown():Promise<void>;
 

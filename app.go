@@ -72,6 +72,28 @@ func (a *App) IsChatVisible() bool {
 	return a.isChatVisible
 }
 
+// ListProactiveItems returns all pending proactive reminders ordered by trigger time.
+func (a *App) ListProactiveItems() ([]proactive.Item, error) {
+	a.mu.RLock()
+	pe := a.proactiveEngine
+	a.mu.RUnlock()
+	if pe == nil {
+		return nil, nil
+	}
+	return pe.Store().List(context.Background())
+}
+
+// DeleteProactiveItem cancels a pending proactive reminder by ID.
+func (a *App) DeleteProactiveItem(id int64) error {
+	a.mu.RLock()
+	pe := a.proactiveEngine
+	a.mu.RUnlock()
+	if pe == nil {
+		return nil
+	}
+	return pe.Store().Delete(context.Background(), id)
+}
+
 // SetChatVisible updates the tracked chat-panel visibility state.
 // Called by the frontend when the chat bubble is opened or closed.
 func (a *App) SetChatVisible(visible bool) {

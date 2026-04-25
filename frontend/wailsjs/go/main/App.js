@@ -42,6 +42,10 @@ export function DeleteModelProfile(arg1) {
   return window['go']['main']['App']['DeleteModelProfile'](arg1);
 }
 
+export function DeleteProactiveItem(arg1) {
+  return window['go']['main']['App']['DeleteProactiveItem'](arg1);
+}
+
 export function EmitEvent(arg1, arg2) {
   return window['go']['main']['App']['EmitEvent'](arg1, arg2);
 }
@@ -144,6 +148,10 @@ export function ListModelProfiles() {
 
 export function ListOpenRouterModels(arg1, arg2) {
   return window['go']['main']['App']['ListOpenRouterModels'](arg1, arg2);
+}
+
+export function ListProactiveItems() {
+  return window['go']['main']['App']['ListProactiveItems']();
 }
 
 export function MarkWelcomeShown() {
