@@ -1,22 +1,22 @@
-# Proactive Reminders Settings Design
+# 提醒事项设置界面设计
 
-**Goal:** Expose the `proactive_items` queue in the Settings UI so users can view and cancel pending reminders. Simultaneously clean up leftover design debt: remove morning/evening greeting cron jobs, drop the `fired` column (replace mark-as-fired with delete-on-fire), and hide `ChatDirect`/`ChatDirectCollect` from Wails bindings.
+**目标：** 在设置界面新增「提醒事项」tab，展示 `proactive_items` 待触发队列，支持删除单条。同步清理技术债：移除晨/晚问候、将触发后标记改为触发后删除、去掉 `fired` 字段。
 
-**Date:** 2026-04-25
-
----
-
-## Overview
-
-`proactive_items` is a "pending queue": every row is a future reminder that has not yet fired. On fire, the row is deleted. Users see the live queue in Settings → 提醒事项 and can delete any entry to cancel it.
+**日期：** 2026-04-25
 
 ---
 
-## Data Model Changes
+## 核心设计思路
 
-### Drop `fired` column
+`proactive_items` 是一个**待触发队列**：表里的每一行都是尚未触发的提醒。触发后直接删除该行，不标记状态。用户在设置界面看到的就是真实的待办列表，无需过滤 `fired` 状态。
 
-`fired BOOLEAN DEFAULT FALSE` is removed. The table is rebuilt via migration (SQLite lacks reliable `DROP COLUMN` on older versions):
+---
+
+## 数据模型变更
+
+### 删除 `fired` 字段
+
+通过重建表的方式删除（SQLite 旧版本不可靠支持 `DROP COLUMN`）：
 
 ```sql
 CREATE TABLE IF NOT EXISTS proactive_items_new (
@@ -31,15 +31,15 @@ DROP TABLE proactive_items;
 ALTER TABLE proactive_items_new RENAME TO proactive_items;
 ```
 
-This migration runs in `internal/db/sqlite.go`'s `migrate()` function, appended after the existing `proactive_items` creation block.
+迁移脚本追加到 `internal/db/sqlite.go` 的 `migrate()` 函数末尾。
 
 ---
 
-## Backend Changes
+## 后端变更
 
 ### `internal/proactive/store.go`
 
-**Store interface** — replace `MarkFired` with `Delete`, add `List`:
+**Store 接口** — 将 `MarkFired` 替换为 `Delete`，新增 `List`：
 
 ```go
 type Store interface {
@@ -50,7 +50,7 @@ type Store interface {
 }
 ```
 
-`Item` struct — remove `Fired bool` field:
+**Item 结构体** — 删除 `Fired bool` 字段：
 
 ```go
 type Item struct {
@@ -61,26 +61,26 @@ type Item struct {
 }
 ```
 
-**`ProactiveStore` implementations:**
+**ProactiveStore 新增实现：**
 
-- `Delete(ctx, id)`: `DELETE FROM proactive_items WHERE id = ?` — idempotent (no error if row not found)
-- `List(ctx)`: `SELECT id, trigger_at, prompt, created_at FROM proactive_items ORDER BY trigger_at ASC`
+- `Delete(ctx, id)`：`DELETE FROM proactive_items WHERE id = ?`，幂等（行不存在不报错）
+- `List(ctx)`：`SELECT id, trigger_at, prompt, created_at FROM proactive_items ORDER BY trigger_at ASC`
 
 ### `internal/proactive/engine.go`
 
-**Remove greeting cron jobs entirely** — delete from `Start()`:
-- `greetingMorningPrompt` constant
-- `greetingEveningPrompt` constant
-- Both `cron.AddFunc(...)` calls for morning and evening greetings
+**彻底删除晨/晚问候：**
+- 删除 `greetingMorningPrompt` 常量
+- 删除 `greetingEveningPrompt` 常量
+- 删除 `Start()` 中注册早晚问候的两个 `cron.AddFunc(...)` 调用
 
-**`Poll()` — replace `MarkFired` with `Delete`:**
+**`Poll()` — 触发后删除（不再标记 fired）：**
 
 ```go
 func (e *ProactiveEngine) Poll(ctx context.Context) {
     items, err := e.store.DueItems(ctx, time.Now().UTC())
     if err != nil { return }
     for _, item := range items {
-        // Delete first (prevent double-fire on slow Fire())
+        // 先删除，防止 Fire 慢时重复触发
         if err := e.store.Delete(ctx, item.ID); err != nil { continue }
         if err := e.Fire(ctx, item.Prompt); err != nil {
             e.app.EmitEvent("notification:show", map[string]string{
@@ -91,16 +91,20 @@ func (e *ProactiveEngine) Poll(ctx context.Context) {
 }
 ```
 
-`truncate(s string, n int) string` — returns first `n` runes of `s`, appending `…` if truncated.
+`truncate(s string, n int) string`：返回前 n 个 rune，超出时追加 `…`。
+
+**新增 `Store()` 访问器**，供 `app.go` 调用：
+
+```go
+func (e *ProactiveEngine) Store() Store { return e.store }
+```
 
 ### `app.go`
 
-**Remove from Wails bindings** — Wails exposes all exported methods on the registered struct. `ChatDirect` and `ChatDirectCollect` must remain exported (capital) to satisfy `AppInterface`. Instead, add a compile-time guard: wrap them in a private helper and have the exported version delegate to it, OR simply accept that they remain technically callable from the frontend but document them as internal. Since the frontend never calls them and there is no sensitive data path, **leave them as-is** — this is not a security issue, only a cleanliness concern. Remove this item from scope.
-
-**New Wails-bound methods:**
+新增两个 Wails 绑定方法：
 
 ```go
-// ListProactiveItems returns all pending proactive reminders ordered by trigger time.
+// ListProactiveItems 返回所有待触发的提醒事项，按触发时间升序排列。
 func (a *App) ListProactiveItems() ([]proactive.Item, error) {
     a.mu.RLock()
     pe := a.proactiveEngine
@@ -111,7 +115,7 @@ func (a *App) ListProactiveItems() ([]proactive.Item, error) {
     return pe.Store().List(context.Background())
 }
 
-// DeleteProactiveItem cancels a pending proactive reminder by ID.
+// DeleteProactiveItem 取消指定 ID 的提醒事项。
 func (a *App) DeleteProactiveItem(id int64) error {
     a.mu.RLock()
     pe := a.proactiveEngine
@@ -123,21 +127,21 @@ func (a *App) DeleteProactiveItem(id int64) error {
 }
 ```
 
-`ProactiveEngine` needs a `Store() Store` accessor method added in `engine.go`.
+> **关于 ChatDirect / ChatDirectCollect：** Wails 通过注册整个 struct 暴露所有导出方法，而这两个方法必须保持大写以实现 `AppInterface` 接口，无法通过改名隐藏。前端实际上不会调用它们，也不存在安全风险，因此**保持现状，不在本次范围内处理**。
 
 ---
 
-## Frontend Changes
+## 前端变更
 
 ### `SettingsWindow.vue`
 
-**New tab button** (after the `sms` tab button):
+**新增 tab 按钮**（放在 `sms` tab 按钮之后）：
 
 ```html
 <button :class="{ active: activeTab === 'proactive' }" @click="activeTab = 'proactive'">提醒事项</button>
 ```
 
-**New tab pane:**
+**新增 tab 内容面板：**
 
 ```html
 <div v-if="activeTab === 'proactive'" class="tab-pane">
@@ -162,7 +166,7 @@ func (a *App) DeleteProactiveItem(id int64) error {
 </div>
 ```
 
-**Script additions** (`<script setup>`):
+**`<script setup>` 新增逻辑：**
 
 ```js
 import { ListProactiveItems, DeleteProactiveItem } from '../../wailsjs/go/main/App'
@@ -180,26 +184,29 @@ async function loadProactiveItems() {
 }
 
 async function deleteProactiveItem(id) {
-  proactiveItems.value = proactiveItems.value.filter(i => i.ID !== id)  // optimistic
+  proactiveItems.value = proactiveItems.value.filter(i => i.ID !== id)  // 乐观更新
   try {
     await DeleteProactiveItem(id)
   } catch (e) {
-    await loadProactiveItems()  // rollback
+    await loadProactiveItems()  // 失败则回滚
   }
 }
 
 function formatProactiveTime(t) {
-  return new Date(t).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return new Date(t).toLocaleString('zh-CN', {
+    month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'
+  })
 }
 
 function truncatePrompt(s, n) {
   return s.length > n ? s.slice(0, n) + '…' : s
 }
 
+// 切换到提醒事项 tab 时自动加载
 watch(() => activeTab.value, v => { if (v === 'proactive') loadProactiveItems() })
 ```
 
-**CSS** (consistent with `cron-row` style):
+**新增 CSS**（与 `cron-row` 风格一致）：
 
 ```css
 .proactive-row {
@@ -241,20 +248,20 @@ watch(() => activeTab.value, v => { if (v === 'proactive') loadProactiveItems() 
 
 ---
 
-## What Is Not Changed
+## 不变的部分
 
-- `schedule_followup` tool logic — unchanged (Insert still works the same)
-- `DueItems` query — unchanged
-- `ProactiveEngine` cron poll interval — unchanged (`* * * * *`)
-- Permission seeding for `schedule_followup` — unchanged
-- `chat:proactive:start` frontend handling — unchanged
+- `schedule_followup` 工具逻辑（Insert 不变）
+- `DueItems` 查询逻辑不变
+- `ProactiveEngine` 的 cron poll 间隔不变（每分钟）
+- `schedule_followup` 的权限行 seeding 不变
+- `chat:proactive:start` 前端处理逻辑不变
 
 ---
 
-## Testing
+## 测试
 
-- `TestStoreDeleteItem`: insert row → delete → DueItems returns empty
-- `TestStoreList`: insert 2 rows → List returns both ordered by trigger_at
-- `TestPollDeletesOnFire`: mock store, Poll calls Delete (not MarkFired) after Fire succeeds
-- `TestPollDeletesOnFireFailure`: mock store where Fire fails → Delete still called, notification emitted
-- `TestMigrateDropsFiredColumn`: open DB with old schema (with fired column) → migrate → confirm fired column gone
+- `TestStoreDelete`：插入一行 → 删除 → `DueItems` 返回空
+- `TestStoreList`：插入 2 行 → `List` 按 `trigger_at` 升序返回
+- `TestPollDeletesAfterFire`：mock store，Poll 成功触发后调用 `Delete`（不再调用 `MarkFired`）
+- `TestPollDeletesOnFireFailure`：mock store，Fire 失败时仍调用 `Delete`，并 emit `notification:show`
+- `TestMigrateDropsFiredColumn`：对含 `fired` 列的旧 DB 执行迁移，确认迁移后 `fired` 列不存在
