@@ -84,6 +84,14 @@ github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnr
 github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHmT4TnhNGBo=
 github.com/jtolds/gls v4.20.0+incompatible h1:xdiiI2gbIgH/gLH7ADydsJ1uDOEzR8yvV7C0MuV77Wo=
 github.com/jtolds/gls v4.20.0+incompatible/go.mod h1:QJZ7F/aHp+rZTRtaJ1ow/lLfFfVYBRgL+9YlvaHOwJU=
+github.com/k2-fsa/sherpa-onnx-go v1.12.40 h1:2cpNAUoY6BA68u/rTLpZs8Wz97hR9LkZc4HwfLFNF/g=
+github.com/k2-fsa/sherpa-onnx-go v1.12.40/go.mod h1:NFX5xsrLFfYJznVretwMgDueiDaavqVynNVuTmQrLiU=
+github.com/k2-fsa/sherpa-onnx-go-linux v1.12.40 h1:aA8rrKjqD/981jsVxMiNikyr/V3lUcvutaGeQ8WgtIE=
+github.com/k2-fsa/sherpa-onnx-go-linux v1.12.40/go.mod h1:NXEH2rsBgTdqY59YpPq6CtSBlBAXy/8a9FmpLERU97I=
+github.com/k2-fsa/sherpa-onnx-go-macos v1.12.40 h1:/PcZarn9fV3nmfmhZ8rGWtSE8U+aJSIsNrzg/KtvhqQ=
+github.com/k2-fsa/sherpa-onnx-go-macos v1.12.40/go.mod h1:ZOhUAXC62Unj0ZNfu6zxSFKcW96aXf7P3BsqiUyOBbE=
+github.com/k2-fsa/sherpa-onnx-go-windows v1.12.40 h1:2iKqa+uJRai1Ylub3paPBATRpr5VJ1sbk/Rdg80moHQ=
+github.com/k2-fsa/sherpa-onnx-go-windows v1.12.40/go.mod h1:5AX7TU8+P/gInjglY1ijtWUM2b8iyR0QX4yEngzMe64=
 github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0/go.mod h1:1NbS8ALrpOvjt0rHPNLyCIeMtbizbir8U//inJ+zuB8=
 github.com/klauspost/cpuid/v2 v2.2.10 h1:tBs3QSyvjDyFTq3uoc/9xFpCuOsJQFNPiAhYdw2skhE=
 github.com/klauspost/cpuid/v2 v2.2.10/go.mod h1:hqwkgyIinND0mEev00jJYCxPNVRVXFQeu1XKlok6oO0=
