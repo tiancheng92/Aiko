@@ -195,6 +195,7 @@ onMounted(async () => {
     messages.value.push({ role: 'system', content: '错误: ' + err })
     loading.value = false
     isStreaming.value = false
+    proactiveStarted = false
     if (soundsEnabled) playError()
     EventsEmit('pet:state:change', 'error')
   })
