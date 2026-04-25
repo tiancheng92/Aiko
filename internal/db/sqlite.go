@@ -153,5 +153,11 @@ func migrate(db *sql.DB) error {
 			return fmt.Errorf("alter model_profiles for tts: %w", err)
 		}
 	}
+	// tts_backend 列（幂等）
+	if _, err := db.Exec(`ALTER TABLE model_profiles ADD COLUMN tts_backend TEXT NOT NULL DEFAULT ''`); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") {
+			return fmt.Errorf("alter model_profiles for tts_backend: %w", err)
+		}
+	}
 	return nil
 }
