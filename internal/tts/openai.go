@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -73,8 +74,10 @@ func (s *OpenAISpeaker) Speak(ctx context.Context, text, voice string, speed flo
 // Voices calls GET {baseURL}/v1/audio/voices. Returns empty list if endpoint absent.
 func (s *OpenAISpeaker) Voices(ctx context.Context) ([]string, error) {
 	url := strings.TrimRight(s.baseURL, "/") + "/v1/audio/voices"
+	slog.Info("tts: fetching voices", "url", url)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
+		slog.Warn("tts: build voices request failed", "err", err)
 		return nil, nil //nolint:nilerr
 	}
 	if s.apiKey != "" {
@@ -82,15 +85,21 @@ func (s *OpenAISpeaker) Voices(ctx context.Context) ([]string, error) {
 	}
 
 	resp, err := s.httpClient().Do(req)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		return nil, nil // endpoint not available, caller falls back to manual input
+	if err != nil {
+		slog.Warn("tts: voices request failed", "err", err)
+		return nil, nil
 	}
 	defer resp.Body.Close()
+	slog.Info("tts: voices response", "status", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		return nil, nil
+	}
 
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, nil
 	}
+	slog.Info("tts: voices raw response", "body", string(raw))
 
 	// Try {"voices": [...]} first, then {"data": [...]} (OpenAI-compatible variants).
 	var r1 struct {
@@ -116,5 +125,6 @@ func (s *OpenAISpeaker) Voices(ctx context.Context) ([]string, error) {
 	if json.Unmarshal(raw, &r3) == nil && len(r3) > 0 {
 		return r3, nil
 	}
+	slog.Warn("tts: voices response did not match any known format")
 	return nil, nil
 }
