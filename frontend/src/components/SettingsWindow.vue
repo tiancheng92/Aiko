@@ -1,6 +1,6 @@
 <!-- frontend/src/components/SettingsWindow.vue -->
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import {
   GetConfig, SaveConfig,
   ImportKnowledge, ListKnowledgeSources, DeleteKnowledgeSource,
@@ -17,6 +17,7 @@ import {
   GetVoiceAutoSend, SetVoiceAutoSend,
   GetSoundsEnabled, SetSoundsEnabled,
 } from '../../wailsjs/go/main/App'
+import { ListProactiveItems, DeleteProactiveItem } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { useModelPath } from '../composables/useModelPath.js'
 
@@ -583,6 +584,44 @@ async function toggleSoundsEnabled() {
     console.warn('toggleSoundsEnabled failed:', e)
   }
 }
+
+// ── 提醒事项 ──────────────────────────────────────────────
+const proactiveItems = ref([])
+const proactiveError = ref('')
+
+/** loadProactiveItems fetches all pending reminders from the backend. */
+async function loadProactiveItems() {
+  try {
+    proactiveError.value = ''
+    proactiveItems.value = await ListProactiveItems() ?? []
+  } catch (e) {
+    proactiveError.value = '加载失败'
+  }
+}
+
+/** deleteProactiveItem removes a reminder optimistically, rolls back on error. */
+async function deleteProactiveItem(id) {
+  proactiveItems.value = proactiveItems.value.filter(i => i.ID !== id)
+  try {
+    await DeleteProactiveItem(id)
+  } catch (e) {
+    await loadProactiveItems()
+  }
+}
+
+/** formatProactiveTime formats a UTC time string to local M/D HH:mm. */
+function formatProactiveTime(t) {
+  return new Date(t).toLocaleString('zh-CN', {
+    month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'
+  })
+}
+
+/** truncatePrompt truncates a prompt string to n characters. */
+function truncatePrompt(s, n) {
+  return s.length > n ? s.slice(0, n) + '…' : s
+}
+
+watch(activeTab, v => { if (v === 'proactive') loadProactiveItems() })
 </script>
 
 <template>
@@ -619,6 +658,9 @@ async function toggleSoundsEnabled() {
         </button>
         <button :class="{ active: activeTab === 'sms' }" @click="activeTab = 'sms'">
           <span class="nav-icon">📱</span><span class="nav-label">短信监听</span>
+        </button>
+        <button :class="{ active: activeTab === 'proactive' }" @click="activeTab = 'proactive'">
+          <span class="nav-icon">🔔</span><span class="nav-label">提醒事项</span>
         </button>
       </nav>
 
@@ -1063,6 +1105,27 @@ async function toggleSoundsEnabled() {
             </label>
           </div>
           <p class="sms-desc" style="margin-top:4px">发送、收到消息和出错时播放轻柔提示音</p>
+        </div>
+
+        <div v-if="activeTab === 'proactive'" class="tab-pane">
+          <div class="section-header">
+            <h3>提醒事项</h3>
+            <button class="btn-small" @click="loadProactiveItems">刷新</button>
+          </div>
+
+          <div v-if="proactiveError" class="form-error">{{ proactiveError }}</div>
+
+          <div v-if="proactiveItems.length === 0 && !proactiveError" class="empty-hint">
+            暂无待触发的提醒事项
+          </div>
+
+          <div v-for="item in proactiveItems" :key="item.ID" class="proactive-row">
+            <div class="proactive-info">
+              <span class="proactive-time">{{ formatProactiveTime(item.TriggerAt) }}</span>
+              <span class="proactive-prompt">{{ truncatePrompt(item.Prompt, 60) }}</span>
+            </div>
+            <button class="btn-small btn-danger" @click="deleteProactiveItem(item.ID)">删除</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1742,4 +1805,41 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
 }
 .voice-auto-send-switch input:checked + .voice-auto-send-slider { background: #6366f1; }
 .voice-auto-send-switch input:checked + .voice-auto-send-slider::before { transform: translateX(18px); }
+
+/* ── 提醒事项 tab ───────────────────────────────────────── */
+.proactive-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+.proactive-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.proactive-time {
+  font-size: 12px;
+  color: #a5b4fc;
+  font-variant-numeric: tabular-nums;
+}
+.proactive-prompt {
+  font-size: 13px;
+  color: rgba(255,255,255,0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.btn-danger {
+  color: #f87171;
+  border-color: rgba(248,113,113,0.3);
+}
+.btn-danger:hover {
+  background: rgba(248,113,113,0.15);
+}
 </style>
