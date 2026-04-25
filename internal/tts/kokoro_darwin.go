@@ -30,10 +30,6 @@ var kokoroVoices = []string{
 	"zf_xiaoni",   // 小妮（女，温柔）
 	"zf_xiaoxiao", // 小小（女，清新）
 	"zf_xiaoyi",   // 小仪（女，知性）
-	"zm_yunjian",  // 云涧（男，低沉）
-	"zm_yunxi",    // 云希（男，活力）
-	"zm_yunxia",   // 云霞（男，磁性）
-	"zm_yunyang",  // 云扬（男，稳重）
 }
 
 // newKokoroSpeaker 是平台入口，由 tts.New 调用。
