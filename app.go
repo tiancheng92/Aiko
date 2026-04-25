@@ -375,7 +375,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	a.longMem = longMem
 	a.knowledgeSt = knowledgeSt
 	a.petAgent = newAgent
-	a.ttsSpeaker = tts.New(a.cfg.LLMBaseURL, a.cfg.LLMAPIKey, a.cfg.TTSModel)
+	a.ttsSpeaker = tts.New(a.cfg.TTSBackend, a.cfg.LLMBaseURL, a.cfg.LLMAPIKey, a.cfg.TTSModel, a.sherpaModelDir())
 	engine := proactive.NewEngine(a, proactiveStore)
 	a.proactiveEngine = engine
 	a.mu.Unlock()
@@ -1352,7 +1352,7 @@ func (a *App) StopTTS() {
 // baseURL, apiKey, and model correspond to the profile being edited (may differ
 // from the active profile). When model is empty, macOS system voices are returned.
 func (a *App) GetTTSVoices(baseURL, apiKey, model string) ([]string, error) {
-	speaker := tts.New(baseURL, apiKey, model)
+	speaker := tts.New("", baseURL, apiKey, model, a.sherpaModelDir())
 	return speaker.Voices(a.ctx)
 }
 
@@ -1365,4 +1365,21 @@ func (a *App) GetTTSAutoPlay() bool {
 func (a *App) SetTTSAutoPlay(enabled bool) error {
 	a.cfg.TTSAutoPlay = enabled
 	return a.configStore.Save(a.cfg)
+}
+
+// sherpaModelDir 返回打包的 sherpa TTS 模型路径。
+// 开发模式下返回 vendor-sherpa/model；.app bundle 中返回 Contents/Resources/sherpa/model。
+func (a *App) sherpaModelDir() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "vendor-sherpa/model"
+	}
+	// macOS .app 结构：<name>.app/Contents/MacOS/<binary>
+	// 资源路径：        <name>.app/Contents/Resources/sherpa/model
+	contentsDir := filepath.Dir(filepath.Dir(exe))
+	bundled := filepath.Join(contentsDir, "Resources", "sherpa", "model")
+	if _, statErr := os.Stat(filepath.Join(bundled, "model.onnx")); statErr == nil {
+		return bundled
+	}
+	return "vendor-sherpa/model"
 }
