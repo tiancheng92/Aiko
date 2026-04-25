@@ -183,6 +183,24 @@ func (a *Agent) ChatDirect(ctx context.Context, prompt string) <-chan StreamResu
 	return ch
 }
 
+// ChatDirectCollect sends a prompt to the agent, collects the full response
+// as a string, and returns it. Unlike ChatDirect, no Wails events are emitted.
+// Used by the ProactiveEngine when the chat panel is closed.
+func (a *Agent) ChatDirectCollect(ctx context.Context, prompt string) (string, error) {
+	ch := a.ChatDirect(ctx, prompt)
+	var sb strings.Builder
+	for r := range ch {
+		if r.Err != nil {
+			return "", r.Err
+		}
+		if r.Done {
+			break
+		}
+		sb.WriteString(r.Token)
+	}
+	return sb.String(), nil
+}
+
 // drainRunner consumes all events from runner.Query, forwards tokens to ch,
 // and returns the accumulated response string. Returns (response, true) on
 // success or ("", false) after sending an error to ch.
