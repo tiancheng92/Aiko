@@ -18,6 +18,13 @@ type Item struct {
 	CreatedAt time.Time
 }
 
+// Store is the interface for managing scheduled proactive items.
+type Store interface {
+	Insert(ctx context.Context, triggerAt time.Time, prompt string) error
+	DueItems(ctx context.Context, now time.Time) ([]Item, error)
+	MarkFired(ctx context.Context, id int64) error
+}
+
 // ProactiveStore manages the proactive_items SQLite table.
 type ProactiveStore struct {
 	db *sql.DB
