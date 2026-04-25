@@ -83,7 +83,7 @@ func (t *ScheduleFollowupTool) InvokableRun(ctx context.Context, input string, _
 		return "", fmt.Errorf("schedule followup: %w", err)
 	}
 
-	return fmt.Sprintf("已安排：将在 %s 提醒你", when.Format("2006年01月02日 15:04")), nil
+	return fmt.Sprintf("已安排：将在 %s 提醒你", when.In(time.Local).Format("2006年01月02日 15:04")), nil
 }
 
 // parseToolArgs unmarshals JSON input into a map. Returns empty map on failure.
