@@ -799,6 +799,23 @@ watch(activeTab, v => { if (v === 'proactive') loadProactiveItems() })
             </div>
             <button class="btn-reset-size" @click="resetChatSize">重置为默认</button>
           </label>
+          <div class="settings-section-title" style="margin-top:20px">语音与音效</div>
+          <div class="sms-toggle-row" style="margin-top:8px">
+            <span class="sms-status-label" style="flex:1">语音消息立刻发送</span>
+            <label class="voice-auto-send-switch">
+              <input type="checkbox" v-model="cfg.VoiceAutoSend" @change="toggleVoiceAutoSend" />
+              <span class="voice-auto-send-slider"></span>
+            </label>
+          </div>
+          <p class="sms-desc" style="margin-top:4px">释放 Option 键后，等待转录完成并自动发送消息</p>
+          <div class="sms-toggle-row" style="margin-top:16px">
+            <span class="sms-status-label" style="flex:1">聊天音效</span>
+            <label class="voice-auto-send-switch">
+              <input type="checkbox" v-model="cfg.SoundsEnabled" @change="toggleSoundsEnabled" />
+              <span class="voice-auto-send-slider"></span>
+            </label>
+          </div>
+          <p class="sms-desc" style="margin-top:4px">发送、收到消息和出错时播放轻柔提示音</p>
         </div>
 
         <!-- 工具权限 -->
@@ -1095,26 +1112,6 @@ watch(activeTab, v => { if (v === 'proactive') loadProactiveItems() })
             </div>
           </div>
 
-          <!-- Voice auto-send toggle -->
-          <div class="settings-section-title" style="margin-top:20px">语音设置</div>
-          <div class="sms-toggle-row" style="margin-top:8px">
-            <span class="sms-status-label" style="flex:1">语音消息立刻发送</span>
-            <label class="voice-auto-send-switch">
-              <input type="checkbox" v-model="cfg.VoiceAutoSend" @change="toggleVoiceAutoSend" />
-              <span class="voice-auto-send-slider"></span>
-            </label>
-          </div>
-          <p class="sms-desc" style="margin-top:4px">释放 Option 键后，等待转录完成并自动发送消息</p>
-
-          <!-- Sounds toggle -->
-          <div class="sms-toggle-row" style="margin-top:16px">
-            <span class="sms-status-label" style="flex:1">聊天音效</span>
-            <label class="voice-auto-send-switch">
-              <input type="checkbox" v-model="cfg.SoundsEnabled" @change="toggleSoundsEnabled" />
-              <span class="voice-auto-send-slider"></span>
-            </label>
-          </div>
-          <p class="sms-desc" style="margin-top:4px">发送、收到消息和出错时播放轻柔提示音</p>
         </div>
 
         <div v-if="activeTab === 'proactive'" class="tab-pane">
