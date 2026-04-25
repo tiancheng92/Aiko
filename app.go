@@ -176,6 +176,7 @@ func (a *App) startup(ctx context.Context) {
 		&internaltools.SaveMemoryTool{},
 		&internaltools.UpdateUserProfileTool{},
 		&internaltools.SaveSkillTool{},
+		&proactive.ScheduleFollowupTool{},
 	} {
 		_ = a.permStore.EnsureRow(toolsCtx, t)
 	}
