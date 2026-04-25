@@ -73,9 +73,9 @@ func (s *OpenAISpeaker) Speak(ctx context.Context, text, voice string, speed flo
 
 // Voices calls GET {baseURL}/v1/audio/voices. Returns empty list if endpoint absent.
 func (s *OpenAISpeaker) Voices(ctx context.Context) ([]string, error) {
-	url := strings.TrimRight(s.baseURL, "/") + "/v1/audio/voices"
-	slog.Info("tts: fetching voices", "url", url)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	voicesURL := strings.TrimRight(s.baseURL, "/") + "/v1/audio/voices?model=" + s.model
+	slog.Info("tts: fetching voices", "url", voicesURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, voicesURL, nil)
 	if err != nil {
 		slog.Warn("tts: build voices request failed", "err", err)
 		return nil, nil //nolint:nilerr
@@ -90,16 +90,14 @@ func (s *OpenAISpeaker) Voices(ctx context.Context) ([]string, error) {
 		return nil, nil
 	}
 	defer resp.Body.Close()
-	slog.Info("tts: voices response", "status", resp.StatusCode)
-	if resp.StatusCode != http.StatusOK {
-		return nil, nil
-	}
-
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, nil
 	}
-	slog.Info("tts: voices raw response", "body", string(raw))
+	slog.Info("tts: voices response", "status", resp.StatusCode, "body", string(raw))
+	if resp.StatusCode != http.StatusOK {
+		return nil, nil
+	}
 
 	// Try {"voices": [...]} first, then {"data": [...]} (OpenAI-compatible variants).
 	var r1 struct {
