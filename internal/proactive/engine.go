@@ -2,7 +2,6 @@ package proactive
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"time"
 	"unicode/utf8"
@@ -13,15 +12,13 @@ import (
 const (
 	// notifMaxRunes is the max rune length for notification messages.
 	notifMaxRunes = 80
+	// fireDeadline is how long after trigger_at an item is still fired; beyond this it is silently dropped.
+	fireDeadline = 5 * time.Minute
 )
 
 // AppInterface is the subset of *app.App that ProactiveEngine needs.
 // Defined here to break the import cycle (proactive → app would be circular).
 type AppInterface interface {
-	// ChatDirect streams tokens to the frontend via chat:token / chat:done events.
-	ChatDirect(ctx context.Context, prompt string) error
-	// ChatDirectCollect runs the agent and returns the full response text with no events emitted.
-	ChatDirectCollect(ctx context.Context, prompt string) (string, error)
 	// IsChatVisible reports whether the chat bubble is currently open.
 	IsChatVisible() bool
 	// EmitEvent emits a Wails event to the frontend.
@@ -66,24 +63,15 @@ func (e *ProactiveEngine) Stop() {
 	e.cron.Stop()
 }
 
-// Fire delivers a proactive message using the given prompt.
-// If chat is open, it streams tokens to the frontend.
-// If chat is closed, it collects the response and shows a notification.
-// Returns an error if the underlying chat call fails.
-func (e *ProactiveEngine) Fire(ctx context.Context, prompt string) error {
+// Fire delivers a proactive message directly to the user without LLM processing.
+// If chat is open, it pushes the message to the chat panel.
+// If chat is closed, it shows a notification bubble (truncated to notifMaxRunes).
+func (e *ProactiveEngine) Fire(_ context.Context, prompt string) error {
 	if e.app.IsChatVisible() {
-		// Emit sentinel so frontend can style the bubble.
-		e.app.EmitEvent("chat:proactive:start", nil)
-		if err := e.app.ChatDirect(ctx, prompt); err != nil {
-			return fmt.Errorf("ChatDirect: %w", err)
-		}
+		e.app.EmitEvent("chat:proactive:message", prompt)
 		return nil
 	}
-	// Chat is closed: collect and deliver via notification bubble.
-	text, err := e.app.ChatDirectCollect(ctx, prompt)
-	if err != nil {
-		return fmt.Errorf("ChatDirectCollect: %w", err)
-	}
+	text := prompt
 	if utf8.RuneCountInString(text) > notifMaxRunes {
 		runes := []rune(text)
 		text = string(runes[:notifMaxRunes]) + "…"
@@ -114,12 +102,13 @@ func (e *ProactiveEngine) Poll(ctx context.Context) {
 			slog.Warn("proactive poll: delete item", "id", item.ID, "err", err)
 			continue
 		}
+		// Drop items that are more than fireDeadline past their trigger time.
+		if time.Now().UTC().Sub(item.TriggerAt) > fireDeadline {
+			slog.Info("proactive poll: item expired, dropped", "id", item.ID, "trigger_at", item.TriggerAt)
+			continue
+		}
 		if err := e.Fire(ctx, item.Prompt); err != nil {
 			slog.Warn("proactive poll: fire failed", "id", item.ID, "err", err)
-			e.app.EmitEvent("notification:show", map[string]any{
-				"title":   "提醒触发失败",
-				"message": truncate(item.Prompt, 30),
-			})
 		}
 	}
 }

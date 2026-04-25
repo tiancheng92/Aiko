@@ -130,7 +130,7 @@ function formatTime(ts) {
 }
 
 let proactiveStarted = false
-let offToken, offDone, offError, offClear, offProactiveStart
+let offToken, offDone, offError, offClear, offProactiveStart, offProactiveMessage
 
 onMounted(async () => {
   const history = await GetMessages(50)
@@ -168,6 +168,13 @@ onMounted(async () => {
     messages.value.push({ role: 'assistant', content: '', streaming: true, isProactive: true })
     EventsEmit('pet:state:change', 'speaking')
     scrollToBottom()
+  })
+
+  offProactiveMessage = EventsOn('chat:proactive:message', (text) => {
+    messages.value.push({ role: 'assistant', content: text, isProactive: true })
+    EventsEmit('pet:state:change', 'speaking')
+    scrollToBottom()
+    setTimeout(() => EventsEmit('pet:state:change', 'idle'), 2000)
   })
 
   offToken = EventsOn('chat:token', (token) => {
@@ -251,7 +258,7 @@ onMounted(async () => {
   })
 })
 
-onUnmounted(() => { offToken?.(); offDone?.(); offError?.(); offClear?.(); offProactiveStart?.() })
+onUnmounted(() => { offToken?.(); offDone?.(); offError?.(); offClear?.(); offProactiveStart?.(); offProactiveMessage?.() })
 
 /** renderMarkdown converts markdown text to sanitized HTML. */
 function renderMarkdown(text) {

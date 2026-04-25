@@ -95,9 +95,25 @@ func scanItems(rows *sql.Rows) ([]Item, error) {
 		if err := rows.Scan(&it.ID, &trigStr, &it.Prompt, &createdStr); err != nil {
 			return nil, fmt.Errorf("scan item: %w", err)
 		}
-		it.TriggerAt, _ = time.Parse("2006-01-02 15:04:05", trigStr)
-		it.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdStr)
+		it.TriggerAt = parseDBTime(trigStr)
+		it.CreatedAt = parseDBTime(createdStr)
 		items = append(items, it)
 	}
 	return items, rows.Err()
+}
+
+// parseDBTime parses a SQLite DATETIME string (UTC) into time.Time.
+// Tries common SQLite formats; returns zero time on failure.
+func parseDBTime(s string) time.Time {
+	for _, layout := range []string{
+		"2006-01-02T15:04:05Z",
+		"2006-01-02T15:04:05",
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04:05.999999999",
+	} {
+		if t, err := time.ParseInLocation(layout, s, time.UTC); err == nil {
+			return t
+		}
+	}
+	return time.Time{}
 }

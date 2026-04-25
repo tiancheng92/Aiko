@@ -2,7 +2,6 @@ package proactive_test
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -13,27 +12,9 @@ import (
 
 // mockApp implements AppInterface for testing.
 type mockApp struct {
-	mu              sync.Mutex
-	chatDirectCalls []string
-	collectCalls    []string
-	emittedEvents   []string
-	chatVisible     bool
-	collectReturn   string
-	chatDirectErr   error
-}
-
-func (m *mockApp) ChatDirect(_ context.Context, prompt string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.chatDirectCalls = append(m.chatDirectCalls, prompt)
-	return m.chatDirectErr
-}
-
-func (m *mockApp) ChatDirectCollect(_ context.Context, prompt string) (string, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.collectCalls = append(m.collectCalls, prompt)
-	return m.collectReturn, nil
+	mu            sync.Mutex
+	emittedEvents []string
+	chatVisible   bool
 }
 
 func (m *mockApp) IsChatVisible() bool {
@@ -48,39 +29,33 @@ func (m *mockApp) EmitEvent(name string, _ any) {
 	m.emittedEvents = append(m.emittedEvents, name)
 }
 
-// TestFireChatOpen verifies Fire emits chat:proactive:start and calls ChatDirect when chat is open.
+// TestFireChatOpen verifies Fire emits chat:proactive:message when chat is open.
 func TestFireChatOpen(t *testing.T) {
 	app := &mockApp{chatVisible: true}
 	eng := proactive.NewEngine(app, nil)
 
-	if err := eng.Fire(context.Background(), "good morning"); err != nil {
+	if err := eng.Fire(context.Background(), "drink water"); err != nil {
 		t.Fatalf("Fire returned error: %v", err)
 	}
 
 	app.mu.Lock()
 	defer app.mu.Unlock()
-	if len(app.chatDirectCalls) != 1 || app.chatDirectCalls[0] != "good morning" {
-		t.Errorf("expected ChatDirect called with prompt, got %v", app.chatDirectCalls)
-	}
-	if len(app.emittedEvents) == 0 || app.emittedEvents[0] != "chat:proactive:start" {
-		t.Errorf("expected chat:proactive:start emitted, got %v", app.emittedEvents)
+	if len(app.emittedEvents) == 0 || app.emittedEvents[0] != "chat:proactive:message" {
+		t.Errorf("expected chat:proactive:message emitted, got %v", app.emittedEvents)
 	}
 }
 
-// TestFireChatClosed verifies Fire uses ChatDirectCollect and emits notification:show when chat is closed.
+// TestFireChatClosed verifies Fire emits notification:show when chat is closed.
 func TestFireChatClosed(t *testing.T) {
-	app := &mockApp{chatVisible: false, collectReturn: "evening greeting text"}
+	app := &mockApp{chatVisible: false}
 	eng := proactive.NewEngine(app, nil)
 
-	if err := eng.Fire(context.Background(), "good evening"); err != nil {
+	if err := eng.Fire(context.Background(), "drink water"); err != nil {
 		t.Fatalf("Fire returned error: %v", err)
 	}
 
 	app.mu.Lock()
 	defer app.mu.Unlock()
-	if len(app.collectCalls) != 1 {
-		t.Errorf("expected ChatDirectCollect called, got %v", app.collectCalls)
-	}
 	found := false
 	for _, e := range app.emittedEvents {
 		if e == "notification:show" {
@@ -92,12 +67,12 @@ func TestFireChatClosed(t *testing.T) {
 	}
 }
 
-// TestFireChatClosedTruncates verifies long responses are truncated to 80 runes.
+// TestFireChatClosedTruncates verifies long prompts are truncated to 80 runes in notification.
 func TestFireChatClosedTruncates(t *testing.T) {
 	long := "A very long proactive message that exceeds eighty characters in total length for testing truncation behavior here"
-	app := &mockApp{chatVisible: false, collectReturn: long}
+	app := &mockApp{chatVisible: false}
 	eng := proactive.NewEngine(app, nil)
-	if err := eng.Fire(context.Background(), "prompt"); err != nil {
+	if err := eng.Fire(context.Background(), long); err != nil {
 		t.Fatalf("Fire returned error: %v", err)
 	}
 
@@ -123,21 +98,27 @@ func TestPollDeletesAfterFire(t *testing.T) {
 	defer database.Close()
 	store := proactive.NewStore(database)
 
-	if err := store.Insert(context.Background(), time.Now().Add(-time.Second), "follow up"); err != nil {
+	if err := store.Insert(context.Background(), time.Now().Add(-time.Second), "drink water"); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
 
-	app := &mockApp{chatVisible: false, collectReturn: "reminder text"}
+	app := &mockApp{chatVisible: false}
 	eng := proactive.NewEngine(app, store)
 	eng.Poll(context.Background())
 
 	app.mu.Lock()
-	defer app.mu.Unlock()
-	if len(app.collectCalls) != 1 {
-		t.Errorf("expected 1 collect call, got %d", len(app.collectCalls))
+	found := false
+	for _, e := range app.emittedEvents {
+		if e == "notification:show" {
+			found = true
+		}
+	}
+	app.mu.Unlock()
+	if !found {
+		t.Error("expected notification:show emitted")
 	}
 
-	// Verify item is deleted (not just marked fired).
+	// Verify item is deleted.
 	items, err := store.List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
@@ -147,7 +128,8 @@ func TestPollDeletesAfterFire(t *testing.T) {
 	}
 }
 
-// TestPollDeletesOnFireFailure verifies Poll deletes row and emits notification:show when Fire fails.
+// TestPollDeletesOnFireFailure verifies Poll still deletes row even when Fire is called.
+// Since Fire no longer fails (no LLM), we just verify deletion and event emission.
 func TestPollDeletesOnFireFailure(t *testing.T) {
 	database, err := db.Open(t.TempDir())
 	if err != nil {
@@ -160,30 +142,29 @@ func TestPollDeletesOnFireFailure(t *testing.T) {
 		t.Fatalf("insert: %v", err)
 	}
 
-	// ChatDirect returns error to simulate Fire failure.
-	app := &mockApp{chatVisible: true, chatDirectErr: errors.New("agent unavailable")}
+	app := &mockApp{chatVisible: true}
 	eng := proactive.NewEngine(app, store)
 	eng.Poll(context.Background())
 
-	// Row must be deleted even on failure.
+	// Row must be deleted.
 	items, err := store.List(context.Background())
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
 	if len(items) != 0 {
-		t.Errorf("expected item deleted on Fire failure, got %d items", len(items))
+		t.Errorf("expected item deleted, got %d items", len(items))
 	}
 
-	// notification:show must be emitted.
+	// chat:proactive:message must be emitted.
 	app.mu.Lock()
 	defer app.mu.Unlock()
 	found := false
 	for _, e := range app.emittedEvents {
-		if e == "notification:show" {
+		if e == "chat:proactive:message" {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("expected notification:show emitted on Fire failure, got %v", app.emittedEvents)
+		t.Errorf("expected chat:proactive:message emitted, got %v", app.emittedEvents)
 	}
 }
