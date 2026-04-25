@@ -87,11 +87,34 @@ func (s *OpenAISpeaker) Voices(ctx context.Context) ([]string, error) {
 	}
 	defer resp.Body.Close()
 
-	var result struct {
-		Voices []string `json:"voices"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
 		return nil, nil
 	}
-	return result.Voices, nil
+
+	// Try {"voices": [...]} first, then {"data": [...]} (OpenAI-compatible variants).
+	var r1 struct {
+		Voices []string `json:"voices"`
+	}
+	if json.Unmarshal(raw, &r1) == nil && len(r1.Voices) > 0 {
+		return r1.Voices, nil
+	}
+	var r2 struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if json.Unmarshal(raw, &r2) == nil && len(r2.Data) > 0 {
+		voices := make([]string, len(r2.Data))
+		for i, d := range r2.Data {
+			voices[i] = d.ID
+		}
+		return voices, nil
+	}
+	// Last resort: try a plain string array
+	var r3 []string
+	if json.Unmarshal(raw, &r3) == nil && len(r3) > 0 {
+		return r3, nil
+	}
+	return nil, nil
 }
