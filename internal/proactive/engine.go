@@ -44,6 +44,11 @@ func NewEngine(app AppInterface, store Store) *ProactiveEngine {
 	}
 }
 
+// Store returns the underlying Store. Used by app.go to expose List/Delete to the frontend.
+func (e *ProactiveEngine) Store() Store {
+	return e.store
+}
+
 // Start registers cron jobs and begins the scheduler.
 // ctx is used as a base context for all fired messages.
 func (e *ProactiveEngine) Start(ctx context.Context) {
