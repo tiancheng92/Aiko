@@ -818,20 +818,100 @@ watch(activeTab, v => { if (v === 'proactive') loadProactiveItems() })
           <p class="sms-desc" style="margin-top:4px">发送、收到消息和出错时播放轻柔提示音</p>
         </div>
 
-        <!-- 工具权限 -->
+        <!-- 工具 -->
         <div v-if="activeTab === 'tools'" class="tab-pane">
-          <p class="hint">Public 工具无需授权；Protected 工具需要手动开启。</p>
-          <div v-if="toolPerms.length === 0" class="empty">暂无工具信息</div>
-          <div v-for="perm in toolPerms" :key="perm.ToolName" class="perm-row">
-            <div class="perm-info">
-              <span class="perm-name">{{ perm.ToolName }}</span>
-              <span :class="['perm-level', perm.Level]">{{ perm.Level }}</span>
-            </div>
-            <label class="toggle">
-              <input type="checkbox" :checked="perm.Granted" :disabled="perm.Level === 'public'" @change="togglePerm(perm)" />
-              <span class="toggle-track" />
-            </label>
+          <div class="sub-tab-bar">
+            <button :class="{ active: toolsSubTab === 'mcp' }" @click="toolsSubTab = 'mcp'">MCP 服务器</button>
+            <button :class="{ active: toolsSubTab === 'permissions' }" @click="toolsSubTab = 'permissions'">工具权限</button>
           </div>
+
+          <!-- MCP 子 tab -->
+          <template v-if="toolsSubTab === 'mcp'">
+            <div class="section-header">
+              <h3>MCP 服务器</h3>
+              <button class="btn-small" @click="openMCPForm">+ 添加</button>
+            </div>
+
+            <div v-if="mcpServers.length === 0" class="empty-hint">
+              暂无 MCP 服务器，点击"添加"接入外部工具
+            </div>
+
+            <div v-for="srv in mcpServers" :key="srv.id" class="mcp-row">
+              <div class="mcp-info">
+                <span class="mcp-name">{{ srv.name }}</span>
+                <span class="mcp-transport">{{ srv.transport }}</span>
+                <span class="mcp-endpoint">{{ srv.transport === 'stdio' ? srv.command : srv.url }}</span>
+              </div>
+              <div class="mcp-actions">
+                <button class="btn-toggle" :class="{ active: srv.enabled }" @click="toggleMCPServer(srv)">
+                  {{ srv.enabled ? '已启用' : '已禁用' }}
+                </button>
+                <button class="btn-small" @click="editMCPServer(srv)">编辑</button>
+                <button class="btn-danger-small" @click="deleteMCPServer(srv.id)">删除</button>
+              </div>
+            </div>
+
+            <!-- Add/Edit Form -->
+            <div v-if="showMCPForm" class="mcp-form">
+              <div class="form-row">
+                <label>名称</label>
+                <input v-model="mcpForm.name" placeholder="my-server" />
+              </div>
+              <div class="form-row">
+                <label>传输方式</label>
+                <select v-model="mcpForm.transport">
+                  <option value="stdio">stdio</option>
+                  <option value="sse">SSE</option>
+                  <option value="http">HTTP (Streamable)</option>
+                </select>
+              </div>
+              <template v-if="mcpForm.transport === 'stdio'">
+                <div class="form-row">
+                  <label>命令</label>
+                  <input v-model="mcpForm.command" placeholder="/usr/local/bin/mcp-server" />
+                </div>
+                <div class="form-row">
+                  <label>参数（空格分隔）</label>
+                  <input v-model="mcpForm.args" placeholder="--flag value" />
+                </div>
+              </template>
+              <template v-else>
+                <div class="form-row">
+                  <label>URL</label>
+                  <input v-model="mcpForm.url" placeholder="http://localhost:8080/sse" />
+                </div>
+                <div class="form-row">
+                  <label>请求头（每行一个，格式：Key: Value）</label>
+                  <textarea v-model="mcpForm.headers" rows="3" placeholder="Authorization: Bearer xxx&#10;X-Custom: value" />
+                </div>
+              </template>
+              <div v-if="mcpFormError" class="form-error">{{ mcpFormError }}</div>
+              <div class="form-buttons">
+                <button class="btn-primary" @click="saveMCPServer">保存</button>
+                <button class="btn-secondary" @click="showMCPForm = false">取消</button>
+              </div>
+            </div>
+          </template>
+
+          <!-- 工具权限子 tab -->
+          <template v-if="toolsSubTab === 'permissions'">
+            <div v-if="toolPerms.length === 0" class="empty">暂无工具信息</div>
+            <template v-else>
+              <div class="public-tools-title">内置工具（无需授权）</div>
+              <div class="public-tools">{{ publicToolNames }}</div>
+              <div class="protected-tools-title">需授权工具</div>
+              <div v-for="perm in protectedToolPerms" :key="perm.ToolName" class="perm-row">
+                <div class="perm-info">
+                  <span class="perm-name">{{ perm.ToolName }}</span>
+                  <span :class="['perm-level', perm.Level]">{{ perm.Level }}</span>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" :checked="perm.Granted" @change="togglePerm(perm)" />
+                  <span class="toggle-track" />
+                </label>
+              </div>
+            </template>
+          </template>
         </div>
 
         <!-- 知识库 -->
@@ -847,74 +927,6 @@ watch(activeTab, v => { if (v === 'proactive') loadProactiveItems() })
             </li>
           </ul>
           <p v-else class="empty">暂无知识库文件</p>
-        </div>
-
-        <!-- MCP Servers Section -->
-        <div v-if="activeTab === 'mcp'" class="tab-pane">
-          <div class="section-header">
-            <h3>MCP 服务器</h3>
-            <button class="btn-small" @click="openMCPForm">+ 添加</button>
-          </div>
-
-          <div v-if="mcpServers.length === 0" class="empty-hint">
-            暂无 MCP 服务器，点击"添加"接入外部工具
-          </div>
-
-          <div v-for="srv in mcpServers" :key="srv.id" class="mcp-row">
-            <div class="mcp-info">
-              <span class="mcp-name">{{ srv.name }}</span>
-              <span class="mcp-transport">{{ srv.transport }}</span>
-              <span class="mcp-endpoint">{{ srv.transport === 'stdio' ? srv.command : srv.url }}</span>
-            </div>
-            <div class="mcp-actions">
-              <button class="btn-toggle" :class="{ active: srv.enabled }" @click="toggleMCPServer(srv)">
-                {{ srv.enabled ? '已启用' : '已禁用' }}
-              </button>
-              <button class="btn-small" @click="editMCPServer(srv)">编辑</button>
-              <button class="btn-danger-small" @click="deleteMCPServer(srv.id)">删除</button>
-            </div>
-          </div>
-
-          <!-- Add/Edit Form -->
-          <div v-if="showMCPForm" class="mcp-form">
-            <div class="form-row">
-              <label>名称</label>
-              <input v-model="mcpForm.name" placeholder="my-server" />
-            </div>
-            <div class="form-row">
-              <label>传输方式</label>
-              <select v-model="mcpForm.transport">
-                <option value="stdio">stdio</option>
-                <option value="sse">SSE</option>
-                <option value="http">HTTP (Streamable)</option>
-              </select>
-            </div>
-            <template v-if="mcpForm.transport === 'stdio'">
-              <div class="form-row">
-                <label>命令</label>
-                <input v-model="mcpForm.command" placeholder="/usr/local/bin/mcp-server" />
-              </div>
-              <div class="form-row">
-                <label>参数（空格分隔）</label>
-                <input v-model="mcpForm.args" placeholder="--flag value" />
-              </div>
-            </template>
-            <template v-else>
-              <div class="form-row">
-                <label>URL</label>
-                <input v-model="mcpForm.url" placeholder="http://localhost:8080/sse" />
-              </div>
-              <div class="form-row">
-                <label>请求头（每行一个，格式：Key: Value）</label>
-                <textarea v-model="mcpForm.headers" rows="3" placeholder="Authorization: Bearer xxx&#10;X-Custom: value" />
-              </div>
-            </template>
-            <div v-if="mcpFormError" class="form-error">{{ mcpFormError }}</div>
-            <div class="form-buttons">
-              <button class="btn-primary" @click="saveMCPServer">保存</button>
-              <button class="btn-secondary" @click="showMCPForm = false">取消</button>
-            </div>
-          </div>
         </div>
 
         <!-- 定时任务 -->
@@ -1848,5 +1860,48 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
 }
 .btn-danger:hover {
   background: rgba(248,113,113,0.15);
+}
+
+/* 子 tab 导航 */
+.sub-tab-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.sub-tab-bar button {
+  padding: 4px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: transparent;
+  color: rgba(255,255,255,0.5);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.sub-tab-bar button.active {
+  background: rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.9);
+  border-color: rgba(255,255,255,0.3);
+}
+.public-tools {
+  font-size: 12px;
+  color: rgba(255,255,255,0.35);
+  line-height: 1.8;
+  margin-bottom: 16px;
+}
+.public-tools-title {
+  font-size: 11px;
+  color: rgba(255,255,255,0.25);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+.protected-tools-title {
+  font-size: 11px;
+  color: rgba(255,255,255,0.25);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+  margin-top: 16px;
 }
 </style>
