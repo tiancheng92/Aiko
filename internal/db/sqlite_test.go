@@ -6,6 +6,21 @@ import (
 	"aiko/internal/db"
 )
 
+// TestMigrateDropsFiredColumn verifies that after migration proactive_items has no fired column.
+func TestMigrateDropsFiredColumn(t *testing.T) {
+	database, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer database.Close()
+
+	// Try inserting with fired column — should fail.
+	_, err = database.Exec(`INSERT INTO proactive_items (trigger_at, prompt, fired) VALUES ('2099-01-01 00:00:00', 'test', 1)`)
+	if err == nil {
+		t.Fatal("expected error inserting fired column, but got none — fired column still exists")
+	}
+}
+
 // TestMigrateProactiveItems verifies that the proactive_items table is
 // created by the migration and has the expected columns.
 func TestMigrateProactiveItems(t *testing.T) {

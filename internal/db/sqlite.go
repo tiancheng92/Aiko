@@ -127,5 +127,21 @@ func migrate(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("create proactive_items: %w", err)
 	}
+	// Rebuild proactive_items without the fired column (trigger-and-delete model).
+	_, err = db.Exec(`DROP TABLE IF EXISTS proactive_items`)
+	if err != nil {
+		return fmt.Errorf("drop proactive_items: %w", err)
+	}
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS proactive_items (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			trigger_at  DATETIME NOT NULL,
+			prompt      TEXT NOT NULL,
+			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("recreate proactive_items: %w", err)
+	}
 	return nil
 }
