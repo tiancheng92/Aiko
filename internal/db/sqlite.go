@@ -148,15 +148,10 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE model_profiles ADD COLUMN tts_model TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE model_profiles ADD COLUMN tts_voice TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE model_profiles ADD COLUMN tts_speed REAL NOT NULL DEFAULT 1.0`,
+		`ALTER TABLE model_profiles ADD COLUMN tts_backend TEXT NOT NULL DEFAULT ''`,
 	} {
 		if _, err := db.Exec(col); err != nil && !strings.Contains(err.Error(), "duplicate column") {
 			return fmt.Errorf("alter model_profiles for tts: %w", err)
-		}
-	}
-	// tts_backend 列（幂等）
-	if _, err := db.Exec(`ALTER TABLE model_profiles ADD COLUMN tts_backend TEXT NOT NULL DEFAULT ''`); err != nil {
-		if !strings.Contains(err.Error(), "duplicate column") {
-			return fmt.Errorf("alter model_profiles for tts_backend: %w", err)
 		}
 	}
 	return nil
