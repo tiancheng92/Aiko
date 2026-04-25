@@ -630,7 +630,7 @@ const protectedToolPerms = computed(() =>
   toolPerms.value.filter(p => p.Level !== 'public')
 )
 
-watch(activeTab, v => { if (v === 'proactive') loadProactiveItems() })
+watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 </script>
 
 <template>
@@ -929,100 +929,129 @@ watch(activeTab, v => { if (v === 'proactive') loadProactiveItems() })
           <p v-else class="empty">暂无知识库文件</p>
         </div>
 
-        <!-- 定时任务 -->
-        <div v-if="activeTab === 'cron'" class="tab-pane">
-          <div class="section-header">
-            <h3>定时任务</h3>
-            <button class="btn-small" @click="openCronForm">+ 新建</button>
+        <!-- 自动化 -->
+        <div v-if="activeTab === 'automation'" class="tab-pane">
+          <div class="sub-tab-bar">
+            <button :class="{ active: automationSubTab === 'cron' }" @click="automationSubTab = 'cron'">定时任务</button>
+            <button :class="{ active: automationSubTab === 'proactive' }" @click="automationSubTab = 'proactive'">提醒事项</button>
           </div>
 
-          <div v-if="cronJobs.length === 0" class="empty-hint">
-            暂无定时任务，点击"新建"创建
-          </div>
+          <!-- 定时任务子 tab -->
+          <template v-if="automationSubTab === 'cron'">
+            <div class="section-header">
+              <h3>定时任务</h3>
+              <button class="btn-small" @click="openCronForm">+ 新建</button>
+            </div>
 
-          <!-- New job form (id === 0) -->
-          <div v-if="showCronForm && cronForm.id === 0" class="cron-form">
-            <h4>新建定时任务</h4>
-            <div class="form-row">
-              <label>名称 *</label>
-              <input v-model="cronForm.name" placeholder="每日早报" />
+            <div v-if="cronJobs.length === 0" class="empty-hint">
+              暂无定时任务，点击"新建"创建
             </div>
-            <div class="form-row">
-              <label>描述</label>
-              <input v-model="cronForm.description" placeholder="可选说明" />
-            </div>
-            <div class="form-row">
-              <label>Cron 表达式 *</label>
-              <input v-model="cronForm.schedule" placeholder="0 8 * * *（每天早 8 点）" />
-            </div>
-            <div class="form-row">
-              <label>触发提示词 *</label>
-              <textarea v-model="cronForm.prompt" rows="3" placeholder="触发时发送给 AI 的消息内容" />
-            </div>
-            <div v-if="cronFormError" class="form-error">{{ cronFormError }}</div>
-            <div class="form-buttons">
-              <button class="btn-primary" @click="saveCronJob">保存</button>
-              <button class="btn-secondary" @click="showCronForm = false">取消</button>
-            </div>
-          </div>
 
-          <div
-            v-for="job in cronJobs"
-            :key="job.ID"
-            class="cron-row"
-            :class="{ 'cron-row--editing': showCronForm && cronForm.id === job.ID }"
-          >
-            <!-- View mode -->
-            <template v-if="!(showCronForm && cronForm.id === job.ID)">
-              <div class="cron-info">
-                <div class="cron-name-row">
-                  <span class="cron-name">{{ job.Name }}</span>
-                  <span class="cron-schedule">{{ job.Schedule }}</span>
-                  <span class="cron-status" :class="job.Enabled ? 'cron-status--on' : 'cron-status--off'">
-                    {{ job.Enabled ? '启用中' : '已禁用' }}
-                  </span>
-                </div>
-                <div v-if="job.Description" class="cron-desc">{{ job.Description }}</div>
-                <div class="cron-prompt">{{ job.Prompt }}</div>
-                <div v-if="job.LastRun" class="cron-lastrun">上次执行：{{ new Date(job.LastRun).toLocaleString() }}</div>
+            <!-- New job form (id === 0) -->
+            <div v-if="showCronForm && cronForm.id === 0" class="cron-form">
+              <h4>新建定时任务</h4>
+              <div class="form-row">
+                <label>名称 *</label>
+                <input v-model="cronForm.name" placeholder="每日早报" />
               </div>
-              <div class="cron-actions">
-                <button class="btn-small" @click="runCronJobNow(job.ID)">执行</button>
-                <button class="btn-small" @click="editCronJob(job)">编辑</button>
-                <button v-if="job.Enabled" class="btn-toggle" @click="toggleCronJob(job)">禁用</button>
-                <button v-else class="btn-toggle btn-toggle--enable" @click="toggleCronJob(job)">启用</button>
-                <button class="btn-danger-small" @click="deleteCronJob(job.ID)">删除</button>
+              <div class="form-row">
+                <label>描述</label>
+                <input v-model="cronForm.description" placeholder="可选说明" />
               </div>
-            </template>
-
-            <!-- Inline edit mode -->
-            <template v-else>
-              <div class="cron-edit-form">
-                <div class="form-row">
-                  <label>名称 *</label>
-                  <input v-model="cronForm.name" placeholder="每日早报" />
-                </div>
-                <div class="form-row">
-                  <label>描述</label>
-                  <input v-model="cronForm.description" placeholder="可选说明" />
-                </div>
-                <div class="form-row">
-                  <label>Cron 表达式 *</label>
-                  <input v-model="cronForm.schedule" placeholder="0 8 * * *（每天早 8 点）" />
-                </div>
-                <div class="form-row">
-                  <label>触发提示词 *</label>
-                  <textarea v-model="cronForm.prompt" rows="3" placeholder="触发时发送给 AI 的消息内容" />
-                </div>
-                <div v-if="cronFormError" class="form-error">{{ cronFormError }}</div>
-                <div class="form-buttons">
-                  <button class="btn-primary" @click="saveCronJob">保存</button>
-                  <button class="btn-secondary" @click="showCronForm = false">取消</button>
-                </div>
+              <div class="form-row">
+                <label>Cron 表达式 *</label>
+                <input v-model="cronForm.schedule" placeholder="0 8 * * *（每天早 8 点）" />
               </div>
-            </template>
-          </div>
+              <div class="form-row">
+                <label>触发提示词 *</label>
+                <textarea v-model="cronForm.prompt" rows="3" placeholder="触发时发送给 AI 的消息内容" />
+              </div>
+              <div v-if="cronFormError" class="form-error">{{ cronFormError }}</div>
+              <div class="form-buttons">
+                <button class="btn-primary" @click="saveCronJob">保存</button>
+                <button class="btn-secondary" @click="showCronForm = false">取消</button>
+              </div>
+            </div>
 
+            <div
+              v-for="job in cronJobs"
+              :key="job.ID"
+              class="cron-row"
+              :class="{ 'cron-row--editing': showCronForm && cronForm.id === job.ID }"
+            >
+              <!-- View mode -->
+              <template v-if="!(showCronForm && cronForm.id === job.ID)">
+                <div class="cron-info">
+                  <div class="cron-name-row">
+                    <span class="cron-name">{{ job.Name }}</span>
+                    <span class="cron-schedule">{{ job.Schedule }}</span>
+                    <span class="cron-status" :class="job.Enabled ? 'cron-status--on' : 'cron-status--off'">
+                      {{ job.Enabled ? '启用中' : '已禁用' }}
+                    </span>
+                  </div>
+                  <div v-if="job.Description" class="cron-desc">{{ job.Description }}</div>
+                  <div class="cron-prompt">{{ job.Prompt }}</div>
+                  <div v-if="job.LastRun" class="cron-lastrun">上次执行：{{ new Date(job.LastRun).toLocaleString() }}</div>
+                </div>
+                <div class="cron-actions">
+                  <button class="btn-small" @click="runCronJobNow(job.ID)">执行</button>
+                  <button class="btn-small" @click="editCronJob(job)">编辑</button>
+                  <button v-if="job.Enabled" class="btn-toggle" @click="toggleCronJob(job)">禁用</button>
+                  <button v-else class="btn-toggle btn-toggle--enable" @click="toggleCronJob(job)">启用</button>
+                  <button class="btn-danger-small" @click="deleteCronJob(job.ID)">删除</button>
+                </div>
+              </template>
+
+              <!-- Inline edit mode -->
+              <template v-else>
+                <div class="cron-edit-form">
+                  <div class="form-row">
+                    <label>名称 *</label>
+                    <input v-model="cronForm.name" placeholder="每日早报" />
+                  </div>
+                  <div class="form-row">
+                    <label>描述</label>
+                    <input v-model="cronForm.description" placeholder="可选说明" />
+                  </div>
+                  <div class="form-row">
+                    <label>Cron 表达式 *</label>
+                    <input v-model="cronForm.schedule" placeholder="0 8 * * *（每天早 8 点）" />
+                  </div>
+                  <div class="form-row">
+                    <label>触发提示词 *</label>
+                    <textarea v-model="cronForm.prompt" rows="3" placeholder="触发时发送给 AI 的消息内容" />
+                  </div>
+                  <div v-if="cronFormError" class="form-error">{{ cronFormError }}</div>
+                  <div class="form-buttons">
+                    <button class="btn-primary" @click="saveCronJob">保存</button>
+                    <button class="btn-secondary" @click="showCronForm = false">取消</button>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </template>
+
+          <!-- 提醒事项子 tab -->
+          <template v-if="automationSubTab === 'proactive'">
+            <div class="section-header">
+              <h3>提醒事项</h3>
+              <button class="btn-small" @click="loadProactiveItems">刷新</button>
+            </div>
+
+            <div v-if="proactiveError" class="form-error">{{ proactiveError }}</div>
+
+            <div v-if="proactiveItems.length === 0 && !proactiveError" class="empty-hint">
+              暂无待触发的提醒事项
+            </div>
+
+            <div v-for="item in proactiveItems" :key="item.ID" class="proactive-row">
+              <div class="proactive-info">
+                <span class="proactive-time">{{ formatProactiveTime(item.TriggerAt) }}</span>
+                <span class="proactive-prompt">{{ truncatePrompt(item.Prompt, 60) }}</span>
+              </div>
+              <button class="btn-small btn-danger" @click="deleteProactiveItem(item.ID)">删除</button>
+            </div>
+          </template>
         </div>
 
         <!-- 飞书 lark-cli -->
@@ -1126,26 +1155,6 @@ watch(activeTab, v => { if (v === 'proactive') loadProactiveItems() })
 
         </div>
 
-        <div v-if="activeTab === 'proactive'" class="tab-pane">
-          <div class="section-header">
-            <h3>提醒事项</h3>
-            <button class="btn-small" @click="loadProactiveItems">刷新</button>
-          </div>
-
-          <div v-if="proactiveError" class="form-error">{{ proactiveError }}</div>
-
-          <div v-if="proactiveItems.length === 0 && !proactiveError" class="empty-hint">
-            暂无待触发的提醒事项
-          </div>
-
-          <div v-for="item in proactiveItems" :key="item.ID" class="proactive-row">
-            <div class="proactive-info">
-              <span class="proactive-time">{{ formatProactiveTime(item.TriggerAt) }}</span>
-              <span class="proactive-prompt">{{ truncatePrompt(item.Prompt, 60) }}</span>
-            </div>
-            <button class="btn-small btn-danger" @click="deleteProactiveItem(item.ID)">删除</button>
-          </div>
-        </div>
       </div>
     </div>
 
