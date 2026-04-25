@@ -14,7 +14,6 @@ type Item struct {
 	ID        int64
 	TriggerAt time.Time
 	Prompt    string
-	Fired     bool
 	CreatedAt time.Time
 }
 
@@ -22,7 +21,8 @@ type Item struct {
 type Store interface {
 	Insert(ctx context.Context, triggerAt time.Time, prompt string) error
 	DueItems(ctx context.Context, now time.Time) ([]Item, error)
-	MarkFired(ctx context.Context, id int64) error
+	Delete(ctx context.Context, id int64) error
+	List(ctx context.Context) ([]Item, error)
 }
 
 // ProactiveStore manages the proactive_items SQLite table.
@@ -47,12 +47,12 @@ func (s *ProactiveStore) Insert(ctx context.Context, triggerAt time.Time, prompt
 	return nil
 }
 
-// DueItems returns all unfired items with trigger_at <= now.
+// DueItems returns all items with trigger_at <= now, ordered by trigger_at ascending.
 func (s *ProactiveStore) DueItems(ctx context.Context, now time.Time) ([]Item, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, trigger_at, prompt, fired, created_at
+		`SELECT id, trigger_at, prompt, created_at
 		   FROM proactive_items
-		  WHERE fired = FALSE AND trigger_at <= ?
+		  WHERE trigger_at <= ?
 		  ORDER BY trigger_at ASC`,
 		now.UTC().Format("2006-01-02 15:04:05"),
 	)
@@ -60,12 +60,39 @@ func (s *ProactiveStore) DueItems(ctx context.Context, now time.Time) ([]Item, e
 		return nil, fmt.Errorf("query due items: %w", err)
 	}
 	defer rows.Close()
+	return scanItems(rows)
+}
 
+// Delete removes the item with the given id. Returns nil if the id does not exist.
+func (s *ProactiveStore) Delete(ctx context.Context, id int64) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM proactive_items WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("delete proactive item %d: %w", id, err)
+	}
+	return nil
+}
+
+// List returns all pending items ordered by trigger_at ascending.
+func (s *ProactiveStore) List(ctx context.Context) ([]Item, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, trigger_at, prompt, created_at
+		   FROM proactive_items
+		  ORDER BY trigger_at ASC`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list proactive items: %w", err)
+	}
+	defer rows.Close()
+	return scanItems(rows)
+}
+
+// scanItems scans a *sql.Rows into a slice of Item.
+func scanItems(rows *sql.Rows) ([]Item, error) {
 	var items []Item
 	for rows.Next() {
 		var it Item
 		var trigStr, createdStr string
-		if err := rows.Scan(&it.ID, &trigStr, &it.Prompt, &it.Fired, &createdStr); err != nil {
+		if err := rows.Scan(&it.ID, &trigStr, &it.Prompt, &createdStr); err != nil {
 			return nil, fmt.Errorf("scan item: %w", err)
 		}
 		it.TriggerAt, _ = time.Parse("2006-01-02 15:04:05", trigStr)
@@ -73,15 +100,4 @@ func (s *ProactiveStore) DueItems(ctx context.Context, now time.Time) ([]Item, e
 		items = append(items, it)
 	}
 	return items, rows.Err()
-}
-
-// MarkFired marks the item with the given id as fired.
-func (s *ProactiveStore) MarkFired(ctx context.Context, id int64) error {
-	_, err := s.db.ExecContext(ctx,
-		`UPDATE proactive_items SET fired = TRUE WHERE id = ?`, id,
-	)
-	if err != nil {
-		return fmt.Errorf("mark fired %d: %w", id, err)
-	}
-	return nil
 }

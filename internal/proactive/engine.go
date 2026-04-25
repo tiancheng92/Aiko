@@ -111,9 +111,9 @@ func (e *ProactiveEngine) Poll(ctx context.Context) {
 		return
 	}
 	for _, item := range items {
-		// Mark fired before calling Fire to avoid double-firing if Fire is slow.
-		if err := e.store.MarkFired(ctx, item.ID); err != nil {
-			slog.Warn("proactive poll: mark fired", "id", item.ID, "err", err)
+		// Delete before calling Fire to avoid double-firing if Fire is slow.
+		if err := e.store.Delete(ctx, item.ID); err != nil {
+			slog.Warn("proactive poll: delete item", "id", item.ID, "err", err)
 			continue
 		}
 		e.Fire(ctx, item.Prompt)

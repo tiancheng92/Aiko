@@ -18,10 +18,10 @@ func openStore(t *testing.T) *proactive.ProactiveStore {
 	return proactive.NewStore(database)
 }
 
-// TestStoreInsertAndQuery verifies insert + query of pending items.
+// TestStoreInsertAndQuery verifies insert + DueItems returns due rows.
 func TestStoreInsertAndQuery(t *testing.T) {
 	s := openStore(t)
-	triggerAt := time.Now().Add(-time.Second) // already due
+	triggerAt := time.Now().Add(-time.Second)
 
 	if err := s.Insert(t.Context(), triggerAt, "hello world"); err != nil {
 		t.Fatalf("insert: %v", err)
@@ -39,8 +39,8 @@ func TestStoreInsertAndQuery(t *testing.T) {
 	}
 }
 
-// TestStoreMarkFired verifies that marking an item fired excludes it from future queries.
-func TestStoreMarkFired(t *testing.T) {
+// TestStoreDelete verifies that Delete removes the row and DueItems returns empty.
+func TestStoreDelete(t *testing.T) {
 	s := openStore(t)
 	triggerAt := time.Now().Add(-time.Second)
 
@@ -53,20 +53,56 @@ func TestStoreMarkFired(t *testing.T) {
 		t.Fatalf("expected due item, got err=%v items=%v", err, items)
 	}
 
-	if err := s.MarkFired(t.Context(), items[0].ID); err != nil {
-		t.Fatalf("mark fired: %v", err)
+	if err := s.Delete(t.Context(), items[0].ID); err != nil {
+		t.Fatalf("delete: %v", err)
 	}
 
 	after, err := s.DueItems(t.Context(), time.Now())
 	if err != nil {
-		t.Fatalf("due items after mark: %v", err)
+		t.Fatalf("due items after delete: %v", err)
 	}
 	if len(after) != 0 {
-		t.Errorf("expected 0 due items after fired, got %d", len(after))
+		t.Errorf("expected 0 due items after delete, got %d", len(after))
 	}
 }
 
-// TestStoreFutureItemNotDue verifies that future items are not returned.
+// TestStoreDeleteIdempotent verifies that deleting a non-existent ID returns no error.
+func TestStoreDeleteIdempotent(t *testing.T) {
+	s := openStore(t)
+	if err := s.Delete(t.Context(), 9999); err != nil {
+		t.Errorf("expected no error for missing id, got: %v", err)
+	}
+}
+
+// TestStoreList verifies List returns all rows ordered by trigger_at ascending.
+func TestStoreList(t *testing.T) {
+	s := openStore(t)
+	t1 := time.Now().Add(time.Hour)
+	t2 := time.Now().Add(2 * time.Hour)
+
+	if err := s.Insert(t.Context(), t2, "second"); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if err := s.Insert(t.Context(), t1, "first"); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	items, err := s.List(t.Context())
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(items))
+	}
+	if items[0].Prompt != "first" {
+		t.Errorf("expected first item prompt 'first', got %q", items[0].Prompt)
+	}
+	if items[1].Prompt != "second" {
+		t.Errorf("expected second item prompt 'second', got %q", items[1].Prompt)
+	}
+}
+
+// TestStoreFutureItemNotDue verifies that future items are not returned by DueItems.
 func TestStoreFutureItemNotDue(t *testing.T) {
 	s := openStore(t)
 	triggerAt := time.Now().Add(time.Hour)
