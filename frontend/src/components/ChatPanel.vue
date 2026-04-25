@@ -110,7 +110,7 @@ function applyToken(token) {
   if (last && last.role === 'assistant' && last.streaming) {
     messages.value[idx] = { ...last, content: last.content + token }
   } else {
-    messages.value.push({ role: 'assistant', content: token, streaming: true })
+    messages.value.push({ role: 'assistant', content: token, streaming: true, isProactive: proactiveStarted })
     EventsEmit('pet:state:change', 'speaking')
   }
   scrollToBottom()
@@ -129,7 +129,8 @@ function formatTime(ts) {
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
-let offToken, offDone, offError, offClear
+let proactiveStarted = false
+let offToken, offDone, offError, offClear, offProactiveStart
 
 onMounted(async () => {
   const history = await GetMessages(50)
@@ -162,6 +163,13 @@ onMounted(async () => {
     }
   })
 
+  offProactiveStart = EventsOn('chat:proactive:start', () => {
+    proactiveStarted = true
+    messages.value.push({ role: 'assistant', content: '', streaming: true, isProactive: true })
+    EventsEmit('pet:state:change', 'speaking')
+    scrollToBottom()
+  })
+
   offToken = EventsOn('chat:token', (token) => {
     if (firstTokenThisTurn) {
       firstTokenThisTurn = false
@@ -176,6 +184,7 @@ onMounted(async () => {
     if (idx >= 0) messages.value[idx] = { ...messages.value[idx], streaming: false, time: new Date() }
     loading.value = false
     isStreaming.value = false
+    proactiveStarted = false
     EventsEmit('pet:state:change', 'idle')
   })
 
@@ -241,7 +250,7 @@ onMounted(async () => {
   })
 })
 
-onUnmounted(() => { offToken?.(); offDone?.(); offError?.(); offClear?.() })
+onUnmounted(() => { offToken?.(); offDone?.(); offError?.(); offClear?.(); offProactiveStart?.() })
 
 /** renderMarkdown converts markdown text to sanitized HTML. */
 function renderMarkdown(text) {
@@ -366,10 +375,10 @@ defineExpose({ focusInput, scrollToBottom })
 
             <div v-if="m.role !== 'assistant'" class="bubble markdown" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')"></div>
             <template v-else>
-              <div v-if="m.thinking || (m.streaming && !renderMarkdown(m.content))" class="bubble thinking-bubble">
+              <div v-if="m.thinking || (m.streaming && !renderMarkdown(m.content))" :class="['bubble', 'thinking-bubble', { proactive: m.isProactive }]">
                 <span class="dot" /><span class="dot" /><span class="dot" />
               </div>
-              <div v-else class="bubble markdown" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')" />
+              <div v-else :class="['bubble', 'markdown', { proactive: m.isProactive }]" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')" />
             </template>
 
             <!-- Assistant copy button: right of bubble -->
@@ -487,6 +496,12 @@ defineExpose({ focusInput, scrollToBottom })
   font-size: 11px;
   opacity: 0.6;
   font-style: normal;
+}
+
+/* Proactive assistant messages: subtle left-border accent */
+.assistant .bubble.proactive {
+  border-left: 3px solid rgba(120, 180, 255, 0.6);
+  padding-left: 13px;
 }
 
 /* Stop button */
