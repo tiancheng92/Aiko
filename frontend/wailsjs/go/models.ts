@@ -11,6 +11,9 @@ export namespace config {
 	    SystemPrompt: string;
 	    ShortTermLimit: number;
 	    NudgeInterval: number;
+	    AllowedPaths: string[];
+	    ShellTimeout: number;
+	    CodeTimeout: number;
 	    SMSWatcherEnabled: boolean;
 	    VoiceAutoSend: boolean;
 	    SoundsEnabled: boolean;
@@ -42,6 +45,9 @@ export namespace config {
 	        this.SystemPrompt = source["SystemPrompt"];
 	        this.ShortTermLimit = source["ShortTermLimit"];
 	        this.NudgeInterval = source["NudgeInterval"];
+	        this.AllowedPaths = source["AllowedPaths"];
+	        this.ShellTimeout = source["ShellTimeout"];
+	        this.CodeTimeout = source["CodeTimeout"];
 	        this.SMSWatcherEnabled = source["SMSWatcherEnabled"];
 	        this.VoiceAutoSend = source["VoiceAutoSend"];
 	        this.SoundsEnabled = source["SoundsEnabled"];

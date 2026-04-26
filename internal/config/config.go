@@ -19,6 +19,9 @@ type Config struct {
 	SystemPrompt   string
 	ShortTermLimit int
 	NudgeInterval  int      // 每隔多少轮触发一次 self-growth nudge，0 表示使用默认值 5
+	AllowedPaths  []string // file system path whitelist; empty = deny all
+	ShellTimeout  int      // execute_shell timeout in seconds; default 30
+	CodeTimeout   int      // execute_code timeout in seconds; default 60
 	SMSWatcherEnabled bool   // 是否启用 SMS 短信监听（macOS 仅支持）
 	VoiceAutoSend      bool   // 语音识别完成后是否自动发送消息
 	SoundsEnabled       bool   // 是否启用聊天音效
@@ -76,6 +79,15 @@ func (s *Store) Load() (*Config, error) {
 	if cfg.NudgeInterval <= 0 {
 		cfg.NudgeInterval = 5
 	}
+	cfg.AllowedPaths = splitLines(m["allowed_paths"])
+	cfg.ShellTimeout = parseInt(m["shell_timeout"], 30)
+	if cfg.ShellTimeout <= 0 {
+		cfg.ShellTimeout = 30
+	}
+	cfg.CodeTimeout = parseInt(m["code_timeout"], 60)
+	if cfg.CodeTimeout <= 0 {
+		cfg.CodeTimeout = 60
+	}
 	cfg.PetSize = parseInt(m["pet_size"], 0)
 	cfg.ChatWidth = parseInt(m["chat_width"], 0)
 	cfg.ChatHeight = parseInt(m["chat_height"], 0)
@@ -115,6 +127,9 @@ func (s *Store) Save(cfg *Config) error {
 		"sounds_enabled": strconv.FormatBool(cfg.SoundsEnabled),
 		"tts_auto_play":            strconv.FormatBool(cfg.TTSAutoPlay),
 		"tts_summarize_threshold":  strconv.Itoa(cfg.TTSSummarizeThreshold),
+		"allowed_paths":            joinLines(cfg.AllowedPaths),
+		"shell_timeout":            strconv.Itoa(cfg.ShellTimeout),
+		"code_timeout":             strconv.Itoa(cfg.CodeTimeout),
 	}
 	tx, err := s.db.Begin()
 	if err != nil {
