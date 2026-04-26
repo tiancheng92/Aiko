@@ -90,6 +90,14 @@ const messages = ref([])
 const input = ref('')
 /** pendingImages holds data URLs of images pasted by the user, awaiting send. */
 const pendingImages = ref([])
+
+/** lightboxSrc holds the data URL of the image currently shown in the lightbox, or null. */
+const lightboxSrc = ref(null)
+
+/** previewImage opens the lightbox for the given image src. */
+function previewImage(src) {
+  lightboxSrc.value = src
+}
 const loading = ref(false)
 const messagesEl = ref(null)
 const copiedIdx = ref(null)
@@ -465,7 +473,7 @@ defineExpose({ focusInput, scrollToBottom })
             <!-- Bubble content -->
             <div v-if="m.role !== 'assistant'" class="bubble markdown" :class="{ 'has-images': m.images && m.images.length > 0 }">
               <div v-if="m.images && m.images.length > 0" class="msg-images">
-                <img v-for="(img, imgIdx) in m.images" :key="imgIdx" :src="img" class="msg-img" />
+                <img v-for="(img, imgIdx) in m.images" :key="imgIdx" :src="img" class="msg-img" @click.stop="previewImage(img)" />
               </div>
               <div v-if="m.content" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')"></div>
             </div>
@@ -504,6 +512,11 @@ defineExpose({ focusInput, scrollToBottom })
         </div>
       </div>
     </div>
+    <!-- Image lightbox -->
+    <div v-if="lightboxSrc" class="lightbox" @click="lightboxSrc = null">
+      <img :src="lightboxSrc" class="lightbox-img" @click.stop />
+    </div>
+
       <!-- Voice recording status bar -->
       <div v-if="isRecording" class="voice-hint-bar">
         <span class="voice-hint-icon">🎙️</span>
@@ -975,5 +988,26 @@ defineExpose({ focusInput, scrollToBottom })
   border-radius: 8px;
   object-fit: cover;
   border: 1px solid rgba(255,255,255,0.1);
+  cursor: zoom-in;
+}
+
+/* Lightbox */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+}
+.lightbox-img {
+  max-width: 90vw;
+  max-height: 90vh;
+  border-radius: 10px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  object-fit: contain;
+  cursor: default;
 }
 </style>
