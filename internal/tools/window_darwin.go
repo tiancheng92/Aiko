@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cloudwego/eino/components/tool"
@@ -21,10 +22,34 @@ type windowInfo struct {
 	SelectedText string `json:"selected_text"`
 }
 
-// InvokableRun gets the frontmost app/window and any selected text.
-func (t *GetActiveWindowInfoTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (string, error) {
-	// Step 1: get app name and window title via System Events.
-	appScript := `tell application "System Events"
+var (
+	lastWindowMu   sync.RWMutex
+	lastWindowInfo windowInfo // last non-Aiko frontmost window, cached by background poller
+)
+
+// StartWindowPoller launches a background goroutine that polls the frontmost
+// non-Aiko application every second and caches the result. Call once at startup.
+func StartWindowPoller(ctx context.Context) {
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Second):
+				info := pollFrontWindow()
+				if info.App != "" && info.App != "Aiko" {
+					lastWindowMu.Lock()
+					lastWindowInfo = info
+					lastWindowMu.Unlock()
+				}
+			}
+		}
+	}()
+}
+
+// pollFrontWindow queries System Events for the current frontmost app/window.
+func pollFrontWindow() windowInfo {
+	script := `tell application "System Events"
 	set p to first process whose frontmost is true
 	set appName to name of p
 	set winTitle to ""
@@ -34,30 +59,44 @@ func (t *GetActiveWindowInfoTool) InvokableRun(_ context.Context, _ string, _ ..
 	return appName & "||" & winTitle
 end tell`
 
-	appRaw, err := runAppleScript(appScript)
+	raw, err := runAppleScript(script)
 	if err != nil {
-		return fmt.Sprintf("获取窗口信息失败：%s\n请在「系统设置 → 隐私与安全性 → 辅助功能」中授权 Aiko。", err.Error()), nil
+		return windowInfo{}
 	}
-
-	parts := strings.SplitN(appRaw, "||", 2)
-	info := windowInfo{App: strings.TrimSpace(parts[0])}
+	parts := strings.SplitN(strings.TrimSpace(raw), "||", 2)
+	info := windowInfo{App: parts[0]}
 	if len(parts) == 2 {
-		info.WindowTitle = strings.TrimSpace(parts[1])
+		info.WindowTitle = parts[1]
+	}
+	return info
+}
+
+// InvokableRun returns the last non-Aiko frontmost window and any selected text.
+// Selected text is captured from the cached app via ⌘C simulation.
+func (t *GetActiveWindowInfoTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (string, error) {
+	lastWindowMu.RLock()
+	info := lastWindowInfo
+	lastWindowMu.RUnlock()
+
+	if info.App == "" {
+		return `{"app":"","window_title":"","selected_text":""}`, nil
 	}
 
-	// Step 2: save current clipboard, simulate ⌘C, read new clipboard, restore.
+	// Capture selected text: bring the cached app to front briefly,
+	// simulate ⌘C, read clipboard, then return focus to Aiko.
 	origClip, _ := exec.Command("pbpaste").Output()
+	origText := strings.TrimRight(string(origClip), "\n")
 
-	// Simulate ⌘C in the frontmost app.
-	copyScript := `tell application "System Events" to keystroke "c" using command down`
+	// Activate the target app and send ⌘C.
+	copyScript := fmt.Sprintf(`tell application "%s" to activate
+delay 0.15
+tell application "System Events" to keystroke "c" using command down`, info.App)
 	_ = exec.Command("osascript", "-e", copyScript).Run()
 
-	// Wait for clipboard to update.
-	time.Sleep(120 * time.Millisecond)
+	time.Sleep(150 * time.Millisecond)
 
 	newClip, _ := exec.Command("pbpaste").Output()
 	newText := strings.TrimRight(string(newClip), "\n")
-	origText := strings.TrimRight(string(origClip), "\n")
 
 	// Restore original clipboard.
 	restore := exec.Command("pbcopy")

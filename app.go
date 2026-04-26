@@ -215,6 +215,10 @@ func (a *App) startup(ctx context.Context) {
 	// Enhanced tools (EnhancedInvokableTool) also need permission rows.
 	_ = a.permStore.EnsureRow(toolsCtx, &internaltools.TakeScreenshotTool{})
 
+	// Start background poller so get_active_window_info can report the last
+	// non-Aiko frontmost window (querying at call-time always returns Aiko).
+	internaltools.StartWindowPoller(toolsCtx)
+
 	vectorPath := filepath.Join(dataDir, "vectors")
 	a.vectorDB, err = chromem.NewPersistentDB(vectorPath, false)
 	if err != nil {
