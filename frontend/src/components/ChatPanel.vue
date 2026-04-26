@@ -513,9 +513,11 @@ defineExpose({ focusInput, scrollToBottom })
       </div>
     </div>
     <!-- Image lightbox -->
-    <div v-if="lightboxSrc" class="lightbox" @click="lightboxSrc = null">
-      <img :src="lightboxSrc" class="lightbox-img" @click.stop />
-    </div>
+    <Teleport to="body">
+      <div v-if="lightboxSrc" class="lightbox" @click="lightboxSrc = null">
+        <img :src="lightboxSrc" class="lightbox-img" @click.stop />
+      </div>
+    </Teleport>
 
       <!-- Voice recording status bar -->
       <div v-if="isRecording" class="voice-hint-bar">
