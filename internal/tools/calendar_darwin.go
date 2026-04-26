@@ -22,18 +22,47 @@ type calendarEvent struct {
 	Notes    string `json:"notes"`
 }
 
-// formatCalDate converts a YYYY-MM-DD string to the AppleScript date literal
-// format: "Sunday, January 1, 2006 at 00:00:00".
-func formatCalDate(dateStr string, endOfDay bool) (string, error) {
+// calDateComponents holds the year/month/day/seconds fields needed to
+// construct an AppleScript date in a locale-independent way.
+type calDateComponents struct {
+	Year, Month, Day, Seconds int
+}
+
+// parseCalDate parses a YYYY-MM-DD string into calDateComponents.
+// If endOfDay is true, Seconds is set to 86399 (23:59:59).
+func parseCalDate(dateStr string, endOfDay bool) (calDateComponents, error) {
 	t, err := time.Parse("2006-01-02", dateStr)
 	if err != nil {
-		return "", fmt.Errorf("invalid date %q: %w", dateStr, err)
+		return calDateComponents{}, fmt.Errorf("invalid date %q: %w", dateStr, err)
 	}
+	secs := 0
 	if endOfDay {
-		t = t.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+		secs = 86399
 	}
-	// AppleScript expects: "Monday, April 26, 2026 at 09:00:00"
-	return t.Format("Monday, January 2, 2006 at 15:04:05"), nil
+	return calDateComponents{
+		Year: t.Year(), Month: int(t.Month()), Day: t.Day(), Seconds: secs,
+	}, nil
+}
+
+// parseCalDateTime parses a "YYYY-MM-DD HH:MM" string into calDateComponents.
+func parseCalDateTime(s string) (calDateComponents, error) {
+	t, err := time.Parse("2006-01-02 15:04", s)
+	if err != nil {
+		return calDateComponents{}, fmt.Errorf("invalid datetime %q (expected YYYY-MM-DD HH:MM): %w", s, err)
+	}
+	secs := t.Hour()*3600 + t.Minute()*60
+	return calDateComponents{
+		Year: t.Year(), Month: int(t.Month()), Day: t.Day(), Seconds: secs,
+	}, nil
+}
+
+// appleScriptDateBlock emits the AppleScript snippet that constructs a date
+// object into the given variable name, locale-independently.
+func appleScriptDateBlock(varName string, c calDateComponents) string {
+	return fmt.Sprintf(
+		"set %s to current date\n\tset year of %s to %d\n\tset month of %s to %d\n\tset day of %s to %d\n\tset time of %s to %d",
+		varName, varName, c.Year, varName, c.Month, varName, c.Day, varName, c.Seconds,
+	)
 }
 
 // InvokableRun queries Calendar.app for events in the given date range.
@@ -47,11 +76,11 @@ func (t *GetCalendarEventsTool) InvokableRun(_ context.Context, input string, _ 
 		return "请提供 start_date 和 end_date（格式 YYYY-MM-DD）", nil
 	}
 
-	startLiteral, err := formatCalDate(startDate, false)
+	startComp, err := parseCalDate(startDate, false)
 	if err != nil {
 		return fmt.Sprintf("日期格式错误：%s", err.Error()), nil
 	}
-	endLiteral, err := formatCalDate(endDate, true)
+	endComp, err := parseCalDate(endDate, true)
 	if err != nil {
 		return fmt.Sprintf("日期格式错误：%s", err.Error()), nil
 	}
@@ -67,8 +96,8 @@ func (t *GetCalendarEventsTool) InvokableRun(_ context.Context, input string, _ 
 
 	script := fmt.Sprintf(`
 tell application "Calendar"
-	set startDate to date "%s"
-	set endDate to date "%s"
+	%s
+	%s
 	set output to ""
 	set calList to every calendar
 	set i to 1
@@ -96,7 +125,10 @@ tell application "Calendar"
 	end repeat
 	if output is "" then return "（该时间段内没有日历事件）"
 	return output
-end tell`, startLiteral, endLiteral, calFilter)
+end tell`,
+		appleScriptDateBlock("startDate", startComp),
+		appleScriptDateBlock("endDate", endComp),
+		calFilter)
 
 	raw, err := runAppleScript(script)
 	if err != nil {
@@ -131,15 +163,6 @@ end tell`, startLiteral, endLiteral, calFilter)
 	return string(b), nil
 }
 
-// formatCalDateTime converts "YYYY-MM-DD HH:MM" to AppleScript date literal.
-func formatCalDateTime(s string) (string, error) {
-	t, err := time.Parse("2006-01-02 15:04", s)
-	if err != nil {
-		return "", fmt.Errorf("invalid datetime %q (expected YYYY-MM-DD HH:MM): %w", s, err)
-	}
-	return t.Format("Monday, January 2, 2006 at 15:04:05"), nil
-}
-
 // InvokableRun creates a new event in Calendar.app.
 func (t *CreateCalendarEventTool) InvokableRun(_ context.Context, input string, _ ...tool.Option) (string, error) {
 	args := parseArgs(input)
@@ -154,11 +177,11 @@ func (t *CreateCalendarEventTool) InvokableRun(_ context.Context, input string, 
 		return "请提供 title、start_time 和 end_time", nil
 	}
 
-	startLiteral, err := formatCalDateTime(startTime)
+	startComp, err := parseCalDateTime(startTime)
 	if err != nil {
 		return fmt.Sprintf("时间格式错误：%s", err.Error()), nil
 	}
-	endLiteral, err := formatCalDateTime(endTime)
+	endComp, err := parseCalDateTime(endTime)
 	if err != nil {
 		return fmt.Sprintf("时间格式错误：%s", err.Error()), nil
 	}
@@ -174,10 +197,16 @@ func (t *CreateCalendarEventTool) InvokableRun(_ context.Context, input string, 
 	script := fmt.Sprintf(`
 tell application "Calendar"
 	%s
-	set newEvent to make new event at end of events of targetCal with properties {summary:"%s", start date:date "%s", end date:date "%s", location:"%s", description:"%s"}
+	%s
+	%s
+	set newEvent to make new event at end of events of targetCal with properties {summary:"%s", start date:evStart, end date:evEnd, location:"%s", description:"%s"}
 	set usedCal to name of targetCal
 	return "事件「" & summary of newEvent & "」已创建到日历「" & usedCal & "」"
-end tell`, calResolve, title, startLiteral, endLiteral, location, notes)
+end tell`,
+		calResolve,
+		appleScriptDateBlock("evStart", startComp),
+		appleScriptDateBlock("evEnd", endComp),
+		title, location, notes)
 
 	result, err := runAppleScript(script)
 	if err != nil {
