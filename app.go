@@ -114,6 +114,29 @@ func (a *App) SetChatVisible(visible bool) {
 	a.mu.Unlock()
 }
 
+// ConfirmToolExecution is called by the frontend when the user approves or rejects
+// a pending tool execution request.
+func (a *App) ConfirmToolExecution(id string, approved bool, editedContent string) {
+	v, ok := a.pendingConfirms.Load(id)
+	if !ok {
+		slog.Warn("ConfirmToolExecution: unknown id", "id", id)
+		return
+	}
+	ch := v.(chan agent.ToolConfirmResponse)
+	ch <- agent.ToolConfirmResponse{Approved: approved, EditedContent: editedContent}
+}
+
+// KillToolExecution forcibly terminates a running shell or code execution by its task UUID.
+func (a *App) KillToolExecution(id string) {
+	v, ok := a.runningCmds.Load(id)
+	if !ok {
+		slog.Warn("KillToolExecution: unknown id", "id", id)
+		return
+	}
+	cancel := v.(func())
+	cancel()
+}
+
 // EmitEvent emits a Wails runtime event with the given name and payload.
 func (a *App) EmitEvent(name string, data any) {
 	wailsruntime.EventsEmit(a.ctx, name, data)
