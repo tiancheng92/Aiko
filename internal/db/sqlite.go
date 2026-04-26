@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
-
 	_ "modernc.org/sqlite"
 )
 
@@ -34,7 +32,11 @@ func Open(dataDir string) (*sql.DB, error) {
 	return db, nil
 }
 
+// migrate creates all tables and applies idempotent column patches for DBs
+// created before certain schema additions.
 func migrate(db *sql.DB) error {
+	// Create all tables in one shot with the current complete schema.
+	// CREATE TABLE IF NOT EXISTS is a no-op for tables that already exist.
 	_, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS messages (
 			id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,7 +49,7 @@ func migrate(db *sql.DB) error {
 			value TEXT NOT NULL
 		);
 		CREATE TABLE IF NOT EXISTS knowledge_sources (
-			source TEXT PRIMARY KEY,
+			source   TEXT PRIMARY KEY,
 			added_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 		CREATE TABLE IF NOT EXISTS tool_permissions (
@@ -66,38 +68,26 @@ func migrate(db *sql.DB) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_memory_segments_created ON memory_segments(created_at DESC);
 		CREATE TABLE IF NOT EXISTS cron_jobs (
-		    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-		    name        TEXT NOT NULL,
-		    description TEXT NOT NULL,
-		    schedule    TEXT NOT NULL,
-		    prompt      TEXT NOT NULL,
-		    enabled     INTEGER NOT NULL DEFAULT 1,
-		    last_run    DATETIME,
-		    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			name        TEXT NOT NULL,
+			description TEXT NOT NULL,
+			schedule    TEXT NOT NULL,
+			prompt      TEXT NOT NULL,
+			enabled     INTEGER NOT NULL DEFAULT 1,
+			last_run    DATETIME,
+			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 		CREATE TABLE IF NOT EXISTS mcp_servers (
-		    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-		    name        TEXT NOT NULL UNIQUE,
-		    transport   TEXT NOT NULL,
-		    command     TEXT,
-		    args        TEXT,
-		    url         TEXT,
-		    headers     TEXT,
-		    enabled     INTEGER NOT NULL DEFAULT 1,
-		    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			name        TEXT NOT NULL UNIQUE,
+			transport   TEXT NOT NULL,
+			command     TEXT,
+			args        TEXT,
+			url         TEXT,
+			headers     TEXT,
+			enabled     INTEGER NOT NULL DEFAULT 1,
+			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
-	`)
-	if err != nil {
-		return err
-	}
-	// Idempotent column addition for databases created before headers was introduced.
-	_, altErr := db.Exec(`ALTER TABLE mcp_servers ADD COLUMN headers TEXT`)
-	if altErr != nil && !strings.Contains(altErr.Error(), "duplicate column") {
-		return fmt.Errorf("alter mcp_servers add headers: %w", altErr)
-	}
-
-	// model_profiles: each row is a named LLM configuration.
-	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS model_profiles (
 			id              INTEGER PRIMARY KEY AUTOINCREMENT,
 			name            TEXT NOT NULL UNIQUE,
@@ -107,52 +97,22 @@ func migrate(db *sql.DB) error {
 			model           TEXT NOT NULL DEFAULT '',
 			embedding_model TEXT NOT NULL DEFAULT '',
 			embedding_dim   INTEGER NOT NULL DEFAULT 1536,
+			tts_model       TEXT NOT NULL DEFAULT '',
+			tts_voice       TEXT NOT NULL DEFAULT '',
+			tts_speed       REAL NOT NULL DEFAULT 1.0,
+			tts_backend     TEXT NOT NULL DEFAULT '',
 			created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
-	`)
-	if err != nil {
-		return fmt.Errorf("create model_profiles: %w", err)
-	}
-
-	// proactive_items: one-shot proactive messages scheduled by the engine or agent tool.
-	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS proactive_items (
-			id          INTEGER PRIMARY KEY AUTOINCREMENT,
-			trigger_at  DATETIME NOT NULL,
-			prompt      TEXT NOT NULL,
-			fired       BOOLEAN DEFAULT FALSE,
-			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			trigger_at DATETIME NOT NULL,
+			prompt     TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 	`)
 	if err != nil {
-		return fmt.Errorf("create proactive_items: %w", err)
+		return err
 	}
-	// Rebuild proactive_items without the fired column (trigger-and-delete model).
-	_, err = db.Exec(`DROP TABLE IF EXISTS proactive_items`)
-	if err != nil {
-		return fmt.Errorf("drop proactive_items: %w", err)
-	}
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS proactive_items (
-			id          INTEGER PRIMARY KEY AUTOINCREMENT,
-			trigger_at  DATETIME NOT NULL,
-			prompt      TEXT NOT NULL,
-			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
-		)
-	`)
-	if err != nil {
-		return fmt.Errorf("recreate proactive_items: %w", err)
-	}
-	// TTS columns for model_profiles (idempotent)
-	for _, col := range []string{
-		`ALTER TABLE model_profiles ADD COLUMN tts_model TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE model_profiles ADD COLUMN tts_voice TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE model_profiles ADD COLUMN tts_speed REAL NOT NULL DEFAULT 1.0`,
-		`ALTER TABLE model_profiles ADD COLUMN tts_backend TEXT NOT NULL DEFAULT ''`,
-	} {
-		if _, err := db.Exec(col); err != nil && !strings.Contains(err.Error(), "duplicate column") {
-			return fmt.Errorf("alter model_profiles for tts: %w", err)
-		}
-	}
+
 	return nil
 }

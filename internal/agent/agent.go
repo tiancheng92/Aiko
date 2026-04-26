@@ -332,6 +332,11 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput, assistantReply
 		return
 	}
 
+	// Increment the turn counter on every completed conversation turn so the
+	// self-growth nudge fires at the correct interval regardless of whether
+	// short-term memory overflow has occurred.
+	a.turnCount.Add(1)
+
 	if _, err := a.shortMem.Add("user", userInput); err != nil {
 		slog.Error("save user message failed", "err", err)
 		return
@@ -383,5 +388,4 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput, assistantReply
 	if err := a.shortMem.DeleteByIDs(ids); err != nil {
 		slog.Error("delete migrated messages failed", "err", err)
 	}
-	a.turnCount.Add(1)
 }

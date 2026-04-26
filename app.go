@@ -1005,12 +1005,16 @@ func (a *App) shutdown(_ context.Context) {
 	w := a.smsWatcher
 	a.smsWatcher = nil
 	pe := a.proactiveEngine
+	sched := a.scheduler
 	a.mu.Unlock()
 	if w != nil {
 		w.Stop()
 	}
 	if pe != nil {
 		pe.Stop()
+	}
+	if sched != nil {
+		sched.Stop()
 	}
 }
 
