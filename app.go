@@ -71,6 +71,7 @@ type App struct {
 	isChatVisible   bool               // tracks whether the chat panel is open; guarded by mu
 	proactiveEngine *proactive.ProactiveEngine
 	runningCmds     sync.Map
+	pendingConfirms sync.Map
 }
 
 // NewApp creates a new App instance.
@@ -381,7 +382,12 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		middleware.ErrorRecovery(),
 	)
 
-	newAgent, err := agent.New(ctx, chatModel, a.shortMem, longMem, allTools, a.cfg, mw, skillMW, dataDir)
+	newAgent, err := agent.New(ctx, chatModel, a.shortMem, longMem, allTools, a.cfg, mw, skillMW, dataDir,
+		&a.pendingConfirms,
+		func(event string, data ...any) {
+			wailsruntime.EventsEmit(a.ctx, event, data...)
+		},
+	)
 	if err != nil {
 		return fmt.Errorf("new agent: %w", err)
 	}

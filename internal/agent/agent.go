@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
+	"time"
 
 	localbk "github.com/cloudwego/eino-ext/adk/backend/local"
 	"github.com/cloudwego/eino/adk"
@@ -21,6 +23,7 @@ import (
 	"aiko/internal/agent/middleware"
 	"aiko/internal/config"
 	"aiko/internal/memory"
+	internaltools "aiko/internal/tools"
 )
 
 // StreamResult is a single streamed token or a terminal signal.
@@ -28,6 +31,45 @@ type StreamResult struct {
 	Token string
 	Err   error
 	Done  bool
+}
+
+// ToolConfirmRequest is emitted via Wails event when a tool requests user confirmation.
+type ToolConfirmRequest struct {
+	ID         string `json:"id"`
+	ToolType   string `json:"tool_type"`   // "shell" or "code"
+	Command    string `json:"command,omitempty"`
+	Code       string `json:"code,omitempty"`
+	Language   string `json:"language,omitempty"`
+	WorkingDir string `json:"working_dir"`
+}
+
+// ToolConfirmResponse is the user's response to a tool confirmation request.
+type ToolConfirmResponse struct {
+	Approved      bool
+	EditedContent string
+}
+
+// memCheckPointStore is a simple in-memory CheckPointStore used to persist interrupt
+// checkpoints within a single application session.
+type memCheckPointStore struct {
+	mu sync.RWMutex
+	m  map[string][]byte
+}
+
+// Get retrieves a checkpoint by ID.
+func (s *memCheckPointStore) Get(_ context.Context, key string) ([]byte, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	v, ok := s.m[key]
+	return v, ok, nil
+}
+
+// Set stores a checkpoint under the given ID.
+func (s *memCheckPointStore) Set(_ context.Context, key string, value []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.m[key] = value
+	return nil
 }
 
 // Agent wraps an eino ReAct agent with short/long-term memory integration.
@@ -39,6 +81,8 @@ type Agent struct {
 	dataDir       string // ~/.aiko data directory, used to read USER.md
 	turnCount     atomic.Int64 // completed conversation turns (resets on restart)
 	nudgeInterval int    // how often to trigger self-growth nudge
+	pendingConfirms *sync.Map // map[string]chan ToolConfirmResponse; bridged from App
+	emitEvent       func(event string, data ...any) // Wails EventsEmit
 }
 
 // New constructs an Agent with a ReAct runner backed by the given chat model,
@@ -54,6 +98,8 @@ func New(
 	mw middleware.Middleware,
 	skillMW adk.ChatModelAgentMiddleware,
 	dataDir string,
+	pendingConfirms *sync.Map,
+	emitEvent func(event string, data ...any),
 ) (*Agent, error) {
 	// Apply middleware chain to all tools if provided.
 	if mw != nil && len(tools) > 0 {
@@ -104,8 +150,9 @@ func New(
 	}
 
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
-		Agent:          agent,
-		EnableStreaming: true,
+		Agent:           agent,
+		EnableStreaming:  true,
+		CheckPointStore: &memCheckPointStore{m: map[string][]byte{}},
 	})
 
 	ni := cfg.NudgeInterval
@@ -113,12 +160,14 @@ func New(
 		ni = 5
 	}
 	return &Agent{
-		runner:        runner,
-		shortMem:      shortMem,
-		longMem:       longMem,
-		cfg:           cfg,
-		dataDir:       dataDir,
-		nudgeInterval: ni,
+		runner:          runner,
+		shortMem:        shortMem,
+		longMem:         longMem,
+		cfg:             cfg,
+		dataDir:         dataDir,
+		nudgeInterval:   ni,
+		pendingConfirms: pendingConfirms,
+		emitEvent:       emitEvent,
 	}, nil
 }
 
@@ -148,7 +197,8 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 			query = history + "\nUser: " + userInput
 		}
 
-		fullResponse, ok := drainRunner(ctx, a.runner, query, ch)
+		checkpointID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
+		fullResponse, ok := drainRunner(ctx, a.runner, query, ch, a.pendingConfirms, a.emitEvent, checkpointID)
 		if !ok {
 			return
 		}
@@ -172,7 +222,7 @@ func (a *Agent) ChatDirect(ctx context.Context, prompt string) <-chan StreamResu
 				ch <- StreamResult{Err: fmt.Errorf("agent panic: %v", r)}
 			}
 		}()
-		_, ok := drainRunner(ctx, a.runner, prompt, ch)
+		_, ok := drainRunner(ctx, a.runner, prompt, ch, nil, nil, fmt.Sprintf("direct-%d", time.Now().UnixNano()))
 		if !ok {
 			return
 		}
@@ -204,60 +254,25 @@ func (a *Agent) ChatDirectCollect(ctx context.Context, prompt string) (string, e
 // drainRunner consumes all events from runner.Query, forwards tokens to ch,
 // and returns the accumulated response string. Returns (response, true) on
 // success or ("", false) after sending an error to ch.
-func drainRunner(ctx context.Context, runner *adk.Runner, query string, ch chan<- StreamResult) (string, bool) {
-	iter := runner.Query(ctx, query)
-	var sb strings.Builder
-
-	for {
-		event, ok := iter.Next()
-		if !ok {
-			break
-		}
-		if event.Err != nil {
-			ch <- StreamResult{Err: event.Err}
-			return "", false
-		}
-		if event.Output == nil || event.Output.MessageOutput == nil {
-			continue
-		}
-
-		mo := event.Output.MessageOutput
-		if mo.IsStreaming {
-			for {
-				msg, recvErr := mo.MessageStream.Recv()
-				if recvErr != nil {
-					if recvErr == io.EOF {
-						break
-					}
-					ch <- StreamResult{Err: recvErr}
-					return "", false
-				}
-				if msg == nil || msg.Content == "" {
-					continue
-				}
-				// Skip tool role messages and assistant messages that only contain tool calls.
-				if msg.Role == schema.Tool || len(msg.ToolCalls) > 0 {
-					continue
-				}
-				ch <- StreamResult{Token: msg.Content}
-				sb.WriteString(msg.Content)
-			}
-		} else if mo.Message != nil && mo.Message.Content != "" {
-			// Skip tool result messages and tool-call-only assistant messages.
-			if mo.Message.Role != schema.Tool && len(mo.Message.ToolCalls) == 0 {
-				ch <- StreamResult{Token: mo.Message.Content}
-				sb.WriteString(mo.Message.Content)
-			}
-		}
-	}
-	return sb.String(), true
+func drainRunner(ctx context.Context, runner *adk.Runner, query string, ch chan<- StreamResult,
+	pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, bool) {
+	iter := runner.Query(ctx, query, adk.WithCheckPointID(checkpointID))
+	return drainIter(ctx, runner, iter, ch, pendingConfirms, emitEvent, checkpointID)
 }
 
 // drainRunnerMsg consumes all events from runner.Run with a pre-built Message,
 // forwards tokens to ch, and returns the accumulated response string.
 // Returns (response, true) on success or ("", false) after sending an error to ch.
-func drainRunnerMsg(ctx context.Context, runner *adk.Runner, msg *schema.Message, ch chan<- StreamResult) (string, bool) {
-	iter := runner.Run(ctx, []adk.Message{msg})
+func drainRunnerMsg(ctx context.Context, runner *adk.Runner, msg *schema.Message, ch chan<- StreamResult,
+	pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, bool) {
+	iter := runner.Run(ctx, []adk.Message{msg}, adk.WithCheckPointID(checkpointID))
+	return drainIter(ctx, runner, iter, ch, pendingConfirms, emitEvent, checkpointID)
+}
+
+// drainIter consumes all events from an AsyncIterator, forwards tokens to ch,
+// handles interrupt events, and returns the accumulated response string.
+func drainIter(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIterator[*adk.AgentEvent],
+	ch chan<- StreamResult, pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, bool) {
 	var sb strings.Builder
 
 	for {
@@ -268,6 +283,20 @@ func drainRunnerMsg(ctx context.Context, runner *adk.Runner, msg *schema.Message
 		if event.Err != nil {
 			ch <- StreamResult{Err: event.Err}
 			return "", false
+		}
+		if event.Action != nil && event.Action.Interrupted != nil {
+			resumeIter, err := handleInterrupt(ctx, runner, event, ch, pendingConfirms, emitEvent, checkpointID)
+			if err != nil {
+				return "", false
+			}
+			if resumeIter != nil {
+				resp, ok := drainIter(ctx, runner, resumeIter, ch, pendingConfirms, emitEvent, checkpointID)
+				if !ok {
+					return "", false
+				}
+				sb.WriteString(resp)
+			}
+			continue
 		}
 		if event.Output == nil || event.Output.MessageOutput == nil {
 			continue
@@ -301,6 +330,78 @@ func drainRunnerMsg(ctx context.Context, runner *adk.Runner, msg *schema.Message
 		}
 	}
 	return sb.String(), true
+}
+
+// handleInterrupt processes an eino interrupt event by notifying the frontend and
+// blocking until the user confirms or rejects. Returns the resume iterator on success,
+// or (nil, nil) if no pendingConfirms is provided, or (nil, err) on failure.
+func handleInterrupt(
+	ctx context.Context,
+	runner *adk.Runner,
+	event *adk.AgentEvent,
+	ch chan<- StreamResult,
+	pendingConfirms *sync.Map,
+	emitEvent func(string, ...any),
+	checkpointID string,
+) (*adk.AsyncIterator[*adk.AgentEvent], error) {
+	if pendingConfirms == nil || emitEvent == nil {
+		return nil, nil
+	}
+	if event.Action.Interrupted == nil || len(event.Action.Interrupted.InterruptContexts) == 0 {
+		return nil, nil
+	}
+
+	// Find the root-cause interrupt context to use as the resume target.
+	ictx := event.Action.Interrupted.InterruptContexts[0]
+	for _, c := range event.Action.Interrupted.InterruptContexts {
+		if c.IsRootCause {
+			ictx = c
+			break
+		}
+	}
+	interruptID := ictx.ID
+
+	var req ToolConfirmRequest
+	switch info := ictx.Info.(type) {
+	case internaltools.ShellConfirmInfo:
+		req = ToolConfirmRequest{
+			ID: info.ID, ToolType: "shell",
+			Command: info.Command, WorkingDir: info.WorkingDir,
+		}
+	case internaltools.CodeConfirmInfo:
+		req = ToolConfirmRequest{
+			ID: info.ID, ToolType: "code",
+			Language: info.Language, Code: info.Code, WorkingDir: info.WorkingDir,
+		}
+	default:
+		return nil, nil
+	}
+
+	respCh := make(chan ToolConfirmResponse, 1)
+	pendingConfirms.Store(req.ID, respCh)
+	defer pendingConfirms.Delete(req.ID)
+
+	emitEvent("tool:confirm", req)
+
+	var resp ToolConfirmResponse
+	select {
+	case resp = <-respCh:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
+	resumeData := map[string]any{
+		interruptID: internaltools.ConfirmResult{
+			Approved:      resp.Approved,
+			EditedContent: resp.EditedContent,
+		},
+	}
+	resumeIter, err := runner.ResumeWithParams(ctx, checkpointID, &adk.ResumeParams{Targets: resumeData})
+	if err != nil {
+		ch <- StreamResult{Err: fmt.Errorf("resume failed: %w", err)}
+		return nil, err
+	}
+	return resumeIter, nil
 }
 
 // extractTextFromMessage returns the plain text from a Message's Content or
@@ -367,7 +468,8 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 			}
 		}
 
-		fullResponse, ok := drainRunnerMsg(ctx, a.runner, &sendMsg, ch)
+		checkpointID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
+		fullResponse, ok := drainRunnerMsg(ctx, a.runner, &sendMsg, ch, a.pendingConfirms, a.emitEvent, checkpointID)
 		if !ok {
 			return
 		}
