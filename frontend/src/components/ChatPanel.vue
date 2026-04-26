@@ -149,7 +149,7 @@ let currentTTSAudio = null
 
 onMounted(async () => {
   const history = await GetMessages(50)
-  messages.value = (history || []).map(m => ({ role: m.Role, content: m.Content, time: m.CreatedAt }))
+  messages.value = (history || []).map(m => ({ role: m.Role, content: m.Content, time: m.CreatedAt, images: m.Images || [] }))
   scrollToBottom()
 
   // Show welcome message on first launch when chat history is empty.

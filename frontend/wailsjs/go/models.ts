@@ -186,6 +186,7 @@ export namespace memory {
 	    ID: number;
 	    Role: string;
 	    Content: string;
+	    Images: string[];
 	    CreatedAt: string;
 	
 	    static createFrom(source: any = {}) {
@@ -197,6 +198,7 @@ export namespace memory {
 	        this.ID = source["ID"];
 	        this.Role = source["Role"];
 	        this.Content = source["Content"];
+	        this.Images = source["Images"];
 	        this.CreatedAt = source["CreatedAt"];
 	    }
 	}

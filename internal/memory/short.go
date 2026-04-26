@@ -2,6 +2,7 @@ package memory
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -9,8 +10,9 @@ import (
 // Message is a single conversation turn stored in SQLite.
 type Message struct {
 	ID        int64
-	Role      string // "user" | "assistant"
+	Role      string   // "user" | "assistant"
 	Content   string
+	Images    []string // data URLs, empty for most messages
 	CreatedAt string
 }
 
@@ -20,10 +22,23 @@ type ShortStore struct{ db *sql.DB }
 // NewShortStore creates a ShortStore.
 func NewShortStore(db *sql.DB) *ShortStore { return &ShortStore{db: db} }
 
+// scanMessage scans a row that selects id, role, content, images, created_at.
+func scanMessage(scan func(...any) error) (Message, error) {
+	var m Message
+	var imagesJSON string
+	if err := scan(&m.ID, &m.Role, &m.Content, &imagesJSON, &m.CreatedAt); err != nil {
+		return m, err
+	}
+	if imagesJSON != "" {
+		_ = json.Unmarshal([]byte(imagesJSON), &m.Images)
+	}
+	return m, nil
+}
+
 // Recent returns the most recent n messages in chronological order.
 func (s *ShortStore) Recent(n int) ([]Message, error) {
 	rows, err := s.db.Query(`
-		SELECT id, role, content, created_at
+		SELECT id, role, content, images, created_at
 		FROM messages
 		ORDER BY id DESC
 		LIMIT ?`, n)
@@ -34,8 +49,8 @@ func (s *ShortStore) Recent(n int) ([]Message, error) {
 
 	var msgs []Message
 	for rows.Next() {
-		var m Message
-		if err := rows.Scan(&m.ID, &m.Role, &m.Content, &m.CreatedAt); err != nil {
+		m, err := scanMessage(rows.Scan)
+		if err != nil {
 			return nil, err
 		}
 		msgs = append(msgs, m)
@@ -50,10 +65,20 @@ func (s *ShortStore) Recent(n int) ([]Message, error) {
 	return msgs, nil
 }
 
-// Add inserts a new message and returns its ID.
+// Add inserts a new message (no images) and returns its ID.
 func (s *ShortStore) Add(role, content string) (int64, error) {
+	return s.AddWithImages(role, content, nil)
+}
+
+// AddWithImages inserts a new message with optional image data URLs and returns its ID.
+func (s *ShortStore) AddWithImages(role, content string, images []string) (int64, error) {
+	imagesJSON := ""
+	if len(images) > 0 {
+		b, _ := json.Marshal(images)
+		imagesJSON = string(b)
+	}
 	res, err := s.db.Exec(
-		`INSERT INTO messages(role, content) VALUES(?, ?)`, role, content)
+		`INSERT INTO messages(role, content, images) VALUES(?, ?, ?)`, role, content, imagesJSON)
 	if err != nil {
 		return 0, err
 	}
@@ -70,7 +95,7 @@ func (s *ShortStore) Count() (int, error) {
 // OldestN returns the oldest n messages in chronological order.
 func (s *ShortStore) OldestN(n int) ([]Message, error) {
 	rows, err := s.db.Query(`
-		SELECT id, role, content, created_at
+		SELECT id, role, content, images, created_at
 		FROM messages
 		ORDER BY id ASC
 		LIMIT ?`, n)
@@ -81,8 +106,8 @@ func (s *ShortStore) OldestN(n int) ([]Message, error) {
 
 	var msgs []Message
 	for rows.Next() {
-		var m Message
-		if err := rows.Scan(&m.ID, &m.Role, &m.Content, &m.CreatedAt); err != nil {
+		m, err := scanMessage(rows.Scan)
+		if err != nil {
 			return nil, err
 		}
 		msgs = append(msgs, m)

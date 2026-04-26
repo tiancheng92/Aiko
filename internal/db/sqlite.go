@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	_ "modernc.org/sqlite"
 )
 
@@ -114,5 +115,31 @@ func migrate(db *sql.DB) error {
 		return err
 	}
 
+	// Idempotent column patches for databases created before schema additions.
+	patches := []string{
+		// v2: store images as JSON array of data URLs alongside each message.
+		`ALTER TABLE messages ADD COLUMN images TEXT NOT NULL DEFAULT ''`,
+	}
+	for _, p := range patches {
+		if _, err := db.Exec(p); err != nil {
+			// SQLite returns "duplicate column name" when the column already
+			// exists; treat that as a no-op.
+			if !isDuplicateColumnErr(err) {
+				return fmt.Errorf("patch %q: %w", p, err)
+			}
+		}
+	}
+
 	return nil
+}
+
+// isDuplicateColumnErr reports whether err is the SQLite "duplicate column
+// name" error returned when ALTER TABLE ADD COLUMN is run on an existing col.
+func isDuplicateColumnErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "duplicate column name") ||
+		strings.Contains(msg, "already exists")
 }

@@ -154,7 +154,7 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 		}
 
 		ch <- StreamResult{Done: true}
-		go a.persistAndMigrate(context.Background(), userInput, fullResponse)
+		go a.persistAndMigrate(context.Background(), userInput, nil, fullResponse)
 	}()
 
 	return ch
@@ -334,10 +334,21 @@ func sanitiseForMemory(msg *schema.Message) string {
 	return text
 }
 
+// extractImagesFromMessage returns all base64 data URLs from image parts of msg.
+func extractImagesFromMessage(msg *schema.Message) []string {
+	var images []string
+	for _, p := range msg.UserInputMultiContent {
+		if p.Type == schema.ChatMessagePartTypeImageURL && p.Image != nil && p.Image.Base64Data != nil {
+			images = append(images, "data:"+p.Image.MIMEType+";base64,"+*p.Image.Base64Data)
+		}
+	}
+	return images
+}
+
 // ChatWithMessage sends a pre-built user Message (which may contain images via
 // UserInputMultiContent) to the agent and streams tokens via the returned channel.
 // After streaming, user input and assistant reply are persisted to short-term
-// memory with image parts replaced by placeholder text.
+// memory; images are stored as data URLs so history can re-render them.
 func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan StreamResult {
 	ch := make(chan StreamResult, 64)
 
@@ -379,8 +390,9 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 		}
 
 		ch <- StreamResult{Done: true}
-		userMemory := sanitiseForMemory(msg)
-		go a.persistAndMigrate(context.Background(), userMemory, fullResponse)
+		userMemory := extractTextFromMessage(msg)
+		userImages := extractImagesFromMessage(msg)
+		go a.persistAndMigrate(context.Background(), userMemory, userImages, fullResponse)
 	}()
 
 	return ch
@@ -460,7 +472,7 @@ func (a *Agent) buildHistoryPrefix(ctx context.Context, userInput string) (strin
 // persistAndMigrate saves user and assistant messages to SQLite, then checks
 // whether the total message count exceeds ShortTermLimit. If so, the oldest
 // excess messages are migrated to long-term vector memory.
-func (a *Agent) persistAndMigrate(ctx context.Context, userInput, assistantReply string) {
+func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userImages []string, assistantReply string) {
 	if a.shortMem == nil {
 		return
 	}
@@ -470,7 +482,7 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput, assistantReply
 	// short-term memory overflow has occurred.
 	a.turnCount.Add(1)
 
-	if _, err := a.shortMem.Add("user", userInput); err != nil {
+	if _, err := a.shortMem.AddWithImages("user", userInput, userImages); err != nil {
 		slog.Error("save user message failed", "err", err)
 		return
 	}
