@@ -108,7 +108,7 @@ wails generate module  # 重新生成 Wails bindings
 ## 数据目录结构
 
 `~/.aiko/`
-- `pet.db` — SQLite 数据库（settings、messages、knowledge_sources、cron_jobs、model_profiles）
+- `pet.db` — SQLite 数据库（settings、messages、knowledge_sources、cron_jobs、model_profiles、tool_permissions）
 - `vectors/` — chromem-go 持久化向量数据存储
 - `USER.md` — 用户画像文档（由 `update_user_profile` 工具自动维护）
 - `auto-skills/` — Agent 自动沉淀的可复用技能（YAML 格式，由 `save_skill` 工具写入）
@@ -118,16 +118,27 @@ wails generate module  # 重新生成 Wails bindings
 ### macOS 平台特定
 - `macos.go` 中的 Objective-C 代码负责按像素判断鼠标事件响应，实现点击穿透功能
 - **⚠️ 不要随意修改 hitTest 逻辑**，容易破坏点击穿透机制
+- hitTest JS 选择器：`.live2d-pet,.chat-bubble,.settings-win,.ctx-menu,.notif-bubble,.lightbox`——新增可交互的全屏覆盖层时必须加入此列表，否则鼠标事件会穿透到桌面
 - `macos.go` 同时包含全局 Option 键监控：双击切换气泡，长按 ≥1s 触发语音录音（`startVoiceRecognition` / `stopVoiceRecognition`）
 - 语音识别使用 `AVAudioEngine` + `SFSpeechRecognizer`，partial 结果通过 voice pipe 推送 `voice:transcript` Wails 事件；`isFinal` 结果推送 `FINAL:<text>` → Go goroutine 转为 `voice:final` 事件
 - **voice:final vs voice:end**：`voice:end` 在 Option 释放时立即触发（停止 UI 动画）；`voice:final` 在 SFSpeechRecognition 异步完成后触发（携带最终文字）。若 `VoiceAutoSend` 开启，ChatPanel 收到 `voice:final` 后自动调用 `send()`
 - **macOS 系统集成首选 osascript**：Wails 的 `[NSApp run]` 占用主线程，任何需要主线程的 CGO API（AXUIElement、NSWorkspace 等）都不安全；改用 `exec.Command("osascript", "-e", ...)` 子进程调用 AppleScript，无线程限制
 
 ### 工具系统
-- 新增内置工具只需在 `registry.go` 的 `All()` 中注册；`AllEino()` 会自动遍历 `All()` 并包装，**无需单独修改 `AllEino()`**
+- 普通工具实现 `Tool` 接口（`InvokableRun(ctx, string) (string, error)`），在 `All()` 中注册，`AllEino()` 自动用 `ToEino()` 包装
+- **多模态工具**（返回图片等）实现 `EnhancedTool` 接口（`InvokableRun(ctx, *schema.ToolArgument) (*schema.ToolResult, error)`），在 `AllEino()` 中用 `ToEinoEnhanced()` 单独注册，**不**放入 `All()`；同时在 `app.go` 启动时手动调用 `permStore.EnsureRow()` 注册权限行（`EnsureRow` 接受 `namedPerm` 接口，普通 Tool 和 EnhancedTool 均满足）
 - 有运行时依赖（知识库、调度器、长期记忆等）的工具在 `AllContextual()` 中注册
 - macOS 专属工具用 `//go:build darwin` / `//go:build !darwin` 分平台实现（non-darwin 提供 stub）
 - **osascript 模式**：所有 macOS 系统集成（浏览器 URL、提醒事项等）使用 `exec.Command("osascript", "-e", script)` 子进程方式，**不要使用 CGO AXUIElement / AppKit API**，原因是 Wails 已占用主线程，CGO 的 `dispatch_sync(main_queue)` 会死锁
+
+### 多模态对话
+- `app.go` 的 `SendMessageWithImages(userInput string, images []string)` 接收前端传来的 data URL 数组，解析后构造含图片 part 的 `*schema.Message`，调用 `agent.ChatWithMessage()`
+- `agent.go` 的 `ChatWithMessage()` 通过 `runner.Run(ctx, []adk.Message{msg})` 直接传入预构建消息，再走标准流式输出流程；`sanitiseForMemory()` 在存入短期记忆前将图片 part 替换为 `[图片×N]` 文本占位
+- eino acl/openai 会将 `Base64Data` 序列化为 `data:<mime>;base64,<data>` 格式的 image_url，与 OpenAI 多模态 API 规范一致；若模型报"image input not supported"，是模型端问题而非序列化问题
+
+### 图片预览灯箱
+- `ChatPanel.vue` 中用 `<Teleport to="body">` 将灯箱挂到 `document.body`，使 `position: fixed` 覆盖整个 viewport 而不受父级限制
+- 灯箱 CSS class `.lightbox` 已加入 `macos.go` hitTest 选择器，鼠标悬停时窗口不会穿透
 
 ### MCP 热重载
 - `app.go` 的 `AddMCPServer`、`UpdateMCPServer`、`DeleteMCPServer` 在 DB 操作完成后会立即调用 `initLLMComponents` 重建 Agent，使新配置立即生效，无需重启应用
@@ -151,14 +162,17 @@ wails generate module  # 重新生成 Wails bindings
 ### 技术创新点
 1. **点击穿透实现** - 通过 Objective-C CGO 实现像素级鼠标事件处理
 2. **语音输入** - 长按 Option 键触发，AVAudioEngine + SFSpeechRecognizer 实时 STT；isFinal 结果走 FINAL: 前缀 pipe → voice:final 事件；支持「语音消息立刻发送」模式
-3. **Apple Intelligence 视觉特效** - 录音期间 4 层 Canvas conic-gradient 彩虹光边框 + 水波纹扩散动画
-4. **eino Agent 集成** - 基于字节跳动 ADK 的工具调用和中间件系统
-5. **毛玻璃 UI 设计** - 现代化深色主题 + CSS backdrop-filter 效果
-6. **多模态内容渲染** - 支持 Markdown、LaTeX、代码高亮、表格等
-7. **RAG 知识库** - chromem-go 向量数据库 + 文档导入系统
-8. **MCP 协议支持** - 可扩展第三方工具生态，支持热重载
-9. **osascript 系统集成** - 无 CGO 的 macOS 系统集成模式（浏览器 URL、提醒事项等）
-10. **自我成长系统** - 跨会话用户画像、记忆事实、可复用技能自动沉淀
+3. **语音输出 (TTS)** - 支持 OpenAI TTS、Kokoro（本地离线）、macOS 系统 TTS 三种后端，可按模型 profile 独立配置
+4. **Apple Intelligence 视觉特效** - 录音期间 4 层 Canvas conic-gradient 彩虹光边框 + 水波纹扩散动画
+5. **eino Agent 集成** - 基于字节跳动 ADK 的工具调用和中间件系统
+6. **毛玻璃 UI 设计** - 现代化深色主题 + CSS backdrop-filter 效果
+7. **多模态内容渲染** - 支持 Markdown、LaTeX、代码高亮、表格等；聊天框支持粘贴图片并发送给多模态模型
+8. **RAG 知识库** - chromem-go 向量数据库 + 文档导入系统
+9. **MCP 协议支持** - 可扩展第三方工具生态，支持热重载
+10. **osascript 系统集成** - 无 CGO 的 macOS 系统集成模式（浏览器 URL、提醒事项、邮件、截图等）
+11. **自我成长系统** - 跨会话用户画像、记忆事实、可复用技能自动沉淀
+12. **剪贴板 & 截图工具** - Agent 可读写剪贴板、截图并以图片形式返回多模态结果
+13. **应用控制工具** - Agent 可列出运行中 App、激活或退出指定应用
 
 ### 借鉴的优秀项目
 - **架构设计** 借鉴了 [Wails Community Examples](https://github.com/wailsapp/awesome-wails)
@@ -178,20 +192,23 @@ wails generate module  # 重新生成 Wails bindings
 - ✅ 飞书 lark-cli 集成
 - ✅ MCP 协议工具扩展（添加/编辑/删除后热重载）
 - ✅ 语音输入（长按 Option，SFSpeechRecognizer STT，支持「立刻发送」模式）
+- ✅ 语音输出 TTS（OpenAI / Kokoro 本地离线 / macOS 系统，按 profile 配置）
 - ✅ 浏览器感知（osascript 获取当前 URL + 页面内容）
 - ✅ macOS 提醒事项读取与标记完成
 - ✅ macOS 邮件读取（osascript 读取 Mail.app 邮件列表与正文）
 - ✅ 短信监听（fsnotify 监听 chat.db，自动识别验证码并复制到剪贴板）
 - ✅ 自我成长（用户画像、长期记忆、技能沉淀）
+- ✅ 剪贴板读写（`read_clipboard` / `write_clipboard` 工具）
+- ✅ 截图工具（`take_screenshot`，EnhancedInvokableTool，返回 PNG base64 图片）
+- ✅ 应用控制（`list_running_apps` / `control_app`，osascript 激活/退出 App）
+- ✅ 聊天框图片粘贴（粘贴或拖入图片，发送给多模态模型；消息气泡内展示缩略图；点击灯箱全屏预览）
 - ⚠️ 仅支持 macOS（使用私有 API，不兼容 App Store）
 - ❌ Windows/Linux 支持（开发中）
 
 ## 下阶段计划
 
-### 语音输出 (v2.1)
-- 🔊 语音输出 - TTS 文字转语音，宠物可发声
-- 🎵 音色选择 - 多种声音个性化选项
-- 📱 语音唤醒 - 支持"Hey Aiko"等唤醒指令
+### 语音唤醒 (v2.1)
+- 📱 **语音唤醒** - 支持"Hey Aiko"等唤醒指令
 
 ### 跨平台支持 (v2.2)
 - 🖥️ Windows 版本 - 重写点击穿透逻辑，使用 Win32 API
@@ -199,4 +216,4 @@ wails generate module  # 重新生成 Wails bindings
 
 ---
 
-*最后更新：2026-04-24*
+*最后更新：2026-04-26*
