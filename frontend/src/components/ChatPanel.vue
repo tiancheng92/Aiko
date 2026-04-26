@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { SendMessage, GetMessages, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig } from '../../wailsjs/go/main/App'
+import { SendMessage, SendMessageWithImages, GetMessages, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 import { marked, Renderer } from 'marked'
 import markedKatex from 'marked-katex-extension'
@@ -88,6 +88,8 @@ function shortenUrl(url) {
 
 const messages = ref([])
 const input = ref('')
+/** pendingImages holds data URLs of images pasted by the user, awaiting send. */
+const pendingImages = ref([])
 const loading = ref(false)
 const messagesEl = ref(null)
 const copiedIdx = ref(null)
@@ -349,21 +351,50 @@ async function speakMessage(idx) {
   SpeakText(m.content).catch(() => { activeTTSMsgId.value = null })
 }
 
+/** onPaste handles clipboard paste events on the textarea.
+ *  If the clipboard contains an image, it is captured as a data URL and
+ *  added to pendingImages for preview; the default paste action is suppressed. */
+function onPaste(e) {
+  const items = [...(e.clipboardData?.items ?? [])]
+  const imageItem = items.find(i => i.type.startsWith('image/'))
+  if (!imageItem) return
+  e.preventDefault()
+  const blob = imageItem.getAsFile()
+  if (!blob) return
+  const reader = new FileReader()
+  reader.onload = (ev) => {
+    pendingImages.value.push(ev.target.result)
+  }
+  reader.readAsDataURL(blob)
+}
+
+/** removeImage removes a pending image by index. */
+function removeImage(idx) {
+  pendingImages.value.splice(idx, 1)
+}
+
 /** send submits the current input as a user message. */
 async function send() {
   const text = input.value.trim()
-  if (!text || loading.value) return
+  if ((!text && pendingImages.value.length === 0) || loading.value) return
   input.value = ''
   loading.value = true
   isStreaming.value = true
   firstTokenThisTurn = true
   if (soundsEnabled) playSend()
-  messages.value.push({ role: 'user', content: text, time: new Date() })
+
+  const imgs = [...pendingImages.value]
+  pendingImages.value = []
+  messages.value.push({ role: 'user', content: text, images: imgs, time: new Date() })
   messages.value.push({ role: 'assistant', content: '', streaming: true, thinking: true })
   scrollToBottom()
   EventsEmit('pet:state:change', 'thinking')
   try {
-    await SendMessage(text)
+    if (imgs.length > 0) {
+      await SendMessageWithImages(text, imgs)
+    } else {
+      await SendMessage(text)
+    }
   } catch (e) {
     const idx = messages.value.findLastIndex(m => m.thinking)
     if (idx >= 0) messages.value.splice(idx, 1)
@@ -432,7 +463,12 @@ defineExpose({ focusInput, scrollToBottom })
         <div class="bubble-wrap" :class="{ ghost: m.ghost }">
           <div class="bubble-row">
             <!-- Bubble content -->
-            <div v-if="m.role !== 'assistant'" class="bubble markdown" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')"></div>
+            <div v-if="m.role !== 'assistant'">
+              <div class="bubble markdown" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')"></div>
+              <div v-if="m.images && m.images.length > 0" class="msg-images">
+                <img v-for="(img, i) in m.images" :key="i" :src="img" class="msg-img" />
+              </div>
+            </div>
             <template v-else>
               <div v-if="m.thinking || (m.streaming && !renderMarkdown(m.content))" :class="['bubble', 'thinking-bubble', { proactive: m.isProactive }]">
                 <span class="dot" /><span class="dot" /><span class="dot" />
@@ -480,6 +516,13 @@ defineExpose({ focusInput, scrollToBottom })
           <span />
         </span>
       </div>
+    <!-- Pending image previews shown above the input row -->
+    <div v-if="pendingImages.length > 0" class="pending-images">
+      <div v-for="(img, idx) in pendingImages" :key="idx" class="pending-img-wrap">
+        <img :src="img" class="pending-img" />
+        <button class="pending-img-remove" @click="removeImage(idx)">×</button>
+      </div>
+    </div>
     <div class="input-row">
       <textarea
         ref="textareaEl"
@@ -487,6 +530,7 @@ defineExpose({ focusInput, scrollToBottom })
         placeholder="输入消息... (Enter 发送)"
         rows="1"
         @keydown.enter.exact.prevent="send"
+        @paste="onPaste"
         :disabled="loading"
       />
       <button v-if="isStreaming" class="stop-btn" @click="stopGeneration">⏹ 停止</button>
@@ -872,5 +916,59 @@ defineExpose({ focusInput, scrollToBottom })
 @keyframes dot-bounce {
   0%, 80%, 100% { transform: translateY(0);    opacity: 0.4; }
   40%           { transform: translateY(-4px); opacity: 1; }
+}
+
+/* Pending image previews above input */
+.pending-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 12px 0;
+}
+.pending-img-wrap {
+  position: relative;
+  display: inline-block;
+}
+.pending-img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+.pending-img-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.7);
+  color: #fff;
+  border: none;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-shadow: none;
+}
+.pending-img-remove:hover { background: rgba(220,50,50,0.8); }
+
+/* Images inside sent user messages */
+.msg-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.msg-img {
+  max-width: 200px;
+  max-height: 200px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.1);
 }
 </style>
