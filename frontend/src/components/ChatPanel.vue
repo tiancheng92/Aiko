@@ -463,7 +463,12 @@ defineExpose({ focusInput, scrollToBottom })
         <div class="bubble-wrap" :class="{ ghost: m.ghost }">
           <div class="bubble-row">
             <!-- Bubble content -->
-            <div v-if="m.role !== 'assistant'" class="bubble markdown" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')"></div>
+            <div v-if="m.role !== 'assistant'" class="bubble markdown" :class="{ 'has-images': m.images && m.images.length > 0 }">
+              <div v-if="m.images && m.images.length > 0" class="msg-images">
+                <img v-for="(img, imgIdx) in m.images" :key="imgIdx" :src="img" class="msg-img" />
+              </div>
+              <div v-if="m.content" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')"></div>
+            </div>
             <template v-else>
               <div v-if="m.thinking || (m.streaming && !renderMarkdown(m.content))" :class="['bubble', 'thinking-bubble', { proactive: m.isProactive }]">
                 <span class="dot" /><span class="dot" /><span class="dot" />
@@ -494,10 +499,6 @@ defineExpose({ focusInput, scrollToBottom })
                 <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
               </button>
             </div>
-          </div>
-          <!-- Images below the text bubble, inside bubble-wrap so alignment follows user/assistant side -->
-          <div v-if="m.images && m.images.length > 0" class="msg-images">
-            <img v-for="(img, imgIdx) in m.images" :key="imgIdx" :src="img" class="msg-img" />
           </div>
           <div v-if="m.time && !m.streaming && !m.thinking" class="msg-time">{{ formatTime(m.time) }}</div>
         </div>
@@ -584,6 +585,11 @@ defineExpose({ focusInput, scrollToBottom })
   color: #fff;
   border-radius: 16px 16px 4px 16px;
   box-shadow: 0 2px 12px rgba(3, 105, 161, 0.4);
+}
+.user .bubble.has-images {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 /* Assistant bubble */
