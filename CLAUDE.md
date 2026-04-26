@@ -118,7 +118,7 @@ wails generate module  # 重新生成 Wails bindings
 ### macOS 平台特定
 - `macos.go` 中的 Objective-C 代码负责按像素判断鼠标事件响应，实现点击穿透功能
 - **⚠️ 不要随意修改 hitTest 逻辑**，容易破坏点击穿透机制
-- hitTest JS 选择器：`.live2d-pet,.chat-bubble,.settings-win,.ctx-menu,.notif-bubble,.lightbox`——新增可交互的全屏覆盖层时必须加入此列表，否则鼠标事件会穿透到桌面
+- hitTest JS 选择器：`.live2d-pet,.chat-bubble,.settings-win,.ctx-menu,.notif-bubble,.lightbox,.tool-confirm-modal,.execution-progress`——新增可交互的全屏覆盖层时必须加入此列表，否则鼠标事件会穿透到桌面
 - `macos.go` 同时包含全局 Option 键监控：双击切换气泡，长按 ≥1s 触发语音录音（`startVoiceRecognition` / `stopVoiceRecognition`）
 - 语音识别使用 `AVAudioEngine` + `SFSpeechRecognizer`，partial 结果通过 voice pipe 推送 `voice:transcript` Wails 事件；`isFinal` 结果推送 `FINAL:<text>` → Go goroutine 转为 `voice:final` 事件
 - **voice:final vs voice:end**：`voice:end` 在 Option 释放时立即触发（停止 UI 动画）；`voice:final` 在 SFSpeechRecognition 异步完成后触发（携带最终文字）。若 `VoiceAutoSend` 开启，ChatPanel 收到 `voice:final` 后自动调用 `send()`
@@ -203,6 +203,9 @@ wails generate module  # 重新生成 Wails bindings
 - ✅ 应用控制（`list_running_apps` / `control_app`，osascript 激活/退出 App）
 - ✅ macOS 日历读写（`get_calendar_events` / `create_calendar_event`，osascript 读取事件、创建新事件）
 - ✅ 聊天框图片粘贴（粘贴或拖入图片，发送给多模态模型；消息气泡内展示缩略图；点击灯箱全屏预览）
+- ✅ 文件系统工具（`list_directory` / `read_file` / `write_file` / `delete_file` / `make_directory` / `move_file`，路径白名单访问控制）
+- ✅ Shell 执行工具（`execute_shell`，eino interrupt/resume 用户二次确认，可编辑命令，超时可配置）
+- ✅ 代码执行工具（`execute_code`，支持 python/node/ruby/bash，eino interrupt/resume 用户二次确认）
 - ⚠️ 仅支持 macOS（使用私有 API，不兼容 App Store）
 - ❌ Windows/Linux 支持（开发中）
 
@@ -217,4 +220,4 @@ wails generate module  # 重新生成 Wails bindings
 
 ---
 
-*最后更新：2026-04-26*
+*最后更新：2026-04-26（新增文件系统/Shell/代码执行工具）*

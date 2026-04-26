@@ -22,6 +22,10 @@ export function ClearChatHistory() {
   return window['go']['main']['App']['ClearChatHistory']();
 }
 
+export function ConfirmToolExecution(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ConfirmToolExecution'](arg1, arg2, arg3);
+}
+
 export function CreateCronJob(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['CreateCronJob'](arg1, arg2, arg3, arg4);
 }
@@ -126,6 +130,10 @@ export function IsSMSWatcherRunning() {
   return window['go']['main']['App']['IsSMSWatcherRunning']();
 }
 
+export function KillToolExecution(arg1) {
+  return window['go']['main']['App']['KillToolExecution'](arg1);
+}
+
 export function LarkRunCommand(arg1) {
   return window['go']['main']['App']['LarkRunCommand'](arg1);
 }
@@ -168,6 +176,10 @@ export function MarkWelcomeShown() {
 
 export function MissingRequiredConfig() {
   return window['go']['main']['App']['MissingRequiredConfig']();
+}
+
+export function OpenDirectoryDialog(arg1) {
+  return window['go']['main']['App']['OpenDirectoryDialog'](arg1);
 }
 
 export function OpenFileDialog(arg1, arg2) {

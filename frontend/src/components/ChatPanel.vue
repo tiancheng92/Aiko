@@ -18,6 +18,8 @@ import 'highlight.js/styles/github-dark.css'
 import { useSounds } from '../composables/useSounds'
 import { useTypingScheduler } from '../composables/useTypingScheduler'
 import { GetSoundsEnabled } from '../../wailsjs/go/main/App'
+import ToolConfirmModal from './ToolConfirmModal.vue'
+import ExecutionProgress from './ExecutionProgress.vue'
 
 hljs.registerLanguage('javascript', javascript)
 hljs.registerLanguage('typescript', typescript)
@@ -518,6 +520,12 @@ defineExpose({ focusInput, scrollToBottom })
         <img :src="lightboxSrc" class="lightbox-img" @click.stop />
       </div>
     </Teleport>
+
+      <!-- Tool execution confirmation modal -->
+      <ToolConfirmModal />
+
+      <!-- In-chat progress indicators for running tools -->
+      <ExecutionProgress />
 
       <!-- Voice recording status bar -->
       <div v-if="isRecording" class="voice-hint-bar">

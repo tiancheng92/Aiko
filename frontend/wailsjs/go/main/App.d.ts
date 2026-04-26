@@ -20,6 +20,8 @@ export function ChatDirectCollect(arg1:context.Context,arg2:string):Promise<stri
 
 export function ClearChatHistory():Promise<void>;
 
+export function ConfirmToolExecution(arg1:string,arg2:boolean,arg3:string):Promise<void>;
+
 export function CreateCronJob(arg1:string,arg2:string,arg3:string,arg4:string):Promise<scheduler.Job>;
 
 export function DeleteCronJob(arg1:number):Promise<void>;
@@ -72,6 +74,8 @@ export function IsFirstLaunch():Promise<boolean>;
 
 export function IsSMSWatcherRunning():Promise<boolean>;
 
+export function KillToolExecution(arg1:string):Promise<void>;
+
 export function LarkRunCommand(arg1:string):Promise<string>;
 
 export function LarkStatus():Promise<string>;
@@ -93,6 +97,8 @@ export function ListProactiveItems():Promise<Array<proactive.Item>>;
 export function MarkWelcomeShown():Promise<void>;
 
 export function MissingRequiredConfig():Promise<Array<string>>;
+
+export function OpenDirectoryDialog(arg1:string):Promise<string>;
 
 export function OpenFileDialog(arg1:string,arg2:Array<frontend.FileFilter>):Promise<string>;
 

@@ -4,7 +4,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import {
   GetConfig, SaveConfig,
   ImportKnowledge, ListKnowledgeSources, DeleteKnowledgeSource,
-  OpenFileDialog, GetToolPermissions, SetToolPermission,
+  OpenFileDialog, OpenDirectoryDialog, GetToolPermissions, SetToolPermission,
   ListLLMModels,
   ListMCPServers, AddMCPServer, UpdateMCPServer, DeleteMCPServer,
   ListCronJobs, CreateCronJob, UpdateCronJob, DeleteCronJob, SetCronJobEnabled, RunCronJobNow,
@@ -463,6 +463,20 @@ async function deleteMCPServer(id) {
   }
 }
 
+/** addPath opens a directory picker and appends the selected path to AllowedPaths. */
+async function addPath() {
+  const selected = await OpenDirectoryDialog('选择允许访问的目录')
+  if (selected && !localCfg.value.AllowedPaths?.includes(selected)) {
+    if (!localCfg.value.AllowedPaths) localCfg.value.AllowedPaths = []
+    localCfg.value.AllowedPaths.push(selected)
+  }
+}
+
+/** removePath removes the path at the given index from AllowedPaths. */
+function removePath(index) {
+  localCfg.value.AllowedPaths.splice(index, 1)
+}
+
 /** toggleMCPServer toggles the enabled state of an MCP server. */
 async function toggleMCPServer(srv) {
   try {
@@ -893,6 +907,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           <div class="sub-tab-bar">
             <button :class="{ active: toolsSubTab === 'mcp' }" @click="toolsSubTab = 'mcp'">MCP 服务器</button>
             <button :class="{ active: toolsSubTab === 'permissions' }" @click="toolsSubTab = 'permissions'">工具权限</button>
+            <button :class="{ active: toolsSubTab === 'settings' }" @click="toolsSubTab = 'settings'">执行设置</button>
           </div>
 
           <!-- MCP 子 tab -->
@@ -982,9 +997,35 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               </div>
             </template>
           </template>
-        </div>
 
-        <!-- 知识库 -->
+          <!-- 执行设置子 tab -->
+          <template v-if="toolsSubTab === 'settings'">
+            <div class="settings-section" style="margin-top:12px">
+              <h3 class="section-title">文件系统访问白名单</h3>
+              <p class="section-hint">留空则禁止所有文件操作</p>
+              <div class="path-list">
+                <div v-for="(p, i) in localCfg.AllowedPaths" :key="i" class="path-row">
+                  <span class="path-text">{{ p }}</span>
+                  <button class="btn-danger-small" @click="removePath(i)">删除</button>
+                </div>
+                <p v-if="!localCfg.AllowedPaths || localCfg.AllowedPaths.length === 0" class="empty-hint">暂无允许路径，文件操作已禁用</p>
+              </div>
+              <button class="btn-small" style="margin-top:8px" @click="addPath">+ 添加路径</button>
+            </div>
+
+            <div class="settings-section" style="margin-top:16px">
+              <h3 class="section-title">执行超时</h3>
+              <div class="form-row">
+                <label>Shell 超时（秒）</label>
+                <input type="number" v-model.number="localCfg.ShellTimeout" min="1" max="3600" class="short-input" />
+              </div>
+              <div class="form-row">
+                <label>代码执行超时（秒）</label>
+                <input type="number" v-model.number="localCfg.CodeTimeout" min="1" max="3600" class="short-input" />
+              </div>
+            </div>
+          </template>
+        </div>
         <div v-if="activeTab === 'knowledge'" class="tab-pane">
           <button @click="importFile" :disabled="!!importProgress">导入文件</button>
           <div v-if="importProgress" class="progress">

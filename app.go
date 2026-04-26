@@ -909,6 +909,13 @@ func (a *App) OpenFileDialog(title string, filters []wailsruntime.FileFilter) (s
 	})
 }
 
+// OpenDirectoryDialog opens a native directory picker and returns the selected path.
+func (a *App) OpenDirectoryDialog(title string) (string, error) {
+	return wailsruntime.OpenDirectoryDialog(a.ctx, wailsruntime.OpenDialogOptions{
+		Title: title,
+	})
+}
+
 // GetScreenSize returns the primary screen's [width, height] in pixels.
 func (a *App) GetScreenSize() []int {
 	screens, err := wailsruntime.ScreenGetAll(a.ctx)
