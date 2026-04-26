@@ -5,7 +5,8 @@
   "info": {
     "productName": "Aiko",
     "productVersion": "1.0.0",
-    "copyright": "Copyright © 2025 xutiancheng"
+    "copyright": "Copyright © 2025 xutiancheng",
+    "bundleidentifier": "com.xutiancheng.aiko"
   },
   "frontend:install": "yarn install",
   "frontend:build": "yarn build",

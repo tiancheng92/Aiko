@@ -12,9 +12,9 @@ import (
 // Item is a single scheduled proactive message.
 type Item struct {
 	ID        int64
-	TriggerAt time.Time
+	TriggerAt string // RFC3339; string so Wails can generate TS bindings
 	Prompt    string
-	CreatedAt time.Time
+	CreatedAt string // RFC3339; string so Wails can generate TS bindings
 }
 
 // Store is the interface for managing scheduled proactive items.
@@ -95,8 +95,8 @@ func scanItems(rows *sql.Rows) ([]Item, error) {
 		if err := rows.Scan(&it.ID, &trigStr, &it.Prompt, &createdStr); err != nil {
 			return nil, fmt.Errorf("scan item: %w", err)
 		}
-		it.TriggerAt = parseDBTime(trigStr)
-		it.CreatedAt = parseDBTime(createdStr)
+		it.TriggerAt = parseDBTime(trigStr).UTC().Format(time.RFC3339)
+		it.CreatedAt = parseDBTime(createdStr).UTC().Format(time.RFC3339)
 		items = append(items, it)
 	}
 	return items, rows.Err()

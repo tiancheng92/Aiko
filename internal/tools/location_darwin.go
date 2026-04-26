@@ -4,7 +4,7 @@
 package tools
 
 /*
-#cgo CFLAGS: -x objective-c
+#cgo CFLAGS: -x objective-c -mmacosx-version-min=11.0
 #cgo LDFLAGS: -framework CoreLocation -framework Foundation
 
 #import <CoreLocation/CoreLocation.h>

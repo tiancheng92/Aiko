@@ -103,7 +103,8 @@ func (e *ProactiveEngine) Poll(ctx context.Context) {
 			continue
 		}
 		// Drop items that are more than fireDeadline past their trigger time.
-		if time.Now().UTC().Sub(item.TriggerAt) > fireDeadline {
+		triggerAt, _ := time.Parse(time.RFC3339, item.TriggerAt)
+		if time.Now().UTC().Sub(triggerAt) > fireDeadline {
 			slog.Info("proactive poll: item expired, dropped", "id", item.ID, "trigger_at", item.TriggerAt)
 			continue
 		}
