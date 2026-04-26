@@ -4,7 +4,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import {
   GetConfig, SaveConfig,
   ImportKnowledge, ListKnowledgeSources, DeleteKnowledgeSource,
-  OpenFileDialog, OpenDirectoryDialog, GetToolPermissions, SetToolPermission,
+  OpenFileDialog, GetToolPermissions, SetToolPermission,
   ListLLMModels,
   ListMCPServers, AddMCPServer, UpdateMCPServer, DeleteMCPServer,
   ListCronJobs, CreateCronJob, UpdateCronJob, DeleteCronJob, SetCronJobEnabled, RunCronJobNow,
@@ -39,6 +39,9 @@ const cfg = ref({
   ActiveProfileID: 0,
   VoiceAutoSend: false,
   SoundsEnabled: false,
+  AllowedPaths: [],
+  ShellTimeout: 30,
+  CodeTimeout: 60,
 })
 const { availableModels, loadModels } = useModelPath()
 const toolPerms = ref([])   // [{ ToolName, Level, Granted }]
@@ -47,8 +50,9 @@ const importProgress = ref(null)
 const saving = ref(false)
 const statusMsg = ref('')
 const activeTab = ref('model')  // 'model' | 'ai' | 'appearance' | 'tools' | 'knowledge' | 'automation' | 'lark' | 'sms'
-const toolsSubTab = ref('mcp')         // 'mcp' | 'permissions'
+const toolsSubTab = ref('mcp')         // 'mcp' | 'permissions' | 'settings'
 const automationSubTab = ref('cron')   // 'cron' | 'proactive'
+const newPathInput = ref('')           // input buffer for adding allowed paths
 
 const llmModels = ref([])       // fetched from /v1/models
 const fetchingModels = ref(false)
@@ -463,18 +467,20 @@ async function deleteMCPServer(id) {
   }
 }
 
-/** addPath opens a directory picker and appends the selected path to AllowedPaths. */
-async function addPath() {
-  const selected = await OpenDirectoryDialog('选择允许访问的目录')
-  if (selected && !localCfg.value.AllowedPaths?.includes(selected)) {
-    if (!localCfg.value.AllowedPaths) localCfg.value.AllowedPaths = []
-    localCfg.value.AllowedPaths.push(selected)
+/** addPath appends a manually entered path (supports globs) to AllowedPaths. */
+function addPath() {
+  const p = newPathInput.value.trim()
+  if (!p) return
+  if (!cfg.value.AllowedPaths) cfg.value.AllowedPaths = []
+  if (!cfg.value.AllowedPaths.includes(p)) {
+    cfg.value.AllowedPaths.push(p)
   }
+  newPathInput.value = ''
 }
 
 /** removePath removes the path at the given index from AllowedPaths. */
 function removePath(index) {
-  localCfg.value.AllowedPaths.splice(index, 1)
+  cfg.value.AllowedPaths.splice(index, 1)
 }
 
 /** toggleMCPServer toggles the enabled state of an MCP server. */
@@ -1002,26 +1008,34 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           <template v-if="toolsSubTab === 'settings'">
             <div class="settings-section" style="margin-top:12px">
               <h3 class="section-title">文件系统访问白名单</h3>
-              <p class="section-hint">留空则禁止所有文件操作</p>
+              <p class="section-hint">留空则禁止所有文件操作，支持通配符（如 /Users/me/projects/*）</p>
               <div class="path-list">
-                <div v-for="(p, i) in localCfg.AllowedPaths" :key="i" class="path-row">
+                <div v-for="(p, i) in cfg.AllowedPaths" :key="i" class="path-row">
                   <span class="path-text">{{ p }}</span>
                   <button class="btn-danger-small" @click="removePath(i)">删除</button>
                 </div>
-                <p v-if="!localCfg.AllowedPaths || localCfg.AllowedPaths.length === 0" class="empty-hint">暂无允许路径，文件操作已禁用</p>
+                <p v-if="!cfg.AllowedPaths || cfg.AllowedPaths.length === 0" class="empty-hint">暂无允许路径，文件操作已禁用</p>
               </div>
-              <button class="btn-small" style="margin-top:8px" @click="addPath">+ 添加路径</button>
+              <div class="path-add-row" style="margin-top:8px">
+                <input
+                  v-model="newPathInput"
+                  class="path-input"
+                  placeholder="/Users/me/projects 或 /tmp/*"
+                  @keydown.enter="addPath"
+                />
+                <button class="btn-small" @click="addPath">添加</button>
+              </div>
             </div>
 
             <div class="settings-section" style="margin-top:16px">
               <h3 class="section-title">执行超时</h3>
               <div class="form-row">
                 <label>Shell 超时（秒）</label>
-                <input type="number" v-model.number="localCfg.ShellTimeout" min="1" max="3600" class="short-input" />
+                <input type="number" v-model.number="cfg.ShellTimeout" min="1" max="3600" class="short-input" />
               </div>
               <div class="form-row">
                 <label>代码执行超时（秒）</label>
-                <input type="number" v-model.number="localCfg.CodeTimeout" min="1" max="3600" class="short-input" />
+                <input type="number" v-model.number="cfg.CodeTimeout" min="1" max="3600" class="short-input" />
               </div>
             </div>
           </template>
@@ -2026,5 +2040,45 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
   letter-spacing: 0.5px;
   margin-bottom: 10px;
   margin-top: 16px;
+}
+.path-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.path-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  padding: 5px 10px;
+}
+.path-text {
+  flex: 1;
+  font-family: monospace;
+  font-size: 12px;
+  color: #ccc;
+  word-break: break-all;
+}
+.path-add-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.path-input {
+  flex: 1;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-family: monospace;
+  font-size: 12px;
+  padding: 5px 10px;
+  outline: none;
+}
+.path-input:focus {
+  border-color: rgba(120,160,255,0.4);
 }
 </style>

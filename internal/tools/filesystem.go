@@ -13,14 +13,33 @@ import (
 )
 
 // isPathAllowed reports whether absTarget is inside at least one of the allowed paths.
+// Allowed paths may contain glob patterns (e.g. /Users/me/projects/*); in that case
+// filepath.Match is used against the target path and each of its parent directories.
 func isPathAllowed(absTarget string, allowedPaths []string) bool {
 	for _, allowed := range allowedPaths {
-		abs, err := filepath.Abs(allowed)
-		if err != nil {
+		// If the pattern contains no glob metacharacters, use prefix matching.
+		if !strings.ContainsAny(allowed, "*?[") {
+			abs, err := filepath.Abs(allowed)
+			if err != nil {
+				continue
+			}
+			if strings.HasPrefix(absTarget, abs+string(filepath.Separator)) || absTarget == abs {
+				return true
+			}
 			continue
 		}
-		if strings.HasPrefix(absTarget, abs+string(filepath.Separator)) || absTarget == abs {
-			return true
+		// Glob pattern: check whether absTarget or any of its ancestors matches.
+		check := absTarget
+		for {
+			matched, err := filepath.Match(allowed, check)
+			if err == nil && matched {
+				return true
+			}
+			parent := filepath.Dir(check)
+			if parent == check {
+				break
+			}
+			check = parent
 		}
 	}
 	return false

@@ -12,7 +12,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	localbk "github.com/cloudwego/eino-ext/adk/backend/local"
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/adk/prebuilt/deep"
 	"github.com/cloudwego/eino/components/model"
@@ -106,11 +105,6 @@ func New(
 		tools = middleware.WrapAll(tools, mw)
 	}
 
-	backend, err := localbk.NewBackend(ctx, &localbk.Config{})
-	if err != nil {
-		return nil, err
-	}
-
 	var handlers []adk.ChatModelAgentMiddleware
 	if skillMW != nil {
 		handlers = append(handlers, skillMW)
@@ -122,8 +116,6 @@ func New(
 		Instruction:    cfg.SystemPrompt,
 		ChatModel:      chatModel,
 		MaxIteration:   30,
-		Backend:        backend,
-		StreamingShell: backend,
 		Handlers:       handlers,
 		ModelRetryConfig: &adk.ModelRetryConfig{
 			MaxRetries: 5,
