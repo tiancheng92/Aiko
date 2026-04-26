@@ -58,11 +58,26 @@ func parseCalDateTime(s string) (calDateComponents, error) {
 
 // appleScriptDateBlock emits the AppleScript snippet that constructs a date
 // object into the given variable name, locale-independently.
+// Day is reset to 1 before setting the month to avoid overflow when the
+// current machine day (e.g. 31) exceeds the target month's length.
 func appleScriptDateBlock(varName string, c calDateComponents) string {
 	return fmt.Sprintf(
-		"set %s to current date\n\tset year of %s to %d\n\tset month of %s to %d\n\tset day of %s to %d\n\tset time of %s to %d",
-		varName, varName, c.Year, varName, c.Month, varName, c.Day, varName, c.Seconds,
+		"set %s to current date\n\tset year of %s to %d\n\tset day of %s to 1\n\tset month of %s to %d\n\tset day of %s to %d\n\tset time of %s to %d",
+		varName,
+		varName, c.Year,
+		varName,
+		varName, c.Month,
+		varName, c.Day,
+		varName, c.Seconds,
 	)
+}
+
+// escapeAppleScriptString escapes double-quotes and backslashes in a string
+// so it is safe to embed inside an AppleScript double-quoted literal.
+func escapeAppleScriptString(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	return s
 }
 
 // InvokableRun queries Calendar.app for events in the given date range.
@@ -85,13 +100,15 @@ func (t *GetCalendarEventsTool) InvokableRun(_ context.Context, input string, _ 
 		return fmt.Sprintf("日期格式错误：%s", err.Error()), nil
 	}
 
+	// Build calendar name filter using else-branch to skip non-matching calendars
+	// (AppleScript has no continue statement).
 	calFilter := ""
 	if calName != "" {
-		calFilter = fmt.Sprintf(`if name of cal is not "%s" then
-			set i to i + 1
-			repeat
-			end repeat
-		end if`, calName)
+		calFilter = fmt.Sprintf(`if name of cal is "%s" then`, escapeAppleScriptString(calName))
+	}
+	calFilterEnd := ""
+	if calName != "" {
+		calFilterEnd = "end if"
 	}
 
 	script := fmt.Sprintf(`
@@ -100,10 +117,8 @@ tell application "Calendar"
 	%s
 	set output to ""
 	set calList to every calendar
-	set i to 1
 	repeat with cal in calList
 		%s
-		set calName to name of cal
 		set evList to (every event of cal whose start date >= startDate and start date <= endDate)
 		repeat with ev in evList
 			set evTitle to summary of ev
@@ -121,14 +136,15 @@ tell application "Calendar"
 			end try
 			set output to output & evTitle & "||" & evStart & "||" & evEnd & "||" & evLoc & "||" & evNotes & "|||"
 		end repeat
-		set i to i + 1
+		%s
 	end repeat
 	if output is "" then return "（该时间段内没有日历事件）"
 	return output
 end tell`,
 		appleScriptDateBlock("startDate", startComp),
 		appleScriptDateBlock("endDate", endComp),
-		calFilter)
+		calFilter,
+		calFilterEnd)
 
 	raw, err := runAppleScript(script)
 	if err != nil {
@@ -189,7 +205,7 @@ func (t *CreateCalendarEventTool) InvokableRun(_ context.Context, input string, 
 	// Resolve target calendar: use named calendar or default (first writable).
 	var calResolve string
 	if calName != "" {
-		calResolve = fmt.Sprintf(`set targetCal to first calendar whose name is "%s"`, calName)
+		calResolve = fmt.Sprintf(`set targetCal to first calendar whose name is "%s"`, escapeAppleScriptString(calName))
 	} else {
 		calResolve = `set targetCal to first calendar`
 	}
@@ -206,7 +222,9 @@ end tell`,
 		calResolve,
 		appleScriptDateBlock("evStart", startComp),
 		appleScriptDateBlock("evEnd", endComp),
-		title, location, notes)
+		escapeAppleScriptString(title),
+		escapeAppleScriptString(location),
+		escapeAppleScriptString(notes))
 
 	result, err := runAppleScript(script)
 	if err != nil {
