@@ -253,6 +253,139 @@ func drainRunner(ctx context.Context, runner *adk.Runner, query string, ch chan<
 	return sb.String(), true
 }
 
+// drainRunnerMsg consumes all events from runner.Run with a pre-built Message,
+// forwards tokens to ch, and returns the accumulated response string.
+// Returns (response, true) on success or ("", false) after sending an error to ch.
+func drainRunnerMsg(ctx context.Context, runner *adk.Runner, msg *schema.Message, ch chan<- StreamResult) (string, bool) {
+	iter := runner.Run(ctx, []adk.Message{msg})
+	var sb strings.Builder
+
+	for {
+		event, ok := iter.Next()
+		if !ok {
+			break
+		}
+		if event.Err != nil {
+			ch <- StreamResult{Err: event.Err}
+			return "", false
+		}
+		if event.Output == nil || event.Output.MessageOutput == nil {
+			continue
+		}
+
+		mo := event.Output.MessageOutput
+		if mo.IsStreaming {
+			for {
+				m, recvErr := mo.MessageStream.Recv()
+				if recvErr != nil {
+					if recvErr == io.EOF {
+						break
+					}
+					ch <- StreamResult{Err: recvErr}
+					return "", false
+				}
+				if m == nil || m.Content == "" {
+					continue
+				}
+				if m.Role == schema.Tool || len(m.ToolCalls) > 0 {
+					continue
+				}
+				ch <- StreamResult{Token: m.Content}
+				sb.WriteString(m.Content)
+			}
+		} else if mo.Message != nil && mo.Message.Content != "" {
+			if mo.Message.Role != schema.Tool && len(mo.Message.ToolCalls) == 0 {
+				ch <- StreamResult{Token: mo.Message.Content}
+				sb.WriteString(mo.Message.Content)
+			}
+		}
+	}
+	return sb.String(), true
+}
+
+// extractTextFromMessage returns the plain text from a Message's Content or
+// the first text part in UserInputMultiContent. Used as memory key and query.
+func extractTextFromMessage(msg *schema.Message) string {
+	if msg.Content != "" {
+		return msg.Content
+	}
+	for _, p := range msg.UserInputMultiContent {
+		if p.Type == schema.ChatMessagePartTypeText && p.Text != "" {
+			return p.Text
+		}
+	}
+	return ""
+}
+
+// sanitiseForMemory returns a plain-text representation of the user message
+// suitable for storing in short-term memory. Image parts are replaced by a
+// "[图片×N]" placeholder to avoid bloating the memory store with base64 data.
+func sanitiseForMemory(msg *schema.Message) string {
+	text := extractTextFromMessage(msg)
+	imageCount := 0
+	for _, p := range msg.UserInputMultiContent {
+		if p.Type == schema.ChatMessagePartTypeImageURL {
+			imageCount++
+		}
+	}
+	if imageCount > 0 {
+		return fmt.Sprintf("%s [图片×%d]", text, imageCount)
+	}
+	return text
+}
+
+// ChatWithMessage sends a pre-built user Message (which may contain images via
+// UserInputMultiContent) to the agent and streams tokens via the returned channel.
+// After streaming, user input and assistant reply are persisted to short-term
+// memory with image parts replaced by placeholder text.
+func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan StreamResult {
+	ch := make(chan StreamResult, 64)
+
+	go func() {
+		defer close(ch)
+		defer func() {
+			if r := recover(); r != nil {
+				ch <- StreamResult{Err: fmt.Errorf("agent panic: %v", r)}
+			}
+		}()
+
+		userText := extractTextFromMessage(msg)
+		history, err := a.buildHistoryPrefix(ctx, userText)
+		if err != nil {
+			ch <- StreamResult{Err: err}
+			return
+		}
+
+		// Prepend history into the message before sending.
+		sendMsg := *msg
+		if history != "" {
+			if sendMsg.Content != "" {
+				sendMsg.Content = history + "\nUser: " + sendMsg.Content
+			} else {
+				histPart := schema.MessageInputPart{
+					Type: schema.ChatMessagePartTypeText,
+					Text: history + "\nUser: ",
+				}
+				sendMsg.UserInputMultiContent = append(
+					[]schema.MessageInputPart{histPart},
+					sendMsg.UserInputMultiContent...,
+				)
+			}
+		}
+
+		fullResponse, ok := drainRunnerMsg(ctx, a.runner, &sendMsg, ch)
+		if !ok {
+			return
+		}
+
+		ch <- StreamResult{Done: true}
+		userMemory := sanitiseForMemory(msg)
+		go a.persistAndMigrate(context.Background(), userMemory, fullResponse)
+	}()
+
+	return ch
+}
+
 // buildHistoryPrefix returns recent conversation history as a formatted string,
 // prepended with USER.md profile (if available) and a self-growth nudge (if due).
 // Returns empty string if no history exists or an error occurs.
