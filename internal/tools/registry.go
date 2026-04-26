@@ -8,6 +8,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 
+	"aiko/internal/config"
 	"aiko/internal/knowledge"
 	"aiko/internal/memory"
 	"aiko/internal/scheduler"
@@ -153,6 +154,9 @@ func AllContextual(
 	sched *scheduler.Scheduler,
 	longMem *memory.LongStore,
 	dataDir string,
+	cfg *config.Config,
+	registerCmd func(id string, cancel func()),
+	unregisterCmd func(id string),
 ) []tool.BaseTool {
 	contextTools := []Tool{
 		&SearchKnowledgeTool{KnowledgeSt: knowledgeSt},
@@ -160,6 +164,16 @@ func AllContextual(
 		&SaveMemoryTool{LongMem: longMem},
 		&UpdateUserProfileTool{DataDir: dataDir},
 		&SaveSkillTool{DataDir: dataDir},
+		// File system tools
+		&ListDirectoryTool{Cfg: cfg},
+		&ReadFileTool{Cfg: cfg},
+		&WriteFileTool{Cfg: cfg},
+		&DeleteFileTool{Cfg: cfg},
+		&MakeDirectoryTool{Cfg: cfg},
+		&MoveFileTool{Cfg: cfg},
+		// Execution tools
+		&ExecuteShellTool{Cfg: cfg, RegisterCmd: registerCmd, UnregisterCmd: unregisterCmd},
+		&ExecuteCodeTool{Cfg: cfg, RegisterCmd: registerCmd, UnregisterCmd: unregisterCmd},
 	}
 	result := make([]tool.BaseTool, len(contextTools))
 	for i, t := range contextTools {

@@ -70,6 +70,7 @@ type App struct {
 	ttsGeneration   uint64             // incremented on each SpeakText call; used to avoid stale cancel nils
 	isChatVisible   bool               // tracks whether the chat panel is open; guarded by mu
 	proactiveEngine *proactive.ProactiveEngine
+	runningCmds     sync.Map
 }
 
 // NewApp creates a new App instance.
@@ -342,7 +343,22 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		slog.Error("scheduler start failed", "err", err)
 	}
 
-	contextTools := internaltools.AllContextual(a.permStore, knowledgeSt, sched, longMem, dataDir)
+	contextTools := internaltools.AllContextual(
+		a.permStore,
+		knowledgeSt,
+		sched,
+		longMem,
+		dataDir,
+		a.cfg,
+		func(id string, cancel func()) {
+			a.runningCmds.Store(id, cancel)
+			wailsruntime.EventsEmit(a.ctx, "tool:executing", map[string]interface{}{"id": id})
+		},
+		func(id string) {
+			a.runningCmds.Delete(id)
+			wailsruntime.EventsEmit(a.ctx, "tool:executed", map[string]interface{}{"id": id})
+		},
+	)
 	mcpTools := mcp.LoadTools(ctx, a.mcpStore)
 	proactiveStore := proactive.NewStore(a.sqlDB)
 	followupTool := internaltools.ToEino(proactive.NewScheduleFollowupTool(proactiveStore), a.permStore)
