@@ -85,9 +85,16 @@ func (s *PermissionStore) ListAll(ctx context.Context) ([]PermissionRow, error) 
 	return result, rows.Err()
 }
 
+// namedPerm is a minimal interface for tools that provide a name and permission
+// level. Used by EnsureRow so both Tool and EnhancedTool can register rows.
+type namedPerm interface {
+	Name() string
+	Permission() PermissionLevel
+}
+
 // EnsureRow inserts a row for t if one does not already exist, recording its
 // permission level. This is called at startup so ListAll returns complete data.
-func (s *PermissionStore) EnsureRow(ctx context.Context, t Tool) error {
+func (s *PermissionStore) EnsureRow(ctx context.Context, t namedPerm) error {
 	_, err := s.db.ExecContext(ctx, `
 		INSERT OR IGNORE INTO tool_permissions(tool_name, permission_level, granted)
 		VALUES(?, ?, ?)

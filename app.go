@@ -212,6 +212,8 @@ func (a *App) startup(ctx context.Context) {
 	} {
 		_ = a.permStore.EnsureRow(toolsCtx, t)
 	}
+	// Enhanced tools (EnhancedInvokableTool) also need permission rows.
+	_ = a.permStore.EnsureRow(toolsCtx, &internaltools.TakeScreenshotTool{})
 
 	vectorPath := filepath.Join(dataDir, "vectors")
 	a.vectorDB, err = chromem.NewPersistentDB(vectorPath, false)
