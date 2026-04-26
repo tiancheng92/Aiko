@@ -128,6 +128,10 @@ func All() []Tool {
 		&WriteClipboardTool{},
 		&ListRunningAppsTool{},
 		&ControlAppTool{},
+		&GetCalendarEventsTool{},
+		&CreateCalendarEventTool{},
+		&GetActiveWindowInfoTool{},
+		&OcrScreenTool{},
 	}
 }
 

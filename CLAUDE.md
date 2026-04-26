@@ -201,6 +201,9 @@ wails generate module  # 重新生成 Wails bindings
 - ✅ 剪贴板读写（`read_clipboard` / `write_clipboard` 工具）
 - ✅ 截图工具（`take_screenshot`，EnhancedInvokableTool，返回 PNG base64 图片）
 - ✅ 应用控制（`list_running_apps` / `control_app`，osascript 激活/退出 App）
+- ✅ macOS 日历读写（`get_calendar_events` / `create_calendar_event`，osascript 读取事件、创建新事件）
+- ✅ 前台窗口上下文（`get_active_window_info`，App 名称、窗口标题、选中文字）
+- ✅ 屏幕 OCR（`ocr_screen`，screencapture + macOS Vision 框架，支持中英日文）
 - ✅ 聊天框图片粘贴（粘贴或拖入图片，发送给多模态模型；消息气泡内展示缩略图；点击灯箱全屏预览）
 - ⚠️ 仅支持 macOS（使用私有 API，不兼容 App Store）
 - ❌ Windows/Linux 支持（开发中）
