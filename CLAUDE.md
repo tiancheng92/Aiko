@@ -49,7 +49,7 @@ main.go → app.go (Wails bindings)
 **前端架构：**
 ```
 frontend/src/
-├── components/        # Vue 组件 (ChatPanel, SettingsWindow, etc.)
+├── components/        # Vue 组件 (ChatPanel, ChatBubble, SettingsWindow, etc.)
 ├── composables/       # 可复用逻辑 (useModelPath.js)
 └── wailsjs/          # Wails 自动生成的 Go 绑定
 ```
@@ -63,6 +63,7 @@ frontend/src/
 - 涉及 `a.petAgent` / `a.longMem` / `a.knowledgeSt` 的字段读写必须持有 `a.mu`（`RLock` 读，`Lock` 写）
 - 新增 Wails 绑定方法写在 `app.go`，签名遵循已有模式
 - 新增内置工具：实现 `internaltools.Tool` 接口，在 `registry.go` 的 `All()` 中注册
+- **Wails 绑定结构体中禁止使用 `time.Time`**，改用 RFC3339 字符串（`string`）——Wails TS 绑定生成器不识别 `time.Time`
 
 ### Vue 前端规范
 
@@ -94,16 +95,22 @@ frontend/src/
 | `voice:error` | backend→frontend | 语音识别错误 |
 | `sms:verification_code` | backend→frontend | 检测到验证码短信 |
 | `config:voice:auto-send:changed` | frontend→frontend | 语音自动发送开关状态变更 |
+| `tool:confirm` | backend→frontend | 工具执行需用户确认（shell/code） |
+| `tool:executing` | backend→frontend | 工具开始执行（显示进度条） |
+| `tool:executed` | backend→frontend | 工具执行结束（隐藏进度条） |
 
 ## 开发命令
 
 ```bash
-wails dev              # 开发模式（前端热重载）
-wails build            # 构建生产 .app
+make run               # 构建 + ad-hoc 签名 + 启动（推荐，权限持久化）
+make build             # 仅构建 + 签名
+wails dev              # 开发模式（前端热重载，权限每次重置）
 go build ./...         # 仅检查 Go 编译
 cd frontend && yarn build   # 仅构建前端资源
 wails generate module  # 重新生成 Wails bindings
 ```
+
+> **权限说明**：使用 `make run` 构建会自动 ad-hoc 签名（`codesign --sign -`），配合 `wails.json` 中固定的 `bundleidentifier: com.xutiancheng.aiko`，macOS TCC 权限授权后跨重新编译持久有效。`wails dev` 不签名，每次重启可能重新弹权限窗。
 
 ## 数据目录结构
 
@@ -126,28 +133,40 @@ wails generate module  # 重新生成 Wails bindings
 
 ### 工具系统
 - 普通工具实现 `Tool` 接口（`InvokableRun(ctx, string) (string, error)`），在 `All()` 中注册，`AllEino()` 自动用 `ToEino()` 包装
-- **多模态工具**（返回图片等）实现 `EnhancedTool` 接口（`InvokableRun(ctx, *schema.ToolArgument) (*schema.ToolResult, error)`），在 `AllEino()` 中用 `ToEinoEnhanced()` 单独注册，**不**放入 `All()`；同时在 `app.go` 启动时手动调用 `permStore.EnsureRow()` 注册权限行（`EnsureRow` 接受 `namedPerm` 接口，普通 Tool 和 EnhancedTool 均满足）
-- 有运行时依赖（知识库、调度器、长期记忆等）的工具在 `AllContextual()` 中注册
+- **有运行时依赖**（知识库、调度器、长期记忆、config 等）的工具在 `AllContextual()` 中注册
+- **多模态工具**（返回图片等）实现 `EnhancedTool` 接口，在 `AllEino()` 中用 `ToEinoEnhanced()` 单独注册，**不**放入 `All()`；同时在 `app.go` 启动时手动调用 `permStore.EnsureRow()` 注册权限行
+- **需要 eino interrupt/resume 的工具**（如 execute_shell / execute_code）：调用 `tool.Interrupt(ctx, info)` 触发中断，info 类型必须用 `gob.Register` 提前注册；`ErrorRecovery` 中间件会放行 `compose.IsInterruptRerunError` 的 error
 - macOS 专属工具用 `//go:build darwin` / `//go:build !darwin` 分平台实现（non-darwin 提供 stub）
-- **osascript 模式**：所有 macOS 系统集成（浏览器 URL、提醒事项等）使用 `exec.Command("osascript", "-e", script)` 子进程方式，**不要使用 CGO AXUIElement / AppKit API**，原因是 Wails 已占用主线程，CGO 的 `dispatch_sync(main_queue)` 会死锁
+- **新工具需在 `app.go` 启动时调用 `permStore.EnsureRow()`**，否则不会出现在工具权限列表
+
+### eino interrupt/resume 流程
+- 工具调用 `tool.Interrupt(ctx, ShellConfirmInfo{...})` → eino 保存 checkpoint，返回 interrupt error
+- `ErrorRecovery` 中间件检测到 `compose.IsInterruptRerunError` 后原样透传（不转字符串）
+- `drainIter` 检测 `event.Action.Interrupted != nil` → 调用 `handleInterrupt`
+- `handleInterrupt` 从 `InterruptContexts` 找 `IsRootCause=true` 的 ctx，读取 `ctx.Info`（类型断言为 `ShellConfirmInfo` / `CodeConfirmInfo`），emit `tool:confirm` 事件给前端
+- 前端确认后调用 `ConfirmToolExecution(id, approved, editedContent)` → 写入 `pendingConfirms` sync.Map
+- `handleInterrupt` 收到响应，调用 `runner.ResumeWithParams(ctx, checkpointID, &adk.ResumeParams{Targets: map[string]any{ictx.ID: ConfirmResult{...}}})`
+- 工具被 resume，`tool.GetResumeContext[ConfirmResult](ctx)` 返回确认结果，执行实际命令
 
 ### 多模态对话
 - `app.go` 的 `SendMessageWithImages(userInput string, images []string)` 接收前端传来的 data URL 数组，解析后构造含图片 part 的 `*schema.Message`，调用 `agent.ChatWithMessage()`
-- `agent.go` 的 `ChatWithMessage()` 通过 `runner.Run(ctx, []adk.Message{msg})` 直接传入预构建消息，再走标准流式输出流程；`sanitiseForMemory()` 在存入短期记忆前将图片 part 替换为 `[图片×N]` 文本占位
-- eino acl/openai 会将 `Base64Data` 序列化为 `data:<mime>;base64,<data>` 格式的 image_url，与 OpenAI 多模态 API 规范一致；若模型报"image input not supported"，是模型端问题而非序列化问题
+- eino acl/openai 会将 `Base64Data` 序列化为 `data:<mime>;base64,<data>` 格式的 image_url，与 OpenAI 多模态 API 规范一致
 
 ### 图片预览灯箱
 - `ChatPanel.vue` 中用 `<Teleport to="body">` 将灯箱挂到 `document.body`，使 `position: fixed` 覆盖整个 viewport 而不受父级限制
 - 灯箱 CSS class `.lightbox` 已加入 `macos.go` hitTest 选择器，鼠标悬停时窗口不会穿透
 
+### 聊天框全屏模式
+- `ChatBubble.vue` 标题栏有全屏切换按钮（`isFullscreen` ref）
+- 全屏时 `.chat-bubble.fullscreen` CSS 覆盖位置/尺寸：`top: 38px`（避让 macOS 菜单栏），`width/height: 100vw/calc(100vh-38px)`
+- `.chat-bubble` 已在 hitTest 选择器中，全屏状态下鼠标不会穿透
+
 ### MCP 热重载
 - `app.go` 的 `AddMCPServer`、`UpdateMCPServer`、`DeleteMCPServer` 在 DB 操作完成后会立即调用 `initLLMComponents` 重建 Agent，使新配置立即生效，无需重启应用
-- 前端设置界面支持编辑已有 MCP 服务器（`editMCPServer` 函数预填充表单，`saveMCPServer` 根据是否有 `id` 决定调 Add 还是 Update）
 
 ### 自我成长系统
 - `NudgeInterval`（配置项）控制 Agent 每隔 N 轮对话后自动触发沉淀提示
-- 相关工具：`save_memory`（保存长期记忆事实）、`update_user_profile`（更新 `~/.aiko/USER.md` 用户画像）、`save_skill`（保存可复用技能到 `~/.aiko/auto-skills/`）
-- 这三个工具在 `AllContextual()` 中注册，需要运行时依赖注入
+- 相关工具：`save_memory`、`update_user_profile`、`save_skill`——在 `AllContextual()` 中注册
 
 ### 并发安全
 - `app.go` 的 `initLLMComponents` 可能并发调用（SaveConfig 触发配置变更时）
@@ -173,6 +192,7 @@ wails generate module  # 重新生成 Wails bindings
 11. **自我成长系统** - 跨会话用户画像、记忆事实、可复用技能自动沉淀
 12. **剪贴板 & 截图工具** - Agent 可读写剪贴板、截图并以图片形式返回多模态结果
 13. **应用控制工具** - Agent 可列出运行中 App、激活或退出指定应用
+14. **文件系统 & 执行工具** - 路径白名单访问控制，shell/代码执行通过 eino interrupt/resume 做用户二次确认
 
 ### 借鉴的优秀项目
 - **架构设计** 借鉴了 [Wails Community Examples](https://github.com/wailsapp/awesome-wails)
@@ -203,9 +223,12 @@ wails generate module  # 重新生成 Wails bindings
 - ✅ 应用控制（`list_running_apps` / `control_app`，osascript 激活/退出 App）
 - ✅ macOS 日历读写（`get_calendar_events` / `create_calendar_event`，osascript 读取事件、创建新事件）
 - ✅ 聊天框图片粘贴（粘贴或拖入图片，发送给多模态模型；消息气泡内展示缩略图；点击灯箱全屏预览）
-- ✅ 文件系统工具（`list_directory` / `read_file` / `write_file` / `delete_file` / `make_directory` / `move_file`，路径白名单访问控制）
+- ✅ 文件系统工具（`list_directory` / `read_file` / `write_file` / `delete_file` / `make_directory` / `move_file`，路径白名单 + glob 支持）
 - ✅ Shell 执行工具（`execute_shell`，eino interrupt/resume 用户二次确认，可编辑命令，超时可配置）
 - ✅ 代码执行工具（`execute_code`，支持 python/node/ruby/bash，eino interrupt/resume 用户二次确认）
+- ✅ 聊天框全屏模式（标题栏全屏按钮，避让 macOS 菜单栏 38px）
+- ✅ ad-hoc 代码签名（`make run` 自动签名，TCC 权限跨重编译持久化）
+- ✅ Bundle ID 固定（`com.xutiancheng.aiko`，解决每次弹权限问题）
 - ⚠️ 仅支持 macOS（使用私有 API，不兼容 App Store）
 - ❌ Windows/Linux 支持（开发中）
 
@@ -220,4 +243,4 @@ wails generate module  # 重新生成 Wails bindings
 
 ---
 
-*最后更新：2026-04-26（新增文件系统/Shell/代码执行工具）*
+*最后更新：2026-04-26（全屏模式、权限持久化、文件系统/Shell/代码执行工具完善）*
