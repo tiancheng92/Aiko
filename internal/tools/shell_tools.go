@@ -3,11 +3,17 @@ package tools
 
 import (
 	"context"
+	"encoding/gob"
 
 	"github.com/cloudwego/eino/schema"
 
 	"aiko/internal/config"
 )
+
+func init() {
+	gob.Register(ShellConfirmInfo{})
+	gob.Register(ConfirmResult{})
+}
 
 // ShellConfirmInfo is the interrupt payload sent to the frontend for user confirmation.
 type ShellConfirmInfo struct {

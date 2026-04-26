@@ -234,6 +234,16 @@ func (a *App) startup(ctx context.Context) {
 		&internaltools.UpdateUserProfileTool{},
 		&internaltools.SaveSkillTool{},
 		&proactive.ScheduleFollowupTool{},
+		// File system tools
+		&internaltools.ListDirectoryTool{},
+		&internaltools.ReadFileTool{},
+		&internaltools.WriteFileTool{},
+		&internaltools.DeleteFileTool{},
+		&internaltools.MakeDirectoryTool{},
+		&internaltools.MoveFileTool{},
+		// Execution tools
+		&internaltools.ExecuteShellTool{},
+		&internaltools.ExecuteCodeTool{},
 	} {
 		_ = a.permStore.EnsureRow(toolsCtx, t)
 	}

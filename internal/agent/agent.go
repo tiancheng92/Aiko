@@ -326,7 +326,11 @@ func drainIter(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIterator[
 
 // handleInterrupt processes an eino interrupt event by notifying the frontend and
 // blocking until the user confirms or rejects. Returns the resume iterator on success,
-// or (nil, nil) if no pendingConfirms is provided, or (nil, err) on failure.
+// or (nil, nil) if interrupt data is unrecognised, or (nil, err) on failure.
+//
+// The resume Targets key is the root-cause InterruptCtx.ID (the fully-qualified
+// component address, e.g. "agent:aiko;node:ToolNode;tool:execute_shell:xxx").
+// The interrupt payload is in InterruptCtx.Info, set by tool.Interrupt().
 func handleInterrupt(
 	ctx context.Context,
 	runner *adk.Runner,
@@ -339,11 +343,12 @@ func handleInterrupt(
 	if pendingConfirms == nil || emitEvent == nil {
 		return nil, nil
 	}
-	if event.Action.Interrupted == nil || len(event.Action.Interrupted.InterruptContexts) == 0 {
+	if event.Action == nil || event.Action.Interrupted == nil ||
+		len(event.Action.Interrupted.InterruptContexts) == 0 {
 		return nil, nil
 	}
 
-	// Find the root-cause interrupt context to use as the resume target.
+	// Find the root-cause interrupt context — its ID is the Targets key for resume.
 	ictx := event.Action.Interrupted.InterruptContexts[0]
 	for _, c := range event.Action.Interrupted.InterruptContexts {
 		if c.IsRootCause {
@@ -351,7 +356,6 @@ func handleInterrupt(
 			break
 		}
 	}
-	interruptID := ictx.ID
 
 	var req ToolConfirmRequest
 	switch info := ictx.Info.(type) {
@@ -366,6 +370,8 @@ func handleInterrupt(
 			Language: info.Language, Code: info.Code, WorkingDir: info.WorkingDir,
 		}
 	default:
+		slog.Warn("handleInterrupt: unrecognized interrupt info type",
+			"type", fmt.Sprintf("%T", ictx.Info), "value", ictx.Info)
 		return nil, nil
 	}
 
@@ -375,25 +381,24 @@ func handleInterrupt(
 
 	emitEvent("tool:confirm", req)
 
-	var resp ToolConfirmResponse
 	select {
-	case resp = <-respCh:
+	case resp := <-respCh:
+		resumeIter, err := runner.ResumeWithParams(ctx, checkpointID, &adk.ResumeParams{
+			Targets: map[string]any{
+				ictx.ID: internaltools.ConfirmResult{
+					Approved:      resp.Approved,
+					EditedContent: resp.EditedContent,
+				},
+			},
+		})
+		if err != nil {
+			ch <- StreamResult{Err: fmt.Errorf("resume failed: %w", err)}
+			return nil, err
+		}
+		return resumeIter, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
-
-	resumeData := map[string]any{
-		interruptID: internaltools.ConfirmResult{
-			Approved:      resp.Approved,
-			EditedContent: resp.EditedContent,
-		},
-	}
-	resumeIter, err := runner.ResumeWithParams(ctx, checkpointID, &adk.ResumeParams{Targets: resumeData})
-	if err != nil {
-		ch <- StreamResult{Err: fmt.Errorf("resume failed: %w", err)}
-		return nil, err
-	}
-	return resumeIter, nil
 }
 
 // extractTextFromMessage returns the plain text from a Message's Content or

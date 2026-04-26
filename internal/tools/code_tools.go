@@ -3,11 +3,16 @@ package tools
 
 import (
 	"context"
+	"encoding/gob"
 
 	"github.com/cloudwego/eino/schema"
 
 	"aiko/internal/config"
 )
+
+func init() {
+	gob.Register(CodeConfirmInfo{})
+}
 
 // CodeConfirmInfo is the interrupt payload sent to the frontend for user confirmation.
 type CodeConfirmInfo struct {

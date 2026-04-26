@@ -61,7 +61,13 @@ onUnmounted(() => {
   offSizeChange?.()
 })
 
-/** pos aligns the bubble's right edge to the ball's right edge, sitting above the ball. */
+const isFullscreen = ref(false)
+
+/** toggleFullscreen switches between normal and fullscreen chat mode. */
+function toggleFullscreen() {
+  isFullscreen.value = !isFullscreen.value
+}
+
 const pos = computed(() => {
   const { x, y } = props.ballPos
   if (x < 0 || y < 0) {
@@ -120,7 +126,8 @@ defineExpose({ focusInput, scrollToBottom })
 <template>
   <div
     class="chat-bubble"
-    :style="{
+    :class="{ fullscreen: isFullscreen }"
+    :style="isFullscreen ? {} : {
       left:   pos.x + 'px',
       top:    pos.y + 'px',
       width:  bubbleW + 'px',
@@ -130,6 +137,10 @@ defineExpose({ focusInput, scrollToBottom })
   >
     <div class="title-bar">
       <span class="title">聊天</span>
+      <button class="icon-btn" @click="toggleFullscreen" :title="isFullscreen ? '退出全屏' : '全屏'">
+        <svg v-if="!isFullscreen" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+        <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>
+      </button>
       <button class="close-btn" @click="$emit('close')">✕</button>
     </div>
     <div class="content">
@@ -191,6 +202,33 @@ defineExpose({ focusInput, scrollToBottom })
 .close-btn:hover {
   background: rgba(239, 68, 68, 0.15);
   color: #ef4444;
+}
+.icon-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.3);
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.8);
+}
+.chat-bubble.fullscreen {
+  position: fixed;
+  left: 0 !important;
+  top: 38px !important;
+  width: 100vw !important;
+  height: calc(100vh - 38px) !important;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+  z-index: 9999;
 }
 .content {
   flex: 1;
