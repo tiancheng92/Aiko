@@ -19,7 +19,7 @@ func (t *ReadClipboardTool) InvokableRun(_ context.Context, _ string, _ ...tool.
 	if err != nil {
 		return "", fmt.Errorf("pbpaste: %w", err)
 	}
-	text := strings.TrimRight(string(out), "\n")
+	text := strings.TrimSuffix(string(out), "\n")
 	if text == "" {
 		return "剪贴板为空", nil
 	}
@@ -29,8 +29,8 @@ func (t *ReadClipboardTool) InvokableRun(_ context.Context, _ string, _ ...tool.
 // InvokableRun writes text to the macOS clipboard via pbcopy.
 func (t *WriteClipboardTool) InvokableRun(_ context.Context, input string, _ ...tool.Option) (string, error) {
 	args := parseArgs(input)
-	text, _ := args["text"].(string)
-	if text == "" {
+	text, ok := args["text"].(string)
+	if !ok || text == "" {
 		return "请提供 text 参数", nil
 	}
 	cmd := exec.Command("pbcopy")
