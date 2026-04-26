@@ -130,8 +130,6 @@ func All() []Tool {
 		&ControlAppTool{},
 		&GetCalendarEventsTool{},
 		&CreateCalendarEventTool{},
-		&GetActiveWindowInfoTool{},
-		&OcrScreenTool{},
 	}
 }
 
