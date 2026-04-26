@@ -110,6 +110,8 @@ export function SavePetSize(arg1:number,arg2:number,arg3:number):Promise<void>;
 
 export function SendMessage(arg1:string):Promise<void>;
 
+export function SendMessageWithImages(arg1:string,arg2:Array<string>):Promise<void>;
+
 export function SetChatVisible(arg1:boolean):Promise<void>;
 
 export function SetCronJobEnabled(arg1:number,arg2:boolean):Promise<void>;

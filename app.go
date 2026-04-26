@@ -22,6 +22,7 @@ import (
 	"unicode"
 
 	chromem "github.com/philippgille/chromem-go"
+	"github.com/cloudwego/eino/schema"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"aiko/internal/agent"
@@ -705,6 +706,108 @@ func (a *App) SendMessage(userInput string) error {
 		wailsruntime.EventsEmit(a.ctx, "chat:done", "")
 	}()
 	return nil
+}
+
+// SendMessageWithImages streams an AI response for a user message that includes
+// one or more inline images encoded as data URLs ("data:image/png;base64,...").
+// Falls back to a plain text message if no valid images are provided.
+func (a *App) SendMessageWithImages(userInput string, images []string) error {
+	// Cancel any previous in-flight request.
+	a.mu.Lock()
+	if a.chatCancel != nil {
+		a.chatCancel()
+		a.chatCancel = nil
+	}
+	chatCtx, cancel := context.WithCancel(a.ctx)
+	a.chatCancel = cancel
+	a.chatGeneration++
+	myGen := a.chatGeneration
+	a.mu.Unlock()
+
+	a.mu.RLock()
+	ag := a.petAgent
+	a.mu.RUnlock()
+
+	if ag == nil {
+		a.mu.Lock()
+		a.chatCancel = nil
+		a.mu.Unlock()
+		cancel()
+		return fmt.Errorf("agent not initialized: complete settings first")
+	}
+
+	// Build UserInputMultiContent: text part first, then image parts.
+	parts := make([]schema.MessageInputPart, 0, 1+len(images))
+	if userInput != "" {
+		parts = append(parts, schema.MessageInputPart{
+			Type: schema.ChatMessagePartTypeText,
+			Text: userInput,
+		})
+	}
+	for _, dataURL := range images {
+		mimeType, b64data, ok := parseDataURL(dataURL)
+		if !ok {
+			slog.Warn("SendMessageWithImages: invalid data URL, skipping")
+			continue
+		}
+		parts = append(parts, schema.MessageInputPart{
+			Type: schema.ChatMessagePartTypeImageURL,
+			Image: &schema.MessageInputImage{
+				MessagePartCommon: schema.MessagePartCommon{
+					Base64Data: &b64data,
+					MIMEType:   mimeType,
+				},
+			},
+		})
+	}
+
+	msg := &schema.Message{
+		Role:                  schema.User,
+		UserInputMultiContent: parts,
+	}
+
+	go func() {
+		defer cancel()
+		defer func() {
+			a.mu.Lock()
+			if a.chatGeneration == myGen {
+				a.chatCancel = nil
+			}
+			a.mu.Unlock()
+		}()
+		ch := ag.ChatWithMessage(chatCtx, msg)
+		for result := range ch {
+			if result.Err != nil {
+				if errors.Is(result.Err, context.Canceled) {
+					return
+				}
+				wailsruntime.EventsEmit(a.ctx, "chat:error", result.Err.Error())
+				return
+			}
+			if result.Done {
+				wailsruntime.EventsEmit(a.ctx, "chat:done", "")
+				return
+			}
+			wailsruntime.EventsEmit(a.ctx, "chat:token", result.Token)
+		}
+		wailsruntime.EventsEmit(a.ctx, "chat:done", "")
+	}()
+	return nil
+}
+
+// parseDataURL splits a data URL of the form "data:<mime>;base64,<data>" into
+// its MIME type and base64-encoded data string. Returns ok=false if the input
+// is not a valid base64 data URL.
+func parseDataURL(dataURL string) (mimeType, b64data string, ok bool) {
+	if !strings.HasPrefix(dataURL, "data:") {
+		return "", "", false
+	}
+	rest := dataURL[len("data:"):]
+	idx := strings.Index(rest, ";base64,")
+	if idx < 0 {
+		return "", "", false
+	}
+	return rest[:idx], rest[idx+len(";base64,"):], true
 }
 
 // GetMessages returns recent chat history (up to limit messages).
