@@ -317,23 +317,6 @@ func extractTextFromMessage(msg *schema.Message) string {
 	return ""
 }
 
-// sanitiseForMemory returns a plain-text representation of the user message
-// suitable for storing in short-term memory. Image parts are replaced by a
-// "[图片×N]" placeholder to avoid bloating the memory store with base64 data.
-func sanitiseForMemory(msg *schema.Message) string {
-	text := extractTextFromMessage(msg)
-	imageCount := 0
-	for _, p := range msg.UserInputMultiContent {
-		if p.Type == schema.ChatMessagePartTypeImageURL {
-			imageCount++
-		}
-	}
-	if imageCount > 0 {
-		return fmt.Sprintf("%s [图片×%d]", text, imageCount)
-	}
-	return text
-}
-
 // extractImagesFromMessage returns all base64 data URLs from image parts of msg.
 func extractImagesFromMessage(msg *schema.Message) []string {
 	var images []string
