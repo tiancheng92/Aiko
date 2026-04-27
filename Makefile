@@ -8,12 +8,12 @@ build:
 	wails build
 	codesign --force --deep --sign "Aiko" --identifier "com.xutiancheng.aiko" --options runtime $(APP)
 	@echo "✅ Build complete: $(APP)"
-
-## run: build, install to /Applications, then launch
-run: build
 	rm -rf /Applications/Aiko.app
 	cp -r $(APP) /Applications/Aiko.app
 	xattr -cr /Applications/Aiko.app
+
+## run: build, install to /Applications, then launch
+run: build
 	open /Applications/Aiko.app
 
 ## dev: start wails dev server (hot-reload, no signing needed)
