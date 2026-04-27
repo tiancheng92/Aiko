@@ -57,6 +57,7 @@ func main() {
 		Menu:             appMenu,
 		AssetServer:      &assetserver.Options{Assets: assets},
 		OnStartup:        app.startup,
+		OnDomReady:       app.domReady,
 		OnShutdown:       app.shutdown,
 		Bind:             []any{app},
 		Mac: &mac.Options{

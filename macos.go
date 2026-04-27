@@ -557,6 +557,28 @@ static void enableClickThrough() {
             }];
     });
 }
+
+// requestPermissionsEarly pre-requests microphone and speech recognition permissions
+// at startup while the app is still in the foreground, so macOS shows a proper
+// alert dialog rather than a silent notification banner.
+static void requestPermissionsEarly() {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        // Microphone
+        AVAuthorizationStatus micStatus = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
+        if (micStatus == AVAuthorizationStatusNotDetermined) {
+            [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted) {
+                NSLog(@"[Aiko] microphone permission: %@", granted ? @"granted" : @"denied");
+            }];
+        }
+        // Speech recognition
+        SFSpeechRecognizerAuthorizationStatus speechStatus = [SFSpeechRecognizer authorizationStatus];
+        if (speechStatus == SFSpeechRecognizerAuthorizationStatusNotDetermined) {
+            [SFSpeechRecognizer requestAuthorization:^(SFSpeechRecognizerAuthorizationStatus status) {
+                NSLog(@"[Aiko] speech recognition permission: %d", (int)status);
+            }];
+        }
+    });
+}
 */
 import "C"
 import (
@@ -571,6 +593,12 @@ import (
 // enableClickThrough installs per-pixel click-through for the main window.
 func enableClickThrough() {
 	C.enableClickThrough()
+}
+
+// requestPermissionsEarly pre-requests microphone and speech recognition at startup
+// so macOS shows a proper alert dialog while the app is still in the foreground.
+func requestPermissionsEarly() {
+	C.requestPermissionsEarly()
 }
 
 // registerGlobalHotkey creates a pipe, passes the write-end to the ObjC monitor,

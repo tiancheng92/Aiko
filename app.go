@@ -1168,6 +1168,13 @@ func (a *App) ListMCPServers() ([]mcp.ServerConfig, error) {
 }
 
 // shutdown is called by Wails when the application is closing.
+// domReady is called by Wails after the frontend DOM is fully loaded.
+// At this point the window is visible and the app is in the foreground,
+// so macOS will show proper permission dialogs instead of silent banners.
+func (a *App) domReady(_ context.Context) {
+	requestPermissionsEarly()
+}
+
 func (a *App) shutdown(_ context.Context) {
 	a.mu.Lock()
 	w := a.smsWatcher
