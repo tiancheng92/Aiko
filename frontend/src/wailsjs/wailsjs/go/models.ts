@@ -13,6 +13,7 @@ export namespace config {
 	    NudgeInterval: number;
 	    AllowedPaths: string[];
 	    ShellTimeout: number;
+	    ShellTrustedCommands: string[];
 	    CodeTimeout: number;
 	    SMSWatcherEnabled: boolean;
 	    VoiceAutoSend: boolean;
@@ -47,6 +48,7 @@ export namespace config {
 	        this.NudgeInterval = source["NudgeInterval"];
 	        this.AllowedPaths = source["AllowedPaths"];
 	        this.ShellTimeout = source["ShellTimeout"];
+	        this.ShellTrustedCommands = source["ShellTrustedCommands"];
 	        this.CodeTimeout = source["CodeTimeout"];
 	        this.SMSWatcherEnabled = source["SMSWatcherEnabled"];
 	        this.VoiceAutoSend = source["VoiceAutoSend"];

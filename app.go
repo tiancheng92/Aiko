@@ -470,7 +470,7 @@ func (a *App) SaveConfig(cfg *config.Config) error {
 	if err := a.configStore.Save(cfg); err != nil {
 		return err
 	}
-	a.cfg = cfg
+	*a.cfg = *cfg // update in-place so existing tool pointers see the new values
 	if err := a.initLLMComponents(a.ctx); err != nil {
 		slog.Warn("SaveConfig: LLM reinit skipped", "err", err)
 	}
