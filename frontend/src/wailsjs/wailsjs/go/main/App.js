@@ -186,6 +186,10 @@ export function OpenFileDialog(arg1, arg2) {
   return window['go']['main']['App']['OpenFileDialog'](arg1, arg2);
 }
 
+export function ResetBallPosition(arg1, arg2) {
+  return window['go']['main']['App']['ResetBallPosition'](arg1, arg2);
+}
+
 export function RunCronJobNow(arg1) {
   return window['go']['main']['App']['RunCronJobNow'](arg1);
 }

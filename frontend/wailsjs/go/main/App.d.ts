@@ -42,6 +42,8 @@ export function GetAvailableModels():Promise<Array<string>>;
 
 export function GetBallPosition(arg1:number,arg2:number):Promise<Array<number>>;
 
+export function ResetBallPosition(arg1:number,arg2:number):Promise<void>;
+
 export function GetChatSize(arg1:number,arg2:number):Promise<Array<number>>;
 
 export function GetConfig():Promise<config.Config>;

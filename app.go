@@ -558,6 +558,14 @@ func (a *App) SaveBallPosition(x, y, screenW, screenH int) error {
 	return err
 }
 
+// ResetBallPosition deletes the saved ball position for the given screen resolution,
+// causing the pet to return to its default position on next render.
+func (a *App) ResetBallPosition(screenW, screenH int) error {
+	key := fmt.Sprintf("ball_pos_%dx%d", screenW, screenH)
+	_, err := a.sqlDB.ExecContext(a.ctx, `DELETE FROM settings WHERE key=?`, key)
+	return err
+}
+
 // GetScreenList returns all connected screens as ScreenInfo values.
 func (a *App) GetScreenList() []ScreenInfo {
 	screens, err := wailsruntime.ScreenGetAll(a.ctx)

@@ -66,6 +66,10 @@ export function GetBallPosition(arg1, arg2) {
   return window['go']['main']['App']['GetBallPosition'](arg1, arg2);
 }
 
+export function ResetBallPosition(arg1, arg2) {
+  return window['go']['main']['App']['ResetBallPosition'](arg1, arg2);
+}
+
 export function GetChatSize(arg1, arg2) {
   return window['go']['main']['App']['GetChatSize'](arg1, arg2);
 }

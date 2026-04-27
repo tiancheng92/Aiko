@@ -211,6 +211,10 @@ onMounted(async () => {
     applySize(size)
   })
 
+  EventsOn('ball:position:reset', () => {
+    pos.value = { x: sw.value - petSize.value - 40, y: sh.value - petSize.value - 40 }
+  })
+
   EventsOn('screen:active:changed', async (info) => {
     const w = info.width
     const h = info.height

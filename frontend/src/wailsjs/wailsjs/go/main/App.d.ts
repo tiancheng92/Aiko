@@ -102,6 +102,8 @@ export function OpenDirectoryDialog(arg1:string):Promise<string>;
 
 export function OpenFileDialog(arg1:string,arg2:Array<frontend.FileFilter>):Promise<string>;
 
+export function ResetBallPosition(arg1:number,arg2:number):Promise<void>;
+
 export function RunCronJobNow(arg1:number):Promise<void>;
 
 export function SaveBallPosition(arg1:number,arg2:number,arg3:number,arg4:number):Promise<void>;

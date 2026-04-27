@@ -13,6 +13,7 @@ import {
   ListOpenRouterModels,
   SavePetSize, SaveChatSize,
   GetPetSize, GetChatSize,
+  ResetBallPosition,
   StartSMSWatcher, StopSMSWatcher, IsSMSWatcherRunning,
   GetVoiceAutoSend, SetVoiceAutoSend,
   GetSoundsEnabled, SetSoundsEnabled,
@@ -276,6 +277,15 @@ function previewChatSize(field, e) {
     SaveChatSize(cfg.value.ChatWidth, cfg.value.ChatHeight, sw, sh)
       .catch(err => console.warn('SaveChatSize failed', err))
   }
+}
+
+/** resetBallPosition clears saved ball position for the active screen so the pet snaps to default. */
+async function resetBallPosition() {
+  const { width: sw, height: sh } = props.activeScreen
+  if (sw > 0 && sh > 0) {
+    await ResetBallPosition(sw, sh).catch(err => console.warn('ResetBallPosition failed', err))
+  }
+  EventsEmit('ball:position:reset')
 }
 
 /** resetChatSize restores default chat bubble dimensions for the active screen. */
@@ -874,6 +884,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             </div>
             <div class="size-hint">0 = 自动根据屏幕高度计算；拖动滑块实时预览，保存后生效</div>
             <button class="btn-reset-size" @click="cfg.PetSize = 0; EventsEmit('config:pet:size:changed', 0)">重置为自动</button>
+            <button class="btn-reset-size" @click="resetBallPosition" style="margin-top:6px">重置桌宠位置</button>
           </label>
           <label>聊天框宽度
             <div class="screen-label" v-if="props.activeScreen.width > 0">
