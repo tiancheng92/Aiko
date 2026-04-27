@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	einotool "github.com/cloudwego/eino/components/tool"
@@ -25,6 +26,11 @@ func (t *ExecuteShellTool) InvokableRun(ctx context.Context, input string, opts 
 	if workingDir == "" {
 		home, _ := os.UserHomeDir()
 		workingDir = home
+	}
+
+	// Bypass confirmation for trusted commands.
+	if isTrustedCommand(command, t.Cfg.ShellTrustedCommands) {
+		return runShellCommand(ctx, command, workingDir, t.Cfg.ShellTimeout, t.RegisterCmd, t.UnregisterCmd)
 	}
 
 	// Check if this is a resume (user has already confirmed).
@@ -47,6 +53,18 @@ func (t *ExecuteShellTool) InvokableRun(ctx context.Context, input string, opts 
 		Command:    command,
 		WorkingDir: workingDir,
 	})
+}
+
+// isTrustedCommand reports whether command matches any trusted prefix.
+// It checks exact equality or prefix + space to avoid "gitk" matching "git".
+func isTrustedCommand(command string, trusted []string) bool {
+	cmd := strings.TrimLeft(command, " \t")
+	for _, entry := range trusted {
+		if cmd == entry || strings.HasPrefix(cmd, entry+" ") {
+			return true
+		}
+	}
+	return false
 }
 
 // runShellCommand executes command in workingDir with the given timeout.
