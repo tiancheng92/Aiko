@@ -40,6 +40,7 @@ const cfg = ref({
   VoiceAutoSend: false,
   SoundsEnabled: false,
   AllowedPaths: [],
+  ShellTrustedCommands: [],
   ShellTimeout: 30,
   CodeTimeout: 60,
 })
@@ -53,6 +54,7 @@ const activeTab = ref('model')  // 'model' | 'ai' | 'appearance' | 'tools' | 'kn
 const toolsSubTab = ref('mcp')         // 'mcp' | 'permissions' | 'settings'
 const automationSubTab = ref('cron')   // 'cron' | 'proactive'
 const newPathInput = ref('')           // input buffer for adding allowed paths
+const newTrustedCmdInput = ref('') // input buffer for adding trusted commands
 
 const llmModels = ref([])       // fetched from /v1/models
 const fetchingModels = ref(false)
@@ -481,6 +483,22 @@ function addPath() {
 /** removePath removes the path at the given index from AllowedPaths. */
 function removePath(index) {
   cfg.value.AllowedPaths.splice(index, 1)
+}
+
+/** addTrustedCommand appends a command prefix to ShellTrustedCommands. */
+function addTrustedCommand() {
+  const cmd = newTrustedCmdInput.value.trim()
+  if (!cmd) return
+  if (!cfg.value.ShellTrustedCommands) cfg.value.ShellTrustedCommands = []
+  if (!cfg.value.ShellTrustedCommands.includes(cmd)) {
+    cfg.value.ShellTrustedCommands.push(cmd)
+  }
+  newTrustedCmdInput.value = ''
+}
+
+/** removeTrustedCommand removes the command prefix at the given index. */
+function removeTrustedCommand(index) {
+  cfg.value.ShellTrustedCommands.splice(index, 1)
 }
 
 /** toggleMCPServer toggles the enabled state of an MCP server. */
@@ -1024,6 +1042,27 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                   @keydown.enter="addPath"
                 />
                 <button class="btn-small" @click="addPath">添加</button>
+              </div>
+            </div>
+
+            <div class="settings-section" style="margin-top:16px">
+              <h3 class="section-title">免确认命令白名单</h3>
+              <p class="section-hint">以这些命令名开头的 Shell 命令将直接执行，无需二次确认（如 git、ls）</p>
+              <div class="path-list">
+                <div v-for="(cmd, i) in cfg.ShellTrustedCommands" :key="i" class="path-row">
+                  <span class="path-text">{{ cmd }}</span>
+                  <button class="btn-danger-small" @click="removeTrustedCommand(i)">删除</button>
+                </div>
+                <p v-if="!cfg.ShellTrustedCommands || cfg.ShellTrustedCommands.length === 0" class="empty-hint">暂无白名单命令，所有 Shell 命令均需确认</p>
+              </div>
+              <div class="path-add-row" style="margin-top:8px">
+                <input
+                  v-model="newTrustedCmdInput"
+                  class="path-input"
+                  placeholder="git"
+                  @keydown.enter="addTrustedCommand"
+                />
+                <button class="btn-small" @click="addTrustedCommand">添加</button>
               </div>
             </div>
 
