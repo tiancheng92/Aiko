@@ -616,17 +616,10 @@ func (a *App) startScreenWatcher() {
 			}
 			lastFoundIdx = foundIdx
 
-			// Screen changed — only now pay the cost of a Wails IPC call.
-			screens, err := wailsruntime.ScreenGetAll(a.ctx)
-			if err != nil {
-				slog.Warn("startScreenWatcher: ScreenGetAll failed", "err", err)
-				continue
-			}
-			if foundIdx >= len(screens) {
-				continue
-			}
-			found := &screens[foundIdx]
-			current := ScreenInfo{Width: found.Size.Width, Height: found.Size.Height}
+			// Derive screen size from the CGO frame (physical pixels) directly,
+			// avoiding the NSScreen index vs. Wails ScreenGetAll index mismatch.
+			frame := getScreenFrame(foundIdx)
+			current := ScreenInfo{Width: int(frame.Width), Height: int(frame.Height)}
 
 			// Move the window directly via CGO to bypass Wails' WindowSetPosition,
 			// which is relative to the current screen and cannot reliably migrate

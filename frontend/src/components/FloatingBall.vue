@@ -1,6 +1,7 @@
 <script setup>
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { GetBallPosition, SaveBallPosition, GetScreenSize } from '../../wailsjs/go/main/App'
+import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 
 const emit = defineEmits(['click', 'position', 'ball-size'])
 const pos = ref(null)
@@ -19,23 +20,42 @@ async function waitForRuntime() {
   }
 }
 
+/** loadPosition fetches the saved ball position for the given screen size. */
+async function loadPosition(screenW, screenH) {
+  sw.value = screenW
+  sh.value = screenH
+  ballSize.value = Math.min(80, Math.max(48, Math.round(screenH * 0.055)))
+  emit('ball-size', ballSize.value)
+  const [bx, by] = await GetBallPosition(screenW, screenH)
+  pos.value = (bx >= 0 && by >= 0)
+    ? { x: bx, y: by }
+    : { x: screenW - ballSize.value - 40, y: screenH - ballSize.value - 40 }
+}
+
+let offScreenChanged = null
+
 onMounted(async () => {
   try {
     await waitForRuntime()
     const [screenW, screenH] = await GetScreenSize()
-    sw.value = screenW
-    sh.value = screenH
-    ballSize.value = Math.min(80, Math.max(48, Math.round(screenH * 0.055)))
-    emit('ball-size', ballSize.value)
-    const [bx, by] = await GetBallPosition(screenW, screenH)
-    pos.value = (bx >= 0 && by >= 0)
-      ? { x: bx, y: by }
-      : { x: screenW - ballSize.value - 40, y: screenH - ballSize.value - 40 }
+    await loadPosition(screenW, screenH)
   } catch (err) {
     console.error('FloatingBall init:', err)
     const bs = ballSize.value
     pos.value = { x: window.innerWidth - bs - 40, y: window.innerHeight - bs - 40 }
   }
+
+  offScreenChanged = EventsOn('screen:active:changed', async (info) => {
+    try {
+      await loadPosition(info.width, info.height)
+    } catch (err) {
+      console.warn('FloatingBall screen:active:changed:', err)
+    }
+  })
+})
+
+onUnmounted(() => {
+  if (offScreenChanged) offScreenChanged()
 })
 
 /** onMouseDown starts drag tracking on mouse button press. */
