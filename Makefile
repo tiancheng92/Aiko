@@ -1,17 +1,20 @@
-APP     := ./build/bin/Aiko.app
+APP     := $(shell pwd)/build/bin/Aiko.app
 BINARY  := $(APP)/Contents/MacOS/Aiko
 
 .PHONY: build run dev clean
 
-## build: compile and ad-hoc sign Aiko.app (keeps TCC permissions across rebuilds)
+## build: compile and sign Aiko.app with local self-signed cert (stable csreq = persistent TCC permissions)
 build:
 	wails build
-	codesign --force --deep --sign "-" $(APP)
+	codesign --force --deep --sign "Aiko" --identifier "com.xutiancheng.aiko" --options runtime $(APP)
 	@echo "✅ Build complete: $(APP)"
 
-## run: build then launch
+## run: build, install to /Applications, then launch
 run: build
-	open $(APP)
+	rm -rf /Applications/Aiko.app
+	cp -r $(APP) /Applications/Aiko.app
+	xattr -cr /Applications/Aiko.app
+	open /Applications/Aiko.app
 
 ## dev: start wails dev server (hot-reload, no signing needed)
 dev:

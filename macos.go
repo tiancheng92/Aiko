@@ -101,9 +101,14 @@ static CGEventRef aikoKeyTap(CGEventTapProxy proxy, CGEventType type,
 static void registerGlobalHotkey() {
     NSSetUncaughtExceptionHandler(aikoUncaughtExceptionHandler);
 
-    // NSEventMaskFlagsChanged global monitors require Accessibility permission.
-    NSDictionary *opts = @{(__bridge id)kAXTrustedCheckOptionPrompt: @YES};
-    BOOL trusted = AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)opts);
+    // Check accessibility permission. Only pass kAXTrustedCheckOptionPrompt=YES
+    // when not yet trusted — passing YES unconditionally triggers the system
+    // prompt on every launch even if the user already granted access.
+    BOOL trusted = AXIsProcessTrustedWithOptions(NULL);
+    if (!trusted) {
+        NSDictionary *opts = @{(__bridge id)kAXTrustedCheckOptionPrompt: @YES};
+        trusted = AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)opts);
+    }
     if (!trusted) {
         NSLog(@"[Aiko] Accessibility not granted yet; global hotkey inactive until relaunch.");
     }
@@ -491,6 +496,9 @@ static void startVoiceRecognition() {
 
 // stopVoiceRecognition ends the STT task and tears down the audio engine.
 // Correct order: stop tap → stop engine → endAudio → finish task → nil globals.
+// After the engine is fully stopped, byte 4 is written to gHotkeyPipeFd so
+// Go emits voice:end only after AVAudioEngine is no longer running — this
+// prevents macOS from showing the "Aiko is recording" indicator after stop.
 static void stopVoiceRecognition() {
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
@@ -510,6 +518,11 @@ static void stopVoiceRecognition() {
         gRecogRequest = nil;
         gAudioEngine = nil;
         gSpeechRecognizer = nil;
+        // Notify Go that the engine is fully stopped; Go will emit voice:end.
+        if (gHotkeyPipeFd >= 0) {
+            char b = 4;
+            write(gHotkeyPipeFd, &b, 1);
+        }
     });
 }
 
@@ -594,8 +607,10 @@ func registerGlobalHotkey() {
 				wailsruntime.EventsEmit(globalAppCtx, "voice:start")
 				C.startVoiceRecognition()
 			case 3:
-				// Option 释放 — 停止录音
+				// Option 释放 — 请求停止录音；voice:end 在引擎真正停止后由 case 4 发出
 				C.stopVoiceRecognition()
+			case 4:
+				// AVAudioEngine 已完全停止 — 现在才通知前端结束录音
 				wailsruntime.EventsEmit(globalAppCtx, "voice:end")
 			}
 		}

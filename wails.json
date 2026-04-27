@@ -3,16 +3,20 @@
   "name": "Aiko",
   "outputfilename": "Aiko",
   "info": {
+    "companyName": "xutiancheng",
     "productName": "Aiko",
     "productVersion": "1.0.0",
     "copyright": "Copyright © 2025 xutiancheng",
-    "bundleidentifier": "com.xutiancheng.aiko"
+    "comments": "Aiko - AI Desktop Pet powered by Wails and eino"
   },
+  "author": {
+    "name": "xutiancheng",
+    "email": "kiritoeva@icloud.com"
+  },
+  "frontend:dir": "frontend",
   "frontend:install": "yarn install",
   "frontend:build": "yarn build",
   "frontend:dev:watcher": "yarn dev",
   "frontend:dev:serverUrl": "auto",
-  "author": {
-    "name": "xutiancheng"
-  }
+  "wailsjsdir": "frontend/src/wailsjs"
 }

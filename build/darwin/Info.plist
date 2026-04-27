@@ -8,11 +8,9 @@
         <key>CFBundleExecutable</key>
         <string>{{.OutputFilename}}</string>
         <key>CFBundleIdentifier</key>
-        <string>com.wails.{{.Name}}</string>
+        <string>com.xutiancheng.aiko</string>
         <key>CFBundleVersion</key>
         <string>{{.Info.ProductVersion}}</string>
-        <key>CFBundleGetInfoString</key>
-        <string>{{.Info.Comments}}</string>
         <key>CFBundleShortVersionString</key>
         <string>{{.Info.ProductVersion}}</string>
         <key>CFBundleIconFile</key>
