@@ -60,7 +60,11 @@ func (t *ExecuteShellTool) InvokableRun(ctx context.Context, input string, opts 
 func isTrustedCommand(command string, trusted []string) bool {
 	cmd := strings.TrimLeft(command, " \t")
 	for _, entry := range trusted {
-		if cmd == entry || strings.HasPrefix(cmd, entry+" ") {
+		e := strings.TrimSpace(entry)
+		if e == "" {
+			continue
+		}
+		if cmd == e || strings.HasPrefix(cmd, e+" ") {
 			return true
 		}
 	}
