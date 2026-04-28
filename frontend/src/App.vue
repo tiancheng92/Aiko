@@ -4,8 +4,8 @@ import Live2DPet from './components/Live2DPet.vue'
 import ChatBubble from './components/ChatBubble.vue'
 import SettingsWindow from './components/SettingsWindow.vue'
 import NotificationBubble from './components/NotificationBubble.vue'
-import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize } from '../wailsjs/go/main/App'
-import { EventsOn, EventsEmit } from '../wailsjs/runtime/runtime'
+import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize } from './wailsjs/go/main/App'
+import { EventsOn, EventsEmit } from './wailsjs/runtime/runtime'
 
 const bubbleOpen = ref(false)
 const settingsOpen = ref(false)
