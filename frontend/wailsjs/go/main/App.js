@@ -58,6 +58,10 @@ export function ExportChatHistory() {
   return window['go']['main']['App']['ExportChatHistory']();
 }
 
+export function FetchLinkPreview(arg1) {
+  return window['go']['main']['App']['FetchLinkPreview'](arg1);
+}
+
 export function GetAvailableModels() {
   return window['go']['main']['App']['GetAvailableModels']();
 }

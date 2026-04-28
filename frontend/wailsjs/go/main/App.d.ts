@@ -3,9 +3,9 @@
 import {mcp} from '../models';
 import {context} from '../models';
 import {scheduler} from '../models';
+import {main} from '../models';
 import {config} from '../models';
 import {memory} from '../models';
-import {main} from '../models';
 import {tools} from '../models';
 import {proactive} from '../models';
 import {frontend} from '../models';
@@ -37,6 +37,8 @@ export function DeleteProactiveItem(arg1:number):Promise<void>;
 export function EmitEvent(arg1:string,arg2:any):Promise<void>;
 
 export function ExportChatHistory():Promise<void>;
+
+export function FetchLinkPreview(arg1:string):Promise<main.LinkPreview>;
 
 export function GetAvailableModels():Promise<Array<string>>;
 

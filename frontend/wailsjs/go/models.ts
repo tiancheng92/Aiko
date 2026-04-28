@@ -140,6 +140,26 @@ export namespace main {
 	        this.content = source["content"];
 	    }
 	}
+	export class LinkPreview {
+	    url: string;
+	    title: string;
+	    description: string;
+	    image: string;
+	    siteName: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LinkPreview(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.url = source["url"];
+	        this.title = source["title"];
+	        this.description = source["description"];
+	        this.image = source["image"];
+	        this.siteName = source["siteName"];
+	    }
+	}
 	export class MousePosition {
 	    x: number;
 	    y: number;

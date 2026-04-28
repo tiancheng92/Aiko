@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -143,6 +144,135 @@ func (a *App) KillToolExecution(id string) {
 // EmitEvent emits a Wails runtime event with the given name and payload.
 func (a *App) EmitEvent(name string, data any) {
 	wailsruntime.EventsEmit(a.ctx, name, data)
+}
+
+// LinkPreview holds the Open Graph / meta data extracted from a URL.
+type LinkPreview struct {
+	URL         string `json:"url"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Image       string `json:"image"`
+	SiteName    string `json:"siteName"`
+}
+
+// FetchLinkPreview fetches Open Graph / meta tags from the given URL and returns
+// a preview card payload. It times out after 5 s and silently returns an empty
+// preview on any error so the frontend degrades gracefully.
+func (a *App) FetchLinkPreview(rawURL string) LinkPreview {
+	preview := LinkPreview{URL: rawURL}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return preview
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; AikoBot/1.0)")
+	req.Header.Set("Accept", "text/html")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return preview
+	}
+	defer resp.Body.Close()
+
+	// Read at most 128 KB — enough to cover the <head> of any page.
+	buf := make([]byte, 128*1024)
+	n, _ := io.ReadAtLeast(resp.Body, buf, 1)
+	body := string(buf[:n])
+
+	preview.Title = extractMeta(body, "og:title", "twitter:title", "title")
+	preview.Description = extractMeta(body, "og:description", "twitter:description", "description")
+	preview.Image = extractMeta(body, "og:image", "twitter:image")
+	preview.SiteName = extractMeta(body, "og:site_name")
+
+	// Resolve relative image URLs.
+	if preview.Image != "" && !strings.HasPrefix(preview.Image, "http") {
+		if u, err := urlJoin(rawURL, preview.Image); err == nil {
+			preview.Image = u
+		}
+	}
+	return preview
+}
+
+// extractMeta searches an HTML body for the first non-empty match across the
+// given property/name/tag names and returns its content.
+func extractMeta(body string, keys ...string) string {
+	lower := strings.ToLower(body)
+	for _, key := range keys {
+		lk := strings.ToLower(key)
+		// <meta property="og:title" content="..."> or <meta name="description" content="...">
+		for _, attr := range []string{`property="` + lk + `"`, `name="` + lk + `"`} {
+			if idx := strings.Index(lower, attr); idx >= 0 {
+				chunk := body[idx:]
+				if v := extractAttrValue(chunk, "content"); v != "" {
+					return htmlUnescape(v)
+				}
+			}
+		}
+		// Plain <title>...</title>
+		if lk == "title" {
+			if s := strings.Index(lower, "<title"); s >= 0 {
+				after := body[s:]
+				if e := strings.Index(after, ">"); e >= 0 {
+					after = after[e+1:]
+					if end := strings.Index(strings.ToLower(after), "</title>"); end >= 0 {
+						if v := strings.TrimSpace(after[:end]); v != "" {
+							return htmlUnescape(v)
+						}
+					}
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// extractAttrValue extracts the value of the first attribute matching name from
+// a short HTML fragment (e.g. `content="foo bar"`).
+func extractAttrValue(fragment, attr string) string {
+	lower := strings.ToLower(fragment)
+	search := attr + `="`
+	idx := strings.Index(lower, search)
+	if idx < 0 {
+		search = attr + `='`
+		idx = strings.Index(lower, search)
+		if idx < 0 {
+			return ""
+		}
+	}
+	start := idx + len(search)
+	quote := string(fragment[idx+len(attr)+1])
+	end := strings.Index(fragment[start:], quote)
+	if end < 0 {
+		return ""
+	}
+	return fragment[start : start+end]
+}
+
+// htmlUnescape replaces common HTML entities with their Unicode equivalents.
+func htmlUnescape(s string) string {
+	s = strings.ReplaceAll(s, "&amp;", "&")
+	s = strings.ReplaceAll(s, "&lt;", "<")
+	s = strings.ReplaceAll(s, "&gt;", ">")
+	s = strings.ReplaceAll(s, "&quot;", `"`)
+	s = strings.ReplaceAll(s, "&#39;", "'")
+	s = strings.ReplaceAll(s, "&nbsp;", " ")
+	return s
+}
+
+// urlJoin resolves ref relative to base, returning an absolute URL string.
+func urlJoin(base, ref string) (string, error) {
+	b, err := url.Parse(base)
+	if err != nil {
+		return "", err
+	}
+	r, err := url.Parse(ref)
+	if err != nil {
+		return "", err
+	}
+	return b.ResolveReference(r).String(), nil
 }
 
 // ChatDirect streams a proactive AI response for the given prompt without saving to memory.

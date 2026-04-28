@@ -20,6 +20,7 @@ import { useTypingScheduler } from '../composables/useTypingScheduler'
 import { GetSoundsEnabled } from '../../wailsjs/go/main/App'
 import ToolConfirmModal from './ToolConfirmModal.vue'
 import ExecutionProgress from './ExecutionProgress.vue'
+import LinkPreview from './LinkPreview.vue'
 
 hljs.registerLanguage('javascript', javascript)
 hljs.registerLanguage('typescript', typescript)
@@ -349,6 +350,16 @@ function renderMarkdown(text) {
   return marked(processed)
 }
 
+/** extractUrls returns deduplicated http(s) URLs found in plain text, skipping markdown image syntax. */
+function extractUrls(text) {
+  if (!text) return []
+  // Remove markdown image syntax ![...](...) so image URLs are not previewed.
+  const noImages = text.replace(/!\[[^\]]*\]\([^)]+\)/g, '')
+  const matches = noImages.match(/https?:\/\/[^\s)>\]"']+/g) || []
+  // Deduplicate while preserving order.
+  return [...new Set(matches)]
+}
+
 /** copyMessage copies the message content to clipboard. */
 async function copyMessage(idx) {
   const m = messages.value[idx]
@@ -587,6 +598,14 @@ defineExpose({ focusInput, scrollToBottom })
               </button>
             </div>
           </div>
+          <!-- Link preview cards — shown below the bubble once streaming is done -->
+          <template v-if="!m.streaming && !m.thinking && m.content">
+            <LinkPreview
+              v-for="u in extractUrls(m.content)"
+              :key="u"
+              :url="u"
+            />
+          </template>
           <div v-if="m.time && !m.streaming && !m.thinking" class="msg-time">{{ formatTime(m.time) }}</div>
         </div>
       </div>
