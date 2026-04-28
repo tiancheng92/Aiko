@@ -119,6 +119,8 @@ func migrate(db *sql.DB) error {
 	patches := []string{
 		// v2: store images as JSON array of data URLs alongside each message.
 		`ALTER TABLE messages ADD COLUMN images TEXT NOT NULL DEFAULT ''`,
+		// v3: store attached file names as JSON array alongside each message.
+		`ALTER TABLE messages ADD COLUMN files TEXT NOT NULL DEFAULT ''`,
 	}
 	for _, p := range patches {
 		if _, err := db.Exec(p); err != nil {
