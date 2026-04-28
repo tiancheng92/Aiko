@@ -529,12 +529,16 @@ static void stopVoiceRecognition() {
 // enableClickThrough sets the window to ignore mouse events by default,
 // then installs global and local NSEvent monitors so that the window
 // temporarily accepts events only when the cursor is over interactive elements.
+//
+// The initial setIgnoresMouseEvents:YES is deferred 2 seconds to avoid a macOS 26
+// regression where _NSTrackingAreaAKManager SIGABRTs if mouse-event ignoring is
+// applied to the window before WKWebView's tracking areas have been initialized
+// during the first display-cycle commit.
 static void enableClickThrough() {
     dispatch_async(dispatch_get_main_queue(), ^{
         for (NSWindow *win in [NSApp windows]) {
             gWindow  = win;
             gWebView = findWebView(win.contentView);
-            [win setIgnoresMouseEvents:YES];
             break;
         }
         if (!gWindow || !gWebView) return;
@@ -555,26 +559,34 @@ static void enableClickThrough() {
                 handleScreenPoint([NSEvent mouseLocation]);
                 return evt;
             }];
+
+        // Defer setIgnoresMouseEvents:YES until after WKWebView's first display cycle.
+        // Applying it immediately races with _NSTrackingAreaAKManager initialization
+        // on macOS 26 (Tahoe) and causes a SIGABRT in the display-cycle flush.
+        // The mouse monitors above already drive hitTestPoint which will re-apply
+        // the correct setIgnoresMouseEvents state on the first mouse-move event.
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            if (gWindow) [gWindow setIgnoresMouseEvents:YES];
+        });
     });
 }
 
-// requestPermissionsEarly pre-requests microphone and speech recognition permissions
-// at startup while the app is still in the foreground, so macOS shows a proper
-// alert dialog rather than a silent notification banner.
+// requestPermissionsEarly pre-requests microphone permission at startup while the
+// app is still in the foreground, so macOS shows a proper alert dialog rather than
+// a silent notification banner.
+//
+// Speech recognition is intentionally NOT requested here. On macOS 26 (Tahoe),
+// calling [SFSpeechRecognizer requestAuthorization:] during domReady triggers
+// system UI that interacts with WKWebView's _NSTrackingAreaAKManager during its
+// first display-cycle flush, causing a SIGABRT. The lazy check in
+// startVoiceRecognition() is sufficient — the system auto-prompts on first use.
 static void requestPermissionsEarly() {
     dispatch_async(dispatch_get_main_queue(), ^{
-        // Microphone
         AVAuthorizationStatus micStatus = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
         if (micStatus == AVAuthorizationStatusNotDetermined) {
             [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted) {
                 NSLog(@"[Aiko] microphone permission: %@", granted ? @"granted" : @"denied");
-            }];
-        }
-        // Speech recognition
-        SFSpeechRecognizerAuthorizationStatus speechStatus = [SFSpeechRecognizer authorizationStatus];
-        if (speechStatus == SFSpeechRecognizerAuthorizationStatusNotDetermined) {
-            [SFSpeechRecognizer requestAuthorization:^(SFSpeechRecognizerAuthorizationStatus status) {
-                NSLog(@"[Aiko] speech recognition permission: %d", (int)status);
             }];
         }
     });

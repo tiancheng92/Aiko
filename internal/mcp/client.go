@@ -137,22 +137,75 @@ func (a *mcpToolAdapter) qualifiedName() string {
 }
 
 // Info returns the tool's schema information for eino.
+// It converts the MCP tool's true inputSchema properties so the LLM generates
+// correctly-shaped calls (e.g. {"url":"..."}) rather than a wrapped {"args":"..."}.
 func (a *mcpToolAdapter) Info(ctx context.Context) (*schema.ToolInfo, error) {
 	desc := a.toolDef.Description
 	if desc == "" {
 		desc = fmt.Sprintf("MCP tool %q from server %q", a.toolDef.Name, a.serverName)
 	}
 	return &schema.ToolInfo{
-		Name: a.qualifiedName(),
-		Desc: fmt.Sprintf("[MCP:%s] %s", a.serverName, desc),
-		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
-			"args": {
-				Desc:     "JSON object with tool arguments",
-				Required: false,
-				Type:     schema.String,
-			},
-		}),
+		Name:        a.qualifiedName(),
+		Desc:        fmt.Sprintf("[MCP:%s] %s", a.serverName, desc),
+		ParamsOneOf: schema.NewParamsOneOfByParams(mcpSchemaToEinoParams(a.toolDef.InputSchema)),
 	}, nil
+}
+
+// mcpSchemaToEinoParams converts the MCP tool's inputSchema to an eino ParameterInfo map.
+// Falls back to a single generic "args" string parameter when the schema has no properties.
+func mcpSchemaToEinoParams(is mcp.ToolInputSchema) map[string]*schema.ParameterInfo {
+	if len(is.Properties) == 0 {
+		return map[string]*schema.ParameterInfo{
+			"args": {Desc: "JSON object with tool arguments", Type: schema.String},
+		}
+	}
+	required := make(map[string]bool, len(is.Required))
+	for _, r := range is.Required {
+		required[r] = true
+	}
+	params := make(map[string]*schema.ParameterInfo, len(is.Properties))
+	for name, prop := range is.Properties {
+		propMap, ok := prop.(map[string]any)
+		if !ok {
+			continue
+		}
+		params[name] = jsonSchemaPropToEinoParam(propMap, required[name])
+	}
+	if len(params) == 0 {
+		params["args"] = &schema.ParameterInfo{Desc: "JSON object with tool arguments", Type: schema.String}
+	}
+	return params
+}
+
+// jsonSchemaPropToEinoParam converts a single JSON Schema property definition to eino ParameterInfo.
+func jsonSchemaPropToEinoParam(prop map[string]any, required bool) *schema.ParameterInfo {
+	info := &schema.ParameterInfo{Required: required}
+	if desc, ok := prop["description"].(string); ok {
+		info.Desc = desc
+	}
+	switch prop["type"] {
+	case "integer":
+		info.Type = schema.Integer
+	case "number":
+		info.Type = schema.Number
+	case "boolean":
+		info.Type = schema.Boolean
+	case "array":
+		info.Type = schema.Array
+	case "object":
+		info.Type = schema.Object
+	default:
+		// "string" and anything unrecognised → string
+		info.Type = schema.String
+	}
+	if enum, ok := prop["enum"].([]any); ok && info.Type == schema.String {
+		for _, e := range enum {
+			if es, ok := e.(string); ok {
+				info.Enum = append(info.Enum, es)
+			}
+		}
+	}
+	return info
 }
 
 // InvokableRun calls the MCP tool with the given input JSON and returns the result.

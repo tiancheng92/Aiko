@@ -18,5 +18,8 @@
   "frontend:build": "yarn build",
   "frontend:dev:watcher": "yarn dev",
   "frontend:dev:serverUrl": "auto",
-  "wailsjsdir": "frontend"
+  "wailsjsdir": "frontend",
+  "mac": {
+    "bundleIdentifier": "com.xutiancheng.aiko"
+  }
 }

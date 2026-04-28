@@ -8,7 +8,7 @@
         <key>CFBundleExecutable</key>
         <string>{{.OutputFilename}}</string>
         <key>CFBundleIdentifier</key>
-        <string>com.wails.{{.Name}}</string>
+        <string>com.xutiancheng.aiko</string>
         <key>CFBundleVersion</key>
         <string>{{.Info.ProductVersion}}</string>
         <key>CFBundleGetInfoString</key>
@@ -63,6 +63,8 @@
           {{end}}
         </array>
         {{end}}
+        <key>NSAccessibilityUsageDescription</key>
+        <string>Aiko 需要辅助功能权限以支持全局快捷键（⇧⌘P）唤起聊天框。</string>
         <key>NSMicrophoneUsageDescription</key>
         <string>Aiko 需要麦克风权限以接收语音输入。</string>
         <key>NSSpeechRecognitionUsageDescription</key>
