@@ -196,7 +196,7 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 		}
 
 		ch <- StreamResult{Done: true}
-		go a.persistAndMigrate(context.Background(), userInput, nil, fullResponse)
+		go a.persistAndMigrate(context.Background(), userInput, nil, nil, fullResponse)
 	}()
 
 	return ch
@@ -472,9 +472,20 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 		}
 
 		ch <- StreamResult{Done: true}
+		// Prefer the original user text stored in Extra (no file content) for memory.
 		userMemory := extractTextFromMessage(msg)
+		if orig, ok := msg.Extra["_user_text"].(string); ok && orig != "" {
+			userMemory = orig
+		}
 		userImages := extractImagesFromMessage(msg)
-		go a.persistAndMigrate(context.Background(), userMemory, userImages, fullResponse)
+		// Extract file names passed via Extra by app.go.
+		var userFiles []string
+		if raw, ok := msg.Extra["_file_names"]; ok {
+			if names, ok := raw.([]string); ok {
+				userFiles = names
+			}
+		}
+		go a.persistAndMigrate(context.Background(), userMemory, userImages, userFiles, fullResponse)
 	}()
 
 	return ch
@@ -554,7 +565,7 @@ func (a *Agent) buildHistoryPrefix(ctx context.Context, userInput string) (strin
 // persistAndMigrate saves user and assistant messages to SQLite, then checks
 // whether the total message count exceeds ShortTermLimit. If so, the oldest
 // excess messages are migrated to long-term vector memory.
-func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userImages []string, assistantReply string) {
+func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userImages []string, userFiles []string, assistantReply string) {
 	if a.shortMem == nil {
 		return
 	}
@@ -564,7 +575,7 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userIma
 	// short-term memory overflow has occurred.
 	a.turnCount.Add(1)
 
-	if _, err := a.shortMem.AddWithImages("user", userInput, userImages); err != nil {
+	if _, err := a.shortMem.AddWithImagesAndFiles("user", userInput, userImages, userFiles); err != nil {
 		slog.Error("save user message failed", "err", err)
 		return
 	}
