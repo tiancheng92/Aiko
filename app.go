@@ -73,7 +73,8 @@ type App struct {
 	mcpClosers      []io.Closer // guarded by mu; closed and rebuilt on initLLMComponents
 	runningCmds     sync.Map
 	pendingConfirms sync.Map
-	watcherWG       sync.WaitGroup // tracks background watchers started in startup
+	watcherWG       sync.WaitGroup  // tracks background watchers started in startup
+	cancelWatcher   context.CancelFunc // cancels the screen-watcher goroutine on shutdown
 }
 
 // NewApp creates a new App instance.
@@ -618,9 +619,12 @@ func (a *App) GetScreenList() []ScreenInfo {
 // It also detects display reconfiguration (e.g. after wake from sleep) by tracking the
 // screen count and the current screen's geometry — re-emitting if either changes.
 func (a *App) startScreenWatcher() {
+	ctx, cancel := context.WithCancel(a.ctx)
+	a.cancelWatcher = cancel
 	a.watcherWG.Add(1)
 	go func() {
 		defer a.watcherWG.Done()
+		defer cancel()
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
 		lastFoundIdx := -1
@@ -628,7 +632,7 @@ func (a *App) startScreenWatcher() {
 		var lastFrame ScreenFrame
 		for {
 			select {
-			case <-a.ctx.Done():
+			case <-ctx.Done():
 				return
 			case <-ticker.C:
 			}
@@ -1325,6 +1329,12 @@ func (a *App) domReady(_ context.Context) {
 }
 
 func (a *App) shutdown(_ context.Context) {
+	// Cancel the screen-watcher goroutine immediately so watcherWG.Wait() below
+	// doesn't block — the goroutine uses its own derived context, not a.ctx.
+	if a.cancelWatcher != nil {
+		a.cancelWatcher()
+	}
+
 	a.mu.Lock()
 	w := a.smsWatcher
 	a.smsWatcher = nil
@@ -1348,8 +1358,8 @@ func (a *App) shutdown(_ context.Context) {
 			slog.Warn("mcp client close failed", "err", err)
 		}
 	}
-	// Wait for background watchers (screen watcher, etc.) to exit via ctx
-	// cancellation before closing shared resources like the SQLite pool.
+	// Wait for background watchers to exit (screen watcher exits promptly because
+	// cancelWatcher was called above).
 	a.watcherWG.Wait()
 	// Close the SQLite connection pool so modernc.org/sqlite flushes any pending
 	// writes and releases file handles before the process exits.

@@ -70,12 +70,24 @@ func (s *Scheduler) Start(ctx context.Context) error {
     return nil
 }
 
-// Stop halts the cron engine and waits for any in-flight job invocations to
-// finish so callers get deterministic shutdown.
+// Stop halts the cron engine and waits up to 5 seconds for any in-flight job
+// invocations to finish. Jobs that exceed the grace period are abandoned so
+// shutdown doesn't block indefinitely.
 func (s *Scheduler) Stop() {
-    ctx := s.cr.Stop() // returns a ctx that is done once cron workers exit
-    <-ctx.Done()
-    s.wg.Wait()
+	ctx := s.cr.Stop() // returns a ctx that is done once cron workers exit
+	select {
+	case <-ctx.Done():
+	case <-time.After(5 * time.Second):
+		slog.Warn("scheduler: cron workers did not stop within grace period")
+	}
+	// Best-effort wait for in-flight RunJobNow/scheduleJob goroutines.
+	done := make(chan struct{})
+	go func() { s.wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		slog.Warn("scheduler: in-flight jobs did not finish within grace period")
+	}
 }
 
 // CreateJob persists a new job and schedules it immediately.
@@ -101,28 +113,40 @@ func (s *Scheduler) CreateJob(ctx context.Context, name, description, schedule, 
 
 // RunJobNow fires a job immediately regardless of its schedule.
 func (s *Scheduler) RunJobNow(id int64) error {
-	jobs, err := s.ListJobs(context.Background())
+	var j Job
+	var enabled int
+	var lastRun sql.NullTime
+	var createdAt time.Time
+	err := s.db.QueryRowContext(context.Background(),
+		`SELECT id, name, description, schedule, prompt, enabled, last_run, created_at
+		 FROM cron_jobs WHERE id=? LIMIT 1`, id).
+		Scan(&j.ID, &j.Name, &j.Description, &j.Schedule, &j.Prompt, &enabled, &lastRun, &createdAt)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("job %d not found", id)
+	}
 	if err != nil {
 		return err
 	}
-	for _, j := range jobs {
-		if j.ID == id {
-			s.wg.Add(1)
-			go func(job Job) {
-				defer s.wg.Done()
-				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-				defer cancel()
-				_, _ = s.db.ExecContext(ctx, `UPDATE cron_jobs SET last_run=? WHERE id=?`, time.Now(), job.ID)
-				slog.Info("cron job fired manually", "job", job.Name)
-				result, err := s.chatFn(ctx, job.Prompt)
-				if s.onResult != nil {
-					s.onResult(job, result, err)
-				}
-			}(j)
-			return nil
-		}
+	j.Enabled = enabled == 1
+	if lastRun.Valid {
+		s := lastRun.Time.Format(time.RFC3339)
+		j.LastRun = &s
 	}
-	return fmt.Errorf("job %d not found", id)
+	j.CreatedAt = createdAt.Format(time.RFC3339)
+
+	s.wg.Add(1)
+	go func(job Job) {
+		defer s.wg.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		_, _ = s.db.ExecContext(ctx, `UPDATE cron_jobs SET last_run=? WHERE id=?`, time.Now(), job.ID)
+		slog.Info("cron job fired manually", "job", job.Name)
+		result, err := s.chatFn(ctx, job.Prompt)
+		if s.onResult != nil {
+			s.onResult(job, result, err)
+		}
+	}(j)
+	return nil
 }
 
 // DeleteJob removes a job from cron and from the DB.

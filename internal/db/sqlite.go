@@ -68,6 +68,10 @@ func migrate(db *sql.DB) error {
 			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 		CREATE INDEX IF NOT EXISTS idx_memory_segments_created ON memory_segments(created_at DESC);
+		CREATE INDEX IF NOT EXISTS idx_messages_id     ON messages(id DESC);
+		CREATE INDEX IF NOT EXISTS idx_messages_role   ON messages(role);
+		CREATE INDEX IF NOT EXISTS idx_cron_enabled    ON cron_jobs(enabled);
+		CREATE INDEX IF NOT EXISTS idx_proactive_trigger ON proactive_items(trigger_at ASC);
 		CREATE TABLE IF NOT EXISTS cron_jobs (
 			id          INTEGER PRIMARY KEY AUTOINCREMENT,
 			name        TEXT NOT NULL,

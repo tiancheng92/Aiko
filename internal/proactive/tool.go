@@ -2,7 +2,7 @@ package proactive
 
 import (
 	"context"
-	"encoding/json"
+	json "github.com/bytedance/sonic"
 	"fmt"
 	"time"
 

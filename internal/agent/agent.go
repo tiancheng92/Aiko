@@ -496,33 +496,35 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 // Returns empty string if no history exists or an error occurs.
 // userInput is used as the semantic query for long-term memory retrieval.
 func (a *Agent) buildHistoryPrefix(ctx context.Context, userInput string) (string, error) {
+	var sb strings.Builder
+
 	// Read USER.md for user profile injection.
-	var profileSection string
 	if a.dataDir != "" {
 		profilePath := filepath.Join(a.dataDir, "USER.md")
 		if data, err := os.ReadFile(profilePath); err == nil && len(data) > 0 {
-			profileSection = "User Profile:\n" + string(data) + "\n"
+			sb.WriteString("User Profile:\n")
+			sb.Write(data)
+			sb.WriteByte('\n')
 		} else if err != nil && !os.IsNotExist(err) {
 			slog.Warn("read USER.md failed", "err", err)
 		}
 	}
 
 	if a.shortMem == nil {
-		return profileSection, nil
+		return sb.String(), nil
 	}
 
 	// Inject relevant long-term memories if available.
-	var longMemContext string
+	hasLongMem := false
 	if a.longMem != nil {
 		results, err := a.longMem.Search(ctx, userInput, 3)
 		if err == nil && len(results) > 0 {
-			var lmb strings.Builder
-			lmb.WriteString("Relevant past context:\n")
+			sb.WriteString("Relevant past context:\n")
 			for _, r := range results {
-				lmb.WriteString(r)
-				lmb.WriteByte('\n')
+				sb.WriteString(r)
+				sb.WriteByte('\n')
 			}
-			longMemContext = lmb.String()
+			hasLongMem = true
 		}
 	}
 
@@ -532,34 +534,27 @@ func (a *Agent) buildHistoryPrefix(ctx context.Context, userInput string) (strin
 		recent = nil
 	}
 
-	// Assemble history section.
-	var histSection string
 	if len(recent) > 0 {
-		histStr := memory.FormatBlock(recent)
-		if longMemContext != "" {
-			histSection = longMemContext + "\nRecent conversation:\n" + histStr
-		} else {
-			histSection = "Recent conversation:\n" + histStr
+		if hasLongMem {
+			sb.WriteByte('\n')
 		}
-	} else if longMemContext != "" {
-		histSection = longMemContext
+		sb.WriteString("Recent conversation:\n")
+		sb.WriteString(memory.FormatBlock(recent))
 	}
 
 	// Append self-growth nudge if due.
-	var nudgeSection string
 	if a.nudgeInterval > 0 && a.turnCount.Load() > 0 && a.turnCount.Load()%int64(a.nudgeInterval) == 0 {
-		nudgeSection = `
+		sb.WriteString(`
 [SELF-GROWTH NUDGE]
 请在本次回复前，回顾刚才的对话，考虑是否需要：
 1. 调用 save_memory 保存一条具体事实或偏好（一两句话，不需要摘要对话）
 2. 调用 update_user_profile 更新用户画像（发现了新的习惯/偏好/背景信息）
 3. 调用 save_skill 将本次解决的问题模式提炼为可复用技能
 如果都不需要，直接回复即可，无需解释。
-`
+`)
 	}
 
-	result := profileSection + histSection + nudgeSection
-	return result, nil
+	return sb.String(), nil
 }
 
 // persistAndMigrate saves user and assistant messages to SQLite, then checks

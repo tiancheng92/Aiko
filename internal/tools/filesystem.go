@@ -3,7 +3,7 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
+	json "github.com/bytedance/sonic"
 	"fmt"
 	"log/slog"
 	"os"

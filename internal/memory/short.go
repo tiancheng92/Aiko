@@ -2,7 +2,7 @@ package memory
 
 import (
 	"database/sql"
-	"encoding/json"
+	json "github.com/bytedance/sonic"
 	"fmt"
 	"log/slog"
 	"strings"
