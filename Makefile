@@ -5,12 +5,11 @@ BINARY  := $(APP)/Contents/MacOS/Aiko
 
 ## build: compile and sign Aiko.app with local self-signed cert (stable csreq = persistent TCC permissions)
 build:
-	wails build
+	wails build -trimpath -ldflags="-s -w"
 	codesign --force --deep --sign "Aiko" --identifier "com.xutiancheng.aiko" $(APP)
-	@echo "✅ Build complete: $(APP)"
-	rm -rf /Applications/Aiko.app
-	cp -r $(APP) /Applications/Aiko.app
+	rsync -a --delete $(APP)/ /Applications/Aiko.app/
 	xattr -cr /Applications/Aiko.app
+	@echo "✅ Build complete: $(APP)"
 
 ## run: build, install to /Applications, then launch
 run: build
