@@ -905,12 +905,14 @@ func (a *App) SendMessageWithFiles(userInput string, images []string, files []Fi
 	}
 
 	// Build LLM text: original input + file contents appended.
-	llmText := userInput
+	var llmBuilder strings.Builder
+	llmBuilder.WriteString(userInput)
 	fileNames := make([]string, 0, len(files))
 	for _, f := range files {
 		fileNames = append(fileNames, f.Name)
-		llmText += fmt.Sprintf("\n\n[文件: %s (%s)]\n```\n%s\n```", f.Name, f.MimeType, f.Content)
+		fmt.Fprintf(&llmBuilder, "\n\n[文件: %s (%s)]\n```\n%s\n```", f.Name, f.MimeType, f.Content)
 	}
+	llmText := llmBuilder.String()
 
 	// Build UserInputMultiContent: text part first, then image parts.
 	parts := make([]schema.MessageInputPart, 0, 1+len(images))

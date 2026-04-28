@@ -18,5 +18,5 @@
   "frontend:build": "yarn build",
   "frontend:dev:watcher": "yarn dev",
   "frontend:dev:serverUrl": "auto",
-  "wailsjsdir": "frontend/src/wailsjs"
+  "wailsjsdir": "frontend/src"
 }
