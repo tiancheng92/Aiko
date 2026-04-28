@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    permissions:
+      contents: write   # needed to create GitHub Release and upload assets
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Enable Corepack (yarn)
+        run: corepack enable
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: yarn install --frozen-lockfile
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Build Aiko.app
+        run: wails build -trimpath -ldflags="-s -w"
+
+      # Ad-hoc sign — no Apple Developer account required.
+      # Users must run `xattr -cr Aiko.app` after unzipping, or right-click → Open.
+      - name: Sign app (ad-hoc)
+        run: |
+          codesign --force --deep --sign - \
+            --identifier com.xutiancheng.aiko \
+            build/bin/Aiko.app
+
+      - name: Package DMG
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          create-dmg \
+            --volname "Aiko ${VERSION}" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 128 \
+            --icon "Aiko.app" 150 200 \
+            --hide-extension "Aiko.app" \
+            --app-drop-link 450 200 \
+            "build/bin/Aiko-${VERSION}.dmg" \
+            "build/bin/Aiko.app"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/bin/Aiko-*.dmg
+          generate_release_notes: true
