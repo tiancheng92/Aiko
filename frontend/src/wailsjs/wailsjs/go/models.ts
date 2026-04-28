@@ -124,6 +124,22 @@ export namespace frontend {
 
 export namespace main {
 	
+	export class FileAttachment {
+	    name: string;
+	    mimeType: string;
+	    content: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FileAttachment(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.mimeType = source["mimeType"];
+	        this.content = source["content"];
+	    }
+	}
 	export class MousePosition {
 	    x: number;
 	    y: number;
@@ -195,6 +211,7 @@ export namespace memory {
 	    Role: string;
 	    Content: string;
 	    Images: string[];
+	    Files: string[];
 	    CreatedAt: string;
 	
 	    static createFrom(source: any = {}) {
@@ -207,6 +224,7 @@ export namespace memory {
 	        this.Role = source["Role"];
 	        this.Content = source["Content"];
 	        this.Images = source["Images"];
+	        this.Files = source["Files"];
 	        this.CreatedAt = source["CreatedAt"];
 	    }
 	}

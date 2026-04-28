@@ -183,6 +183,14 @@ type ScreenInfo struct {
 	Height int `json:"height"`
 }
 
+// FileAttachment carries a single text-file attachment from the frontend.
+// Content is the full UTF-8 text of the file; Name and MimeType are metadata only.
+type FileAttachment struct {
+	Name     string `json:"name"`
+	MimeType string `json:"mimeType"`
+	Content  string `json:"content"`
+}
+
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
@@ -836,6 +844,104 @@ func (a *App) SendMessageWithImages(userInput string, images []string) error {
 	msg := &schema.Message{
 		Role:                  schema.User,
 		UserInputMultiContent: parts,
+	}
+
+	go func() {
+		defer cancel()
+		defer func() {
+			a.mu.Lock()
+			if a.chatGeneration == myGen {
+				a.chatCancel = nil
+			}
+			a.mu.Unlock()
+		}()
+		ch := ag.ChatWithMessage(chatCtx, msg)
+		for result := range ch {
+			if result.Err != nil {
+				if errors.Is(result.Err, context.Canceled) {
+					return
+				}
+				wailsruntime.EventsEmit(a.ctx, "chat:error", result.Err.Error())
+				return
+			}
+			if result.Done {
+				wailsruntime.EventsEmit(a.ctx, "chat:done", "")
+				return
+			}
+			wailsruntime.EventsEmit(a.ctx, "chat:token", result.Token)
+		}
+		wailsruntime.EventsEmit(a.ctx, "chat:done", "")
+	}()
+	return nil
+}
+
+// SendMessageWithFiles streams an AI response for a user message that may include
+// inline images (data URLs) and/or text file attachments.
+// File contents are appended to the user text before sending to the LLM.
+// Only file names are persisted in memory — not the content.
+func (a *App) SendMessageWithFiles(userInput string, images []string, files []FileAttachment) error {
+	// Cancel any previous in-flight request.
+	a.mu.Lock()
+	if a.chatCancel != nil {
+		a.chatCancel()
+		a.chatCancel = nil
+	}
+	chatCtx, cancel := context.WithCancel(a.ctx)
+	a.chatCancel = cancel
+	a.chatGeneration++
+	myGen := a.chatGeneration
+	a.mu.Unlock()
+
+	a.mu.RLock()
+	ag := a.petAgent
+	a.mu.RUnlock()
+
+	if ag == nil {
+		a.mu.Lock()
+		a.chatCancel = nil
+		a.mu.Unlock()
+		cancel()
+		return fmt.Errorf("agent not initialized: complete settings first")
+	}
+
+	// Build LLM text: original input + file contents appended.
+	llmText := userInput
+	fileNames := make([]string, 0, len(files))
+	for _, f := range files {
+		fileNames = append(fileNames, f.Name)
+		llmText += fmt.Sprintf("\n\n[文件: %s (%s)]\n```\n%s\n```", f.Name, f.MimeType, f.Content)
+	}
+
+	// Build UserInputMultiContent: text part first, then image parts.
+	parts := make([]schema.MessageInputPart, 0, 1+len(images))
+	parts = append(parts, schema.MessageInputPart{
+		Type: schema.ChatMessagePartTypeText,
+		Text: llmText,
+	})
+	for _, dataURL := range images {
+		mimeType, b64data, ok := parseDataURL(dataURL)
+		if !ok {
+			slog.Warn("SendMessageWithFiles: invalid data URL, skipping")
+			continue
+		}
+		parts = append(parts, schema.MessageInputPart{
+			Type: schema.ChatMessagePartTypeImageURL,
+			Image: &schema.MessageInputImage{
+				MessagePartCommon: schema.MessagePartCommon{
+					Base64Data: &b64data,
+					MIMEType:   mimeType,
+				},
+			},
+		})
+	}
+
+	msg := &schema.Message{
+		Role:                  schema.User,
+		UserInputMultiContent: parts,
+		Extra: map[string]any{
+			"_user_text":  userInput,
+			"_file_names": fileNames,
+		},
 	}
 
 	go func() {
