@@ -70,8 +70,10 @@ type App struct {
 	ttsGeneration   uint64             // incremented on each SpeakText call; used to avoid stale cancel nils
 	isChatVisible   bool               // tracks whether the chat panel is open; guarded by mu
 	proactiveEngine *proactive.ProactiveEngine
+	mcpClosers      []io.Closer // guarded by mu; closed and rebuilt on initLLMComponents
 	runningCmds     sync.Map
 	pendingConfirms sync.Map
+	watcherWG       sync.WaitGroup // tracks background watchers started in startup
 }
 
 // NewApp creates a new App instance.
@@ -229,34 +231,15 @@ func (a *App) startup(ctx context.Context) {
 	a.mcpStore = mcp.NewServerStore(a.sqlDB)
 	// Remove stale tool rows that no longer exist.
 	_, _ = a.sqlDB.Exec(`DELETE FROM tool_permissions WHERE tool_name = 'lark'`)
-	// Ensure all built-in tools have rows in tool_permissions.
+	// Ensure all built-in tools have rows in tool_permissions. The declarations
+	// live next to the tool registry so adding a tool only touches one place.
 	toolsCtx := context.Background()
-	for _, t := range internaltools.All() {
-		_ = a.permStore.EnsureRow(toolsCtx, t)
+	for _, d := range internaltools.AllPermissionDeclarations() {
+		_ = a.permStore.EnsureRow(toolsCtx, d)
 	}
-	// Ensure contextual tool permission rows (store not needed for row creation).
-	for _, t := range []internaltools.Tool{
-		&internaltools.SearchKnowledgeTool{},
-		&internaltools.CronTool{},
-		&internaltools.SaveMemoryTool{},
-		&internaltools.UpdateUserProfileTool{},
-		&internaltools.SaveSkillTool{},
-		&proactive.ScheduleFollowupTool{},
-		// File system tools
-		&internaltools.ListDirectoryTool{},
-		&internaltools.ReadFileTool{},
-		&internaltools.WriteFileTool{},
-		&internaltools.DeleteFileTool{},
-		&internaltools.MakeDirectoryTool{},
-		&internaltools.MoveFileTool{},
-		// Execution tools
-		&internaltools.ExecuteShellTool{},
-		&internaltools.ExecuteCodeTool{},
-	} {
-		_ = a.permStore.EnsureRow(toolsCtx, t)
-	}
-	// Enhanced tools (EnhancedInvokableTool) also need permission rows.
-	_ = a.permStore.EnsureRow(toolsCtx, &internaltools.TakeScreenshotTool{})
+	// Proactive tool is declared outside internal/tools to avoid import cycles,
+	// so register its row here.
+	_ = a.permStore.EnsureRow(toolsCtx, &proactive.ScheduleFollowupTool{})
 
 	vectorPath := filepath.Join(dataDir, "vectors")
 	a.vectorDB, err = chromem.NewPersistentDB(vectorPath, false)
@@ -380,10 +363,10 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		})
 	}
 
+	// NOTE: scheduler.Start is deferred until after a.mu is released below —
+	// cron callbacks emit Wails events which may reenter Go, and emitting while
+	// holding a.mu can deadlock if the event handler calls an App method.
 	sched := scheduler.New(a.sqlDB, chatFn, onResult)
-	if err := sched.Start(a.ctx); err != nil {
-		slog.Error("scheduler start failed", "err", err)
-	}
 
 	contextTools := internaltools.AllContextual(
 		a.permStore,
@@ -401,7 +384,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 			wailsruntime.EventsEmit(a.ctx, "tool:executed", map[string]interface{}{"id": id})
 		},
 	)
-	mcpTools := mcp.LoadTools(ctx, a.mcpStore)
+	mcpTools, mcpClosers := mcp.LoadTools(ctx, a.mcpStore)
 	proactiveStore := proactive.NewStore(a.sqlDB)
 	followupTool := internaltools.ToEino(proactive.NewScheduleFollowupTool(proactiveStore), a.permStore)
 	allTools := append(builtinTools, contextTools...)
@@ -440,6 +423,10 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	if a.proactiveEngine != nil {
 		a.proactiveEngine.Stop()
 	}
+	// Swap MCP closers: capture the old list so we can close it outside the
+	// lock (Close may block on stdio subprocess teardown).
+	oldClosers := a.mcpClosers
+	a.mcpClosers = mcpClosers
 	a.scheduler = sched
 	a.longMem = longMem
 	a.knowledgeSt = knowledgeSt
@@ -454,17 +441,41 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	a.proactiveEngine = engine
 	a.mu.Unlock()
 
+	for _, c := range oldClosers {
+		if err := c.Close(); err != nil {
+			slog.Warn("mcp client close failed on reload", "err", err)
+		}
+	}
+
+	// Start cron engines outside the mu critical section — callbacks emit
+	// Wails events and must not run with the mutex held.
+	if err := sched.Start(a.ctx); err != nil {
+		slog.Error("scheduler start failed", "err", err)
+	}
 	engine.Start(a.ctx)
 	return nil
 }
 
-// GetConfig returns the current config to the frontend.
-func (a *App) GetConfig() *config.Config { return a.cfg }
+// GetConfig returns a snapshot of the current config to the frontend so that
+// concurrent writes via SaveConfig / ActivateModelProfile cannot tear reads.
+func (a *App) GetConfig() *config.Config {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if a.cfg == nil {
+		return &config.Config{}
+	}
+	copy := *a.cfg
+	return &copy
+}
 
 // SaveConfig persists updated config and reinitializes LLM components.
 // LLM init errors are non-fatal (user may save non-LLM settings before configuring the model).
 func (a *App) SaveConfig(cfg *config.Config) error {
 	// Preserve fields that are managed independently (not via the settings form).
+	// Snapshot the preserved values under the read lock, then hand off the
+	// merged struct to configStore.Save outside the lock to avoid holding mu
+	// across a potentially slow DB transaction.
+	a.mu.RLock()
 	cfg.SMSWatcherEnabled = a.cfg.SMSWatcherEnabled
 	cfg.VoiceAutoSend = a.cfg.VoiceAutoSend
 	cfg.SoundsEnabled = a.cfg.SoundsEnabled
@@ -475,10 +486,16 @@ func (a *App) SaveConfig(cfg *config.Config) error {
 	cfg.TTSSpeed = a.cfg.TTSSpeed
 	cfg.TTSBackend = a.cfg.TTSBackend
 	cfg.TTSModelDir = a.cfg.TTSModelDir
+	a.mu.RUnlock()
+
 	if err := a.configStore.Save(cfg); err != nil {
 		return err
 	}
+
+	a.mu.Lock()
 	*a.cfg = *cfg // update in-place so existing tool pointers see the new values
+	a.mu.Unlock()
+
 	if err := a.initLLMComponents(a.ctx); err != nil {
 		slog.Warn("SaveConfig: LLM reinit skipped", "err", err)
 	}
@@ -494,12 +511,16 @@ func (a *App) ListModelProfiles() ([]config.ModelProfile, error) {
 // If the saved profile is the currently active one, cfg is updated in-place so
 // TTS voice/speed/backend changes take effect immediately without a full reinit.
 func (a *App) SaveModelProfile(p config.ModelProfile) (config.ModelProfile, error) {
-	slog.Info("SaveModelProfile", "id", p.ID, "backend", p.TTSBackend, "voice", p.TTSVoice, "speed", p.TTSSpeed, "activeID", a.cfg.ActiveProfileID)
+	a.mu.RLock()
+	activeID := a.cfg.ActiveProfileID
+	a.mu.RUnlock()
+	slog.Info("SaveModelProfile", "id", p.ID, "backend", p.TTSBackend, "voice", p.TTSVoice, "speed", p.TTSSpeed, "activeID", activeID)
 	if err := a.profileStore.Save(&p); err != nil {
 		return p, err
 	}
 	// Sync cfg when saving the active profile, so voice/speed/backend changes apply immediately.
-	if p.ID == a.cfg.ActiveProfileID {
+	if p.ID == activeID {
+		a.mu.Lock()
 		a.cfg.ApplyProfile(&p)
 		slog.Info("SaveModelProfile: applied to cfg", "voice", a.cfg.TTSVoice)
 		// 重建 TTS 实例，使 backend/voice/speed 变更立即生效。
@@ -510,6 +531,7 @@ func (a *App) SaveModelProfile(p config.ModelProfile) (config.ModelProfile, erro
 			a.ttsBackendKey = newKey
 			slog.Info("SaveModelProfile: tts rebuilt", "type", fmt.Sprintf("%T", a.ttsSpeaker))
 		}
+		a.mu.Unlock()
 	}
 	return p, nil
 }
@@ -525,12 +547,15 @@ func (a *App) ActivateModelProfile(id int64) error {
 	if err != nil {
 		return err
 	}
+	a.mu.Lock()
 	a.cfg.ApplyProfile(p)
+	cfgCopy := *a.cfg
+	a.mu.Unlock()
 	// Persist any defaults written back to the profile (e.g. OpenRouter base URL).
 	if err := a.profileStore.Save(p); err != nil {
 		slog.Warn("ActivateModelProfile: save profile failed", "err", err)
 	}
-	if err := a.configStore.Save(a.cfg); err != nil {
+	if err := a.configStore.Save(&cfgCopy); err != nil {
 		return err
 	}
 	return a.initLLMComponents(a.ctx)
@@ -593,7 +618,9 @@ func (a *App) GetScreenList() []ScreenInfo {
 // It also detects display reconfiguration (e.g. after wake from sleep) by tracking the
 // screen count and the current screen's geometry — re-emitting if either changes.
 func (a *App) startScreenWatcher() {
+	a.watcherWG.Add(1)
 	go func() {
+		defer a.watcherWG.Done()
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
 		lastFoundIdx := -1
@@ -1303,6 +1330,8 @@ func (a *App) shutdown(_ context.Context) {
 	a.smsWatcher = nil
 	pe := a.proactiveEngine
 	sched := a.scheduler
+	closers := a.mcpClosers
+	a.mcpClosers = nil
 	a.mu.Unlock()
 	if w != nil {
 		w.Stop()
@@ -1312,6 +1341,22 @@ func (a *App) shutdown(_ context.Context) {
 	}
 	if sched != nil {
 		sched.Stop()
+	}
+	// Close MCP client connections accumulated across initLLMComponents calls.
+	for _, c := range closers {
+		if err := c.Close(); err != nil {
+			slog.Warn("mcp client close failed", "err", err)
+		}
+	}
+	// Wait for background watchers (screen watcher, etc.) to exit via ctx
+	// cancellation before closing shared resources like the SQLite pool.
+	a.watcherWG.Wait()
+	// Close the SQLite connection pool so modernc.org/sqlite flushes any pending
+	// writes and releases file handles before the process exits.
+	if a.sqlDB != nil {
+		if err := a.sqlDB.Close(); err != nil {
+			slog.Warn("sqlite close failed", "err", err)
+		}
 	}
 }
 

@@ -52,9 +52,13 @@ func newKokoroSpeaker(modelDir string) (Speaker, error) {
 
 	// 将内嵌脚本写入 ~/.aiko/kokoro_tts.py，每次启动都刷新保持最新。
 	aikoDir := filepath.Join(home, ".aiko")
-	_ = os.MkdirAll(aikoDir, 0755)
+	if err := os.MkdirAll(aikoDir, 0755); err != nil {
+		return nil, fmt.Errorf("kokoro: create %s: %w", aikoDir, err)
+	}
 	scriptPath := filepath.Join(aikoDir, "kokoro_tts.py")
-	_ = os.WriteFile(scriptPath, kokoroPyScript, 0644)
+	if err := os.WriteFile(scriptPath, kokoroPyScript, 0644); err != nil {
+		return nil, fmt.Errorf("kokoro: write script %s: %w", scriptPath, err)
+	}
 
 	return &KokoroSpeaker{
 		pythonBin:  pythonBin,

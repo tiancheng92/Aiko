@@ -6,6 +6,10 @@ import (
 	"time"
 )
 
+// maxRetryDelay caps the exponential back-off so a misconfigured caller
+// (very large baseDelay or many attempts) can't overflow or block for hours.
+const maxRetryDelay = 60 * time.Second
+
 // Retry returns a Middleware that retries up to maxAttempts times with
 // exponential back-off starting at baseDelay. Only hard errors trigger retries;
 // soft string results pass through immediately.
@@ -31,6 +35,9 @@ func Retry(maxAttempts int, baseDelay time.Duration) Middleware {
 				case <-time.After(delay):
 				}
 				delay *= 2
+				if delay > maxRetryDelay {
+					delay = maxRetryDelay
+				}
 			}
 			return out, err
 		}

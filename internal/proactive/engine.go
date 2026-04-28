@@ -47,12 +47,18 @@ func (e *ProactiveEngine) Store() Store {
 }
 
 // Start registers cron jobs and begins the scheduler.
-// ctx is used as a base context for all fired messages.
+// ctx is used as a lifecycle signal — once it is cancelled, subsequent poll
+// ticks become no-ops. A fresh 30s context is created per poll so cancellation
+// of the outer ctx does not propagate to an in-flight DB read.
 func (e *ProactiveEngine) Start(ctx context.Context) {
-	// Poll for due follow-up items every minute.
 	if e.store != nil {
 		_, _ = e.cron.AddFunc("* * * * *", func() {
-			e.Poll(ctx)
+			if ctx.Err() != nil {
+				return
+			}
+			pollCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			e.Poll(pollCtx)
 		})
 	}
 	e.cron.Start()
@@ -103,8 +109,14 @@ func (e *ProactiveEngine) Poll(ctx context.Context) {
 			continue
 		}
 		// Drop items that are more than fireDeadline past their trigger time.
-		triggerAt, _ := time.Parse(time.RFC3339, item.TriggerAt)
-		if time.Now().UTC().Sub(triggerAt) > fireDeadline {
+		// On parse failure we log and still fire — better to deliver a slightly
+		// late reminder than to silently drop a user-facing item because the DB
+		// row has an unexpected timestamp format.
+		triggerAt, parseErr := time.Parse(time.RFC3339, item.TriggerAt)
+		if parseErr != nil {
+			slog.Warn("proactive poll: invalid trigger_at, firing anyway",
+				"id", item.ID, "trigger_at", item.TriggerAt, "err", parseErr)
+		} else if time.Now().UTC().Sub(triggerAt) > fireDeadline {
 			slog.Info("proactive poll: item expired, dropped", "id", item.ID, "trigger_at", item.TriggerAt)
 			continue
 		}

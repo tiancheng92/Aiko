@@ -35,6 +35,7 @@ function applySize({ width, height }) {
 }
 
 let offSizeChange = null
+let offScreenChanged = null
 
 let mounted = false
 
@@ -46,7 +47,7 @@ onMounted(async () => {
     console.error('load chat size failed:', e)
   }
   offSizeChange = EventsOn('config:chat:size:changed', applySize)
-  EventsOn('screen:active:changed', async (info) => {
+  offScreenChanged = EventsOn('screen:active:changed', async (info) => {
     try {
       const [w, h] = await GetChatSize(info.width, info.height)
       applySize({ width: w, height: h })
@@ -59,6 +60,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   offSizeChange?.()
+  offScreenChanged?.()
 })
 
 const isFullscreen = ref(false)

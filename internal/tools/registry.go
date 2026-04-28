@@ -147,6 +147,61 @@ func AllEino(permStore *PermissionStore) []tool.BaseTool {
 	return result
 }
 
+// AllPermissionDeclarations returns every built-in tool (stateless, contextual,
+// enhanced) as a lightweight permission descriptor — the name and permission
+// level only. app.startup iterates this list to populate tool_permissions rows,
+// so adding a new tool requires only updating this function (plus the relevant
+// constructor list), not a separate hardcoded block in app.go.
+//
+// Only returns tools defined in this package; callers are responsible for
+// ensuring rows for tools defined elsewhere (e.g. proactive.ScheduleFollowupTool).
+func AllPermissionDeclarations() []namedPermDecl {
+	decls := make([]namedPermDecl, 0)
+	for _, t := range All() {
+		decls = append(decls, namedPermDecl{Name_: t.Name(), Perm_: t.Permission()})
+	}
+	// Contextual tools: we instantiate zero-value structs purely to read their
+	// declared Name/Permission. Runtime dependencies are not required here.
+	ctxPrototypes := []Tool{
+		&SearchKnowledgeTool{},
+		&CronTool{},
+		&SaveMemoryTool{},
+		&UpdateUserProfileTool{},
+		&SaveSkillTool{},
+		&ListDirectoryTool{},
+		&ReadFileTool{},
+		&WriteFileTool{},
+		&DeleteFileTool{},
+		&MakeDirectoryTool{},
+		&MoveFileTool{},
+		&ExecuteShellTool{},
+		&ExecuteCodeTool{},
+	}
+	for _, t := range ctxPrototypes {
+		decls = append(decls, namedPermDecl{Name_: t.Name(), Perm_: t.Permission()})
+	}
+	// Enhanced multimodal tools.
+	decls = append(decls, namedPermDecl{
+		Name_: (&TakeScreenshotTool{}).Name(),
+		Perm_: (&TakeScreenshotTool{}).Permission(),
+	})
+	return decls
+}
+
+// namedPermDecl is a static tool-name + permission-level descriptor that
+// satisfies the permission store's namedPerm interface without needing a full
+// Tool implementation. Keeping it here avoids leaking tool types to callers.
+type namedPermDecl struct {
+	Name_ string
+	Perm_ PermissionLevel
+}
+
+// Name returns the stable tool name.
+func (d namedPermDecl) Name() string { return d.Name_ }
+
+// Permission returns the required permission level.
+func (d namedPermDecl) Permission() PermissionLevel { return d.Perm_ }
+
 // AllContextual returns tools that require runtime dependencies injected at startup.
 func AllContextual(
 	permStore *PermissionStore,

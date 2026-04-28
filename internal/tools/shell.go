@@ -17,6 +17,9 @@ import (
 // On first call it interrupts to request user confirmation.
 // On resume it executes the (possibly edited) command.
 func (t *ExecuteShellTool) InvokableRun(ctx context.Context, input string, opts ...einotool.Option) (string, error) {
+	if t.Cfg == nil {
+		return "execute_shell 配置缺失，请在设置中完成初始化", nil
+	}
 	args := parseArgs(input)
 	command, _ := args["command"].(string)
 	workingDir, _ := args["working_dir"].(string)
@@ -26,6 +29,16 @@ func (t *ExecuteShellTool) InvokableRun(ctx context.Context, input string, opts 
 	if workingDir == "" {
 		home, _ := os.UserHomeDir()
 		workingDir = home
+	}
+	// Validate workingDir against the allowed-paths whitelist so the Agent
+	// cannot escape sandbox boundaries via an unexpected cwd, even when the
+	// user has marked a command as trusted.
+	if len(t.Cfg.AllowedPaths) > 0 {
+		if abs, err := checkPath(workingDir, t.Cfg.AllowedPaths); err != nil {
+			return err.Error(), nil
+		} else {
+			workingDir = abs
+		}
 	}
 
 	// Bypass confirmation for trusted commands.

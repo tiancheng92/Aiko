@@ -13,7 +13,7 @@ const ballPos  = ref({ x: -1, y: -1 })
 const ballSize = ref(160)
 const chatBubbleRef = ref(null)
 const activeScreen = ref({ width: 0, height: 0 })
-let offToggle, offToken, offDone, offError, offSettings
+let offToggle, offToken, offDone, offError, offSettings, offScreenChanged
 const voiceActive = ref(false)
 const siriMounted = ref(false)   // controls v-if (keeps DOM alive during fade-out)
 const siriVisible = ref(false)   // controls CSS transition class
@@ -354,7 +354,7 @@ onMounted(async () => {
   })
   offVoiceEnd   = EventsOn('voice:end',   () => { voiceActive.value = false })
   offVoiceError = EventsOn('voice:error', () => { voiceActive.value = false })
-  EventsOn('screen:changed', (info) => {
+  offScreenChanged = EventsOn('screen:changed', (info) => {
     activeScreen.value = { width: info.width, height: info.height }
     EventsEmit('screen:active:changed', info)
   })
@@ -378,6 +378,7 @@ onMounted(async () => {
 onUnmounted(() => {
   offToggle?.(); offToken?.(); offDone?.(); offError?.()
   offSettings?.(); offVoiceStart?.(); offVoiceEnd?.(); offVoiceError?.()
+  offScreenChanged?.()
   stopSiriAnim?.()
   stopRippleAnim?.()
   if (siriHideTimer) clearTimeout(siriHideTimer)

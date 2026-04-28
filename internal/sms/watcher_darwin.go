@@ -136,17 +136,15 @@ func (w *Watcher) loop(ctx context.Context, fw *fsnotify.Watcher) {
 	if !debounce.Stop() {
 		<-debounce.C
 	}
+	// Ensure the debounce timer is released regardless of which branch exits the
+	// loop (ctx cancel, fw.Events close, fw.Errors close). Multiple Stop calls
+	// are safe on time.Timer.
+	defer debounce.Stop()
 	pending := false
 
 	for {
 		select {
 		case <-ctx.Done():
-			if !debounce.Stop() {
-				select {
-				case <-debounce.C:
-				default:
-				}
-			}
 			return
 
 		case event, ok := <-fw.Events:

@@ -3,11 +3,12 @@ package mcp
 
 import (
 	"context"
-	json "github.com/bytedance/sonic"
 	"fmt"
+	"io"
 	"log/slog"
 	"strings"
 
+	json "github.com/bytedance/sonic"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 	mcpgo "github.com/mark3labs/mcp-go/client"
@@ -17,44 +18,53 @@ import (
 
 // LoadTools connects to all enabled MCP servers and returns their tools as eino BaseTool slice.
 // Servers that fail to connect are logged and skipped (non-fatal).
-func LoadTools(ctx context.Context, store *ServerStore) []tool.BaseTool {
+// The returned closers own the underlying MCP client connections; the caller
+// must Close them when the tool set is replaced (e.g. on config change) or the
+// process exits, otherwise stdio subprocesses and sockets leak.
+func LoadTools(ctx context.Context, store *ServerStore) ([]tool.BaseTool, []io.Closer) {
 	cfgs, err := store.List(ctx)
 	if err != nil {
 		slog.Error("failed to list mcp_servers", "err", err)
-		return nil
+		return nil, nil
 	}
 
 	var tools []tool.BaseTool
+	var closers []io.Closer
 	for _, cfg := range cfgs {
 		if !cfg.Enabled {
 			continue
 		}
-		serverTools, err := connectAndDiscover(ctx, cfg)
+		serverTools, client, err := connectAndDiscover(ctx, cfg)
 		if err != nil {
 			slog.Warn("mcp server connect failed, skipping", "server", cfg.Name, "err", err)
 			continue
 		}
 		tools = append(tools, serverTools...)
+		if client != nil {
+			closers = append(closers, client)
+		}
 		slog.Info("mcp server connected", "server", cfg.Name, "tools", len(serverTools))
 	}
-	return tools
+	return tools, closers
 }
 
 // connectAndDiscover opens a connection to one MCP server and returns its tools.
-func connectAndDiscover(ctx context.Context, cfg ServerConfig) ([]tool.BaseTool, error) {
+// The returned *mcpgo.Client must be closed by the caller when it is no longer
+// needed; on any error from this function the client (if created) is closed here.
+func connectAndDiscover(ctx context.Context, cfg ServerConfig) ([]tool.BaseTool, *mcpgo.Client, error) {
 	var client *mcpgo.Client
 	var err error
 
 	switch cfg.Transport {
 	case "stdio":
 		if cfg.Command == "" {
-			return nil, fmt.Errorf("stdio transport requires a command")
+			return nil, nil, fmt.Errorf("stdio transport requires a command")
 		}
 		args := append([]string{cfg.Command}, cfg.Args...)
 		client, err = mcpgo.NewStdioMCPClient(args[0], nil, args[1:]...)
 	case "sse":
 		if cfg.URL == "" {
-			return nil, fmt.Errorf("sse transport requires a url")
+			return nil, nil, fmt.Errorf("sse transport requires a url")
 		}
 		var opts []transport.ClientOption
 		if len(cfg.Headers) > 0 {
@@ -63,7 +73,7 @@ func connectAndDiscover(ctx context.Context, cfg ServerConfig) ([]tool.BaseTool,
 		client, err = mcpgo.NewSSEMCPClient(cfg.URL, opts...)
 	case "http":
 		if cfg.URL == "" {
-			return nil, fmt.Errorf("http transport requires a url")
+			return nil, nil, fmt.Errorf("http transport requires a url")
 		}
 		var opts []transport.StreamableHTTPCOption
 		if len(cfg.Headers) > 0 {
@@ -71,17 +81,18 @@ func connectAndDiscover(ctx context.Context, cfg ServerConfig) ([]tool.BaseTool,
 		}
 		client, err = mcpgo.NewStreamableHttpClient(cfg.URL, opts...)
 	default:
-		return nil, fmt.Errorf("unknown transport %q", cfg.Transport)
+		return nil, nil, fmt.Errorf("unknown transport %q", cfg.Transport)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("create mcp client: %w", err)
+		return nil, nil, fmt.Errorf("create mcp client: %w", err)
 	}
 
 	// Start the transport connection before initialization.
 	// NewStdioMCPClient auto-starts for backward compatibility; SSE and HTTP do not.
 	if cfg.Transport != "stdio" {
 		if err := client.Start(ctx); err != nil {
-			return nil, fmt.Errorf("mcp transport start: %w", err)
+			_ = client.Close()
+			return nil, nil, fmt.Errorf("mcp transport start: %w", err)
 		}
 	}
 
@@ -91,14 +102,15 @@ func connectAndDiscover(ctx context.Context, cfg ServerConfig) ([]tool.BaseTool,
 		Name:    "Desktop Pet",
 		Version: "1.0.0",
 	}
-	_, err = client.Initialize(ctx, initRequest)
-	if err != nil {
-		return nil, fmt.Errorf("mcp initialize: %w", err)
+	if _, err := client.Initialize(ctx, initRequest); err != nil {
+		_ = client.Close()
+		return nil, nil, fmt.Errorf("mcp initialize: %w", err)
 	}
 
 	resp, err := client.ListTools(ctx, mcp.ListToolsRequest{})
 	if err != nil {
-		return nil, fmt.Errorf("mcp list tools: %w", err)
+		_ = client.Close()
+		return nil, nil, fmt.Errorf("mcp list tools: %w", err)
 	}
 
 	result := make([]tool.BaseTool, 0, len(resp.Tools))
@@ -109,7 +121,7 @@ func connectAndDiscover(ctx context.Context, cfg ServerConfig) ([]tool.BaseTool,
 			toolDef:    t,
 		})
 	}
-	return result, nil
+	return result, client, nil
 }
 
 // mcpToolAdapter wraps an MCP tool as an eino tool.BaseTool.

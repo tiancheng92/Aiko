@@ -1,7 +1,7 @@
 <!-- ExecutionProgress.vue — in-chat indicator shown while a tool command is running -->
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
+import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { KillToolExecution } from '../../wailsjs/go/main/App'
 
 /** Currently running executions: [{ id, elapsed, intervalId }] */
@@ -31,13 +31,17 @@ async function kill(id) {
   await KillToolExecution(id)
 }
 
+// Store the handler refs returned by EventsOn; passing just the event name to
+// EventsOff would tear down any other subscribers registered for the same name.
+let offExecuting = null
+let offExecuted = null
 onMounted(() => {
-  EventsOn('tool:executing', onExecuting)
-  EventsOn('tool:executed', onExecuted)
+  offExecuting = EventsOn('tool:executing', onExecuting)
+  offExecuted = EventsOn('tool:executed', onExecuted)
 })
 onUnmounted(() => {
-  EventsOff('tool:executing')
-  EventsOff('tool:executed')
+  offExecuting?.()
+  offExecuted?.()
   executions.value.forEach(e => clearInterval(e.intervalId))
 })
 </script>

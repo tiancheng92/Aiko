@@ -151,6 +151,10 @@ onMounted(async () => {
 onUnmounted(() => {
   offProgress?.()
   offScreen?.()
+  // Safety net — ensure no drag listeners linger if the component unmounts mid-drag.
+  window.removeEventListener('mousemove', onMouseMove)
+  window.removeEventListener('mouseup', onMouseUp)
+  window.removeEventListener('blur', onMouseUp)
 })
 
 /** fetchLLMModels calls the backend with the current form values to list available models. */
@@ -224,7 +228,6 @@ async function saveProfile() {
     profileFormError.value = '请输入 Base URL'; profileFormSaving.value = false; return
   }
   try {
-    console.log('saveProfile payload:', JSON.stringify({ ...profileForm.value }))
     await SaveModelProfile({ ...profileForm.value })
     showProfileForm.value = false
     await fetchProfiles()
@@ -389,6 +392,7 @@ function onHeaderMouseDown(e) {
   dragStart = { mx: e.clientX - pos.value.x, my: e.clientY - pos.value.y }
   window.addEventListener('mousemove', onMouseMove)
   window.addEventListener('mouseup', onMouseUp)
+  window.addEventListener('blur', onMouseUp)
 }
 
 /** onMouseMove updates position during drag. */
@@ -397,11 +401,13 @@ function onMouseMove(e) {
   pos.value = { x: e.clientX - dragStart.mx, y: e.clientY - dragStart.my }
 }
 
-/** onMouseUp ends the drag. */
+/** onMouseUp ends the drag. Also invoked from the window blur listener so a
+ *  deactivation mid-drag releases the listeners instead of leaving them attached. */
 function onMouseUp() {
   dragStart = null
   window.removeEventListener('mousemove', onMouseMove)
   window.removeEventListener('mouseup', onMouseUp)
+  window.removeEventListener('blur', onMouseUp)
 }
 
 /** fetchMCPServers loads the MCP server list from the backend. */

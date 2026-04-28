@@ -150,6 +150,8 @@ function formatTime(ts) {
 let proactiveStarted = false
 let offToken, offDone, offError, offClear, offProactiveStart, offProactiveMessage
 let offTTSDone, offTTSError, offTTSAudio
+let offSoundsChanged
+let offVoiceStart, offVoiceTranscript, offVoiceEnd, offVoiceFinal, offVoiceError, offVoiceAutoSend
 /** @type {HTMLAudioElement|null} 当前正在播放的 TTS Audio 实例，用于暂停 */
 let currentTTSAudio = null
 
@@ -238,7 +240,7 @@ onMounted(async () => {
   try { soundsEnabled = await GetSoundsEnabled() } catch {}
   try { cfg.value = await GetConfig() } catch {}
 
-  EventsOn('config:sounds:changed', (val) => {
+  offSoundsChanged = EventsOn('config:sounds:changed', (val) => {
     soundsEnabled = val
   })
 
@@ -273,24 +275,24 @@ onMounted(async () => {
     }
   })
 
-  EventsOn('voice:start', () => {
+  offVoiceStart = EventsOn('voice:start', () => {
     isRecording.value = true
     voiceHint.value = ''
     input.value = ''
     nextTick(() => textareaEl.value?.focus())
   })
 
-  EventsOn('voice:transcript', (text) => {
+  offVoiceTranscript = EventsOn('voice:transcript', (text) => {
     input.value = text
     voiceHint.value = text
   })
 
-  EventsOn('voice:end', () => {
+  offVoiceEnd = EventsOn('voice:end', () => {
     isRecording.value = false
     voiceHint.value = ''
   })
 
-  EventsOn('voice:final', (text) => {
+  offVoiceFinal = EventsOn('voice:final', (text) => {
     input.value = text
     voiceHint.value = ''
     if (voiceAutoSend.value && text.trim()) {
@@ -298,7 +300,7 @@ onMounted(async () => {
     }
   })
 
-  EventsOn('voice:error', (errMsg) => {
+  offVoiceError = EventsOn('voice:error', (errMsg) => {
     isRecording.value = false
     voiceHint.value = ''
     input.value = ''
@@ -312,12 +314,22 @@ onMounted(async () => {
     })
   })
 
-  EventsOn('config:voice:auto-send:changed', (val) => {
+  offVoiceAutoSend = EventsOn('config:voice:auto-send:changed', (val) => {
     voiceAutoSend.value = val
   })
 })
 
-onUnmounted(() => { offToken?.(); offDone?.(); offError?.(); offClear?.(); offProactiveStart?.(); offProactiveMessage?.(); offTTSDone?.(); offTTSError?.(); offTTSAudio?.() })
+onUnmounted(() => {
+  // Invoke every EventsOn teardown; undefined entries are safely skipped via
+  // optional chaining so a partial mount (e.g. early error) does not throw here.
+  offToken?.(); offDone?.(); offError?.(); offClear?.()
+  offProactiveStart?.(); offProactiveMessage?.()
+  offTTSDone?.(); offTTSError?.(); offTTSAudio?.()
+  offSoundsChanged?.()
+  offVoiceStart?.(); offVoiceTranscript?.(); offVoiceEnd?.(); offVoiceFinal?.(); offVoiceError?.(); offVoiceAutoSend?.()
+  // Stop any in-flight TTS playback so detached <audio> elements can be GC'd.
+  if (currentTTSAudio) { try { currentTTSAudio.pause() } catch {} ; currentTTSAudio = null }
+})
 
 /** renderMarkdown converts markdown text to sanitized HTML. */
 function renderMarkdown(text) {

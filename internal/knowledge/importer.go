@@ -99,12 +99,19 @@ func extractEPUB(path string) (string, error) {
 		if !strings.HasSuffix(f.Name, ".html") && !strings.HasSuffix(f.Name, ".xhtml") {
 			continue
 		}
-		rc, err := f.Open()
+		// Wrap rc handling in a closure so defer runs per entry and panic from
+		// the HTML parser doesn't leak the entry's reader.
+		text, err := func(f *zip.File) (string, error) {
+			rc, err := f.Open()
+			if err != nil {
+				return "", fmt.Errorf("open epub entry %s: %w", f.Name, err)
+			}
+			defer rc.Close()
+			return extractHTMLText(rc), nil
+		}(f)
 		if err != nil {
-			return "", fmt.Errorf("open epub entry %s: %w", f.Name, err)
+			return "", err
 		}
-		text := extractHTMLText(rc)
-		rc.Close()
 		sb.WriteString(text)
 		sb.WriteString("\n")
 	}

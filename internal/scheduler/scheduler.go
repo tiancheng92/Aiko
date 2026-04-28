@@ -35,6 +35,9 @@ type Scheduler struct {
     entryIDs map[int64]cron.EntryID // job.ID -> cron entry ID
     chatFn   func(ctx context.Context, prompt string) (string, error)
     onResult ResultFunc
+    // wg tracks in-flight job invocations (cron-triggered and RunJobNow) so
+    // Stop can wait for them to drain before returning.
+    wg sync.WaitGroup
 }
 
 // New creates a Scheduler. chatFn is called to execute each job's prompt.
@@ -67,9 +70,12 @@ func (s *Scheduler) Start(ctx context.Context) error {
     return nil
 }
 
-// Stop halts the cron engine.
+// Stop halts the cron engine and waits for any in-flight job invocations to
+// finish so callers get deterministic shutdown.
 func (s *Scheduler) Stop() {
-    s.cr.Stop()
+    ctx := s.cr.Stop() // returns a ctx that is done once cron workers exit
+    <-ctx.Done()
+    s.wg.Wait()
 }
 
 // CreateJob persists a new job and schedules it immediately.
@@ -101,7 +107,9 @@ func (s *Scheduler) RunJobNow(id int64) error {
 	}
 	for _, j := range jobs {
 		if j.ID == id {
+			s.wg.Add(1)
 			go func(job Job) {
+				defer s.wg.Done()
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 				defer cancel()
 				_, _ = s.db.ExecContext(ctx, `UPDATE cron_jobs SET last_run=? WHERE id=?`, time.Now(), job.ID)
@@ -152,19 +160,41 @@ func (s *Scheduler) UpdateJob(ctx context.Context, id int64, name, description, 
             break
         }
     }
-    // Reschedule: remove old entry then re-add if enabled.
+    // Reschedule: remove old entry then re-add if enabled, holding mu across
+    // the full swap so a concurrent DeleteJob/SetJobEnabled can't observe a
+    // half-updated entryIDs map.
     s.mu.Lock()
     if eid, ok := s.entryIDs[id]; ok {
         s.cr.Remove(eid)
         delete(s.entryIDs, id)
     }
-    s.mu.Unlock()
     if updated.Enabled {
-        if err := s.scheduleJob(updated); err != nil {
+        eid, err := s.cr.AddFunc(updated.Schedule, s.makeJobFunc(updated))
+        if err != nil {
+            s.mu.Unlock()
             return updated, fmt.Errorf("reschedule job: %w", err)
         }
+        s.entryIDs[id] = eid
     }
+    s.mu.Unlock()
     return updated, nil
+}
+
+// makeJobFunc builds the closure invoked by cron for a given job, mirroring
+// the logic in scheduleJob but suitable for callers that already hold mu.
+func (s *Scheduler) makeJobFunc(j Job) func() {
+    return func() {
+        s.wg.Add(1)
+        defer s.wg.Done()
+        ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+        defer cancel()
+        _, _ = s.db.ExecContext(ctx, `UPDATE cron_jobs SET last_run=? WHERE id=?`, time.Now(), j.ID)
+        slog.Info("cron job fired", "job", j.Name)
+        result, err := s.chatFn(ctx, j.Prompt)
+        if s.onResult != nil {
+            s.onResult(j, result, err)
+        }
+    }
 }
 
 // SetJobEnabled enables or disables a scheduled job.
@@ -229,6 +259,8 @@ func (s *Scheduler) ListJobs(ctx context.Context) ([]Job, error) {
 // scheduleJob registers a job with the cron engine.
 func (s *Scheduler) scheduleJob(j Job) error {
     eid, err := s.cr.AddFunc(j.Schedule, func() {
+        s.wg.Add(1)
+        defer s.wg.Done()
         ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
         defer cancel()
         // Update last_run.

@@ -25,6 +25,10 @@ func NewClient(cliPath string) *Client {
 
 // Run executes lark-cli with the given arguments and returns stdout.
 // stderr is captured and appended to the error message on failure.
+//
+// The error message only includes the subcommand (first arg) and an arg count
+// rather than the full args slice — lark-cli args can contain access tokens,
+// message bodies, and other values we don't want in logs or UI toasts.
 func (c *Client) Run(ctx context.Context, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, c.CLIPath, args...)
 	var stdout, stderr bytes.Buffer
@@ -35,7 +39,11 @@ func (c *Client) Run(ctx context.Context, args ...string) (string, error) {
 		if msg == "" {
 			msg = err.Error()
 		}
-		return "", fmt.Errorf("lark-cli %s: %s", strings.Join(args, " "), msg)
+		sub := "?"
+		if len(args) > 0 {
+			sub = args[0]
+		}
+		return "", fmt.Errorf("lark-cli %s (%d args): %s", sub, len(args), msg)
 	}
 	return strings.TrimSpace(stdout.String()), nil
 }

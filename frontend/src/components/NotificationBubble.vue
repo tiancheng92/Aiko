@@ -46,7 +46,8 @@ onMounted(() => {
     nextTick(() => {
       if (bubbleEl.value) bubbleH.value = bubbleEl.value.offsetHeight
     })
-    hideTimer = setTimeout(dismiss, 10 * 60 * 1000)
+    // 5 分钟后自动消失；太长会让已读通知长期停留在桌面。
+    hideTimer = setTimeout(dismiss, 5 * 60 * 1000)
   })
 })
 

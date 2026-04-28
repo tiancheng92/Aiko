@@ -1,7 +1,7 @@
 <!-- ToolConfirmModal.vue — confirmation dialog for shell/code tool execution requests -->
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
+import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { ConfirmToolExecution } from '../../wailsjs/go/main/App'
 
 const visible = ref(false)
@@ -42,8 +42,12 @@ async function reject() {
   await ConfirmToolExecution(request.value.id, false, '')
 }
 
-onMounted(() => EventsOn('tool:confirm', onConfirmEvent))
-onUnmounted(() => EventsOff('tool:confirm'))
+// Store the handler returned by EventsOn and invoke it on unmount — passing
+// the event name alone to EventsOff removes all listeners for that event,
+// which would break other components subscribing to the same name later.
+let offConfirm = null
+onMounted(() => { offConfirm = EventsOn('tool:confirm', onConfirmEvent) })
+onUnmounted(() => { offConfirm?.() })
 </script>
 
 <template>

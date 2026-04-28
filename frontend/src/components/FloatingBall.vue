@@ -1,7 +1,7 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { GetBallPosition, SaveBallPosition, GetScreenSize } from '../../wailsjs/go/main/App'
-import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
+import { EventsOn } from '../../wailsjs/runtime/runtime'
 
 const emit = defineEmits(['click', 'position', 'ball-size'])
 const pos = ref(null)
@@ -64,6 +64,7 @@ function onMouseDown(e) {
   isDragging = false
   window.addEventListener('mousemove', onMouseMove)
   window.addEventListener('mouseup', onMouseUp)
+  window.addEventListener('blur', onMouseUp)
 }
 
 /** onMouseMove updates the ball position during drag. */
@@ -80,10 +81,13 @@ function onMouseMove(e) {
 async function onMouseUp(e) {
   window.removeEventListener('mousemove', onMouseMove)
   window.removeEventListener('mouseup', onMouseUp)
+  window.removeEventListener('blur', onMouseUp)
   try {
-    if (!isDragging) {
+    // Blur events fire this with no positional data — only treat actual
+    // mouseups as clicks so a window deactivation doesn't trigger emit('click').
+    if (!isDragging && e && typeof e.clientX === 'number') {
       emit('click')
-    } else {
+    } else if (isDragging) {
       await SaveBallPosition(Math.round(pos.value.x), Math.round(pos.value.y), sw.value, sh.value)
     }
   } catch (e) {

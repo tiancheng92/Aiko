@@ -84,6 +84,8 @@ let dragStart = null
 let isDragging = false
 let mounted = true
 let offSizeChange = null
+let offPositionReset = null
+let offScreenChanged = null
 
 watch(pos, (p) => { if (p) emit('position', { ...p }) })
 
@@ -211,11 +213,11 @@ onMounted(async () => {
     applySize(size)
   })
 
-  EventsOn('ball:position:reset', () => {
+  offPositionReset = EventsOn('ball:position:reset', () => {
     pos.value = { x: sw.value - petSize.value - 40, y: sh.value - petSize.value - 40 }
   })
 
-  EventsOn('screen:active:changed', async (info) => {
+  offScreenChanged = EventsOn('screen:active:changed', async (info) => {
     const w = info.width
     const h = info.height
     sw.value = w
@@ -293,9 +295,12 @@ const MOUSE_POLL_INTERVAL_MS = 50
 function startGlobalMouseTracking() {
   let lastX = -1, lastY = -1
   mouseTrackTimer = setInterval(async () => {
-    if (!live2dModel || !canvasRef.value) return
+    // The await below yields the event loop; the component may be unmounted
+    // by the time we resume, so re-check `mounted` before touching PIXI state.
+    if (!mounted || !live2dModel || !canvasRef.value) return
     try {
       const { x, y } = await GetMousePosition()
+      if (!mounted || !live2dModel || !canvasRef.value) return
       if (x === lastX && y === lastY) return
       lastX = x; lastY = y
       const rect = canvasRef.value.getBoundingClientRect()
@@ -308,9 +313,12 @@ onUnmounted(() => {
   mounted = false
   if (mouseTrackTimer !== null) { clearInterval(mouseTrackTimer); mouseTrackTimer = null }
   offSizeChange?.()
+  offPositionReset?.()
+  offScreenChanged?.()
   // Clean up any in-progress drag listeners to prevent ghost handlers.
   window.removeEventListener('mousemove', onMouseMove)
   window.removeEventListener('mouseup', onMouseUp)
+  window.removeEventListener('blur', onMouseUp)
   if (live2dModel) {
     live2dModel.off('hit')
     live2dModel = null
@@ -343,6 +351,9 @@ function onMouseDown(e) {
   isDragging = false
   window.addEventListener('mousemove', onMouseMove)
   window.addEventListener('mouseup', onMouseUp)
+  // If the user drags out of the window, mouseup never fires; treat window
+  // blur as an implicit mouseup so we don't leave the listeners attached.
+  window.addEventListener('blur', onMouseUp)
 }
 
 /** onMouseMove updates the pet position during drag. */
@@ -359,10 +370,13 @@ function onMouseMove(e) {
 async function onMouseUp(e) {
   window.removeEventListener('mousemove', onMouseMove)
   window.removeEventListener('mouseup', onMouseUp)
+  window.removeEventListener('blur', onMouseUp)
   try {
-    if (!isDragging) {
+    // A blur event fires this handler with no positional data, so only treat
+    // it as a click when we actually have a MouseEvent and the user didn't drag.
+    if (!isDragging && e && typeof e.clientX === 'number') {
       onCanvasClick(e)
-    } else {
+    } else if (isDragging) {
       await SaveBallPosition(Math.round(pos.value.x), Math.round(pos.value.y), sw.value, sh.value)
     }
   } catch (err) {

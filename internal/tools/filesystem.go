@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -84,14 +85,20 @@ func (t *ListDirectoryTool) InvokableRun(_ context.Context, input string, _ ...t
 	}
 	var result []entry
 	for _, e := range entries {
-		info, _ := e.Info()
+		info, infoErr := e.Info()
+		if infoErr != nil {
+			slog.Warn("list_directory: DirEntry.Info failed", "path", abs, "name", e.Name(), "err", infoErr)
+		}
 		var size int64
 		if info != nil && !e.IsDir() {
 			size = info.Size()
 		}
 		result = append(result, entry{Name: e.Name(), IsDir: e.IsDir(), Size: size})
 	}
-	b, _ := json.Marshal(result)
+	b, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Sprintf("序列化目录内容失败：%s", err.Error()), nil
+	}
 	return string(b), nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 )
 
@@ -31,10 +32,14 @@ func scanMessage(scan func(...any) error) (Message, error) {
 		return m, err
 	}
 	if imagesJSON != "" {
-		_ = json.Unmarshal([]byte(imagesJSON), &m.Images)
+		if err := json.Unmarshal([]byte(imagesJSON), &m.Images); err != nil {
+			slog.Warn("short memory: images JSON unmarshal", "id", m.ID, "err", err)
+		}
 	}
 	if filesJSON != "" {
-		_ = json.Unmarshal([]byte(filesJSON), &m.Files)
+		if err := json.Unmarshal([]byte(filesJSON), &m.Files); err != nil {
+			slog.Warn("short memory: files JSON unmarshal", "id", m.ID, "err", err)
+		}
 	}
 	return m, nil
 }
@@ -83,13 +88,21 @@ func (s *ShortStore) AddWithImages(role, content string, images []string) (int64
 func (s *ShortStore) AddWithImagesAndFiles(role, content string, images []string, files []string) (int64, error) {
 	imagesJSON := ""
 	if len(images) > 0 {
-		b, _ := json.Marshal(images)
-		imagesJSON = string(b)
+		b, err := json.Marshal(images)
+		if err != nil {
+			slog.Warn("short memory: images JSON marshal", "err", err)
+		} else {
+			imagesJSON = string(b)
+		}
 	}
 	filesJSON := ""
 	if len(files) > 0 {
-		b, _ := json.Marshal(files)
-		filesJSON = string(b)
+		b, err := json.Marshal(files)
+		if err != nil {
+			slog.Warn("short memory: files JSON marshal", "err", err)
+		} else {
+			filesJSON = string(b)
+		}
 	}
 	res, err := s.db.Exec(
 		`INSERT INTO messages(role, content, images, files) VALUES(?, ?, ?, ?)`,

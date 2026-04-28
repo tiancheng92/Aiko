@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"math"
 	"sort"
 	"strconv"
@@ -66,9 +67,11 @@ func (l *LongStore) Store(ctx context.Context, text string) error {
 	}
 
 	// Store the summary vector (if available) with a separate ID.
+	// Summary is a retrieval optimization — a failure here should not block
+	// persistence of the raw vector, so we log and continue.
 	if summary != "" {
 		summaryID := uuid.NewString()
-		_ = col.AddDocument(ctx, chromem.Document{
+		if err := col.AddDocument(ctx, chromem.Document{
 			ID:      summaryID,
 			Content: summary,
 			Metadata: map[string]string{
@@ -76,17 +79,19 @@ func (l *LongStore) Store(ctx context.Context, text string) error {
 				"type":       "summary",
 				"raw_id":     id,
 			},
-		})
+		}); err != nil {
+			slog.Warn("long memory: summary vector add failed", "id", id, "err", err)
+		}
 	}
 
-	// Persist metadata to SQLite.
+	// Persist metadata to SQLite. Non-fatal when it fails: the vector is the
+	// source of truth for retrieval, and the SQLite table is best-effort
+	// metadata used for the settings UI and manual browsing.
 	if l.db != nil {
-		_, err := l.db.ExecContext(ctx,
+		if _, err := l.db.ExecContext(ctx,
 			`INSERT INTO memory_segments(vector_id, raw_content, summary, created_at) VALUES(?,?,?,?)`,
-			id, text, summary, now)
-		if err != nil {
-			// Non-fatal: vector is already stored.
-			return nil
+			id, text, summary, now); err != nil {
+			slog.Warn("long memory: sqlite metadata insert failed", "id", id, "err", err)
 		}
 	}
 	return nil

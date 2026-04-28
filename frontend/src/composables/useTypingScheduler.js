@@ -1,5 +1,13 @@
-/** useTypingScheduler queues chat tokens and drains them with variable timing to create
- *  a natural typing rhythm: punctuation pauses + subtle speed jitter. */
+import { onScopeDispose } from 'vue'
+
+/**
+ * useTypingScheduler queues chat tokens and drains them with variable timing
+ * to create a natural typing rhythm: punctuation pauses + subtle speed jitter.
+ * The returned API is {enqueue, flush, clear}; the composable auto-clears the
+ * queue and cancels any pending setTimeout when its owning scope is disposed
+ * (onUnmounted equivalent), so tokens streamed in-flight cannot apply to a
+ * destroyed component.
+ */
 export function useTypingScheduler(applyToken) {
   const PUNCT = new Set(['。', '！', '？', '\n', '，', '、', '…', '；', '!', '?', ';'])
   const BASE_DELAY_MS = 16
@@ -9,6 +17,8 @@ export function useTypingScheduler(applyToken) {
 
   const queue = []
   let draining = false
+  let pendingTimeoutId = null
+  let disposed = false
 
   /** computeDelay returns the ms to wait before rendering this token. */
   function computeDelay(token) {
@@ -21,17 +31,19 @@ export function useTypingScheduler(applyToken) {
 
   /** drain processes the next token from the queue, then schedules itself again. */
   function drain() {
-    if (queue.length === 0) {
+    pendingTimeoutId = null
+    if (disposed || queue.length === 0) {
       draining = false
       return
     }
     const token = queue.shift()
     applyToken(token)
-    setTimeout(drain, computeDelay(token))
+    pendingTimeoutId = setTimeout(drain, computeDelay(token))
   }
 
   /** enqueue adds a token to the queue and starts draining if not already running. */
   function enqueue(token) {
+    if (disposed) return
     queue.push(token)
     if (!draining) {
       draining = true
@@ -41,6 +53,10 @@ export function useTypingScheduler(applyToken) {
 
   /** flush drains all remaining queued tokens immediately (no delay). */
   function flush() {
+    if (pendingTimeoutId !== null) {
+      clearTimeout(pendingTimeoutId)
+      pendingTimeoutId = null
+    }
     while (queue.length > 0) {
       applyToken(queue.shift())
     }
@@ -49,9 +65,18 @@ export function useTypingScheduler(applyToken) {
 
   /** clear discards all queued tokens without applying them. */
   function clear() {
+    if (pendingTimeoutId !== null) {
+      clearTimeout(pendingTimeoutId)
+      pendingTimeoutId = null
+    }
     queue.length = 0
     draining = false
   }
+
+  onScopeDispose(() => {
+    disposed = true
+    clear()
+  })
 
   return { enqueue, flush, clear }
 }
