@@ -582,11 +582,15 @@ func (a *App) GetScreenList() []ScreenInfo {
 
 // startScreenWatcher polls the mouse position every 500ms and migrates the Wails window
 // to the screen containing the cursor. Emits "screen:changed" when the active screen changes.
+// It also detects display reconfiguration (e.g. after wake from sleep) by tracking the
+// screen count and the current screen's geometry — re-emitting if either changes.
 func (a *App) startScreenWatcher() {
 	go func() {
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
 		lastFoundIdx := -1
+		lastNumScreens := -1
+		var lastFrame ScreenFrame
 		for {
 			select {
 			case <-a.ctx.Done():
@@ -611,14 +615,24 @@ func (a *App) startScreenWatcher() {
 					break
 				}
 			}
-			if foundIdx < 0 || foundIdx == lastFoundIdx {
+			if foundIdx < 0 {
+				continue
+			}
+
+			frame := getScreenFrame(foundIdx)
+			displayChanged := n != lastNumScreens ||
+				frame.Width != lastFrame.Width ||
+				frame.Height != lastFrame.Height ||
+				frame.OriginX != lastFrame.OriginX ||
+				frame.OriginY != lastFrame.OriginY
+
+			if foundIdx == lastFoundIdx && !displayChanged {
 				continue
 			}
 			lastFoundIdx = foundIdx
+			lastNumScreens = n
+			lastFrame = frame
 
-			// Derive screen size from the CGO frame (physical pixels) directly,
-			// avoiding the NSScreen index vs. Wails ScreenGetAll index mismatch.
-			frame := getScreenFrame(foundIdx)
 			current := ScreenInfo{Width: int(frame.Width), Height: int(frame.Height)}
 
 			// Move the window directly via CGO to bypass Wails' WindowSetPosition,
@@ -631,7 +645,7 @@ func (a *App) startScreenWatcher() {
 			a.mu.Unlock()
 
 			wailsruntime.EventsEmit(a.ctx, "screen:changed", current)
-			slog.Info("startScreenWatcher: screen changed", "width", current.Width, "height", current.Height)
+			slog.Info("startScreenWatcher: screen changed", "width", current.Width, "height", current.Height, "numScreens", n)
 		}
 	}()
 }
