@@ -633,7 +633,7 @@ defineExpose({ focusInput, scrollToBottom })
         :disabled="loading"
         @click="fileInputEl.click()"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
       </button>
       <textarea
         ref="textareaEl"
@@ -645,7 +645,7 @@ defineExpose({ focusInput, scrollToBottom })
         :disabled="loading"
       />
       <button v-if="isStreaming" class="stop-btn" @click="stopGeneration">⏹ 停止</button>
-      <button v-else @click="send" :disabled="loading">发送</button>
+      <button v-else class="send-btn" @click="send" :disabled="loading">发送</button>
     </div>
   </div>
 </template>
@@ -969,7 +969,7 @@ defineExpose({ focusInput, scrollToBottom })
 }
 .input-row textarea:focus { border-color: rgba(3, 105, 161, 0.6); }
 .input-row textarea::placeholder { color: rgba(156, 163, 175, 0.5); }
-.input-row button {
+.send-btn {
   background: linear-gradient(135deg, #0369a1, #0c4a6e);
   color: #fff;
   border: none;
@@ -981,9 +981,9 @@ defineExpose({ focusInput, scrollToBottom })
   transition: opacity 0.15s, transform 0.1s;
   box-shadow: 0 2px 8px rgba(3, 105, 161, 0.4);
 }
-.input-row button:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
-.input-row button:active:not(:disabled) { transform: translateY(0); }
-.input-row button:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+.send-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+.send-btn:active:not(:disabled) { transform: translateY(0); }
+.send-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 
 /* ── Voice hint status bar ─────────────────────────────────── */
 .voice-hint-bar {
@@ -1112,6 +1112,7 @@ defineExpose({ focusInput, scrollToBottom })
 /* Attach file button */
 .attach-btn {
   flex-shrink: 0;
+  align-self: center;
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 10px;
