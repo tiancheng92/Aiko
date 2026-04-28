@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { SendMessage, SendMessageWithImages, GetMessages, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig } from '../../wailsjs/go/main/App'
+import { SendMessage, SendMessageWithImages, SendMessageWithFiles, GetMessages, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 import { marked, Renderer } from 'marked'
 import markedKatex from 'marked-katex-extension'
@@ -92,6 +92,10 @@ const messages = ref([])
 const input = ref('')
 /** pendingImages holds data URLs of images pasted by the user, awaiting send. */
 const pendingImages = ref([])
+/** pendingFiles holds text files selected by the user, awaiting send. */
+const pendingFiles = ref([])
+/** fileInputEl is the hidden <input type="file"> element for triggering the OS picker. */
+const fileInputEl = ref(null)
 
 /** lightboxSrc holds the data URL of the image currently shown in the lightbox, or null. */
 const lightboxSrc = ref(null)
@@ -151,7 +155,7 @@ let currentTTSAudio = null
 
 onMounted(async () => {
   const history = await GetMessages(50)
-  messages.value = (history || []).map(m => ({ role: m.Role, content: m.Content, time: m.CreatedAt, images: m.Images || [] }))
+  messages.value = (history || []).map(m => ({ role: m.Role, content: m.Content, time: m.CreatedAt, images: m.Images || [], files: m.Files || [] }))
   scrollToBottom()
 
   // Show welcome message on first launch when chat history is empty.
@@ -383,10 +387,58 @@ function removeImage(idx) {
   pendingImages.value.splice(idx, 1)
 }
 
+const READABLE_MIME_PREFIXES = ['text/']
+const READABLE_MIME_EXACT = new Set([
+  'application/json',
+  'application/xml',
+  'application/javascript',
+  'application/typescript',
+  'application/x-sh',
+  'application/x-python',
+])
+const MAX_FILE_BYTES = 200 * 1024
+
+/** isReadableMime returns true if the MIME type is a supported text type. */
+function isReadableMime(mime) {
+  if (READABLE_MIME_PREFIXES.some(p => mime.startsWith(p))) return true
+  return READABLE_MIME_EXACT.has(mime)
+}
+
+/** addFile validates and reads a File object, pushing to pendingFiles on success. */
+function addFile(file) {
+  if (file.size > MAX_FILE_BYTES) {
+    messages.value.push({ role: 'system', content: `文件过大（最大 200KB）：${file.name}` })
+    return
+  }
+  const mime = file.type || 'text/plain'
+  if (!isReadableMime(mime)) {
+    messages.value.push({ role: 'system', content: `不支持此文件类型，仅支持文本文件：${file.name}` })
+    return
+  }
+  const reader = new FileReader()
+  reader.onload = (ev) => {
+    pendingFiles.value.push({ name: file.name, mimeType: mime, content: ev.target.result })
+  }
+  reader.readAsText(file)
+}
+
+/** onFileInputChange handles files selected via the OS file picker. */
+function onFileInputChange(e) {
+  for (const file of e.target.files) {
+    addFile(file)
+  }
+  e.target.value = ''
+}
+
+/** removeFile removes a pending file by index. */
+function removeFile(idx) {
+  pendingFiles.value.splice(idx, 1)
+}
+
 /** send submits the current input as a user message. */
 async function send() {
   const text = input.value.trim()
-  if ((!text && pendingImages.value.length === 0) || loading.value) return
+  if ((!text && pendingImages.value.length === 0 && pendingFiles.value.length === 0) || loading.value) return
   input.value = ''
   loading.value = true
   isStreaming.value = true
@@ -395,13 +447,17 @@ async function send() {
 
   const imgs = [...pendingImages.value]
   pendingImages.value = []
-  messages.value.push({ role: 'user', content: text, images: imgs, time: new Date() })
+  const fileAttachments = pendingFiles.value.map(f => ({ name: f.name, mimeType: f.mimeType, content: f.content }))
+  const fileNames = pendingFiles.value.map(f => f.name)
+  pendingFiles.value = []
+
+  messages.value.push({ role: 'user', content: text, images: imgs, files: fileNames, time: new Date() })
   messages.value.push({ role: 'assistant', content: '', streaming: true, thinking: true })
   scrollToBottom()
   EventsEmit('pet:state:change', 'thinking')
   try {
-    if (imgs.length > 0) {
-      await SendMessageWithImages(text, imgs)
+    if (imgs.length > 0 || fileAttachments.length > 0) {
+      await SendMessageWithFiles(text, imgs, fileAttachments)
     } else {
       await SendMessage(text)
     }
@@ -473,9 +529,15 @@ defineExpose({ focusInput, scrollToBottom })
         <div class="bubble-wrap" :class="{ ghost: m.ghost }">
           <div class="bubble-row">
             <!-- Bubble content -->
-            <div v-if="m.role !== 'assistant'" class="bubble markdown" :class="{ 'has-images': m.images && m.images.length > 0 }">
+            <div v-if="m.role !== 'assistant'" class="bubble markdown" :class="{ 'has-images': (m.images && m.images.length > 0) || (m.files && m.files.length > 0) }">
               <div v-if="m.images && m.images.length > 0" class="msg-images">
                 <img v-for="(img, imgIdx) in m.images" :key="imgIdx" :src="img" class="msg-img" @click.stop="previewImage(img)" />
+              </div>
+              <div v-if="m.files && m.files.length > 0" class="msg-files">
+                <div v-for="(fname, fi) in m.files" :key="fi" class="msg-file-chip">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+                  <span>{{ fname }}</span>
+                </div>
               </div>
               <div v-if="m.content" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')"></div>
             </div>
@@ -546,7 +608,30 @@ defineExpose({ focusInput, scrollToBottom })
         <button class="pending-img-remove" @click="removeImage(idx)">×</button>
       </div>
     </div>
+    <!-- Pending file chips shown above the input row -->
+    <div v-if="pendingFiles.length > 0" class="pending-files">
+      <div v-for="(f, idx) in pendingFiles" :key="idx" class="pending-file-chip">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+        <span class="pending-file-name">{{ f.name }}</span>
+        <button class="pending-file-remove" @click="removeFile(idx)">×</button>
+      </div>
+    </div>
     <div class="input-row">
+      <input
+        ref="fileInputEl"
+        type="file"
+        multiple
+        style="display:none"
+        @change="onFileInputChange"
+      />
+      <button
+        class="attach-btn"
+        title="附加文件"
+        :disabled="loading"
+        @click="fileInputEl.click()"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+      </button>
       <textarea
         ref="textareaEl"
         v-model="input"
@@ -1019,5 +1104,88 @@ defineExpose({ focusInput, scrollToBottom })
   box-shadow: 0 8px 40px rgba(0,0,0,0.6);
   object-fit: contain;
   cursor: default;
+}
+
+/* Attach file button */
+.attach-btn {
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(156,163,175,0.8);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  padding: 0;
+}
+.attach-btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); color: #f9fafb; }
+.attach-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* Pending file chips above input */
+.pending-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 12px 0;
+}
+.pending-file-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(99,102,241,0.15);
+  border: 1px solid rgba(99,102,241,0.3);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #a5b4fc;
+  max-width: 220px;
+}
+.pending-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.pending-file-remove {
+  background: none;
+  border: none;
+  color: rgba(165,180,252,0.7);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  flex-shrink: 0;
+  box-shadow: none;
+}
+.pending-file-remove:hover { color: #f9fafb; }
+
+/* File chips inside sent user messages */
+.msg-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 4px;
+}
+.msg-file-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11.5px;
+  color: rgba(255,255,255,0.85);
+  max-width: 200px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.msg-file-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>
