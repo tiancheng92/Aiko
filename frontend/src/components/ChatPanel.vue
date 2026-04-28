@@ -419,6 +419,9 @@ function addFile(file) {
   reader.onload = (ev) => {
     pendingFiles.value.push({ name: file.name, mimeType: mime, content: ev.target.result })
   }
+  reader.onerror = () => {
+    messages.value.push({ role: 'system', content: `文件读取失败：${file.name}` })
+  }
   reader.readAsText(file)
 }
 
