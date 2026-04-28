@@ -13,6 +13,7 @@ type Message struct {
 	Role      string   // "user" | "assistant"
 	Content   string
 	Images    []string // data URLs, empty for most messages
+	Files     []string // attached file names (no content), empty for most messages
 	CreatedAt string
 }
 
@@ -22,15 +23,18 @@ type ShortStore struct{ db *sql.DB }
 // NewShortStore creates a ShortStore.
 func NewShortStore(db *sql.DB) *ShortStore { return &ShortStore{db: db} }
 
-// scanMessage scans a row that selects id, role, content, images, created_at.
+// scanMessage scans a row that selects id, role, content, images, files, created_at.
 func scanMessage(scan func(...any) error) (Message, error) {
 	var m Message
-	var imagesJSON string
-	if err := scan(&m.ID, &m.Role, &m.Content, &imagesJSON, &m.CreatedAt); err != nil {
+	var imagesJSON, filesJSON string
+	if err := scan(&m.ID, &m.Role, &m.Content, &imagesJSON, &filesJSON, &m.CreatedAt); err != nil {
 		return m, err
 	}
 	if imagesJSON != "" {
 		_ = json.Unmarshal([]byte(imagesJSON), &m.Images)
+	}
+	if filesJSON != "" {
+		_ = json.Unmarshal([]byte(filesJSON), &m.Files)
 	}
 	return m, nil
 }
@@ -38,7 +42,7 @@ func scanMessage(scan func(...any) error) (Message, error) {
 // Recent returns the most recent n messages in chronological order.
 func (s *ShortStore) Recent(n int) ([]Message, error) {
 	rows, err := s.db.Query(`
-		SELECT id, role, content, images, created_at
+		SELECT id, role, content, images, files, created_at
 		FROM messages
 		ORDER BY id DESC
 		LIMIT ?`, n)
@@ -72,13 +76,24 @@ func (s *ShortStore) Add(role, content string) (int64, error) {
 
 // AddWithImages inserts a new message with optional image data URLs and returns its ID.
 func (s *ShortStore) AddWithImages(role, content string, images []string) (int64, error) {
+	return s.AddWithImagesAndFiles(role, content, images, nil)
+}
+
+// AddWithImagesAndFiles inserts a new message with optional images and file names and returns its ID.
+func (s *ShortStore) AddWithImagesAndFiles(role, content string, images []string, files []string) (int64, error) {
 	imagesJSON := ""
 	if len(images) > 0 {
 		b, _ := json.Marshal(images)
 		imagesJSON = string(b)
 	}
+	filesJSON := ""
+	if len(files) > 0 {
+		b, _ := json.Marshal(files)
+		filesJSON = string(b)
+	}
 	res, err := s.db.Exec(
-		`INSERT INTO messages(role, content, images) VALUES(?, ?, ?)`, role, content, imagesJSON)
+		`INSERT INTO messages(role, content, images, files) VALUES(?, ?, ?, ?)`,
+		role, content, imagesJSON, filesJSON)
 	if err != nil {
 		return 0, err
 	}
@@ -95,7 +110,7 @@ func (s *ShortStore) Count() (int, error) {
 // OldestN returns the oldest n messages in chronological order.
 func (s *ShortStore) OldestN(n int) ([]Message, error) {
 	rows, err := s.db.Query(`
-		SELECT id, role, content, images, created_at
+		SELECT id, role, content, images, files, created_at
 		FROM messages
 		ORDER BY id ASC
 		LIMIT ?`, n)
