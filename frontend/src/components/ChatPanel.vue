@@ -38,9 +38,13 @@ renderer.code = ({ text, lang }) => {
     ? hljs.highlight(text, { language }).value
     : hljs.highlightAuto(text).value
   const cls = language ? `hljs language-${language}` : 'hljs'
-  // Add copy button to code blocks
-  const escaped = text.replace(/`/g, '&#96;')
-  return `<div class="code-block"><div class="code-header"><span class="code-lang">${language || 'text'}</span><button class="code-copy" onclick="navigator.clipboard.writeText(decodeURIComponent(atob(this.dataset.code)));this.textContent='✓';setTimeout(()=>this.textContent='复制',2000)" data-code="${btoa(encodeURIComponent(text))}">复制</button></div><pre><code class="${cls}">${highlighted}</code></pre></div>`
+  // Generate line numbers
+  const lines = highlighted.split('\n')
+  const digits = String(lines.length).length
+  const numbered = lines.map((line, i) =>
+    `<span class="code-line"><span class="line-nr">${String(i + 1).padStart(digits)}</span>${line || ' '}</span>`
+  ).join('')
+  return `<div class="code-block"><div class="code-header"><span class="code-lang">${language || 'text'}</span><button class="code-copy" onclick="navigator.clipboard.writeText(decodeURIComponent(atob(this.dataset.code)));this.textContent='✓';setTimeout(()=>this.textContent='复制',2000)" data-code="${btoa(encodeURIComponent(text))}">复制</button></div><pre><code class="${cls}">${numbered}</code></pre></div>`
 }
 renderer.table = (token) => {
   const alignStyle = (align) => align ? ` style="text-align:${align}"` : ''
@@ -107,7 +111,9 @@ function previewImage(src) {
 }
 const loading = ref(false)
 const messagesEl = ref(null)
+const codeMaxWidth = ref(0)
 const copiedIdx = ref(null)
+const showClearConfirm = ref(false)
 const textareaEl = ref(null)
 const isRecording = ref(false)
 const voiceHint = ref('')
@@ -155,6 +161,7 @@ let offSoundsChanged
 let offVoiceStart, offVoiceTranscript, offVoiceEnd, offVoiceFinal, offVoiceError, offVoiceAutoSend
 /** @type {HTMLAudioElement|null} 当前正在播放的 TTS Audio 实例，用于暂停 */
 let currentTTSAudio = null
+let resizeObserver = null
 
 onMounted(async () => {
   const history = await GetMessages(50)
@@ -178,13 +185,8 @@ onMounted(async () => {
     }
   }
 
-  offClear = EventsOn('chat:clear', async () => {
-    try {
-      await ClearChatHistory()
-      messages.value = []
-    } catch (e) {
-      console.error('clear chat history failed:', e)
-    }
+  offClear = EventsOn('chat:clear', () => {
+    showClearConfirm.value = true
   })
 
   offProactiveStart = EventsOn('chat:proactive:start', () => {
@@ -318,6 +320,14 @@ onMounted(async () => {
   offVoiceAutoSend = EventsOn('config:voice:auto-send:changed', (val) => {
     voiceAutoSend.value = val
   })
+
+  // Observe message container width for code block max-width.
+  if (messagesEl.value) {
+    resizeObserver = new ResizeObserver(([entry]) => {
+      codeMaxWidth.value = entry.contentRect.width - 28 - 68
+    })
+    resizeObserver.observe(messagesEl.value)
+  }
 })
 
 onUnmounted(() => {
@@ -330,6 +340,7 @@ onUnmounted(() => {
   offVoiceStart?.(); offVoiceTranscript?.(); offVoiceEnd?.(); offVoiceFinal?.(); offVoiceError?.(); offVoiceAutoSend?.()
   // Stop any in-flight TTS playback so detached <audio> elements can be GC'd.
   if (currentTTSAudio) { try { currentTTSAudio.pause() } catch {} ; currentTTSAudio = null }
+  resizeObserver?.disconnect()
 })
 
 /** renderMarkdown converts markdown text to sanitized HTML. */
@@ -403,6 +414,17 @@ function onPaste(e) {
     pendingImages.value.push(ev.target.result)
   }
   reader.readAsDataURL(blob)
+}
+
+/** confirmClearHistory clears chat history and closes the confirm dialog. */
+async function confirmClearHistory() {
+  showClearConfirm.value = false
+  try {
+    await ClearChatHistory()
+    messages.value = []
+  } catch (e) {
+    console.error('clear chat history failed:', e)
+  }
 }
 
 /** removeImage removes a pending image by index. */
@@ -549,7 +571,7 @@ defineExpose({ focusInput, scrollToBottom })
 </script>
 
 <template>
-  <div class="chat-panel">
+  <div class="chat-panel" :style="{ '--code-max-width': codeMaxWidth > 0 ? codeMaxWidth + 'px' : 'none' }">
     <div class="messages" ref="messagesEl" @click="onMessagesClick">
       <div v-for="(m, i) in messages" :key="i" :class="['msg', m.role]">
         <div class="bubble-wrap" :class="{ ghost: m.ghost }">
@@ -619,6 +641,21 @@ defineExpose({ focusInput, scrollToBottom })
 
       <!-- Tool execution confirmation modal -->
       <ToolConfirmModal />
+
+      <!-- Clear chat confirmation dialog -->
+      <Teleport to="body">
+        <div v-if="showClearConfirm" class="clear-confirm-overlay">
+          <div class="clear-confirm-backdrop" @click="showClearConfirm = false" />
+          <div class="clear-confirm-box">
+            <p class="clear-confirm-title">清空聊天记录</p>
+            <p class="clear-confirm-text">确定要清空所有聊天记录吗？此操作不可撤销。</p>
+            <div class="clear-confirm-actions">
+              <button class="clear-confirm-cancel" @click="showClearConfirm = false">取消</button>
+              <button class="clear-confirm-ok" @click="confirmClearHistory">确认清空</button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
 
       <!-- In-chat progress indicators for running tools -->
       <ExecutionProgress />
@@ -858,39 +895,63 @@ defineExpose({ focusInput, scrollToBottom })
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid rgba(255,255,255,0.08);
+  max-width: var(--code-max-width, 100%);
 }
 .bubble.markdown :deep(.code-header) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 10px;
-  background: rgba(255,255,255,0.05);
+  padding: 6px 12px;
+  background: rgba(255,255,255,0.04);
   border-bottom: 1px solid rgba(255,255,255,0.06);
 }
 .bubble.markdown :deep(.code-lang) {
   font-size: 11px;
-  color: rgba(165,180,252,0.7);
+  color: rgba(165,180,252,0.6);
   font-family: 'Fira Code', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 .bubble.markdown :deep(.code-copy) {
   font-size: 11px;
-  padding: 2px 8px;
-  background: rgba(99,102,241,0.2);
+  padding: 2px 10px;
+  background: rgba(99,102,241,0.15);
   color: #a5b4fc;
-  border: 1px solid rgba(99,102,241,0.3);
+  border: 1px solid rgba(99,102,241,0.2);
   border-radius: 4px;
   cursor: pointer;
   transition: background 0.15s;
 }
-.bubble.markdown :deep(.code-copy:hover) { background: rgba(99,102,241,0.35); }
+.bubble.markdown :deep(.code-copy:hover) { background: rgba(99,102,241,0.3); }
 .bubble.markdown :deep(pre) {
   background: rgba(10, 10, 20, 0.6);
-  padding: 10px 12px;
+  padding: 12px 14px;
   overflow-x: auto;
   margin: 0;
+  max-width: 100%;
+}
+.bubble.markdown :deep(pre code) { white-space: pre-wrap; word-break: break-word; background: none; padding: 0; }
+.bubble.markdown :deep(.code-line) {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding-left: 4.5ch;
+  text-indent: -4.5ch;
+  line-height: 1.55;
+}
+.bubble.markdown :deep(.line-nr) {
+  display: inline-block;
+  min-width: 3.5ch;
+  text-align: right;
+  margin-right: 1ch;
+  padding-right: 0.5ch;
+  color: rgba(255,255,255,0.15);
+  -webkit-user-select: none;
+  user-select: none;
+  white-space: pre;
+  border-right: 1px solid rgba(255,255,255,0.06);
 }
 .bubble.markdown :deep(code) { font-family: 'Fira Code', 'JetBrains Mono', monospace; font-size: 12px; }
-.bubble.markdown :deep(pre code) { background: none; padding: 0; }
 .bubble.markdown :deep(:not(pre) > code) {
   background: rgba(79, 70, 229, 0.2);
   color: #a5b4fc;
@@ -1223,4 +1284,73 @@ defineExpose({ focusInput, scrollToBottom })
   overflow: hidden;
   text-overflow: ellipsis;
 }
+</style>
+
+<style>
+/* Clear chat confirmation dialog (non-scoped — teleported to body) */
+.clear-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.clear-confirm-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+.clear-confirm-box {
+  position: relative;
+  background: #1e1e2e;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding: 24px;
+  width: 380px;
+  max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.clear-confirm-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin: 0 0 12px;
+}
+.clear-confirm-text {
+  font-size: 13px;
+  color: rgba(255,255,255,0.55);
+  margin: 0 0 20px;
+  line-height: 1.6;
+}
+.clear-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.clear-confirm-cancel {
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: #e2e8f0;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+.clear-confirm-cancel:hover { background: rgba(255,255,255,0.1); }
+.clear-confirm-ok {
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: none;
+  background: linear-gradient(135deg, #dc2626, #991b1b);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.15s;
+}
+.clear-confirm-ok:hover { opacity: 0.9; }
 </style>
