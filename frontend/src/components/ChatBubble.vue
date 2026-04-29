@@ -155,23 +155,25 @@ defineExpose({ focusInput, scrollToBottom })
 <style scoped>
 .chat-bubble {
   position: fixed;
-  min-width: 300px;
-  max-width: 800px;
-  min-height: 320px;
-  max-height: 900px;
-  background: rgba(12, 15, 26, 0.55);
-  backdrop-filter: blur(40px) saturate(200%) brightness(0.9);
-  -webkit-backdrop-filter: blur(40px) saturate(200%) brightness(0.9);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(5, 6, 12, 1);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 20px;
   box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.5),
-    0 1px 0 rgba(255, 255, 255, 0.08) inset,
-    0 0 0 0.5px rgba(255,255,255,0.04) inset;
+    0 16px 48px rgba(0, 0, 0, 0.65),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset;
   display: flex;
   flex-direction: column;
   z-index: 9998;
   overflow: hidden;
+  will-change: left, top, width, height;
+  transition:
+    left          0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    top           0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    width         0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    height        0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    border-radius 0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 .title-bar {
   display: flex;
@@ -180,8 +182,8 @@ defineExpose({ focusInput, scrollToBottom })
   height: 44px;
   flex-shrink: 0;
   user-select: none;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.02);
 }
 .title {
   flex: 1;
@@ -227,8 +229,6 @@ defineExpose({ focusInput, scrollToBottom })
   top: 38px !important;
   width: 100vw !important;
   height: calc(100vh - 38px) !important;
-  max-width: none;
-  max-height: none;
   border-radius: 0;
   z-index: 9999;
 }

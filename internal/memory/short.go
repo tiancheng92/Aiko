@@ -113,6 +113,36 @@ func (s *ShortStore) AddWithImagesAndFiles(role, content string, images []string
 	return res.LastInsertId()
 }
 
+// BeforeID returns up to n messages with id < beforeID in chronological order.
+func (s *ShortStore) BeforeID(beforeID int64, n int) ([]Message, error) {
+	rows, err := s.db.Query(`
+		SELECT id, role, content, images, files, created_at
+		FROM messages
+		WHERE id < ?
+		ORDER BY id DESC
+		LIMIT ?`, beforeID, n)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var msgs []Message
+	for rows.Next() {
+		m, err := scanMessage(rows.Scan)
+		if err != nil {
+			return nil, err
+		}
+		msgs = append(msgs, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
+		msgs[i], msgs[j] = msgs[j], msgs[i]
+	}
+	return msgs, nil
+}
+
 // Count returns total number of stored messages.
 func (s *ShortStore) Count() (int, error) {
 	var n int

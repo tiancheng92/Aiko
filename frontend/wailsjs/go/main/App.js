@@ -86,6 +86,10 @@ export function GetMessages(arg1) {
   return window['go']['main']['App']['GetMessages'](arg1);
 }
 
+export function GetMessagesBeforeID(arg1, arg2) {
+  return window['go']['main']['App']['GetMessagesBeforeID'](arg1, arg2);
+}
+
 export function GetMousePosition() {
   return window['go']['main']['App']['GetMousePosition']();
 }

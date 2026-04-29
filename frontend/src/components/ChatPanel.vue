@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { SendMessage, SendMessageWithImages, SendMessageWithFiles, GetMessages, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig } from '../../wailsjs/go/main/App'
+import { SendMessage, SendMessageWithImages, SendMessageWithFiles, GetMessages, GetMessagesBeforeID, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 import { marked, Renderer } from 'marked'
 import markedKatex from 'marked-katex-extension'
@@ -42,7 +42,7 @@ renderer.code = ({ text, lang }) => {
   const lines = highlighted.split('\n')
   const digits = String(lines.length).length
   const numbered = lines.map((line, i) =>
-    `<span class="code-line"><span class="line-nr">${String(i + 1).padStart(digits)}</span>${line || ' '}</span>`
+    `<span class="code-line"><span class="line-nr">${String(i + 1).padStart(digits)}</span><span class="line-code">${line || ' '}</span></span>`
   ).join('')
   return `<div class="code-block"><div class="code-header"><span class="code-lang">${language || 'text'}</span><button class="code-copy" onclick="navigator.clipboard.writeText(decodeURIComponent(atob(this.dataset.code)));this.textContent='✓';setTimeout(()=>this.textContent='复制',2000)" data-code="${btoa(encodeURIComponent(text))}">复制</button></div><pre><code class="${cls}">${numbered}</code></pre></div>`
 }
@@ -93,7 +93,16 @@ function shortenUrl(url) {
   }
 }
 
+const PAGE_SIZE = 10
+
 const messages = ref([])
+/** oldestLoadedID is the smallest message ID currently in the list; used for lazy-loading older pages. */
+let oldestLoadedID = null
+/** allLoaded is true when there are no more older messages to fetch. */
+const allLoaded = ref(false)
+/** loadingHistory prevents concurrent history fetches and drives the loading indicator. */
+const loadingHistory = ref(false)
+
 /** inputEmpty is true when the textarea has no content (reactive only on empty↔non-empty). */
 const inputEmpty = ref(true)
 /** getInput reads the textarea value directly from the DOM — avoids per-keystroke Vue re-renders. */
@@ -171,10 +180,68 @@ let offVoiceStart, offVoiceTranscript, offVoiceEnd, offVoiceFinal, offVoiceError
 let currentTTSAudio = null
 let resizeObserver = null
 
+/** mapMsg converts a backend Message to the frontend shape. */
+function mapMsg(m) {
+  return { id: m.ID, role: m.Role, content: m.Content, time: m.CreatedAt, images: m.Images || [], files: m.Files || [] }
+}
+
+/** loadOlderMessages fetches the next page of older messages and prepends them. */
+async function loadOlderMessages() {
+  if (loadingHistory.value || allLoaded.value || oldestLoadedID === null) return
+  loadingHistory.value = true
+  // Double-rAF: Vue flushes the DOM in the first frame, browser paints in the second.
+  // This guarantees the loading dots are on screen before the IPC call starts.
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  try {
+    // Fetch and minimum display timer run in parallel — no artificial lag on slow connections.
+    const [older] = await Promise.all([
+      GetMessagesBeforeID(oldestLoadedID, PAGE_SIZE),
+      new Promise(r => setTimeout(r, 300)),
+    ])
+    if (!older || older.length === 0) {
+      allLoaded.value = true
+      return
+    }
+    if (older.length < PAGE_SIZE) allLoaded.value = true
+    const el = messagesEl.value
+    // Record which index the current first message will land at after prepend.
+    const firstOldIdx = older.length
+    messages.value = older.map(mapMsg).concat(messages.value)
+    oldestLoadedID = older[0].ID
+    // Wait for Vue to flush the DOM, then one rAF so the browser finishes layout.
+    await nextTick()
+    await new Promise(resolve => requestAnimationFrame(resolve))
+    if (el) {
+      // Anchor to the first "old" message element: scroll it to the top of the
+      // viewport. getBoundingClientRect() forces a synchronous layout so the
+      // measurement is always accurate, unlike scrollHeight which may be stale.
+      const msgEls = el.querySelectorAll(':scope > .msg')
+      const anchor = msgEls[firstOldIdx]
+      if (anchor) {
+        el.scrollTop += anchor.getBoundingClientRect().top - el.getBoundingClientRect().top
+      }
+    }
+  } finally {
+    loadingHistory.value = false
+  }
+}
+
 onMounted(async () => {
-  const history = await GetMessages(50)
-  messages.value = (history || []).map(m => ({ role: m.Role, content: m.Content, time: m.CreatedAt, images: m.Images || [], files: m.Files || [] }))
+  const history = await GetMessages(PAGE_SIZE)
+  const mapped = (history || []).map(mapMsg)
+  messages.value = mapped
+  if (mapped.length > 0) oldestLoadedID = mapped[0].id
+  if ((history || []).length < PAGE_SIZE) allLoaded.value = true
   scrollToBottom()
+
+  // Sentinel element at top of list triggers lazy-load via IntersectionObserver.
+  const sentinel = document.getElementById('msg-load-sentinel')
+  if (sentinel) {
+    const io = new IntersectionObserver(async (entries) => {
+      if (entries[0].isIntersecting) await loadOlderMessages()
+    }, { root: messagesEl.value, threshold: 0 })
+    io.observe(sentinel)
+  }
 
   // Show welcome message on first launch when chat history is empty.
   if ((history || []).length === 0) {
@@ -430,6 +497,8 @@ async function confirmClearHistory() {
   try {
     await ClearChatHistory()
     messages.value = []
+    oldestLoadedID = null
+    allLoaded.value = true
   } catch (e) {
     console.error('clear chat history failed:', e)
   }
@@ -609,6 +678,13 @@ defineExpose({ focusInput, scrollToBottom })
 <template>
   <div class="chat-panel" :style="{ '--code-max-width': codeMaxWidth > 0 ? codeMaxWidth + 'px' : 'none' }">
     <div class="messages" ref="messagesEl" @click="onMessagesClick">
+      <!-- Lazy-load sentinel: entering viewport triggers loading older messages -->
+      <div id="msg-load-sentinel" class="load-sentinel">
+        <div v-if="loadingHistory" class="history-loading">
+          <span class="h-dot" /><span class="h-dot" /><span class="h-dot" />
+        </div>
+        <span v-else-if="!allLoaded" class="load-sentinel-dot" />
+      </div>
       <div v-for="(m, i) in messages" :key="i" :class="['msg', m.role]">
         <div class="bubble-wrap" :class="{ ghost: m.ghost }">
           <div class="bubble-row">
@@ -680,6 +756,7 @@ defineExpose({ focusInput, scrollToBottom })
 
       <!-- Clear chat confirmation dialog -->
       <Teleport to="body">
+        <Transition name="confirm-pop">
         <div v-if="showClearConfirm" class="clear-confirm-overlay">
           <div class="clear-confirm-backdrop" @click="showClearConfirm = false" />
           <div class="clear-confirm-box">
@@ -691,6 +768,7 @@ defineExpose({ focusInput, scrollToBottom })
             </div>
           </div>
         </div>
+        </Transition>
       </Teleport>
 
       <!-- In-chat progress indicators for running tools -->
@@ -781,6 +859,26 @@ defineExpose({ focusInput, scrollToBottom })
 .messages::-webkit-scrollbar { width: 4px; }
 .messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
 
+/* Lazy-load sentinel */
+.load-sentinel { height: 24px; display: flex; align-items: center; justify-content: center; }
+.load-sentinel-dot {
+  display: block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  animation: dot-bounce 1.2s ease-in-out infinite;
+}
+.history-loading { display: flex; gap: 5px; align-items: center; }
+.h-dot {
+  display: block;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: rgba(3,105,161,0.6);
+  animation: dot-bounce 1.2s ease-in-out infinite;
+}
+.h-dot:nth-child(2) { animation-delay: 0.2s; }
+.h-dot:nth-child(3) { animation-delay: 0.4s; }
+
 /* Row */
 .msg { display: flex; }
 .msg.user { justify-content: flex-end; }
@@ -819,10 +917,10 @@ defineExpose({ focusInput, scrollToBottom })
 
 /* Assistant bubble */
 .assistant .bubble {
-  background: rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.04);
   color: #e5e7eb;
   border-radius: 16px 16px 16px 4px;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.06);
 }
 
 /* System / error bubble */
@@ -984,24 +1082,34 @@ defineExpose({ focusInput, scrollToBottom })
 }
 .bubble.markdown :deep(pre code) { white-space: pre-wrap; word-break: break-word; background: none; padding: 0; }
 .bubble.markdown :deep(.code-line) {
-  display: block;
-  white-space: pre-wrap;
-  word-break: break-word;
-  padding-left: 4.5ch;
-  text-indent: -4.5ch;
-  line-height: 1.55;
+  display: flex;
+  align-items: flex-start;
+  line-height: 1.65;
 }
 .bubble.markdown :deep(.line-nr) {
-  display: inline-block;
-  min-width: 3.5ch;
-  text-align: right;
-  margin-right: 1ch;
-  padding-right: 0.5ch;
-  color: rgba(255,255,255,0.15);
+  flex-shrink: 0;
+  align-self: stretch;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  min-width: 3ch;
+  padding-right: 0.8ch;
+  margin-right: 1.2ch;
+  color: rgba(148, 163, 184, 0.35);
+  font-size: 11px;
   -webkit-user-select: none;
   user-select: none;
-  white-space: pre;
-  border-right: 1px solid rgba(255,255,255,0.06);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  transition: color 0.15s;
+}
+.bubble.markdown :deep(.line-code) {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.bubble.markdown :deep(.code-line:hover .line-nr) {
+  color: rgba(148, 163, 184, 0.7);
 }
 .bubble.markdown :deep(code) { font-family: 'Fira Code', 'JetBrains Mono', monospace; font-size: 12px; }
 .bubble.markdown :deep(:not(pre) > code) {
@@ -1076,7 +1184,7 @@ defineExpose({ focusInput, scrollToBottom })
   background: rgba(255,255,255,0.03);
 }
 .bubble.markdown :deep(tbody tr:hover) {
-  background: rgba(79,172,254,0.08);
+  background: rgba(59, 130, 246, 0.12);
 }
 
 /* KaTeX math — adapt to dark theme */
@@ -1091,8 +1199,8 @@ defineExpose({ focusInput, scrollToBottom })
 /* ── Composer card ─────────────────────────────────────────── */
 .input-area {
   margin: 12px 10px 10px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
   flex-shrink: 0;
   transition: border-color 0.2s;
@@ -1376,17 +1484,41 @@ defineExpose({ focusInput, scrollToBottom })
 .clear-confirm-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
 }
 .clear-confirm-box {
   position: relative;
-  background: #1e1e2e;
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 12px;
+  background: rgb(5, 6, 12);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
   padding: 24px;
   width: 380px;
   max-width: 90vw;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.65),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset;
+}
+.confirm-pop-enter-active {
+  transition: opacity 0.22s ease;
+}
+.confirm-pop-leave-active {
+  transition: opacity 0.14s ease-in;
+}
+.confirm-pop-enter-from,
+.confirm-pop-leave-to {
+  opacity: 0;
+}
+.confirm-pop-enter-active .clear-confirm-box {
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.confirm-pop-leave-active .clear-confirm-box {
+  transition: transform 0.14s ease-in;
+}
+.confirm-pop-enter-from .clear-confirm-box,
+.confirm-pop-leave-to .clear-confirm-box {
+  transform: scale(0.90);
 }
 .clear-confirm-title {
   font-size: 15px;

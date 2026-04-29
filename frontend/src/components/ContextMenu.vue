@@ -48,6 +48,7 @@ defineExpose({ show, hide })
 
 <template>
   <Teleport to="body">
+    <Transition name="ctx-pop">
     <div
       v-if="visible"
       ref="menuRef"
@@ -67,6 +68,7 @@ defineExpose({ show, hide })
         </button>
       </template>
     </div>
+    </Transition>
   </Teleport>
 </template>
 
@@ -74,17 +76,16 @@ defineExpose({ show, hide })
 .ctx-menu {
   position: fixed;
   z-index: 99999;
-  background: rgba(12, 15, 26, 0.65);
-  backdrop-filter: blur(40px) saturate(200%) brightness(0.9);
-  -webkit-backdrop-filter: blur(40px) saturate(200%) brightness(0.9);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(5, 6, 12, 1);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 12px;
   padding: 5px 0;
   min-width: 172px;
   box-shadow:
-    0 12px 32px rgba(0, 0, 0, 0.55),
-    0 1px 0 rgba(255, 255, 255, 0.08) inset,
-    0 0 0 0.5px rgba(255, 255, 255, 0.04) inset;
+    0 16px 48px rgba(0, 0, 0, 0.65),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset;
   user-select: none;
 }
 .ctx-item {
@@ -104,7 +105,23 @@ defineExpose({ show, hide })
   transition: background 0.12s;
   font-weight: 400;
 }
-.ctx-item:hover { background: rgba(99, 102, 241, 0.15); color: #f9fafb; }
+.ctx-item:hover { background: rgba(59, 130, 246, 0.18); color: #fff; }
 .ctx-icon { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
-.ctx-divider { height: 1px; background: rgba(255, 255, 255, 0.06); margin: 4px 8px; }
+.ctx-divider { height: 1px; background: rgba(255, 255, 255, 0.05); margin: 4px 8px; }
+
+.ctx-pop-enter-active {
+  transition: opacity 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+              transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: top left;
+}
+.ctx-pop-leave-active {
+  transition: opacity 0.12s ease-in,
+              transform 0.12s ease-in;
+  transform-origin: top left;
+}
+.ctx-pop-enter-from,
+.ctx-pop-leave-to {
+  opacity: 0;
+  transform: scale(0.88) translateY(-4px);
+}
 </style>

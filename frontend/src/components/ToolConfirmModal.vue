@@ -52,6 +52,7 @@ onUnmounted(() => { offConfirm?.() })
 
 <template>
   <Teleport to="body">
+    <Transition name="tool-confirm-pop">
     <div v-if="visible" class="tool-confirm-modal">
       <div class="modal-backdrop" @click.self="reject" />
       <div class="modal-box">
@@ -83,6 +84,7 @@ onUnmounted(() => { offConfirm?.() })
         </div>
       </div>
     </div>
+    </Transition>
   </Teleport>
 </template>
 
@@ -98,17 +100,41 @@ onUnmounted(() => { offConfirm?.() })
 .modal-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
 }
 .modal-box {
   position: relative;
-  background: #1e1e2e;
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 12px;
+  background: rgb(5, 6, 12);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
   padding: 24px;
   width: 480px;
   max-width: 90vw;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.65),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset;
+}
+.tool-confirm-pop-enter-active {
+  transition: opacity 0.22s ease;
+}
+.tool-confirm-pop-leave-active {
+  transition: opacity 0.14s ease-in;
+}
+.tool-confirm-pop-enter-from,
+.tool-confirm-pop-leave-to {
+  opacity: 0;
+}
+.tool-confirm-pop-enter-active .modal-box {
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.tool-confirm-pop-leave-active .modal-box {
+  transition: transform 0.14s ease-in;
+}
+.tool-confirm-pop-enter-from .modal-box,
+.tool-confirm-pop-leave-to .modal-box {
+  transform: scale(0.90);
 }
 .modal-header {
   display: flex;
@@ -148,9 +174,9 @@ onUnmounted(() => { offConfirm?.() })
 }
 .content-editor {
   width: 100%;
-  background: #12121e;
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
   color: #e0e0e0;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 13px;
@@ -160,7 +186,7 @@ onUnmounted(() => { offConfirm?.() })
   outline: none;
 }
 .content-editor:focus {
-  border-color: rgba(120,160,255,0.4);
+  border-color: rgba(59, 130, 246, 0.4);
 }
 .risk-text {
   font-size: 12px;
@@ -175,14 +201,15 @@ onUnmounted(() => { offConfirm?.() })
 }
 .btn-reject {
   padding: 8px 20px;
-  border-radius: 6px;
-  border: 1px solid rgba(255,255,255,0.15);
-  background: transparent;
-  color: #ccc;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(229, 231, 235, 0.8);
   cursor: pointer;
   font-size: 13px;
+  transition: background 0.15s;
 }
-.btn-reject:hover { background: rgba(255,255,255,0.06); }
+.btn-reject:hover { background: rgba(255, 255, 255, 0.1); }
 .btn-approve {
   padding: 8px 20px;
   border-radius: 6px;

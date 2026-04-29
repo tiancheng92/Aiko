@@ -410,20 +410,24 @@ function openSettings() {
     @ball-size="s => ballSize = s"
     @open-settings="openSettings"
   />
-  <ChatBubble
-    ref="chatBubbleRef"
-    v-show="bubbleOpen"
-    :ball-pos="ballPos"
-    :ball-size="ballSize"
-    :active-screen="activeScreen"
-    @close="bubbleOpen = false"
-    @open-settings="openSettings"
-  />
-  <SettingsWindow
-    v-if="settingsOpen"
-    :active-screen="activeScreen"
-    @close="settingsOpen = false"
-  />
+  <Transition name="chat-pop">
+    <ChatBubble
+      ref="chatBubbleRef"
+      v-show="bubbleOpen"
+      :ball-pos="ballPos"
+      :ball-size="ballSize"
+      :active-screen="activeScreen"
+      @close="bubbleOpen = false"
+      @open-settings="openSettings"
+    />
+  </Transition>
+  <Transition name="settings-pop">
+    <SettingsWindow
+      v-if="settingsOpen"
+      :active-screen="activeScreen"
+      @close="settingsOpen = false"
+    />
+  </Transition>
   <NotificationBubble
     :pet-pos="ballPos"
     :pet-size="ballSize"
@@ -446,6 +450,44 @@ function openSettings() {
 </template>
 
 <style scoped>
+/* ── Chat bubble appear / disappear ────────────────────────── */
+.chat-pop-enter-active,
+.chat-pop-leave-active {
+  transform-origin: bottom center;
+}
+.chat-pop-enter-active {
+  transition: opacity 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
+              transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.chat-pop-leave-active {
+  transition: opacity 0.18s ease-in,
+              transform 0.18s ease-in;
+}
+.chat-pop-enter-from,
+.chat-pop-leave-to {
+  opacity: 0;
+  transform: scale(0.88) translateY(14px);
+}
+
+/* ── Settings window appear / disappear ────────────────────── */
+.settings-pop-enter-active,
+.settings-pop-leave-active {
+  transform-origin: center center;
+}
+.settings-pop-enter-active {
+  transition: opacity 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+              transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.settings-pop-leave-active {
+  transition: opacity 0.16s ease-in,
+              transform 0.16s ease-in;
+}
+.settings-pop-enter-from,
+.settings-pop-leave-to {
+  opacity: 0;
+  transform: scale(0.92);
+}
+
 /* ── Siri wrapper ───────────────────────────────────────────── */
 .siri-wrapper {
   position: fixed;

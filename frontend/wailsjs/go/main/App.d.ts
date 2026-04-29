@@ -52,6 +52,8 @@ export function GetKokoroTTSVoices():Promise<Array<string>>;
 
 export function GetMessages(arg1:number):Promise<Array<memory.Message>>;
 
+export function GetMessagesBeforeID(arg1:number,arg2:number):Promise<Array<memory.Message>>;
+
 export function GetMousePosition():Promise<main.MousePosition>;
 
 export function GetPetSize(arg1:number,arg2:number):Promise<number>;

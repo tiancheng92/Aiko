@@ -1156,6 +1156,11 @@ func (a *App) GetMessages(limit int) ([]memory.Message, error) {
 	return a.shortMem.Recent(limit)
 }
 
+// GetMessagesBeforeID returns up to limit messages older than beforeID.
+func (a *App) GetMessagesBeforeID(beforeID int64, limit int) ([]memory.Message, error) {
+	return a.shortMem.BeforeID(beforeID, limit)
+}
+
 // ImportKnowledge imports a file into the knowledge base.
 // Emits "knowledge:progress" events during import.
 func (a *App) ImportKnowledge(filePath string) error {

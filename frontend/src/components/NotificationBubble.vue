@@ -59,6 +59,7 @@ onUnmounted(() => {
 
 <template>
   <Teleport to="body">
+    <Transition name="notif-pop">
     <div
       v-if="notification"
       ref="bubbleEl"
@@ -73,6 +74,7 @@ onUnmounted(() => {
       </div>
       <div class="notif-body markdown" v-html="renderMd(notification.message)" @click.stop />
     </div>
+    </Transition>
   </Teleport>
 </template>
 
@@ -81,17 +83,15 @@ onUnmounted(() => {
   position: fixed;
   z-index: 99997;
   width: 320px;
-  background: rgba(12, 15, 26, 0.45);
-  backdrop-filter: blur(40px) saturate(200%) brightness(0.9);
-  -webkit-backdrop-filter: blur(40px) saturate(200%) brightness(0.9);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgb(5, 6, 12);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 18px;
   box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.5),
-    0 1px 0 rgba(255, 255, 255, 0.08) inset,
-    0 0 0 0.5px rgba(255, 255, 255, 0.04) inset;
+    0 16px 48px rgba(0, 0, 0, 0.65),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset;
   padding: 12px 16px 14px;
-  animation: popIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
   color: #e5e7eb;
   cursor: pointer;
 }
@@ -104,11 +104,23 @@ onUnmounted(() => {
   height: 0;
   border-left: 8px solid transparent;
   border-right: 8px solid transparent;
-  border-top: 10px solid rgba(12, 15, 26, 0.45);
+  border-top: 10px solid rgb(5, 6, 12);
 }
-@keyframes popIn {
-  from { opacity: 0; transform: translateY(12px) scale(0.92); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+/* ── Notification appear / disappear ── */
+.notif-pop-enter-active {
+  transition: opacity 0.26s cubic-bezier(0.34, 1.56, 0.64, 1),
+              transform 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: bottom left;
+}
+.notif-pop-leave-active {
+  transition: opacity 0.18s ease-in,
+              transform 0.18s ease-in;
+  transform-origin: bottom left;
+}
+.notif-pop-enter-from,
+.notif-pop-leave-to {
+  opacity: 0;
+  transform: scale(0.88) translateY(10px);
 }
 .notif-header {
   display: flex;

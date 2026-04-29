@@ -1358,15 +1358,14 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   z-index: 99990;
   width: 940px;
   height: 820px;
-  background: rgba(12, 15, 26, 0.55);
-  backdrop-filter: blur(40px) saturate(200%) brightness(0.9);
-  -webkit-backdrop-filter: blur(40px) saturate(200%) brightness(0.9);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(5, 6, 12, 1);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 20px;
   box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.5),
-    0 1px 0 rgba(255, 255, 255, 0.08) inset,
-    0 0 0 0.5px rgba(255, 255, 255, 0.04) inset;
+    0 16px 48px rgba(0, 0, 0, 0.65),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1383,8 +1382,8 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   cursor: move;
   flex-shrink: 0;
   user-select: none;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.015);
 }
 .win-title { flex: 1; font-weight: 600; font-size: 13px; letter-spacing: 0.02em; color: rgba(255,255,255,0.85); }
 .win-close {
