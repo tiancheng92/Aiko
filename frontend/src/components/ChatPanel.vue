@@ -94,7 +94,15 @@ function shortenUrl(url) {
 }
 
 const messages = ref([])
-const input = ref('')
+/** inputEmpty is true when the textarea has no content (reactive only on empty↔non-empty). */
+const inputEmpty = ref(true)
+/** getInput reads the textarea value directly from the DOM — avoids per-keystroke Vue re-renders. */
+function getInput() { return textareaEl.value?.value ?? '' }
+/** setInputDOM writes to the DOM textarea and syncs inputEmpty. */
+function setInputDOM(text) {
+  if (textareaEl.value) textareaEl.value.value = text
+  inputEmpty.value = !text.trim()
+}
 /** pendingImages holds data URLs of images pasted by the user, awaiting send. */
 const pendingImages = ref([])
 /** pendingFiles holds text files selected by the user, awaiting send. */
@@ -281,12 +289,12 @@ onMounted(async () => {
   offVoiceStart = EventsOn('voice:start', () => {
     isRecording.value = true
     voiceHint.value = ''
-    input.value = ''
+    setInputDOM('')
     nextTick(() => textareaEl.value?.focus())
   })
 
   offVoiceTranscript = EventsOn('voice:transcript', (text) => {
-    input.value = text
+    setInputDOM(text)
     voiceHint.value = text
   })
 
@@ -296,7 +304,7 @@ onMounted(async () => {
   })
 
   offVoiceFinal = EventsOn('voice:final', (text) => {
-    input.value = text
+    setInputDOM(text)
     voiceHint.value = ''
     if (voiceAutoSend.value && text.trim()) {
       send()
@@ -306,7 +314,7 @@ onMounted(async () => {
   offVoiceError = EventsOn('voice:error', (errMsg) => {
     isRecording.value = false
     voiceHint.value = ''
-    input.value = ''
+    setInputDOM('')
     EventsEmit('notification:show', {
       title: '🎙️ 语音识别失败',
       message: errMsg === 'mic_denied'
@@ -485,9 +493,10 @@ function removeFile(idx) {
 
 /** send submits the current input as a user message. */
 async function send() {
-  const text = input.value.trim()
+  const text = getInput().trim()
   if ((!text && pendingImages.value.length === 0 && pendingFiles.value.length === 0) || loading.value) return
-  input.value = ''
+  setInputDOM('')
+  resetTextareaHeight()
   loading.value = true
   isStreaming.value = true
   firstTokenThisTurn = true
@@ -565,6 +574,33 @@ function scrollToBottom() {
 /** focusInput focuses the textarea input. */
 function focusInput() {
   nextTick(() => { textareaEl.value?.focus() })
+}
+
+/** insertNewline inserts a newline at the current cursor position (⌘+Enter). */
+function insertNewline() {
+  const el = textareaEl.value
+  if (!el) return
+  const start = el.selectionStart
+  const end = el.selectionEnd
+  el.value = el.value.slice(0, start) + '\n' + el.value.slice(end)
+  el.selectionStart = el.selectionEnd = start + 1
+  autoResize()
+}
+
+/** autoResize adjusts the textarea height to fit its content; syncs inputEmpty on transitions only. */
+function autoResize() {
+  const el = textareaEl.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = el.scrollHeight + 'px'
+  const empty = !el.value.trim()
+  if (inputEmpty.value !== empty) inputEmpty.value = empty
+}
+
+/** resetTextareaHeight resets the textarea to single-line height after send. */
+function resetTextareaHeight() {
+  const el = textareaEl.value
+  if (el) el.style.height = 'auto'
 }
 
 defineExpose({ focusInput, scrollToBottom })
@@ -687,7 +723,7 @@ defineExpose({ focusInput, scrollToBottom })
         <button class="pending-file-remove" @click="removeFile(idx)">×</button>
       </div>
     </div>
-    <div class="input-row">
+    <div class="input-area">
       <input
         ref="fileInputEl"
         type="file"
@@ -695,26 +731,36 @@ defineExpose({ focusInput, scrollToBottom })
         style="display:none"
         @change="onFileInputChange"
       />
-      <button
-        class="attach-btn"
-        title="附加文件"
-        :disabled="loading"
-        @click="fileInputEl.click()"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-      </button>
       <textarea
         ref="textareaEl"
-        v-model="input"
-        placeholder="输入消息... (Enter 发送)"
+        placeholder="发消息..."
         rows="1"
+        spellcheck="false"
+        autocorrect="off"
+        autocomplete="off"
+        @input="autoResize"
         @keydown.enter.exact.prevent="send"
+        @keydown.meta.enter.prevent="insertNewline"
         @paste="onPaste"
         :disabled="loading"
       />
-      <button v-if="isStreaming" class="stop-btn" @click="stopGeneration">⏹ 停止</button>
-      <button v-else class="send-btn" @click="send" :disabled="loading">发送</button>
+      <div class="input-toolbar">
+        <div class="toolbar-spacer" />
+        <button
+          class="attach-btn"
+          title="附加文件"
+          :disabled="loading"
+          @click="fileInputEl.click()"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+        </button>
+        <button v-if="isStreaming" class="stop-btn" @click="stopGeneration">⏹ 停止</button>
+        <button v-else class="send-btn" @click="send" :disabled="loading || (inputEmpty && pendingImages.length === 0 && pendingFiles.length === 0)">
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
     </div>
+    <div class="input-hint">Enter 发送 · ⌘↩ 换行</div>
   </div>
 </template>
 
@@ -871,9 +917,9 @@ defineExpose({ focusInput, scrollToBottom })
 
 .msg-action-btn {
   flex-shrink: 0;
-  background: rgba(55, 65, 81, 0.85);
+  background: rgba(15, 20, 38, 0.65);
   border: 1px solid rgba(255,255,255,0.08);
-  color: rgba(156, 163, 175, 0.9);
+  color: rgba(156, 163, 175, 0.8);
   border-radius: 6px;
   width: 28px;
   height: 28px;
@@ -881,9 +927,15 @@ defineExpose({ focusInput, scrollToBottom })
   display: flex; align-items: center; justify-content: center;
   outline: none;
   padding: 0;
-  transition: background 0.15s, color 0.15s;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.msg-action-btn:hover { background: rgba(75, 85, 99, 0.95); color: #f9fafb; }
+.msg-action-btn:hover {
+  background: rgba(3, 105, 161, 0.2);
+  border-color: rgba(3, 105, 161, 0.4);
+  color: #7dd3fc;
+}
 
 /* Markdown prose */
 .bubble.markdown :deep(p) { margin: 0 0 8px; }
@@ -907,7 +959,7 @@ defineExpose({ focusInput, scrollToBottom })
 }
 .bubble.markdown :deep(.code-lang) {
   font-size: 11px;
-  color: rgba(165,180,252,0.6);
+  color: rgba(125,211,252,0.6);
   font-family: 'Fira Code', monospace;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -915,14 +967,14 @@ defineExpose({ focusInput, scrollToBottom })
 .bubble.markdown :deep(.code-copy) {
   font-size: 11px;
   padding: 2px 10px;
-  background: rgba(99,102,241,0.15);
-  color: #a5b4fc;
-  border: 1px solid rgba(99,102,241,0.2);
+  background: rgba(3,105,161,0.15);
+  color: #7dd3fc;
+  border: 1px solid rgba(3,105,161,0.25);
   border-radius: 4px;
   cursor: pointer;
   transition: background 0.15s;
 }
-.bubble.markdown :deep(.code-copy:hover) { background: rgba(99,102,241,0.3); }
+.bubble.markdown :deep(.code-copy:hover) { background: rgba(3,105,161,0.3); }
 .bubble.markdown :deep(pre) {
   background: rgba(10, 10, 20, 0.6);
   padding: 12px 14px;
@@ -953,8 +1005,8 @@ defineExpose({ focusInput, scrollToBottom })
 }
 .bubble.markdown :deep(code) { font-family: 'Fira Code', 'JetBrains Mono', monospace; font-size: 12px; }
 .bubble.markdown :deep(:not(pre) > code) {
-  background: rgba(79, 70, 229, 0.2);
-  color: #a5b4fc;
+  background: rgba(3, 105, 161, 0.18);
+  color: #7dd3fc;
   padding: 1px 5px;
   border-radius: 4px;
   font-size: 12px;
@@ -971,7 +1023,7 @@ defineExpose({ focusInput, scrollToBottom })
   margin: 8px 0;
   padding: 6px 10px;
   color: #9ca3af;
-  background: rgba(99, 102, 241, 0.06);
+  background: rgba(3, 105, 161, 0.06);
   border-radius: 0 6px 6px 0;
 }
 
@@ -983,11 +1035,11 @@ defineExpose({ focusInput, scrollToBottom })
 
 /* Links — break long URLs so they don't overflow the bubble */
 .bubble.markdown :deep(a) {
-  color: #818cf8;
+  color: #38bdf8;
   text-decoration: none;
   word-break: break-all;
 }
-.bubble.markdown :deep(a:hover) { text-decoration: underline; color: #a5b4fc; }
+.bubble.markdown :deep(a:hover) { text-decoration: underline; color: #7dd3fc; }
 
 /* Tables */
 .bubble.markdown :deep(.table-wrapper) {
@@ -1036,46 +1088,72 @@ defineExpose({ focusInput, scrollToBottom })
 }
 .bubble.markdown :deep(.katex-html) { color: #e2e8f0; }
 
-/* Input row */
-.input-row {
-  display: flex;
-  gap: 8px;
-  padding: 10px 12px;
-  border-top: 1px solid rgba(255,255,255,0.06);
-  background: rgba(255,255,255,0.02);
+/* ── Composer card ─────────────────────────────────────────── */
+.input-area {
+  margin: 12px 10px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
   flex-shrink: 0;
+  transition: border-color 0.2s;
+  overflow: hidden;
 }
-.input-row textarea {
-  flex: 1;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 10px;
-  padding: 8px 12px;
+.input-area:focus-within {
+  border-color: rgba(3, 105, 161, 0.55);
+}
+.input-area textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  background: transparent;
+  border: none;
+  padding: 10px 12px 6px;
   color: #f9fafb;
   font-size: 13px;
   outline: none;
   resize: none;
   font-family: inherit;
-  transition: border-color 0.15s;
-  line-height: 1.5;
+  line-height: 1.6;
+  min-height: 40px;
+  max-height: 120px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.1) transparent;
 }
-.input-row textarea:focus { border-color: rgba(3, 105, 161, 0.6); }
-.input-row textarea::placeholder { color: rgba(156, 163, 175, 0.5); }
+.input-area textarea::placeholder { color: rgba(156, 163, 175, 0.45); }
+.input-toolbar {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px 6px;
+  gap: 6px;
+  border-top: none;
+}
+.toolbar-spacer { flex: 1; }
+.input-hint {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.2);
+  user-select: none;
+  text-align: right;
+  padding: 0 12px 6px;
+}
 .send-btn {
   background: linear-gradient(135deg, #0369a1, #0c4a6e);
   color: #fff;
   border: none;
-  border-radius: 10px;
-  padding: 8px 16px;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
   transition: opacity 0.15s, transform 0.1s;
-  box-shadow: 0 2px 8px rgba(3, 105, 161, 0.4);
+  box-shadow: 0 2px 6px rgba(3, 105, 161, 0.35);
+  flex-shrink: 0;
 }
-.send-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+.send-btn:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
 .send-btn:active:not(:disabled) { transform: translateY(0); }
-.send-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+.send-btn:disabled { opacity: 0.3; cursor: not-allowed; box-shadow: none; }
 
 /* ── Voice hint status bar ─────────────────────────────────── */
 .voice-hint-bar {
@@ -1114,7 +1192,7 @@ defineExpose({ focusInput, scrollToBottom })
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #8b5cf6;
+  background: #0369a1;
   animation: dot-bounce 1.2s ease-in-out infinite;
 }
 
@@ -1204,21 +1282,20 @@ defineExpose({ focusInput, scrollToBottom })
 /* Attach file button */
 .attach-btn {
   flex-shrink: 0;
-  align-self: center;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 10px;
-  width: 36px;
-  height: 36px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(156,163,175,0.8);
+  color: rgba(156,163,175,0.6);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
   padding: 0;
 }
-.attach-btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); color: #f9fafb; }
+.attach-btn:hover:not(:disabled) { background: rgba(255,255,255,0.08); color: #f9fafb; }
 .attach-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* Pending file chips above input */
@@ -1232,12 +1309,12 @@ defineExpose({ focusInput, scrollToBottom })
   display: flex;
   align-items: center;
   gap: 5px;
-  background: rgba(99,102,241,0.15);
-  border: 1px solid rgba(99,102,241,0.3);
+  background: rgba(3,105,161,0.15);
+  border: 1px solid rgba(3,105,161,0.3);
   border-radius: 8px;
   padding: 4px 8px;
   font-size: 12px;
-  color: #a5b4fc;
+  color: #7dd3fc;
   max-width: 220px;
 }
 .pending-file-name {
@@ -1249,7 +1326,7 @@ defineExpose({ focusInput, scrollToBottom })
 .pending-file-remove {
   background: none;
   border: none;
-  color: rgba(165,180,252,0.7);
+  color: rgba(125,211,252,0.7);
   cursor: pointer;
   font-size: 14px;
   line-height: 1;

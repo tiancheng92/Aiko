@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	chunkSize    = 512
-	chunkOverlap = 64
+	chunkSize    = 800
+	chunkOverlap = 160
 )
 
 // ImportProgress reports progress during import.
@@ -154,10 +154,7 @@ func splitChunks(text string, size, overlap int) []string {
 		step = size
 	}
 	for start := 0; start < len(runes); start += step {
-		end := start + size
-		if end > len(runes) {
-			end = len(runes)
-		}
+		end := min(start+size, len(runes))
 		chunks = append(chunks, string(runes[start:end]))
 		if end == len(runes) {
 			break

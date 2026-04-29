@@ -70,7 +70,7 @@ func (s *Store) Load() (*Config, error) {
 		LLMModel:        m["llm_model"],
 		LLMProvider:     m["llm_provider"],
 		EmbeddingModel:  m["embedding_model"],
-		Live2DModel:     orDefault(m["live2d_model"], "hiyori"),
+		Live2DModel:     orDefault(m["live2d_model"], "mianyin"),
 		SystemPrompt:    m["system_prompt"],
 		SkillsDirs:      splitLines(m["skills_dirs"]),
 	}

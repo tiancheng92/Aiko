@@ -12,6 +12,15 @@ import (
 	"aiko/internal/memory"
 )
 
+const minSimilarity = 0.3
+
+// SearchResult holds a matched chunk together with its source file and score.
+type SearchResult struct {
+	Content    string
+	Source     string
+	Similarity float32
+}
+
 // Store manages the knowledge base collection in chromem-go, with source
 // names tracked in SQLite to avoid querying the vector index for metadata.
 type Store struct {
@@ -47,22 +56,37 @@ func (s *Store) AddChunk(ctx context.Context, text, source string, chunkIdx int)
 }
 
 // Search returns top-k relevant chunks for the query.
-// Returns nil if the knowledge base is empty.
-func (s *Store) Search(ctx context.Context, query string, k int) ([]string, error) {
+// It fetches up to 2×k candidates from the vector index, filters those below
+// minSimilarity, and returns at most k results ordered by descending similarity.
+// Returns nil if the knowledge base is empty or no result meets the threshold.
+func (s *Store) Search(ctx context.Context, query string, k int) ([]SearchResult, error) {
 	total := s.col.Count()
 	if total == 0 {
 		return nil, nil
 	}
-	n := min(k, total)
-	results, err := s.col.Query(ctx, query, n, nil, nil)
+
+	// Over-fetch so that threshold filtering still yields up to k results.
+	fetch := min(k*2, total)
+	raw, err := s.col.Query(ctx, query, fetch, nil, nil)
 	if err != nil {
 		return nil, err
 	}
-	texts := make([]string, len(results))
-	for i, r := range results {
-		texts[i] = r.Content
+
+	results := make([]SearchResult, 0, k)
+	for _, r := range raw {
+		if r.Similarity < minSimilarity {
+			continue
+		}
+		results = append(results, SearchResult{
+			Content:    r.Content,
+			Source:     r.Metadata["source"],
+			Similarity: r.Similarity,
+		})
+		if len(results) == k {
+			break
+		}
 	}
-	return texts, nil
+	return results, nil
 }
 
 // DeleteBySource removes all chunks from a given source file and deletes

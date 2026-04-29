@@ -783,7 +783,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           <div v-if="showProfileForm" class="modal-overlay" @click.self="showProfileForm = false">
             <div class="modal-box">
               <div class="modal-title">{{ profileForm.id ? '编辑配置' : '新增配置' }}</div>
-              <label>名称<input v-model="profileForm.name" placeholder="我的 OpenAI" /></label>
+              <label>名称<input v-model="profileForm.name" placeholder="我的 OpenAI" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
               <label>Provider
                 <select v-model="profileForm.provider">
                   <option value="openai">OpenAI 兼容</option>
@@ -795,19 +795,20 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                   <input
                     v-model="profileForm.base_url"
                     :placeholder="profileForm.provider === 'openrouter' ? 'https://openrouter.ai/api/v1（留空使用默认）' : 'http://localhost:11434/v1'"
+                    spellcheck="false" autocorrect="off" autocomplete="off"
                   />
                   <button class="fetch-btn" @click="fetchProfileModels" :disabled="fetchingProfileModels || (profileForm.provider !== 'openrouter' && !profileForm.base_url)">
                     {{ fetchingProfileModels ? '获取中...' : '获取模型' }}
                   </button>
                 </div>
-              </label>              <label>API Key<input v-model="profileForm.api_key" type="password" placeholder="（可选）" /></label>
+              </label>              <label>API Key<input v-model="profileForm.api_key" type="password" placeholder="（可选）" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
               <label>Model
                 <div class="select-row">
                   <select v-if="profileModels.length" v-model="profileForm.model">
                     <option value="">-- 请选择模型 --</option>
                     <option v-for="m in profileModels" :key="m" :value="m">{{ m }}</option>
                   </select>
-                  <input v-else v-model="profileForm.model" placeholder="gpt-4o" />
+                  <input v-else v-model="profileForm.model" placeholder="gpt-4o" spellcheck="false" autocorrect="off" autocomplete="off" />
                 </div>
               </label>
               <label>Embedding Model
@@ -816,7 +817,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                     <option value="">-- 不使用 Embedding --</option>
                     <option v-for="m in profileModels" :key="m" :value="m">{{ m }}</option>
                   </select>
-                  <input v-else v-model="profileForm.embedding_model" placeholder="text-embedding-3-small（可选）" />
+                  <input v-else v-model="profileForm.embedding_model" placeholder="text-embedding-3-small（可选）" spellcheck="false" autocorrect="off" autocomplete="off" />
                 </div>
               </label>
               <label>Embedding 维度<input type="number" v-model.number="profileForm.embedding_dim" min="256" max="4096" /></label>
@@ -861,10 +862,10 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
         <!-- AI 设置 -->
         <div v-if="activeTab === 'ai'" class="tab-pane">
-          <label>System Prompt<textarea v-model="cfg.SystemPrompt" rows="5" /></label>
+          <label>System Prompt<textarea v-model="cfg.SystemPrompt" rows="5" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
           <label>短期记忆轮数（1-100）<input type="number" v-model.number="cfg.ShortTermLimit" min="1" max="100" /></label>
           <label>自我成长 Nudge 间隔（轮）<input type="number" v-model.number="cfg.NudgeInterval" min="1" max="100" /></label>
-          <label>Skills 目录<span class="field-hint">每行一个路径</span><textarea v-model="cfg.SkillsDirs" rows="3" placeholder="~/.aiko/skills" /></label>
+          <label>Skills 目录<span class="field-hint">每行一个路径</span><textarea v-model="cfg.SkillsDirs" rows="3" placeholder="~/.aiko/skills" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
         </div>
 
         <!-- 外观与交互 -->
@@ -981,7 +982,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             <div v-if="showMCPForm" class="mcp-form">
               <div class="form-row">
                 <label>名称</label>
-                <input v-model="mcpForm.name" placeholder="my-server" />
+                <input v-model="mcpForm.name" placeholder="my-server" spellcheck="false" autocorrect="off" autocomplete="off" />
               </div>
               <div class="form-row">
                 <label>传输方式</label>
@@ -994,21 +995,21 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               <template v-if="mcpForm.transport === 'stdio'">
                 <div class="form-row">
                   <label>命令</label>
-                  <input v-model="mcpForm.command" placeholder="/usr/local/bin/mcp-server" />
+                  <input v-model="mcpForm.command" placeholder="/usr/local/bin/mcp-server" spellcheck="false" autocorrect="off" autocomplete="off" />
                 </div>
                 <div class="form-row">
                   <label>参数（空格分隔）</label>
-                  <input v-model="mcpForm.args" placeholder="--flag value" />
+                  <input v-model="mcpForm.args" placeholder="--flag value" spellcheck="false" autocorrect="off" autocomplete="off" />
                 </div>
               </template>
               <template v-else>
                 <div class="form-row">
                   <label>URL</label>
-                  <input v-model="mcpForm.url" placeholder="http://localhost:8080/sse" />
+                  <input v-model="mcpForm.url" placeholder="http://localhost:8080/sse" spellcheck="false" autocorrect="off" autocomplete="off" />
                 </div>
                 <div class="form-row">
                   <label>请求头（每行一个，格式：Key: Value）</label>
-                  <textarea v-model="mcpForm.headers" rows="3" placeholder="Authorization: Bearer xxx&#10;X-Custom: value" />
+                  <textarea v-model="mcpForm.headers" rows="3" placeholder="Authorization: Bearer xxx&#10;X-Custom: value" spellcheck="false" autocorrect="off" autocomplete="off" />
                 </div>
               </template>
               <div v-if="mcpFormError" class="form-error">{{ mcpFormError }}</div>
@@ -1041,7 +1042,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
           <!-- 执行设置子 tab -->
           <template v-if="toolsSubTab === 'settings'">
-            <div class="settings-section" style="margin-top:12px">
+            <div class="settings-section" style="margin-top:8px">
               <h3 class="section-title">文件系统访问白名单</h3>
               <p class="section-hint">留空则禁止所有文件操作，支持通配符（如 /Users/me/projects/*）</p>
               <div class="path-list">
@@ -1057,12 +1058,13 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                   class="path-input"
                   placeholder="/Users/me/projects 或 /tmp/*"
                   @keydown.enter="addPath"
+                  spellcheck="false" autocorrect="off" autocomplete="off"
                 />
                 <button class="btn-small" @click="addPath">添加</button>
               </div>
             </div>
 
-            <div class="settings-section" style="margin-top:16px">
+            <div class="settings-section" style="margin-top:12px">
               <h3 class="section-title">免确认命令白名单</h3>
               <p class="section-hint">以这些命令名开头的 Shell 命令将直接执行，无需二次确认（如 git、ls）</p>
               <div class="path-list">
@@ -1078,12 +1080,13 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                   class="path-input"
                   placeholder="git"
                   @keydown.enter="addTrustedCommand"
+                  spellcheck="false" autocorrect="off" autocomplete="off"
                 />
                 <button class="btn-small" @click="addTrustedCommand">添加</button>
               </div>
             </div>
 
-            <div class="settings-section" style="margin-top:16px">
+            <div class="settings-section" style="margin-top:12px">
               <h3 class="section-title">执行超时</h3>
               <div class="form-row">
                 <label>Shell 超时（秒）</label>
@@ -1133,19 +1136,19 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               <h4>新建定时任务</h4>
               <div class="form-row">
                 <label>名称 *</label>
-                <input v-model="cronForm.name" placeholder="每日早报" />
+                <input v-model="cronForm.name" placeholder="每日早报" spellcheck="false" autocorrect="off" autocomplete="off" />
               </div>
               <div class="form-row">
                 <label>描述</label>
-                <input v-model="cronForm.description" placeholder="可选说明" />
+                <input v-model="cronForm.description" placeholder="可选说明" spellcheck="false" autocorrect="off" autocomplete="off" />
               </div>
               <div class="form-row">
                 <label>Cron 表达式 *</label>
-                <input v-model="cronForm.schedule" placeholder="0 8 * * *（每天早 8 点）" />
+                <input v-model="cronForm.schedule" placeholder="0 8 * * *（每天早 8 点）" spellcheck="false" autocorrect="off" autocomplete="off" />
               </div>
               <div class="form-row">
                 <label>触发提示词 *</label>
-                <textarea v-model="cronForm.prompt" rows="3" placeholder="触发时发送给 AI 的消息内容" />
+                <textarea v-model="cronForm.prompt" rows="3" placeholder="触发时发送给 AI 的消息内容" spellcheck="false" autocorrect="off" autocomplete="off" />
               </div>
               <div v-if="cronFormError" class="form-error">{{ cronFormError }}</div>
               <div class="form-buttons">
@@ -1188,19 +1191,19 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 <div class="cron-edit-form">
                   <div class="form-row">
                     <label>名称 *</label>
-                    <input v-model="cronForm.name" placeholder="每日早报" />
+                    <input v-model="cronForm.name" placeholder="每日早报" spellcheck="false" autocorrect="off" autocomplete="off" />
                   </div>
                   <div class="form-row">
                     <label>描述</label>
-                    <input v-model="cronForm.description" placeholder="可选说明" />
+                    <input v-model="cronForm.description" placeholder="可选说明" spellcheck="false" autocorrect="off" autocomplete="off" />
                   </div>
                   <div class="form-row">
                     <label>Cron 表达式 *</label>
-                    <input v-model="cronForm.schedule" placeholder="0 8 * * *（每天早 8 点）" />
+                    <input v-model="cronForm.schedule" placeholder="0 8 * * *（每天早 8 点）" spellcheck="false" autocorrect="off" autocomplete="off" />
                   </div>
                   <div class="form-row">
                     <label>触发提示词 *</label>
-                    <textarea v-model="cronForm.prompt" rows="3" placeholder="触发时发送给 AI 的消息内容" />
+                    <textarea v-model="cronForm.prompt" rows="3" placeholder="触发时发送给 AI 的消息内容" spellcheck="false" autocorrect="off" autocomplete="off" />
                   </div>
                   <div v-if="cronFormError" class="form-error">{{ cronFormError }}</div>
                   <div class="form-buttons">
@@ -1440,8 +1443,8 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   color: rgba(255, 255, 255, 0.75);
 }
 .win-sidebar button.active {
-  background: rgba(99, 102, 241, 0.15);
-  color: #c4b5fd;
+  background: rgba(3, 105, 161, 0.15);
+  color: #7dd3fc;
   font-weight: 600;
 }
 .nav-icon {
@@ -1474,7 +1477,7 @@ input, textarea, select {
   font-family: inherit;
   transition: border-color 0.15s;
 }
-input:focus, textarea:focus, select:focus { border-color: rgba(99, 102, 241, 0.6); }
+input:focus, textarea:focus, select:focus { border-color: rgba(3, 105, 161, 0.6); }
 input::placeholder, textarea::placeholder { color: rgba(156, 163, 175, 0.4); }
 textarea { resize: vertical; }
 select {
@@ -1509,9 +1512,10 @@ select {
 
 /* Model profiles */
 .profile-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.section-title { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.7); }
-.btn-add { padding: 4px 12px; background: rgba(59,130,246,0.7); border: none; border-radius: 6px; color: #fff; font-size: 12px; cursor: pointer; }
-.btn-add:hover { background: rgba(59,130,246,0.9); }
+.section-title { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.7); margin: 0 0 4px; }
+.section-hint { font-size: 12px; color: rgba(255,255,255,0.4); margin: 0 0 8px; }
+.btn-add { padding: 4px 12px; background: rgba(3, 105, 161,0.7); border: none; border-radius: 6px; color: #fff; font-size: 12px; cursor: pointer; }
+.btn-add:hover { background: rgba(3, 105, 161,0.9); }
 .empty-hint { color: rgba(255,255,255,0.35); font-size: 12px; padding: 24px 0; text-align: center; }
 .profile-card {
   display: flex; align-items: center; justify-content: space-between;
@@ -1520,7 +1524,7 @@ select {
   border: 1px solid rgba(255,255,255,0.06);
   transition: border-color 0.15s;
 }
-.profile-card.active { border-color: rgba(59,130,246,0.5); background: rgba(59,130,246,0.08); }
+.profile-card.active { border-color: rgba(3, 105, 161,0.5); background: rgba(3, 105, 161,0.08); }
 .profile-card-main { display: flex; flex-direction: column; gap: 3px; }
 .profile-name { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.85); }
 .profile-meta { font-size: 11px; color: rgba(255,255,255,0.4); }
@@ -1548,11 +1552,11 @@ select {
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .btn-cancel { padding: 5px 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: rgba(255,255,255,0.6); font-size: 12px; cursor: pointer; }
 .btn-cancel:hover { background: rgba(255,255,255,0.12); }
-.btn-save { padding: 5px 14px; background: rgba(59,130,246,0.7); border: none; border-radius: 6px; color: #fff; font-size: 12px; cursor: pointer; }
-.btn-save:hover { background: rgba(59,130,246,0.9); }
-.btn-setup { width: 100%; padding: 7px 0; background: rgba(59,130,246,0.7); border: none; border-radius: 6px; color: #fff; font-size: 12px; cursor: pointer; }
-.btn-setup:hover { background: rgba(59,130,246,0.9); }
-.btn-setup:disabled { background: rgba(59,130,246,0.35); cursor: not-allowed; }
+.btn-save { padding: 5px 14px; background: rgba(3, 105, 161,0.7); border: none; border-radius: 6px; color: #fff; font-size: 12px; cursor: pointer; }
+.btn-save:hover { background: rgba(3, 105, 161,0.9); }
+.btn-setup { width: 100%; padding: 7px 0; background: rgba(3, 105, 161,0.7); border: none; border-radius: 6px; color: #fff; font-size: 12px; cursor: pointer; }
+.btn-setup:hover { background: rgba(3, 105, 161,0.9); }
+.btn-setup:disabled { background: rgba(3, 105, 161,0.35); cursor: not-allowed; }
 .form-error { color: #f87171; font-size: 12px; }
 
 /* Tool permissions */
@@ -1582,7 +1586,7 @@ select {
   position: relative;
   transition: background 0.2s, border-color 0.2s;
 }
-.toggle input:checked ~ .toggle-track { background: rgba(99, 102, 241, 0.8); border-color: rgba(99, 102, 241, 0.4); }
+.toggle input:checked ~ .toggle-track { background: rgba(3, 105, 161, 0.8); border-color: rgba(3, 105, 161, 0.4); }
 .toggle-track::after {
   content: '';
   position: absolute;
@@ -1598,7 +1602,7 @@ select {
 
 /* Buttons */
 button {
-  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  background: linear-gradient(135deg, #0369a1, #0c4a6e);
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -1649,10 +1653,10 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
   transition: border-color 0.15s, color 0.15s, background 0.15s;
   box-shadow: none;
 }
-.model-btn:hover { border-color: rgba(99,102,241,0.5); color: #f9fafb; background: rgba(99,102,241,0.08); }
+.model-btn:hover { border-color: rgba(3, 105, 161,0.5); color: #f9fafb; background: rgba(3, 105, 161,0.08); }
 .model-btn.selected {
-  background: rgba(99, 102, 241, 0.2);
-  border-color: rgba(99, 102, 241, 0.5);
+  background: rgba(3, 105, 161, 0.2);
+  border-color: rgba(3, 105, 161, 0.5);
   color: #a5b4fc;
 }
 
@@ -1783,7 +1787,10 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
 .form-row {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+}
+.form-row + .form-row {
+  margin-top: 12px;
 }
 .form-row label {
   font-size: 12px;
@@ -1800,7 +1807,7 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
   justify-content: flex-end;
 }
 .btn-primary {
-  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  background: linear-gradient(135deg, #0369a1, #0c4a6e);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -1829,7 +1836,7 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
 
 /* Pet size slider */
 .size-row { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
-.size-row input[type=range] { flex: 1; accent-color: #6366f1; cursor: pointer; }
+.size-row input[type=range] { flex: 1; accent-color: #0369a1; cursor: pointer; }
 .size-val { font-size: 12px; color: #a5b4fc; min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
 .size-hint { font-size: 11px; color: rgba(107,114,128,0.6); margin-top: 2px; line-height: 1.4; }
 .btn-reset-size {
@@ -1861,7 +1868,7 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
 .cron-name { font-size: 13px; font-weight: 600; color: #f9fafb; }
 .cron-schedule {
   font-size: 11px; color: #a5b4fc;
-  background: rgba(99,102,241,0.15);
+  background: rgba(3, 105, 161,0.15);
   border-radius: 4px; padding: 1px 6px;
   font-family: 'Fira Code', monospace;
 }
@@ -1883,8 +1890,8 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
 .btn-toggle--enable { background: rgba(34,197,94,0.15); color: #4ade80; border-color: rgba(34,197,94,0.3); }
 .btn-toggle--enable:hover { background: rgba(34,197,94,0.25); }
 .cron-row--editing {
-  border-color: rgba(99,102,241,0.4);
-  background: rgba(99,102,241,0.06);
+  border-color: rgba(3, 105, 161,0.4);
+  background: rgba(3, 105, 161,0.06);
 }
 .cron-edit-form {
   flex: 1;
@@ -1927,7 +1934,7 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
   flex-shrink: 0;
   width: 22px; height: 22px;
   border-radius: 50%;
-  background: rgba(99,102,241,0.25);
+  background: rgba(3, 105, 161,0.25);
   color: #a5b4fc;
   font-size: 12px;
   font-weight: 700;
@@ -2015,7 +2022,7 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
   border-radius: 50%;
   transition: transform 0.2s;
 }
-.voice-auto-send-switch input:checked + .voice-auto-send-slider { background: #6366f1; }
+.voice-auto-send-switch input:checked + .voice-auto-send-slider { background: #0369a1; }
 .voice-auto-send-switch input:checked + .voice-auto-send-slider::before { transform: translateX(18px); }
 
 /* ── 提醒事项 tab ───────────────────────────────────────── */
@@ -2100,7 +2107,7 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
 .path-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 .path-row {
   display: flex;
@@ -2109,7 +2116,7 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 6px;
-  padding: 5px 10px;
+  padding: 8px 12px;
 }
 .path-text {
   flex: 1;
@@ -2135,6 +2142,6 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
   outline: none;
 }
 .path-input:focus {
-  border-color: rgba(120,160,255,0.4);
+  border-color: rgba(3, 105, 161,0.4);
 }
 </style>

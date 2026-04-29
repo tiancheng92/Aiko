@@ -53,7 +53,7 @@ func (t *SearchKnowledgeTool) InvokableRun(ctx context.Context, input string, _ 
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "找到 %d 条相关知识库内容：\n\n", len(results))
 	for i, r := range results {
-		fmt.Fprintf(&sb, "--- 片段 %d ---\n%s\n\n", i+1, r)
+		fmt.Fprintf(&sb, "--- 片段 %d [来源: %s, 相似度: %.2f] ---\n%s\n\n", i+1, r.Source, r.Similarity, r.Content)
 	}
 	return sb.String(), nil
 }
