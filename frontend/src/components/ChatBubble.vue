@@ -156,7 +156,7 @@ defineExpose({ focusInput, scrollToBottom })
 <style scoped>
 .chat-bubble {
   position: fixed;
-  background: rgba(5, 6, 12, 1);
+  background: rgba(8, 10, 24, 1);
   backdrop-filter: blur(24px) saturate(140%);
   -webkit-backdrop-filter: blur(24px) saturate(140%);
   border: 1px solid rgba(255, 255, 255, 0.07);

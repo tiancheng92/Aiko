@@ -55,6 +55,64 @@ func (t *SaveMemoryTool) InvokableRun(ctx context.Context, input string, _ ...to
 	return fmt.Sprintf("已保存到长期记忆：%s", content), nil
 }
 
+// SearchMemoryTool queries long-term memory for segments relevant to a given topic.
+type SearchMemoryTool struct {
+	LongMem *memory.LongStore
+}
+
+// Name returns the tool's stable identifier.
+func (t *SearchMemoryTool) Name() string { return "search_memory" }
+
+// Permission returns the required permission level.
+func (t *SearchMemoryTool) Permission() PermissionLevel { return PermPublic }
+
+// Info returns the eino tool schema for search_memory.
+func (t *SearchMemoryTool) Info(_ context.Context) (*schema.ToolInfo, error) {
+	return infoFromSchema(t.Name(),
+		"在长期记忆中语义搜索，返回与查询最相关的历史片段。适合回答「我之前说过什么」、「我们讨论过 X 吗」等问题。",
+		map[string]*schema.ParameterInfo{
+			"query": {
+				Type:     schema.String,
+				Desc:     "搜索关键词或问题描述",
+				Required: true,
+			},
+			"limit": {
+				Type: schema.Integer,
+				Desc: "返回条数（默认 5，最大 20）",
+			},
+		},
+	), nil
+}
+
+// InvokableRun searches long-term memory and returns the top matching segments.
+func (t *SearchMemoryTool) InvokableRun(ctx context.Context, input string, _ ...tool.Option) (string, error) {
+	if t.LongMem == nil {
+		return "长期记忆未启用（需配置 Embedding 模型）", nil
+	}
+	args := parseArgs(input)
+	query, _ := args["query"].(string)
+	if query == "" {
+		return "请提供搜索关键词", nil
+	}
+	limit := 5
+	if v, ok := args["limit"].(float64); ok && v > 0 {
+		limit = min(int(v), 20)
+	}
+	results, err := t.LongMem.Search(ctx, query, limit)
+	if err != nil {
+		return "", fmt.Errorf("search memory: %w", err)
+	}
+	if len(results) == 0 {
+		return "未找到相关记忆片段", nil
+	}
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "找到 %d 条相关记忆片段：\n\n", len(results))
+	for i, r := range results {
+		fmt.Fprintf(&sb, "【%d】%s\n\n", i+1, r)
+	}
+	return strings.TrimRight(sb.String(), "\n"), nil
+}
+
 // UpdateUserProfileTool updates a key-value entry in ~/.aiko/USER.md.
 type UpdateUserProfileTool struct {
 	DataDir string

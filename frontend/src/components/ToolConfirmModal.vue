@@ -103,7 +103,7 @@ onUnmounted(() => { offConfirm?.() })
 }
 .modal-box {
   position: relative;
-  background: rgb(5, 6, 12);
+  background: rgb(8, 10, 24);
   backdrop-filter: blur(24px) saturate(140%);
   -webkit-backdrop-filter: blur(24px) saturate(140%);
   border: 1px solid rgba(255, 255, 255, 0.07);
@@ -185,7 +185,7 @@ onUnmounted(() => { offConfirm?.() })
   outline: none;
 }
 .content-editor:focus {
-  border-color: rgba(59, 130, 246, 0.4);
+  border-color: rgba(37, 99, 235, 0.4);
 }
 .risk-text {
   font-size: 12px;
@@ -213,7 +213,7 @@ onUnmounted(() => { offConfirm?.() })
   padding: 8px 20px;
   border-radius: 6px;
   border: none;
-  background: #3b6ff5;
+  background: #2563eb;
   color: #fff;
   cursor: pointer;
   font-size: 13px;

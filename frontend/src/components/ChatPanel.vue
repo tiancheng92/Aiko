@@ -108,6 +108,7 @@ renderer.table = (token) => {
     sortedIndices: rawRows.map((_, i) => i),
     currentPage: 1,
     filterQuery: '',
+    filterCol: -1,
   }
 
   const headerHtml = token.header.map((cell, i) => {
@@ -123,7 +124,8 @@ renderer.table = (token) => {
     ? `<div class="table-pagination"><button class="tbl-page-btn" onclick="window.__tp('${id}',0)" disabled>‹</button><span class="tbl-page-info">1 / ${totalPages}</span><button class="tbl-page-btn" onclick="window.__tp('${id}',2)"${totalPages <= 1 ? ' disabled' : ''}>›</button></div>`
     : ''
 
-  const filterBar = `<div class="tbl-filter-bar"><input class="tbl-filter-input" type="text" placeholder="筛选..." oninput="window.__tf('${id}',this.value)"></div>`
+  const colOptions = [`<option value="-1">全表</option>`, ...headers.map((h, i) => `<option value="${i}">${h}</option>`)].join('')
+  const filterBar = `<div class="tbl-filter-bar"><select class="tbl-filter-select" onchange="window.__fc('${id}',+this.value)">${colOptions}</select><input class="tbl-filter-input" type="text" placeholder="筛选..." oninput="window.__tf('${id}',this.value)"></div>`
 
   return `<div class="table-wrapper" id="${id}" data-headers="${encodedHeaders}" data-raw="${encodedRaw}">${filterBar}<div class="tbl-scroll"><table><thead><tr>${headerHtml}</tr></thead><tbody>${firstRowsHtml}</tbody></table></div>${paginationHtml}</div>`
 }
@@ -150,33 +152,20 @@ window.__ts = (id, colIdx) => {
     state.sortCol = colIdx
     state.sortDir = 'asc'
   }
-  const indices = state.rawRows.map((_, i) => i)
-  if (state.sortDir !== 'none') {
-    const dir = state.sortDir === 'asc' ? 1 : -1
-    indices.sort((a, b) => {
-      const va = state.rawRows[a][colIdx] ?? ''
-      const vb = state.rawRows[b][colIdx] ?? ''
-      const na = parseFloat(va.replace(/,/g, ''))
-      const nb = parseFloat(vb.replace(/,/g, ''))
-      return (!isNaN(na) && !isNaN(nb) ? na - nb : va.localeCompare(vb, undefined, { numeric: true })) * dir
-    })
-  }
-  state.sortedIndices = indices
-  state.currentPage = 1
+  applyFilterSort(state)
   renderTablePage(wrapper, state)
   updateSortHeaders(wrapper, state)
 }
 
-/** __tf filters table rows by a case-insensitive substring across all columns, then re-applies the current sort. */
-window.__tf = (id, query) => {
-  const wrapper = document.getElementById(id)
-  const state = window.__tableState?.[id]
-  if (!wrapper || !state) return
-  state.filterQuery = query.trim().toLowerCase()
+/** applyFilterSort recomputes sortedIndices from current filterQuery/filterCol/sortCol/sortDir. */
+function applyFilterSort(state) {
   const q = state.filterQuery
+  const fc = state.filterCol
   let indices = state.rawRows.map((_, i) => i)
   if (q) {
-    indices = indices.filter(i => state.rawRows[i].some(cell => cell.toLowerCase().includes(q)))
+    indices = fc >= 0
+      ? indices.filter(i => (state.rawRows[i][fc] ?? '').toLowerCase().includes(q))
+      : indices.filter(i => state.rawRows[i].some(cell => cell.toLowerCase().includes(q)))
   }
   if (state.sortDir !== 'none' && state.sortCol >= 0) {
     const col = state.sortCol
@@ -191,6 +180,25 @@ window.__tf = (id, query) => {
   }
   state.sortedIndices = indices
   state.currentPage = 1
+}
+
+/** __fc changes the active filter column then re-runs the current filter query. */
+window.__fc = (id, colIdx) => {
+  const wrapper = document.getElementById(id)
+  const state = window.__tableState?.[id]
+  if (!wrapper || !state) return
+  state.filterCol = colIdx
+  applyFilterSort(state)
+  renderTablePage(wrapper, state)
+}
+
+/** __tf filters table rows by a case-insensitive substring, scoped to the selected column or all columns. */
+window.__tf = (id, query) => {
+  const wrapper = document.getElementById(id)
+  const state = window.__tableState?.[id]
+  if (!wrapper || !state) return
+  state.filterQuery = query.trim().toLowerCase()
+  applyFilterSort(state)
   renderTablePage(wrapper, state)
 }
 
@@ -1022,7 +1030,7 @@ defineExpose({ focusInput, scrollToBottom })
           <div class="tbl-detail-body">
             <div v-for="pair in tableDetailRow" :key="pair.key" class="tbl-detail-pair">
               <span class="tbl-detail-key">{{ pair.key }}</span>
-              <span class="tbl-detail-value">{{ pair.value }}</span>
+              <span class="tbl-detail-value markdown" v-html="renderMarkdown(pair.value)"></span>
             </div>
           </div>
         </div>
@@ -1131,7 +1139,7 @@ defineExpose({ focusInput, scrollToBottom })
   display: block;
   width: 5px; height: 5px;
   border-radius: 50%;
-  background: rgba(3,105,161,0.6);
+  background: rgba(37,99,235,0.6);
   animation: dot-bounce 1.2s ease-in-out infinite;
 }
 .h-dot:nth-child(2) { animation-delay: 0.2s; }
@@ -1162,7 +1170,7 @@ defineExpose({ focusInput, scrollToBottom })
   left: 0;
   right: 0;
   height: 80px;
-  background: linear-gradient(to bottom, transparent, rgba(5, 6, 12, 0.96));
+  background: linear-gradient(to bottom, transparent, rgba(8, 10, 24, 0.96));
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -1171,7 +1179,7 @@ defineExpose({ focusInput, scrollToBottom })
 }
 /* For user bubbles the gradient should match the bubble background */
 .msg.user .collapse-fade {
-  background: linear-gradient(to bottom, transparent, rgba(5, 6, 12, 0.96));
+  background: linear-gradient(to bottom, transparent, rgba(8, 10, 24, 0.96));
 }
 
 .collapse-btn {
@@ -1231,10 +1239,10 @@ defineExpose({ focusInput, scrollToBottom })
 
 /* User bubble */
 .user .bubble {
-  background: linear-gradient(135deg, #0369a1, #0c4a6e);
+  background: linear-gradient(135deg, #2563eb, #1e3a8a);
   color: #fff;
   border-radius: 16px 16px 4px 16px;
-  box-shadow: 0 2px 12px rgba(3, 105, 161, 0.4);
+  box-shadow: 0 2px 12px rgba(37, 99, 235, 0.4);
 }
 .user .bubble.has-images {
   display: flex;
@@ -1244,10 +1252,10 @@ defineExpose({ focusInput, scrollToBottom })
 
 /* Assistant bubble */
 .assistant .bubble {
-  background: rgba(255,255,255,0.04);
-  color: #e5e7eb;
+  background: rgba(30, 41, 70, 0.55);
+  color: #e2e8f0;
   border-radius: 16px 16px 16px 4px;
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid rgba(99, 130, 210, 0.15);
 }
 
 /* System / error bubble */
@@ -1370,9 +1378,9 @@ defineExpose({ focusInput, scrollToBottom })
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 .msg-action-btn:hover {
-  background: rgba(3, 105, 161, 0.2);
-  border-color: rgba(3, 105, 161, 0.4);
-  color: #7dd3fc;
+  background: rgba(37, 99, 235, 0.2);
+  border-color: rgba(37, 99, 235, 0.4);
+  color: #93c5fd;
 }
 
 /* Markdown prose */
@@ -1453,8 +1461,8 @@ defineExpose({ focusInput, scrollToBottom })
 }
 .bubble.markdown :deep(code) { font-family: 'Fira Code', 'JetBrains Mono', monospace; font-size: 12px; }
 .bubble.markdown :deep(:not(pre) > code) {
-  background: rgba(3, 105, 161, 0.18);
-  color: #7dd3fc;
+  background: rgba(37, 99, 235, 0.18);
+  color: #93c5fd;
   padding: 1px 5px;
   border-radius: 4px;
   font-size: 12px;
@@ -1467,11 +1475,11 @@ defineExpose({ focusInput, scrollToBottom })
 
 /* Blockquote */
 .bubble.markdown :deep(blockquote) {
-  border-left: 3px solid #0369a1;
+  border-left: 3px solid #2563eb;
   margin: 8px 0;
   padding: 6px 10px;
-  color: #9ca3af;
-  background: rgba(3, 105, 161, 0.06);
+  color: #94a3b8;
+  background: rgba(37, 99, 235, 0.06);
   border-radius: 0 6px 6px 0;
 }
 
@@ -1483,11 +1491,11 @@ defineExpose({ focusInput, scrollToBottom })
 
 /* Links — break long URLs so they don't overflow the bubble */
 .bubble.markdown :deep(a) {
-  color: #38bdf8;
+  color: #60a5fa;
   text-decoration: none;
   word-break: break-all;
 }
-.bubble.markdown :deep(a:hover) { text-decoration: underline; color: #7dd3fc; }
+.bubble.markdown :deep(a:hover) { text-decoration: underline; color: #93c5fd; }
 
 /* Tables */
 .bubble.markdown :deep(.table-wrapper) {
@@ -1553,9 +1561,30 @@ defineExpose({ focusInput, scrollToBottom })
   padding: 7px 10px 6px;
   border-bottom: 1px solid rgba(255,255,255,0.06);
   background: rgba(255,255,255,0.015);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.bubble.markdown :deep(.tbl-filter-select) {
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.75);
+  font-size: 12px;
+  font-family: inherit;
+  padding: 4px 6px;
+  outline: none;
+  cursor: pointer;
+  max-width: 110px;
+  transition: border-color 0.15s;
+}
+.bubble.markdown :deep(.tbl-filter-select:focus) {
+  border-color: rgba(37,99,235,0.4);
 }
 .bubble.markdown :deep(.tbl-filter-input) {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.09);
   border-radius: 6px;
@@ -1571,7 +1600,7 @@ defineExpose({ focusInput, scrollToBottom })
   color: rgba(255,255,255,0.28);
 }
 .bubble.markdown :deep(.tbl-filter-input:focus) {
-  border-color: rgba(59,130,246,0.4);
+  border-color: rgba(37,99,235,0.4);
 }
 .bubble.markdown :deep(.table-pagination) {
   display: flex;
@@ -1633,7 +1662,7 @@ defineExpose({ focusInput, scrollToBottom })
 }
 .tbl-detail-box {
   position: relative;
-  background: rgb(5, 6, 12);
+  background: rgb(8, 10, 24);
   backdrop-filter: blur(24px) saturate(140%);
   -webkit-backdrop-filter: blur(24px) saturate(140%);
   border: 1px solid rgba(255, 255, 255, 0.07);
@@ -1694,14 +1723,14 @@ defineExpose({ focusInput, scrollToBottom })
   transition: background 0.12s;
 }
 .tbl-detail-pair:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(37, 99, 235, 0.07);
 }
 .tbl-detail-key {
   flex-shrink: 0;
   width: 120px;
   font-size: 11px;
   font-weight: 500;
-  color: rgba(125, 211, 252, 0.75);
+  color: rgba(99, 160, 246, 0.8);
   word-break: break-word;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1713,6 +1742,10 @@ defineExpose({ focusInput, scrollToBottom })
   word-break: break-word;
   line-height: 1.5;
 }
+.tbl-detail-value.markdown :deep(p) { margin: 0; }
+.tbl-detail-value.markdown :deep(p + p) { margin-top: 4px; }
+.tbl-detail-value.markdown :deep(strong) { color: #e5e7eb; }
+.tbl-detail-value.markdown :deep(code) { font-size: 12px; }
 .tbl-detail-pop-enter-active { transition: opacity 0.22s ease; }
 .tbl-detail-pop-leave-active { transition: opacity 0.14s ease-in; }
 .tbl-detail-pop-enter-from,
@@ -1748,7 +1781,7 @@ defineExpose({ focusInput, scrollToBottom })
   overflow: hidden;
 }
 .input-area:focus-within {
-  border-color: rgba(3, 105, 161, 0.55);
+  border-color: rgba(37, 99, 235, 0.55);
 }
 .input-area textarea {
   display: block;
@@ -1786,7 +1819,7 @@ defineExpose({ focusInput, scrollToBottom })
   padding: 0 12px 6px;
 }
 .send-btn {
-  background: linear-gradient(135deg, #0369a1, #0c4a6e);
+  background: linear-gradient(135deg, #2563eb, #1e3a8a);
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -1797,7 +1830,7 @@ defineExpose({ focusInput, scrollToBottom })
   justify-content: center;
   cursor: pointer;
   transition: opacity 0.15s, transform 0.1s;
-  box-shadow: 0 2px 6px rgba(3, 105, 161, 0.35);
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
   flex-shrink: 0;
 }
 .send-btn:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
@@ -2031,7 +2064,7 @@ defineExpose({ focusInput, scrollToBottom })
 }
 .clear-confirm-box {
   position: relative;
-  background: rgb(5, 6, 12);
+  background: rgb(8, 10, 24);
   backdrop-filter: blur(24px) saturate(140%);
   -webkit-backdrop-filter: blur(24px) saturate(140%);
   border: 1px solid rgba(255, 255, 255, 0.07);

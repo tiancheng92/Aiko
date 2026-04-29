@@ -166,6 +166,7 @@ func AllPermissionDeclarations() []namedPermDecl {
 		&SearchKnowledgeTool{},
 		&CronTool{},
 		&SaveMemoryTool{},
+		&SearchMemoryTool{},
 		&UpdateUserProfileTool{},
 		&SaveSkillTool{},
 		&ListDirectoryTool{},
@@ -217,6 +218,7 @@ func AllContextual(
 		&SearchKnowledgeTool{KnowledgeSt: knowledgeSt},
 		&CronTool{Scheduler: sched},
 		&SaveMemoryTool{LongMem: longMem},
+		&SearchMemoryTool{LongMem: longMem},
 		&UpdateUserProfileTool{DataDir: dataDir},
 		&SaveSkillTool{DataDir: dataDir},
 		// File system tools

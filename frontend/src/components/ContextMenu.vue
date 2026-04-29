@@ -76,7 +76,7 @@ defineExpose({ show, hide })
 .ctx-menu {
   position: fixed;
   z-index: 99999;
-  background: rgba(5, 6, 12, 1);
+  background: rgba(8, 10, 24, 1);
   backdrop-filter: blur(24px) saturate(140%);
   -webkit-backdrop-filter: blur(24px) saturate(140%);
   border: 1px solid rgba(255, 255, 255, 0.07);
@@ -105,7 +105,7 @@ defineExpose({ show, hide })
   transition: background 0.12s;
   font-weight: 400;
 }
-.ctx-item:hover { background: rgba(59, 130, 246, 0.18); color: #fff; }
+.ctx-item:hover { background: rgba(37, 99, 235, 0.22); color: #fff; }
 .ctx-icon { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
 .ctx-divider { height: 1px; background: rgba(255, 255, 255, 0.05); margin: 4px 8px; }
 
