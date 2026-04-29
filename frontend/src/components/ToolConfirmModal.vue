@@ -51,51 +51,50 @@ onUnmounted(() => { offConfirm?.() })
 </script>
 
 <template>
-  <Teleport to="body">
-    <Transition name="tool-confirm-pop">
-    <div v-if="visible" class="tool-confirm-modal">
-      <div class="modal-backdrop" @click.self="reject" />
-      <div class="modal-box">
-        <div class="modal-header">
-          <span class="badge">{{ languageLabel }}</span>
-          <span class="title">⚠️ Agent 请求执行{{ request?.tool_type === 'shell' ? ' Shell 命令' : '代码' }}</span>
-        </div>
+  <Transition name="tool-confirm-pop">
+  <div v-if="visible" class="tool-confirm-modal">
+    <div class="modal-backdrop" @click.self="reject" />
+    <div class="modal-box">
+      <div class="modal-header">
+        <span class="badge">{{ languageLabel }}</span>
+        <span class="title">⚠️ Agent 请求执行{{ request?.tool_type === 'shell' ? ' Shell 命令' : '代码' }}</span>
+      </div>
 
-        <div class="modal-field">
-          <label>工作目录</label>
-          <span class="dir-path">{{ request?.working_dir }}</span>
-        </div>
+      <div class="modal-field">
+        <label>工作目录</label>
+        <span class="dir-path">{{ request?.working_dir }}</span>
+      </div>
 
-        <div class="modal-field">
-          <label>{{ request?.tool_type === 'shell' ? '命令' : '代码' }}（可编辑）</label>
-          <textarea
-            v-model="editedContent"
-            class="content-editor"
-            :rows="request?.tool_type === 'code' ? 8 : 3"
-            spellcheck="false"
-          />
-        </div>
+      <div class="modal-field">
+        <label>{{ request?.tool_type === 'shell' ? '命令' : '代码' }}（可编辑）</label>
+        <textarea
+          v-model="editedContent"
+          class="content-editor"
+          :rows="request?.tool_type === 'code' ? 8 : 3"
+          spellcheck="false"
+        />
+      </div>
 
-        <p class="risk-text">{{ riskText }}</p>
+      <p class="risk-text">{{ riskText }}</p>
 
-        <div class="modal-actions">
-          <button class="btn-reject" @click="reject">拒绝</button>
-          <button class="btn-approve" @click="approve">批准执行</button>
-        </div>
+      <div class="modal-actions">
+        <button class="btn-reject" @click="reject">拒绝</button>
+        <button class="btn-approve" @click="approve">批准执行</button>
       </div>
     </div>
-    </Transition>
-  </Teleport>
+  </div>
+  </Transition>
 </template>
 
 <style scoped>
 .tool-confirm-modal {
-  position: fixed;
+  position: absolute;
   inset: 0;
-  z-index: 9999;
+  z-index: 200;
   display: flex;
   align-items: center;
   justify-content: center;
+  pointer-events: auto;
 }
 .modal-backdrop {
   position: absolute;

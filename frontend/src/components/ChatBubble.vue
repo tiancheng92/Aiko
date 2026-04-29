@@ -70,6 +70,7 @@ function toggleFullscreen() {
   isFullscreen.value = !isFullscreen.value
 }
 
+
 const pos = computed(() => {
   const { x, y } = props.ballPos
   if (x < 0 || y < 0) {

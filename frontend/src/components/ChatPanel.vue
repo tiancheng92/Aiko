@@ -46,15 +46,59 @@ renderer.code = ({ text, lang }) => {
   ).join('')
   return `<div class="code-block"><div class="code-header"><span class="code-lang">${language || 'text'}</span><button class="code-copy" onclick="navigator.clipboard.writeText(decodeURIComponent(atob(this.dataset.code)));this.textContent='✓';setTimeout(()=>this.textContent='复制',2000)" data-code="${btoa(encodeURIComponent(text))}">复制</button></div><pre><code class="${cls}">${numbered}</code></pre></div>`
 }
+const TABLE_PAGE_SIZE = 10
+
 renderer.table = (token) => {
   const alignStyle = (align) => align ? ` style="text-align:${align}"` : ''
   const headerHtml = token.header.map(cell =>
     `<th${alignStyle(cell.align)}>${marked.parseInline(cell.text)}</th>`
   ).join('')
-  const rowsHtml = token.rows.map(row =>
-    `<tr>${row.map(cell => `<td${alignStyle(cell.align)}>${marked.parseInline(cell.text)}</td>`).join('')}</tr>`
-  ).join('')
-  return `<div class="table-wrapper"><table><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></div>`
+  const encodedHeaders = btoa(encodeURIComponent(JSON.stringify(
+    token.header.map(cell => cell.text)
+  )))
+  const encodedRaw = btoa(encodeURIComponent(JSON.stringify(
+    token.rows.map(row => row.map(cell => cell.text))
+  )))
+  const allRows = token.rows.map((row, i) => {
+    const cells = row.map(cell => `<td${alignStyle(cell.align)}>${marked.parseInline(cell.text)}</td>`).join('')
+    return `<tr class="tbl-row" onclick="window.__tr(this)" data-row-idx="${i}">${cells}</tr>`
+  })
+  if (allRows.length <= TABLE_PAGE_SIZE) {
+    return `<div class="table-wrapper" data-headers="${encodedHeaders}" data-raw="${encodedRaw}"><table><thead><tr>${headerHtml}</tr></thead><tbody>${allRows.join('')}</tbody></table></div>`
+  }
+  const totalPages = Math.ceil(allRows.length / TABLE_PAGE_SIZE)
+  const id = 'tbl-' + Math.random().toString(36).slice(2, 9)
+  const encoded = btoa(encodeURIComponent(JSON.stringify(allRows)))
+  const firstRows = allRows.slice(0, TABLE_PAGE_SIZE).join('')
+  return `<div class="table-wrapper" id="${id}" data-rows="${encoded}" data-headers="${encodedHeaders}" data-raw="${encodedRaw}"><table><thead><tr>${headerHtml}</tr></thead><tbody>${firstRows}</tbody></table><div class="table-pagination"><button class="tbl-page-btn" onclick="window.__tp('${id}',0)" disabled>‹</button><span class="tbl-page-info">1 / ${totalPages}</span><button class="tbl-page-btn" onclick="window.__tp('${id}',2)"${totalPages <= 1 ? ' disabled' : ''}>›</button></div></div>`
+}
+
+/** __tp navigates a paginated markdown table to the requested page number. */
+window.__tp = (id, page) => {
+  const wrapper = document.getElementById(id)
+  if (!wrapper) return
+  const allRows = JSON.parse(decodeURIComponent(atob(wrapper.dataset.rows)))
+  const totalPages = Math.ceil(allRows.length / TABLE_PAGE_SIZE)
+  const p = Math.max(1, Math.min(page, totalPages))
+  const start = (p - 1) * TABLE_PAGE_SIZE
+  wrapper.querySelector('tbody').innerHTML = allRows.slice(start, start + TABLE_PAGE_SIZE).join('')
+  wrapper.querySelector('.tbl-page-info').textContent = `${p} / ${totalPages}`
+  const [prevBtn, nextBtn] = wrapper.querySelectorAll('.tbl-page-btn')
+  prevBtn.disabled = p <= 1
+  prevBtn.setAttribute('onclick', `window.__tp('${id}',${p - 1})`)
+  nextBtn.disabled = p >= totalPages
+  nextBtn.setAttribute('onclick', `window.__tp('${id}',${p + 1})`)
+}
+
+/** __tr opens the row-detail modal for a clicked table row. */
+window.__tr = (rowEl) => {
+  const wrapper = rowEl.closest('.table-wrapper')
+  if (!wrapper) return
+  const headers = JSON.parse(decodeURIComponent(atob(wrapper.dataset.headers)))
+  const rawRows = JSON.parse(decodeURIComponent(atob(wrapper.dataset.raw)))
+  const rowIdx = parseInt(rowEl.dataset.rowIdx, 10)
+  const cells = rawRows[rowIdx] || []
+  tableDetailRow.value = headers.map((key, i) => ({ key, value: cells[i] ?? '' }))
 }
 renderer.link = ({ href, title, text }) => {
   // Resolve DDG redirect URLs to the actual destination
@@ -131,6 +175,68 @@ const messagesEl = ref(null)
 const codeMaxWidth = ref(0)
 const copiedIdx = ref(null)
 const showClearConfirm = ref(false)
+/** tableDetailRow holds the key-value pairs for the row-detail modal; null when hidden. */
+const tableDetailRow = ref(null)
+
+/** collapsedIds holds message keys that should render in collapsed state. */
+const collapsedIds = ref(new Set())
+/** expandedIds holds message keys the user has manually expanded. */
+const expandedIds = ref(new Set())
+
+/** msgKey returns a stable key for a message — prefers persisted id, falls back to index. */
+function msgKey(m, i) { return m.id != null ? `id:${m.id}` : `i:${i}` }
+
+/** isCollapsed returns true when a message is tall enough to collapse and not yet expanded. */
+function isCollapsed(m, i) {
+  const k = msgKey(m, i)
+  return collapsedIds.value.has(k) && !expandedIds.value.has(k)
+}
+
+/** isEverCollapsed returns true when a message has been registered for collapsing (expanded or not). */
+function isEverCollapsed(m, i) {
+  return collapsedIds.value.has(msgKey(m, i))
+}
+
+/** toggleExpand expands or re-collapses a message. */
+function toggleExpand(m, i) {
+  const k = msgKey(m, i)
+  const next = new Set(expandedIds.value)
+  if (next.has(k)) next.delete(k)
+  else next.add(k)
+  expandedIds.value = next
+}
+
+const COLLAPSE_HEIGHT = 350
+
+/** pendingCollapseChecks queues history messages waiting for the panel to become visible. */
+const pendingCollapseChecks = []
+
+/** runPendingCollapseChecks processes all queued messages once the panel has a real layout. */
+function runPendingCollapseChecks() {
+  if (!messagesEl.value || messagesEl.value.clientHeight === 0) return
+  const checks = pendingCollapseChecks.splice(0)
+  for (const { m, i } of checks) {
+    const k = msgKey(m, i)
+    if (expandedIds.value.has(k)) continue
+    const bubbleEl = messagesEl.value.querySelector(`[data-msg-key="${CSS.escape(k)}"]`)
+    if (bubbleEl && bubbleEl.scrollHeight > COLLAPSE_HEIGHT) {
+      const next = new Set(collapsedIds.value)
+      next.add(k)
+      collapsedIds.value = next
+    }
+  }
+}
+
+/** checkBubbleCollapse queues a history message for collapse measurement.
+ *  If the panel is already visible, processes immediately; otherwise defers until visible. */
+function checkBubbleCollapse(m, i, fromHistory = false) {
+  if (!fromHistory) return
+  if (m.streaming || m.thinking) return
+  pendingCollapseChecks.push({ m, i })
+  if (messagesEl.value && messagesEl.value.clientHeight > 0) {
+    requestAnimationFrame(runPendingCollapseChecks)
+  }
+}
 const textareaEl = ref(null)
 const isRecording = ref(false)
 const voiceHint = ref('')
@@ -206,8 +312,10 @@ async function loadOlderMessages() {
     const el = messagesEl.value
     // Record which index the current first message will land at after prepend.
     const firstOldIdx = older.length
-    messages.value = older.map(mapMsg).concat(messages.value)
+    const olderMapped = older.map(mapMsg)
+    messages.value = olderMapped.concat(messages.value)
     oldestLoadedID = older[0].ID
+    olderMapped.forEach((m, i) => checkBubbleCollapse(m, i, true))
     // Wait for Vue to flush the DOM, then one rAF so the browser finishes layout.
     await nextTick()
     await new Promise(resolve => requestAnimationFrame(resolve))
@@ -233,6 +341,8 @@ onMounted(async () => {
   if (mapped.length > 0) oldestLoadedID = mapped[0].id
   if ((history || []).length < PAGE_SIZE) allLoaded.value = true
   scrollToBottom()
+  // Check loaded history messages for collapse after DOM paints.
+  mapped.forEach((m, i) => checkBubbleCollapse(m, i, true))
 
   // Sentinel element at top of list triggers lazy-load via IntersectionObserver.
   const sentinel = document.getElementById('msg-load-sentinel')
@@ -400,6 +510,10 @@ onMounted(async () => {
   if (messagesEl.value) {
     resizeObserver = new ResizeObserver(([entry]) => {
       codeMaxWidth.value = entry.contentRect.width - 28 - 68
+      // Panel just became visible — process any queued collapse checks.
+      if (pendingCollapseChecks.length > 0 && entry.contentRect.height > 0) {
+        requestAnimationFrame(runPendingCollapseChecks)
+      }
     })
     resizeObserver.observe(messagesEl.value)
   }
@@ -499,6 +613,9 @@ async function confirmClearHistory() {
     messages.value = []
     oldestLoadedID = null
     allLoaded.value = true
+    collapsedIds.value = new Set()
+    expandedIds.value = new Set()
+    pendingCollapseChecks.splice(0)
   } catch (e) {
     console.error('clear chat history failed:', e)
   }
@@ -687,51 +804,67 @@ defineExpose({ focusInput, scrollToBottom })
       </div>
       <div v-for="(m, i) in messages" :key="i" :class="['msg', m.role]">
         <div class="bubble-wrap" :class="{ ghost: m.ghost }">
-          <div class="bubble-row">
-            <!-- Bubble content -->
-            <div v-if="m.role !== 'assistant'" class="bubble markdown" :class="{ 'has-images': (m.images && m.images.length > 0) || (m.files && m.files.length > 0) }">
-              <div v-if="m.images && m.images.length > 0" class="msg-images">
-                <img v-for="(img, imgIdx) in m.images" :key="imgIdx" :src="img" class="msg-img" @click.stop="previewImage(img)" />
-              </div>
-              <div v-if="m.files && m.files.length > 0" class="msg-files">
-                <div v-for="(fname, fi) in m.files" :key="fi" class="msg-file-chip">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
-                  <span>{{ fname }}</span>
+          <!-- Collapsible wrapper -->
+          <div
+            class="bubble-collapse-wrap"
+            :class="{ 'is-collapsed': isCollapsed(m, i) }"
+            :data-msg-key="msgKey(m, i)"
+          >
+            <div class="bubble-row">
+              <!-- Bubble content -->
+              <div v-if="m.role !== 'assistant'" class="bubble markdown" :class="{ 'has-images': (m.images && m.images.length > 0) || (m.files && m.files.length > 0) }">
+                <div v-if="m.images && m.images.length > 0" class="msg-images">
+                  <img v-for="(img, imgIdx) in m.images" :key="imgIdx" :src="img" class="msg-img" @click.stop="previewImage(img)" />
                 </div>
+                <div v-if="m.files && m.files.length > 0" class="msg-files">
+                  <div v-for="(fname, fi) in m.files" :key="fi" class="msg-file-chip">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+                    <span>{{ fname }}</span>
+                  </div>
+                </div>
+                <div v-if="m.content" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')"></div>
               </div>
-              <div v-if="m.content" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')"></div>
-            </div>
-            <template v-else>
-              <div v-if="m.thinking || (m.streaming && !renderMarkdown(m.content))" :class="['bubble', 'thinking-bubble', { proactive: m.isProactive }]">
-                <span class="dot" /><span class="dot" /><span class="dot" />
-              </div>
-              <div v-else :class="['bubble', 'markdown', { proactive: m.isProactive }]" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')" />
-            </template>
+              <template v-else>
+                <div v-if="m.thinking || (m.streaming && !renderMarkdown(m.content))" :class="['bubble', 'thinking-bubble', { proactive: m.isProactive }]">
+                  <span class="dot" /><span class="dot" /><span class="dot" />
+                </div>
+                <div v-else :class="['bubble', 'markdown', { proactive: m.isProactive }]" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')" />
+              </template>
 
-            <!-- Action buttons: absolutely positioned, no layout impact -->
-            <div
-              v-if="!m.streaming && !m.thinking"
-              :class="['msg-actions', m.role]"
-            >
-              <button
-                class="msg-action-btn"
-                @click="copyMessage(i)"
-                :title="copiedIdx === i ? '已复制' : '复制'"
+              <!-- Action buttons: absolutely positioned, no layout impact -->
+              <div
+                v-if="!m.streaming && !m.thinking"
+                :class="['msg-actions', m.role]"
               >
-                <svg v-if="copiedIdx !== i" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              </button>
-              <button
-                v-if="m.role === 'assistant'"
-                class="msg-action-btn"
-                :title="activeTTSMsgId === i ? '停止朗读' : '朗读'"
-                @click="speakMessage(i)"
-              >
-                <svg v-if="activeTTSMsgId !== i" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-                <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                <button
+                  class="msg-action-btn"
+                  @click="copyMessage(i)"
+                  :title="copiedIdx === i ? '已复制' : '复制'"
+                >
+                  <svg v-if="copiedIdx !== i" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </button>
+                <button
+                  v-if="m.role === 'assistant'"
+                  class="msg-action-btn"
+                  :title="activeTTSMsgId === i ? '停止朗读' : '朗读'"
+                  @click="speakMessage(i)"
+                >
+                  <svg v-if="activeTTSMsgId !== i" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                  <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Collapse fade overlay + expand button -->
+            <div v-if="isCollapsed(m, i)" class="collapse-fade" @click.stop="toggleExpand(m, i)">
+              <button class="collapse-btn" @click.stop="toggleExpand(m, i)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                展开
               </button>
             </div>
           </div>
+
           <!-- Link preview cards — shown below the bubble once streaming is done -->
           <template v-if="!m.streaming && !m.thinking && m.content">
             <LinkPreview
@@ -740,36 +873,57 @@ defineExpose({ focusInput, scrollToBottom })
               :url="u"
             />
           </template>
-          <div v-if="m.time && !m.streaming && !m.thinking" class="msg-time">{{ formatTime(m.time) }}</div>
+          <div v-if="(m.time && !m.streaming && !m.thinking) || (isEverCollapsed(m, i) && !isCollapsed(m, i))" class="msg-meta-row">
+            <span v-if="m.time && !m.streaming && !m.thinking" class="msg-time">{{ formatTime(m.time) }}</span>
+            <button v-if="isEverCollapsed(m, i) && !isCollapsed(m, i)" class="recollapse-btn" @click.stop="toggleExpand(m, i)">
+              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+              收起
+            </button>
+          </div>
         </div>
       </div>
     </div>
     <!-- Image lightbox -->
-    <Teleport to="body">
-      <div v-if="lightboxSrc" class="lightbox" @click="lightboxSrc = null">
-        <img :src="lightboxSrc" class="lightbox-img" @click.stop />
+    <div v-if="lightboxSrc" class="lightbox" @click="lightboxSrc = null">
+      <img :src="lightboxSrc" class="lightbox-img" @click.stop />
+    </div>
+
+    <!-- Tool execution confirmation modal -->
+    <ToolConfirmModal />
+
+    <!-- Clear chat confirmation dialog -->
+    <Transition name="confirm-pop">
+    <div v-if="showClearConfirm" class="clear-confirm-overlay">
+      <div class="clear-confirm-backdrop" @click="showClearConfirm = false" />
+      <div class="clear-confirm-box">
+        <p class="clear-confirm-title">清空聊天记录</p>
+        <p class="clear-confirm-text">确定要清空所有聊天记录吗？此操作不可撤销。</p>
+        <div class="clear-confirm-actions">
+          <button class="clear-confirm-cancel" @click="showClearConfirm = false">取消</button>
+          <button class="clear-confirm-ok" @click="confirmClearHistory">确认清空</button>
+        </div>
       </div>
-    </Teleport>
+    </div>
+    </Transition>
 
-      <!-- Tool execution confirmation modal -->
-      <ToolConfirmModal />
-
-      <!-- Clear chat confirmation dialog -->
-      <Teleport to="body">
-        <Transition name="confirm-pop">
-        <div v-if="showClearConfirm" class="clear-confirm-overlay">
-          <div class="clear-confirm-backdrop" @click="showClearConfirm = false" />
-          <div class="clear-confirm-box">
-            <p class="clear-confirm-title">清空聊天记录</p>
-            <p class="clear-confirm-text">确定要清空所有聊天记录吗？此操作不可撤销。</p>
-            <div class="clear-confirm-actions">
-              <button class="clear-confirm-cancel" @click="showClearConfirm = false">取消</button>
-              <button class="clear-confirm-ok" @click="confirmClearHistory">确认清空</button>
+    <!-- Table row detail modal -->
+    <Transition name="tbl-detail-pop">
+      <div v-if="tableDetailRow" class="tbl-detail-overlay">
+        <div class="tbl-detail-backdrop" @click="tableDetailRow = null" />
+        <div class="tbl-detail-box">
+          <div class="tbl-detail-header">
+            <span class="tbl-detail-title">行详情</span>
+            <button class="tbl-detail-close" @click="tableDetailRow = null">✕</button>
+          </div>
+          <div class="tbl-detail-body">
+            <div v-for="pair in tableDetailRow" :key="pair.key" class="tbl-detail-pair">
+              <span class="tbl-detail-key">{{ pair.key }}</span>
+              <span class="tbl-detail-value">{{ pair.value }}</span>
             </div>
           </div>
         </div>
-        </Transition>
-      </Teleport>
+      </div>
+    </Transition>
 
       <!-- In-chat progress indicators for running tools -->
       <ExecutionProgress />
@@ -843,7 +997,7 @@ defineExpose({ focusInput, scrollToBottom })
 </template>
 
 <style scoped>
-.chat-panel { display: flex; flex-direction: column; height: 100%; }
+.chat-panel { display: flex; flex-direction: column; height: 100%; position: relative; }
 
 /* Messages list */
 .messages {
@@ -887,6 +1041,75 @@ defineExpose({ focusInput, scrollToBottom })
 /* Wrap */
 .bubble-wrap { max-width: 88%; display: flex; flex-direction: column; }
 .msg.user .bubble-wrap { align-items: flex-end; }
+
+/* Collapsible wrapper */
+.bubble-collapse-wrap {
+  position: relative;
+}
+.bubble-collapse-wrap.is-collapsed {
+  max-height: 350px;
+  overflow: hidden;
+}
+
+/* Gradient fade at the bottom of a collapsed bubble */
+.collapse-fade {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: linear-gradient(to bottom, transparent, rgba(5, 6, 12, 0.96));
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 10px;
+  cursor: pointer;
+}
+/* For user bubbles the gradient should match the bubble background */
+.msg.user .collapse-fade {
+  background: linear-gradient(to bottom, transparent, rgba(5, 6, 12, 0.96));
+}
+
+.collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  box-shadow: none;
+  font-family: inherit;
+}
+.collapse-btn:hover {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+}
+
+/* Re-collapse button */
+.recollapse-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.28);
+  font-size: 11px;
+  cursor: pointer;
+  transition: color 0.15s;
+  font-family: inherit;
+  box-shadow: none;
+  line-height: 1;
+}
+.recollapse-btn:hover { color: rgba(255, 255, 255, 0.6); }
 
 /* Bubble row: relative container，按钮绝对定位不占空间 */
 .bubble-row { position: relative; display: inline-flex; }
@@ -987,16 +1210,29 @@ defineExpose({ focusInput, scrollToBottom })
   40% { transform: translateY(-5px); opacity: 1; }
 }
 
+/* Meta row: timestamp at its side, recollapse button centered */
+.msg-meta-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 18px;
+  margin-top: 3px;
+  padding: 0 4px;
+}
+.msg.user .msg-meta-row { justify-content: flex-end; }
+.msg.assistant .msg-meta-row { justify-content: flex-start; }
+.msg-meta-row .recollapse-btn {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
 /* Timestamp */
 .msg-time {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.28);
-  margin-top: 3px;
-  padding: 0 4px;
   user-select: none;
 }
-.msg.user .msg-time { text-align: right; }
-.msg.assistant .msg-time { text-align: left; }
 
 /* Action buttons: absolutely positioned outside bubble */
 .msg-actions {
@@ -1186,6 +1422,162 @@ defineExpose({ focusInput, scrollToBottom })
 .bubble.markdown :deep(tbody tr:hover) {
   background: rgba(59, 130, 246, 0.12);
 }
+.bubble.markdown :deep(.tbl-row) {
+  cursor: pointer;
+}
+.bubble.markdown :deep(.table-pagination) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  background: rgba(255,255,255,0.02);
+}
+.bubble.markdown :deep(.tbl-page-btn) {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.6);
+  border-radius: 5px;
+  width: 28px;
+  height: 26px;
+  cursor: pointer;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.bubble.markdown :deep(.tbl-page-btn:hover:not(:disabled)) {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #fff;
+}
+.bubble.markdown :deep(.tbl-page-btn:disabled) {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+.bubble.markdown :deep(.tbl-page-info) {
+  font-size: 12px;
+  color: rgba(255,255,255,0.45);
+  user-select: none;
+  min-width: 44px;
+  text-align: center;
+}
+
+/* Table row detail modal */
+.tbl-detail-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+.tbl-detail-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+.tbl-detail-box {
+  position: relative;
+  background: rgb(5, 6, 12);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  width: 420px;
+  max-width: 90vw;
+  max-height: 70vh;
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.65),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.tbl-detail-header {
+  display: flex;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
+.tbl-detail-title {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+.tbl-detail-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 5px;
+  line-height: 1;
+  transition: color 0.15s, background 0.15s;
+}
+.tbl-detail-close:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+}
+.tbl-detail-body {
+  overflow-y: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
+}
+.tbl-detail-pair {
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+  padding: 8px 10px;
+  border-radius: 8px;
+  transition: background 0.12s;
+}
+.tbl-detail-pair:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.tbl-detail-key {
+  flex-shrink: 0;
+  width: 120px;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(125, 211, 252, 0.75);
+  word-break: break-word;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tbl-detail-value {
+  flex: 1;
+  font-size: 13px;
+  color: rgba(229, 231, 235, 0.9);
+  word-break: break-word;
+  line-height: 1.5;
+}
+.tbl-detail-pop-enter-active { transition: opacity 0.22s ease; }
+.tbl-detail-pop-leave-active { transition: opacity 0.14s ease-in; }
+.tbl-detail-pop-enter-from,
+.tbl-detail-pop-leave-to { opacity: 0; }
+.tbl-detail-pop-enter-active .tbl-detail-box {
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.tbl-detail-pop-leave-active .tbl-detail-box {
+  transition: transform 0.14s ease-in;
+}
+.tbl-detail-pop-enter-from .tbl-detail-box,
+.tbl-detail-pop-leave-to .tbl-detail-box {
+  transform: scale(0.90);
+}
 
 /* KaTeX math — adapt to dark theme */
 .bubble.markdown :deep(.katex) { font-size: 1em; color: #e2e8f0; }
@@ -1369,18 +1761,19 @@ defineExpose({ focusInput, scrollToBottom })
 
 /* Lightbox */
 .lightbox {
-  position: fixed;
+  position: absolute;
   inset: 0;
-  z-index: 9999;
+  z-index: 200;
   background: rgba(0,0,0,0.85);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: zoom-out;
+  pointer-events: auto;
 }
 .lightbox-img {
-  max-width: 90vw;
-  max-height: 90vh;
+  max-width: 90%;
+  max-height: 90%;
   border-radius: 10px;
   box-shadow: 0 8px 40px rgba(0,0,0,0.6);
   object-fit: contain;
@@ -1474,12 +1867,13 @@ defineExpose({ focusInput, scrollToBottom })
 <style>
 /* Clear chat confirmation dialog (non-scoped — teleported to body) */
 .clear-confirm-overlay {
-  position: fixed;
+  position: absolute;
   inset: 0;
-  z-index: 9999;
+  z-index: 200;
   display: flex;
   align-items: center;
   justify-content: center;
+  pointer-events: auto;
 }
 .clear-confirm-backdrop {
   position: absolute;
