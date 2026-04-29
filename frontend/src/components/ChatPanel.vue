@@ -48,57 +48,161 @@ renderer.code = ({ text, lang }) => {
 }
 const TABLE_PAGE_SIZE = 10
 
-renderer.table = (token) => {
-  const alignStyle = (align) => align ? ` style="text-align:${align}"` : ''
-  const headerHtml = token.header.map(cell =>
-    `<th${alignStyle(cell.align)}>${marked.parseInline(cell.text)}</th>`
-  ).join('')
-  const encodedHeaders = btoa(encodeURIComponent(JSON.stringify(
-    token.header.map(cell => cell.text)
-  )))
-  const encodedRaw = btoa(encodeURIComponent(JSON.stringify(
-    token.rows.map(row => row.map(cell => cell.text))
-  )))
-  const allRows = token.rows.map((row, i) => {
-    const cells = row.map(cell => `<td${alignStyle(cell.align)}>${marked.parseInline(cell.text)}</td>`).join('')
-    return `<tr class="tbl-row" onclick="window.__tr(this)" data-row-idx="${i}">${cells}</tr>`
-  })
-  if (allRows.length <= TABLE_PAGE_SIZE) {
-    return `<div class="table-wrapper" data-headers="${encodedHeaders}" data-raw="${encodedRaw}"><table><thead><tr>${headerHtml}</tr></thead><tbody>${allRows.join('')}</tbody></table></div>`
-  }
-  const totalPages = Math.ceil(allRows.length / TABLE_PAGE_SIZE)
-  const id = 'tbl-' + Math.random().toString(36).slice(2, 9)
-  const encoded = btoa(encodeURIComponent(JSON.stringify(allRows)))
-  const firstRows = allRows.slice(0, TABLE_PAGE_SIZE).join('')
-  return `<div class="table-wrapper" id="${id}" data-rows="${encoded}" data-headers="${encodedHeaders}" data-raw="${encodedRaw}"><table><thead><tr>${headerHtml}</tr></thead><tbody>${firstRows}</tbody></table><div class="table-pagination"><button class="tbl-page-btn" onclick="window.__tp('${id}',0)" disabled>‹</button><span class="tbl-page-info">1 / ${totalPages}</span><button class="tbl-page-btn" onclick="window.__tp('${id}',2)"${totalPages <= 1 ? ' disabled' : ''}>›</button></div></div>`
+window.__tableState = window.__tableState || {}
+
+/** buildRowHtml renders one <tr> from raw text cells; origIdx maps back to rawRows for detail lookup. */
+function buildRowHtml(cells, origIdx, aligns) {
+  const tds = cells.map((cell, j) => {
+    const align = aligns[j] ? ` style="text-align:${aligns[j]}"` : ''
+    return `<td${align}>${marked.parseInline(cell)}</td>`
+  }).join('')
+  return `<tr class="tbl-row" onclick="window.__tr(this)" data-row-idx="${origIdx}">${tds}</tr>`
 }
 
-/** __tp navigates a paginated markdown table to the requested page number. */
+/** renderTablePage rebuilds tbody and pagination controls from the current filter+sort+page state. */
+function renderTablePage(wrapper, state) {
+  const { sortedIndices, rawRows, aligns, currentPage, filterQuery } = state
+  const totalPages = Math.ceil(sortedIndices.length / TABLE_PAGE_SIZE)
+  const p = currentPage
+  wrapper.querySelector('tbody').innerHTML = sortedIndices
+    .slice((p - 1) * TABLE_PAGE_SIZE, p * TABLE_PAGE_SIZE)
+    .map(i => buildRowHtml(rawRows[i], i, aligns))
+    .join('')
+  const infoEl = wrapper.querySelector('.tbl-page-info')
+  if (infoEl) {
+    const id = wrapper.id
+    const matchLabel = filterQuery
+      ? `${sortedIndices.length} / ${rawRows.length} 行  ·  ${p} / ${totalPages || 1}`
+      : `${p} / ${totalPages}`
+    infoEl.textContent = matchLabel
+    const [prevBtn, nextBtn] = wrapper.querySelectorAll('.tbl-page-btn')
+    prevBtn.disabled = p <= 1
+    prevBtn.setAttribute('onclick', `window.__tp('${id}',${p - 1})`)
+    nextBtn.disabled = p >= totalPages
+    nextBtn.setAttribute('onclick', `window.__tp('${id}',${p + 1})`)
+  }
+}
+
+/** updateSortHeaders updates <th> sort indicators to reflect the current sort state. */
+function updateSortHeaders(wrapper, state) {
+  wrapper.querySelectorAll('thead th').forEach((th, i) => {
+    const ind = th.querySelector('.sort-indicator')
+    if (!ind) return
+    const active = i === state.sortCol && state.sortDir !== 'none'
+    ind.textContent = active ? (state.sortDir === 'asc' ? ' ↑' : ' ↓') : ''
+    th.classList.toggle('sorted', active)
+  })
+}
+
+renderer.table = (token) => {
+  const aligns = token.header.map(c => c.align || '')
+  const rawRows = token.rows.map(row => row.map(c => c.text))
+  const headers = token.header.map(c => c.text)
+  const encodedHeaders = btoa(encodeURIComponent(JSON.stringify(headers)))
+  const encodedRaw = btoa(encodeURIComponent(JSON.stringify(rawRows)))
+  const id = 'tbl-' + Math.random().toString(36).slice(2, 9)
+
+  window.__tableState[id] = {
+    rawRows, aligns, headers,
+    sortCol: -1, sortDir: 'none',
+    sortedIndices: rawRows.map((_, i) => i),
+    currentPage: 1,
+    filterQuery: '',
+  }
+
+  const headerHtml = token.header.map((cell, i) => {
+    const align = cell.align ? ` style="text-align:${cell.align}"` : ''
+    return `<th${align} class="sortable-th" onclick="window.__ts('${id}',${i})">${marked.parseInline(cell.text)}<span class="sort-indicator"></span></th>`
+  }).join('')
+
+  const firstRowsHtml = rawRows.slice(0, TABLE_PAGE_SIZE)
+    .map((cells, i) => buildRowHtml(cells, i, aligns)).join('')
+
+  const totalPages = Math.ceil(rawRows.length / TABLE_PAGE_SIZE)
+  const paginationHtml = rawRows.length > TABLE_PAGE_SIZE
+    ? `<div class="table-pagination"><button class="tbl-page-btn" onclick="window.__tp('${id}',0)" disabled>‹</button><span class="tbl-page-info">1 / ${totalPages}</span><button class="tbl-page-btn" onclick="window.__tp('${id}',2)"${totalPages <= 1 ? ' disabled' : ''}>›</button></div>`
+    : ''
+
+  const filterBar = `<div class="tbl-filter-bar"><input class="tbl-filter-input" type="text" placeholder="筛选..." oninput="window.__tf('${id}',this.value)"></div>`
+
+  return `<div class="table-wrapper" id="${id}" data-headers="${encodedHeaders}" data-raw="${encodedRaw}">${filterBar}<div class="tbl-scroll"><table><thead><tr>${headerHtml}</tr></thead><tbody>${firstRowsHtml}</tbody></table></div>${paginationHtml}</div>`
+}
+
+/** __tp navigates a paginated markdown table to the requested page. */
 window.__tp = (id, page) => {
   const wrapper = document.getElementById(id)
-  if (!wrapper) return
-  const allRows = JSON.parse(decodeURIComponent(atob(wrapper.dataset.rows)))
-  const totalPages = Math.ceil(allRows.length / TABLE_PAGE_SIZE)
-  const p = Math.max(1, Math.min(page, totalPages))
-  const start = (p - 1) * TABLE_PAGE_SIZE
-  wrapper.querySelector('tbody').innerHTML = allRows.slice(start, start + TABLE_PAGE_SIZE).join('')
-  wrapper.querySelector('.tbl-page-info').textContent = `${p} / ${totalPages}`
-  const [prevBtn, nextBtn] = wrapper.querySelectorAll('.tbl-page-btn')
-  prevBtn.disabled = p <= 1
-  prevBtn.setAttribute('onclick', `window.__tp('${id}',${p - 1})`)
-  nextBtn.disabled = p >= totalPages
-  nextBtn.setAttribute('onclick', `window.__tp('${id}',${p + 1})`)
+  const state = window.__tableState?.[id]
+  if (!wrapper || !state) return
+  const totalPages = Math.ceil(state.sortedIndices.length / TABLE_PAGE_SIZE)
+  state.currentPage = Math.max(1, Math.min(page, totalPages))
+  renderTablePage(wrapper, state)
+}
+
+/** __ts toggles sort on a column: none → asc → desc → none. */
+window.__ts = (id, colIdx) => {
+  const wrapper = document.getElementById(id)
+  const state = window.__tableState?.[id]
+  if (!wrapper || !state) return
+  if (state.sortCol === colIdx) {
+    state.sortDir = { none: 'asc', asc: 'desc', desc: 'none' }[state.sortDir]
+    if (state.sortDir === 'none') state.sortCol = -1
+  } else {
+    state.sortCol = colIdx
+    state.sortDir = 'asc'
+  }
+  const indices = state.rawRows.map((_, i) => i)
+  if (state.sortDir !== 'none') {
+    const dir = state.sortDir === 'asc' ? 1 : -1
+    indices.sort((a, b) => {
+      const va = state.rawRows[a][colIdx] ?? ''
+      const vb = state.rawRows[b][colIdx] ?? ''
+      const na = parseFloat(va.replace(/,/g, ''))
+      const nb = parseFloat(vb.replace(/,/g, ''))
+      return (!isNaN(na) && !isNaN(nb) ? na - nb : va.localeCompare(vb, undefined, { numeric: true })) * dir
+    })
+  }
+  state.sortedIndices = indices
+  state.currentPage = 1
+  renderTablePage(wrapper, state)
+  updateSortHeaders(wrapper, state)
+}
+
+/** __tf filters table rows by a case-insensitive substring across all columns, then re-applies the current sort. */
+window.__tf = (id, query) => {
+  const wrapper = document.getElementById(id)
+  const state = window.__tableState?.[id]
+  if (!wrapper || !state) return
+  state.filterQuery = query.trim().toLowerCase()
+  const q = state.filterQuery
+  let indices = state.rawRows.map((_, i) => i)
+  if (q) {
+    indices = indices.filter(i => state.rawRows[i].some(cell => cell.toLowerCase().includes(q)))
+  }
+  if (state.sortDir !== 'none' && state.sortCol >= 0) {
+    const col = state.sortCol
+    const dir = state.sortDir === 'asc' ? 1 : -1
+    indices.sort((a, b) => {
+      const va = state.rawRows[a][col] ?? ''
+      const vb = state.rawRows[b][col] ?? ''
+      const na = parseFloat(va.replace(/,/g, ''))
+      const nb = parseFloat(vb.replace(/,/g, ''))
+      return (!isNaN(na) && !isNaN(nb) ? na - nb : va.localeCompare(vb, undefined, { numeric: true })) * dir
+    })
+  }
+  state.sortedIndices = indices
+  state.currentPage = 1
+  renderTablePage(wrapper, state)
 }
 
 /** __tr opens the row-detail modal for a clicked table row. */
 window.__tr = (rowEl) => {
   const wrapper = rowEl.closest('.table-wrapper')
   if (!wrapper) return
-  const headers = JSON.parse(decodeURIComponent(atob(wrapper.dataset.headers)))
-  const rawRows = JSON.parse(decodeURIComponent(atob(wrapper.dataset.raw)))
   const rowIdx = parseInt(rowEl.dataset.rowIdx, 10)
-  const cells = rawRows[rowIdx] || []
-  tableDetailRow.value = headers.map((key, i) => ({ key, value: cells[i] ?? '' }))
+  const state = wrapper.id ? window.__tableState?.[wrapper.id] : null
+  const headers = state?.headers ?? JSON.parse(decodeURIComponent(atob(wrapper.dataset.headers)))
+  const rawRow = state?.rawRows[rowIdx] ?? JSON.parse(decodeURIComponent(atob(wrapper.dataset.raw)))[rowIdx]
+  tableDetailRow.value = headers.map((key, i) => ({ key, value: rawRow[i] ?? '' }))
 }
 renderer.link = ({ href, title, text }) => {
   // Resolve DDG redirect URLs to the actual destination
@@ -1387,16 +1491,19 @@ defineExpose({ focusInput, scrollToBottom })
 
 /* Tables */
 .bubble.markdown :deep(.table-wrapper) {
-  overflow-x: auto;
   margin: 10px 0;
   border-radius: 8px;
   border: 1px solid rgba(255,255,255,0.1);
+  max-width: calc(var(--code-max-width, 100%) - 32px);
+}
+.bubble.markdown :deep(.tbl-scroll) {
+  overflow-x: auto;
 }
 .bubble.markdown :deep(table) {
   border-collapse: collapse;
   font-size: 13px;
-  width: 100%;
-  min-width: 360px;
+  width: max-content;
+  min-width: 100%;
 }
 .bubble.markdown :deep(thead tr) {
   background: rgba(255,255,255,0.07);
@@ -1406,12 +1513,29 @@ defineExpose({ focusInput, scrollToBottom })
   white-space: nowrap;
   color: rgba(255,255,255,0.9);
 }
+.bubble.markdown :deep(.sortable-th) {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s, color 0.12s;
+}
+.bubble.markdown :deep(.sortable-th:hover) {
+  background: rgba(255,255,255,0.08);
+}
+.bubble.markdown :deep(.sortable-th.sorted) {
+  color: #60a5fa;
+}
+.bubble.markdown :deep(.sort-indicator) {
+  font-size: 11px;
+  margin-left: 3px;
+  opacity: 0.75;
+}
 .bubble.markdown :deep(th), .bubble.markdown :deep(td) {
   border: none;
   border-bottom: 1px solid rgba(255,255,255,0.07);
   padding: 8px 14px;
   text-align: left;
   vertical-align: middle;
+  white-space: nowrap;
 }
 .bubble.markdown :deep(tbody tr:last-child td) {
   border-bottom: none;
@@ -1424,6 +1548,30 @@ defineExpose({ focusInput, scrollToBottom })
 }
 .bubble.markdown :deep(.tbl-row) {
   cursor: pointer;
+}
+.bubble.markdown :deep(.tbl-filter-bar) {
+  padding: 7px 10px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.015);
+}
+.bubble.markdown :deep(.tbl-filter-input) {
+  width: 100%;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.85);
+  font-size: 12px;
+  font-family: inherit;
+  padding: 4px 9px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+.bubble.markdown :deep(.tbl-filter-input::placeholder) {
+  color: rgba(255,255,255,0.28);
+}
+.bubble.markdown :deep(.tbl-filter-input:focus) {
+  border-color: rgba(59,130,246,0.4);
 }
 .bubble.markdown :deep(.table-pagination) {
   display: flex;
@@ -1463,8 +1611,9 @@ defineExpose({ focusInput, scrollToBottom })
   font-size: 12px;
   color: rgba(255,255,255,0.45);
   user-select: none;
-  min-width: 44px;
+  min-width: 80px;
   text-align: center;
+  white-space: nowrap;
 }
 
 /* Table row detail modal */
