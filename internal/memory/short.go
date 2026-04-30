@@ -2,10 +2,12 @@ package memory
 
 import (
 	"database/sql"
-	json "github.com/bytedance/sonic"
 	"fmt"
 	"log/slog"
 	"strings"
+
+	json "github.com/bytedance/sonic"
+	"github.com/cloudwego/eino/schema"
 )
 
 // Message is a single conversation turn stored in SQLite.
@@ -199,6 +201,25 @@ func (s *ShortStore) DeleteByIDs(ids []int64) error {
 		return fmt.Errorf("delete messages: %w", err)
 	}
 	return nil
+}
+
+// RecentMessages returns the most recent n messages as schema.Message objects,
+// suitable for passing directly to runner.Run as multi-turn history.
+// Images and file attachments are omitted — the LLM has already processed them.
+func (s *ShortStore) RecentMessages(n int) ([]*schema.Message, error) {
+	msgs, err := s.Recent(n)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*schema.Message, 0, len(msgs))
+	for _, m := range msgs {
+		role := schema.User
+		if m.Role == "assistant" {
+			role = schema.Assistant
+		}
+		out = append(out, &schema.Message{Role: role, Content: m.Content})
+	}
+	return out, nil
 }
 
 // FormatBlock formats a slice of messages into a single text block for storage.
