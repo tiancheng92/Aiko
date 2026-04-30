@@ -25,6 +25,17 @@ import (
 	internaltools "aiko/internal/tools"
 )
 
+// nudgeText is appended to the user message every nudgeInterval turns to
+// prompt the agent to reflect and persist useful knowledge.
+const nudgeText = `
+[SELF-GROWTH NUDGE]
+请在本次回复前，回顾刚才的对话，考虑是否需要：
+1. 调用 save_memory 保存一条具体事实或偏好（一两句话，不需要摘要对话）
+2. 调用 update_user_profile 更新用户画像（发现了新的习惯/偏好/背景信息）
+3. 调用 save_skill 将本次解决的问题模式提炼为可复用技能
+如果都不需要，直接回复即可，无需解释。
+`
+
 // StreamResult is a single streamed token or a terminal signal.
 type StreamResult struct {
 	Token string
@@ -544,14 +555,7 @@ func (a *Agent) buildHistoryPrefix(ctx context.Context, userInput string) (strin
 
 	// Append self-growth nudge if due.
 	if a.nudgeInterval > 0 && a.turnCount.Load() > 0 && a.turnCount.Load()%int64(a.nudgeInterval) == 0 {
-		sb.WriteString(`
-[SELF-GROWTH NUDGE]
-请在本次回复前，回顾刚才的对话，考虑是否需要：
-1. 调用 save_memory 保存一条具体事实或偏好（一两句话，不需要摘要对话）
-2. 调用 update_user_profile 更新用户画像（发现了新的习惯/偏好/背景信息）
-3. 调用 save_skill 将本次解决的问题模式提炼为可复用技能
-如果都不需要，直接回复即可，无需解释。
-`)
+		sb.WriteString(nudgeText)
 	}
 
 	return sb.String(), nil
