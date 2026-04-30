@@ -1459,8 +1459,13 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
 /* Content */
 .win-content { flex: 1; overflow-y: auto; padding: 20px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent; }
-.win-content::-webkit-scrollbar { width: 4px; }
+.win-content::-webkit-scrollbar { width: 4px; background: transparent; }
+.win-content::-webkit-scrollbar-track { background: transparent; }
 .win-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+.win-content::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+.win-sidebar::-webkit-scrollbar { width: 0; background: transparent; }
+.win-sidebar::-webkit-scrollbar-track { background: transparent; }
+.win-sidebar::-webkit-scrollbar-thumb { background: transparent; }
 
 /* Form */
 .tab-pane { display: flex; flex-direction: column; gap: 14px; }

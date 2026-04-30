@@ -1166,8 +1166,10 @@ defineExpose({ focusInput, scrollToBottom })
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.1) transparent;
 }
-.messages::-webkit-scrollbar { width: 4px; }
+.messages::-webkit-scrollbar { width: 4px; background: transparent; }
+.messages::-webkit-scrollbar-track { background: transparent; }
 .messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+.messages::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
 
 /* Lazy-load sentinel */
 .load-sentinel { height: 24px; display: flex; align-items: center; justify-content: center; }
@@ -1811,6 +1813,10 @@ defineExpose({ focusInput, scrollToBottom })
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
 }
+.tbl-detail-body::-webkit-scrollbar { width: 4px; background: transparent; }
+.tbl-detail-body::-webkit-scrollbar-track { background: transparent; }
+.tbl-detail-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+.tbl-detail-body::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
 .tbl-detail-pair {
   display: flex;
   gap: 14px;
@@ -1899,6 +1905,10 @@ defineExpose({ focusInput, scrollToBottom })
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.1) transparent;
 }
+.input-area textarea::-webkit-scrollbar { width: 4px; background: transparent; }
+.input-area textarea::-webkit-scrollbar-track { background: transparent; }
+.input-area textarea::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+.input-area textarea::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 .input-area textarea::placeholder { color: rgba(156, 163, 175, 0.45); }
 .input-toolbar {
   display: flex;
