@@ -184,25 +184,6 @@ func (s *ShortStore) DeleteAll() error {
 	return err
 }
 
-// DeleteByIDs removes messages with the given IDs.
-func (s *ShortStore) DeleteByIDs(ids []int64) error {
-	if len(ids) == 0 {
-		return nil
-	}
-	placeholders := strings.Repeat("?,", len(ids))
-	placeholders = placeholders[:len(placeholders)-1]
-	query := "DELETE FROM messages WHERE id IN (" + placeholders + ")"
-	args := make([]any, len(ids))
-	for i, id := range ids {
-		args[i] = id
-	}
-	_, err := s.db.Exec(query, args...)
-	if err != nil {
-		return fmt.Errorf("delete messages: %w", err)
-	}
-	return nil
-}
-
 // RecentMessages returns the most recent n messages as schema.Message objects,
 // suitable for passing directly to runner.Run as multi-turn history.
 // Images and file attachments are omitted — the LLM has already processed them.
@@ -220,6 +201,25 @@ func (s *ShortStore) RecentMessages(n int) ([]*schema.Message, error) {
 		out = append(out, &schema.Message{Role: role, Content: m.Content})
 	}
 	return out, nil
+}
+
+// DeleteByIDs removes messages with the given IDs.
+func (s *ShortStore) DeleteByIDs(ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := strings.Repeat("?,", len(ids))
+	placeholders = placeholders[:len(placeholders)-1]
+	query := "DELETE FROM messages WHERE id IN (" + placeholders + ")"
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	_, err := s.db.Exec(query, args...)
+	if err != nil {
+		return fmt.Errorf("delete messages: %w", err)
+	}
+	return nil
 }
 
 // FormatBlock formats a slice of messages into a single text block for storage.
