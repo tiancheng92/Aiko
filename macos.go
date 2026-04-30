@@ -543,12 +543,15 @@ static void enableClickThrough() {
         }
         if (!gWindow || !gWebView) return;
 
-        // Hide the native overlay scrollbar that WKWebView's enclosing NSScrollView
-        // renders on mouse hover, so our CSS custom scrollbar is not overridden.
+        // Disable the native overlay scrollbar that WKWebView's enclosing NSScrollView
+        // renders on mouse hover. setHidden:YES is not persistent — NSScrollerKnobStyle
+        // animations restore visibility on each hover. Removing the scrollers entirely
+        // via hasVerticalScroller/hasHorizontalScroller is the only reliable approach;
+        // WKWebView drives its own page scrolling through WebCore so this is safe.
         NSScrollView *sv = (NSScrollView *)[gWebView enclosingScrollView];
         if (sv) {
-            [[sv verticalScroller]   setHidden:YES];
-            [[sv horizontalScroller] setHidden:YES];
+            [sv setHasVerticalScroller:NO];
+            [sv setHasHorizontalScroller:NO];
         }
 
         // Remove system shadow and ensure the window is transparent so no border rendering occurs.
