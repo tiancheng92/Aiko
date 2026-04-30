@@ -124,8 +124,9 @@ renderer.table = (token) => {
     ? `<div class="table-pagination"><button class="tbl-page-btn" onclick="window.__tp('${id}',0)" disabled>‹</button><span class="tbl-page-info">1 / ${totalPages}</span><button class="tbl-page-btn" onclick="window.__tp('${id}',2)"${totalPages <= 1 ? ' disabled' : ''}>›</button></div>`
     : ''
 
-  const colOptions = [`<option value="-1">全表</option>`, ...headers.map((h, i) => `<option value="${i}">${h}</option>`)].join('')
-  const filterBar = `<div class="tbl-filter-bar"><select class="tbl-filter-select" onchange="window.__fc('${id}',+this.value)">${colOptions}</select><input class="tbl-filter-input" type="text" placeholder="筛选..." oninput="window.__tf('${id}',this.value)"></div>`
+  const chevronSvg = `<svg class="tbl-col-chevron" xmlns="http://www.w3.org/2000/svg" width="10" height="6" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+  const colItems = [`<li class="tbl-col-opt tbl-col-opt--sel" onclick="window.__selectCol('${id}',-1,this)">全表</li>`, ...headers.map((h, i) => `<li class="tbl-col-opt" onclick="window.__selectCol('${id}',${i},this)">${h}</li>`)].join('')
+  const filterBar = `<div class="tbl-filter-bar"><div class="tbl-col-select" id="${id}-col"><button class="tbl-col-btn" onclick="window.__toggleColDrop(event,'${id}')"><span class="tbl-col-label">全表</span>${chevronSvg}</button><ul class="tbl-col-drop">${colItems}</ul></div><input class="tbl-filter-input" type="text" placeholder="筛选..." oninput="window.__tf('${id}',this.value)"></div>`
 
   return `<div class="table-wrapper" id="${id}" data-headers="${encodedHeaders}" data-raw="${encodedRaw}">${filterBar}<div class="tbl-scroll"><table><thead><tr>${headerHtml}</tr></thead><tbody>${firstRowsHtml}</tbody></table></div>${paginationHtml}</div>`
 }
@@ -212,6 +213,33 @@ window.__tr = (rowEl) => {
   const rawRow = state?.rawRows[rowIdx] ?? JSON.parse(decodeURIComponent(atob(wrapper.dataset.raw)))[rowIdx]
   tableDetailRow.value = headers.map((key, i) => ({ key, value: rawRow[i] ?? '' }))
 }
+
+/** __toggleColDrop opens or closes the custom column-select dropdown. */
+window.__toggleColDrop = (e, id) => {
+  e.stopPropagation()
+  const el = document.getElementById(id + '-col')
+  if (!el) return
+  const drop = el.querySelector('.tbl-col-drop')
+  const isOpen = drop.classList.contains('tbl-col-drop--open')
+  document.querySelectorAll('.tbl-col-drop--open').forEach(d => d.classList.remove('tbl-col-drop--open'))
+  if (!isOpen) drop.classList.add('tbl-col-drop--open')
+}
+
+/** __selectCol updates the button label and fires the column-filter change. */
+window.__selectCol = (id, val, optEl) => {
+  const state = window.__tableState?.[id]
+  const label = val === -1 ? '全表' : (state?.headers[val] ?? '')
+  const el = document.getElementById(id + '-col')
+  if (!el) return
+  el.querySelector('.tbl-col-label').textContent = label
+  el.querySelectorAll('.tbl-col-opt').forEach(o => o.classList.remove('tbl-col-opt--sel'))
+  optEl.classList.add('tbl-col-opt--sel')
+  el.querySelector('.tbl-col-drop').classList.remove('tbl-col-drop--open')
+  window.__fc(id, val)
+}
+
+const closeColDrops = () => document.querySelectorAll('.tbl-col-drop--open').forEach(d => d.classList.remove('tbl-col-drop--open'))
+
 renderer.link = ({ href, title, text }) => {
   // Resolve DDG redirect URLs to the actual destination
   const realHref = extractRealUrl(href) || href
@@ -447,6 +475,7 @@ async function loadOlderMessages() {
 }
 
 onMounted(async () => {
+  document.addEventListener('click', closeColDrops)
   const history = await GetMessages(PAGE_SIZE)
   const mapped = (history || []).map(mapMsg)
   messages.value = mapped
@@ -639,6 +668,7 @@ onUnmounted(() => {
   offTTSDone?.(); offTTSError?.(); offTTSAudio?.()
   offSoundsChanged?.()
   offVoiceStart?.(); offVoiceTranscript?.(); offVoiceEnd?.(); offVoiceFinal?.(); offVoiceError?.(); offVoiceAutoSend?.()
+  document.removeEventListener('click', closeColDrops)
   // Stop any in-flight TTS playback so detached <audio> elements can be GC'd.
   if (currentTTSAudio) { try { currentTTSAudio.pause() } catch {} ; currentTTSAudio = null }
   resizeObserver?.disconnect()
@@ -1565,22 +1595,75 @@ defineExpose({ focusInput, scrollToBottom })
   gap: 6px;
   align-items: center;
 }
-.bubble.markdown :deep(.tbl-filter-select) {
+.bubble.markdown :deep(.tbl-col-select) {
+  position: relative;
   flex-shrink: 0;
+}
+.bubble.markdown :deep(.tbl-col-btn) {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.09);
   border-radius: 6px;
-  color: rgba(255,255,255,0.75);
+  color: rgba(255,255,255,0.8);
   font-size: 12px;
   font-family: inherit;
-  padding: 4px 6px;
+  padding: 4px 8px 4px 9px;
   outline: none;
   cursor: pointer;
-  max-width: 110px;
+  white-space: nowrap;
+  max-width: 120px;
   transition: border-color 0.15s;
 }
-.bubble.markdown :deep(.tbl-filter-select:focus) {
+.bubble.markdown :deep(.tbl-col-btn:focus) {
   border-color: rgba(37,99,235,0.4);
+}
+.bubble.markdown :deep(.tbl-col-chevron) {
+  opacity: 0.45;
+  flex-shrink: 0;
+}
+.bubble.markdown :deep(.tbl-col-drop) {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 100%;
+  max-width: 220px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: rgba(22,22,34,0.97);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  padding: 4px;
+  z-index: 100;
+  list-style: none;
+  margin: 0;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.45);
+}
+.bubble.markdown :deep(.tbl-col-drop--open) {
+  display: block;
+}
+.bubble.markdown :deep(.tbl-col-opt) {
+  padding: 5px 10px;
+  color: rgba(255,255,255,0.72);
+  font-size: 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  list-style: none;
+}
+.bubble.markdown :deep(.tbl-col-opt:hover) {
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.95);
+}
+.bubble.markdown :deep(.tbl-col-opt--sel) {
+  color: rgba(130,175,255,0.95);
+  background: rgba(37,99,235,0.15);
 }
 .bubble.markdown :deep(.tbl-filter-input) {
   flex: 1;
@@ -1588,7 +1671,7 @@ defineExpose({ focusInput, scrollToBottom })
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.09);
   border-radius: 6px;
-  color: rgba(255,255,255,0.85);
+  color: rgba(255,255,255,0.8);
   font-size: 12px;
   font-family: inherit;
   padding: 4px 9px;
