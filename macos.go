@@ -543,6 +543,14 @@ static void enableClickThrough() {
         }
         if (!gWindow || !gWebView) return;
 
+        // Hide the native overlay scrollbar that WKWebView's enclosing NSScrollView
+        // renders on mouse hover, so our CSS custom scrollbar is not overridden.
+        NSScrollView *sv = (NSScrollView *)[gWebView enclosingScrollView];
+        if (sv) {
+            [[sv verticalScroller]   setHidden:YES];
+            [[sv horizontalScroller] setHidden:YES];
+        }
+
         // Remove system shadow and ensure the window is transparent so no border rendering occurs.
         [gWindow setHasShadow:NO];
         [gWindow setOpaque:NO];
