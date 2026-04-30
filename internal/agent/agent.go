@@ -19,6 +19,8 @@ import (
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 
+	"golang.org/x/sync/errgroup"
+
 	"aiko/internal/agent/middleware"
 	"aiko/internal/config"
 	"aiko/internal/memory"
@@ -189,19 +191,21 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 			}
 		}()
 
-		history, err := a.buildHistoryPrefix(ctx, userInput)
+		ctxMsgs, err := a.buildContext(ctx, userInput)
 		if err != nil {
 			ch <- StreamResult{Err: err}
 			return
 		}
 
-		query := userInput
-		if history != "" {
-			query = history + "\nUser: " + userInput
+		content := userInput
+		if a.nudgeInterval > 0 && a.turnCount.Load() > 0 &&
+			a.turnCount.Load()%int64(a.nudgeInterval) == 0 {
+			content += "\n\n" + nudgeText
 		}
 
+		msgs := append(ctxMsgs, &schema.Message{Role: schema.User, Content: content})
 		checkpointID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
-		fullResponse, ok := drainRunner(ctx, a.runner, query, ch, a.pendingConfirms, a.emitEvent, checkpointID)
+		fullResponse, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID)
 		if !ok {
 			return
 		}
@@ -453,31 +457,15 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 		}()
 
 		userText := extractTextFromMessage(msg)
-		history, err := a.buildHistoryPrefix(ctx, userText)
+		ctxMsgs, err := a.buildContext(ctx, userText)
 		if err != nil {
 			ch <- StreamResult{Err: err}
 			return
 		}
 
-		// Prepend history into the message before sending.
-		sendMsg := *msg
-		if history != "" {
-			if sendMsg.Content != "" {
-				sendMsg.Content = history + "\nUser: " + sendMsg.Content
-			} else {
-				histPart := schema.MessageInputPart{
-					Type: schema.ChatMessagePartTypeText,
-					Text: history + "\nUser: ",
-				}
-				sendMsg.UserInputMultiContent = append(
-					[]schema.MessageInputPart{histPart},
-					sendMsg.UserInputMultiContent...,
-				)
-			}
-		}
-
+		msgs := append(ctxMsgs, msg)
 		checkpointID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
-		fullResponse, ok := drainRunnerMsg(ctx, a.runner, []adk.Message{&sendMsg}, ch, a.pendingConfirms, a.emitEvent, checkpointID)
+		fullResponse, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID)
 		if !ok {
 			return
 		}
@@ -502,63 +490,94 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 	return ch
 }
 
-// buildHistoryPrefix returns recent conversation history as a formatted string,
-// prepended with USER.md profile (if available) and a self-growth nudge (if due).
-// Returns empty string if no history exists or an error occurs.
-// userInput is used as the semantic query for long-term memory retrieval.
-func (a *Agent) buildHistoryPrefix(ctx context.Context, userInput string) (string, error) {
-	var sb strings.Builder
+// buildContext fetches user profile, long-term memories (summaries and raws separately),
+// and recent short-term history concurrently, then returns a message list ready for
+// runner.Run. Errors from individual sources are logged and skipped — a partial context
+// is better than no response.
+func (a *Agent) buildContext(ctx context.Context, userInput string) ([]adk.Message, error) {
+	var profile string
+	var memResult memory.MemorySearchResult
+	var recentMsgs []*schema.Message
 
-	// Read USER.md for user profile injection.
-	if a.dataDir != "" {
-		profilePath := filepath.Join(a.dataDir, "USER.md")
-		if data, err := os.ReadFile(profilePath); err == nil && len(data) > 0 {
-			sb.WriteString("User Profile:\n")
-			sb.Write(data)
-			sb.WriteByte('\n')
-		} else if err != nil && !os.IsNotExist(err) {
+	g, gctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		if a.dataDir == "" {
+			return nil
+		}
+		data, err := os.ReadFile(filepath.Join(a.dataDir, "USER.md"))
+		if err == nil {
+			profile = string(data)
+		} else if !os.IsNotExist(err) {
 			slog.Warn("read USER.md failed", "err", err)
 		}
+		return nil
+	})
+
+	g.Go(func() error {
+		if a.longMem == nil {
+			return nil
+		}
+		res, err := a.longMem.SearchSplit(gctx, userInput, 3)
+		if err != nil {
+			slog.Warn("longMem.SearchSplit failed", "err", err)
+			return nil
+		}
+		memResult = res
+		return nil
+	})
+
+	g.Go(func() error {
+		if a.shortMem == nil {
+			return nil
+		}
+		msgs, err := a.shortMem.RecentMessages(a.cfg.ShortTermLimit)
+		if err != nil {
+			slog.Warn("shortMem.RecentMessages error", "err", err)
+			return nil
+		}
+		recentMsgs = msgs
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 
-	if a.shortMem == nil {
-		return sb.String(), nil
-	}
+	var msgs []adk.Message
 
-	// Inject relevant long-term memories if available.
-	hasLongMem := false
-	if a.longMem != nil {
-		results, err := a.longMem.Search(ctx, userInput, 3)
-		if err == nil && len(results) > 0 {
-			sb.WriteString("Relevant past context:\n")
-			for _, r := range results {
-				sb.WriteString(r)
-				sb.WriteByte('\n')
-			}
-			hasLongMem = true
+	// Build context pair (user + assistant "Understood.") only if there is content.
+	var ctxBuf strings.Builder
+	if profile != "" {
+		ctxBuf.WriteString("User Profile:\n")
+		ctxBuf.WriteString(profile)
+	}
+	if len(memResult.Summaries) > 0 {
+		ctxBuf.WriteString("\nRelevant memory summaries:\n")
+		for _, s := range memResult.Summaries {
+			ctxBuf.WriteString("- ")
+			ctxBuf.WriteString(s)
+			ctxBuf.WriteByte('\n')
 		}
 	}
-
-	recent, err := a.shortMem.Recent(a.cfg.ShortTermLimit)
-	if err != nil {
-		slog.Warn("short memory Recent error", "err", err)
-		recent = nil
-	}
-
-	if len(recent) > 0 {
-		if hasLongMem {
-			sb.WriteByte('\n')
+	if len(memResult.Raws) > 0 {
+		ctxBuf.WriteString("\nRelevant memory details:\n")
+		for _, r := range memResult.Raws {
+			ctxBuf.WriteString(r)
+			ctxBuf.WriteByte('\n')
 		}
-		sb.WriteString("Recent conversation:\n")
-		sb.WriteString(memory.FormatBlock(recent))
+	}
+	if ctxBuf.Len() > 0 {
+		msgs = append(msgs,
+			&schema.Message{Role: schema.User, Content: ctxBuf.String()},
+			&schema.Message{Role: schema.Assistant, Content: "Understood."},
+		)
 	}
 
-	// Append self-growth nudge if due.
-	if a.nudgeInterval > 0 && a.turnCount.Load() > 0 && a.turnCount.Load()%int64(a.nudgeInterval) == 0 {
-		sb.WriteString(nudgeText)
+	for _, m := range recentMsgs {
+		msgs = append(msgs, m)
 	}
-
-	return sb.String(), nil
+	return msgs, nil
 }
 
 // persistAndMigrate saves user and assistant messages to SQLite, then checks
