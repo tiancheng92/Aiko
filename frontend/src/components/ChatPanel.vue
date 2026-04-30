@@ -674,6 +674,17 @@ onUnmounted(() => {
   resizeObserver?.disconnect()
 })
 
+// CommonMark flanking-delimiter rules break ** adjacent to CJK/fullwidth chars.
+// Insert a zero-width joiner (U+200D, not whitespace/punctuation) to satisfy
+// the rules, then strip it from the output so it doesn't appear in copy-paste.
+const ZWJ = '‍'
+// Closing ** fails when preceded by CJK/fullwidth (punctuation) and followed by
+// a non-whitespace non-punctuation char — insert ZWJ before the closing **.
+const BOLD_CLOSE_FIX = new RegExp('([　-鿿＀-￯])\\*\\*(?=[^\\s\\p{P}])', 'gu')
+// Opening ** fails when preceded by a letter (Lo) and followed by CJK/fullwidth
+// punctuation — insert ZWJ after the opening **.
+const BOLD_OPEN_FIX = /(\p{Lo})\*\*(?=[　-〿＀-￯'-‟])/gu
+
 /** renderMarkdown converts markdown text to sanitized HTML. */
 function renderMarkdown(text) {
   if (!text) return ''
@@ -682,14 +693,17 @@ function renderMarkdown(text) {
   if (!stripped) return ''
   // Replace bare DDG redirect URLs with the real destination so marked's
   // autolink / link renderer can display them cleanly.
-  const processed = stripped.replace(
+  const ddgFixed = stripped.replace(
     /(?<![(\[])(?:https?:)?\/\/(?:html\.)?duckduckgo\.com\/l\/\?[^\s)>\]]+/g,
     (match) => {
       const real = extractRealUrl(match.startsWith('//') ? 'https:' + match : match)
       return real || match
     }
   )
-  return marked(processed)
+  const processed = ddgFixed
+    .replace(BOLD_CLOSE_FIX, `$1${ZWJ}**`)
+    .replace(BOLD_OPEN_FIX, `$1**${ZWJ}`)
+  return marked(processed).replace(/‍/g, '')
 }
 
 /** extractUrls returns deduplicated http(s) URLs found in plain text, skipping markdown image syntax. */
