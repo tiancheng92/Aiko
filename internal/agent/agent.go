@@ -599,7 +599,8 @@ func (a *Agent) buildContext(ctx context.Context, userInput string) ([]adk.Messa
 	// Build context pair (user + assistant "Understood.") — always includes current time.
 	var ctxBuf strings.Builder
 	ctxBuf.WriteString("Current time: ")
-	ctxBuf.WriteString(time.Now().Format("2006-01-02 15:04:05 MST"))
+	cst := time.FixedZone("CST", 8*3600)
+	ctxBuf.WriteString(time.Now().In(cst).Format("2006-01-02 15:04:05 CST"))
 	ctxBuf.WriteByte('\n')
 	if location != "" {
 		ctxBuf.WriteString("Location: ")
