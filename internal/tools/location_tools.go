@@ -70,15 +70,24 @@ func (t *GetLocationTool) InvokableRun(_ context.Context, _ string, _ ...tool.Op
 	return "来源: IP 定位\n" + ipResult, nil
 }
 
-// FetchIPLocation returns a compact location string for context injection (city, region, country, timezone).
-// It uses IP geolocation only — no system permission required.
-func FetchIPLocation() string {
+// FetchLocation returns a compact location string for context injection.
+// It tries CoreLocation (GPS) first; falls back to IP geolocation on failure.
+func FetchLocation() string {
+	// Try GPS via CoreLocation first.
+	lat, lon, _, err := coreLocation()
+	if err == nil {
+		addr := reverseGeocode(lat, lon)
+		if addr != "" {
+			return addr
+		}
+		return fmt.Sprintf("%.4f, %.4f", lat, lon)
+	}
+
+	// Fall back to IP geolocation.
 	result, err := ipLocation()
 	if err != nil {
 		return ""
 	}
-	// Extract just the compact fields useful as context: city, region, country, timezone.
-	// Full result is multi-line; parse it into a single line.
 	var country, region, city, timezone string
 	for _, line := range strings.Split(result, "\n") {
 		switch {

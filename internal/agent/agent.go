@@ -100,7 +100,7 @@ func cachedLocation() string {
 	if locationCache.value != "" && time.Since(locationCache.fetchedAt) < locationCacheTTL {
 		return locationCache.value
 	}
-	loc := internaltools.FetchIPLocation()
+	loc := internaltools.FetchLocation()
 	if loc != "" {
 		locationCache.value = loc
 		locationCache.fetchedAt = time.Now()
@@ -599,8 +599,7 @@ func (a *Agent) buildContext(ctx context.Context, userInput string) ([]adk.Messa
 	// Build context pair (user + assistant "Understood.") — always includes current time.
 	var ctxBuf strings.Builder
 	ctxBuf.WriteString("Current time: ")
-	cst := time.FixedZone("CST", 8*3600)
-	ctxBuf.WriteString(time.Now().In(cst).Format("2006-01-02 15:04:05 CST"))
+	ctxBuf.WriteString(time.Now().In(time.FixedZone("CST", 8*3600)).Format("2006-01-02 15:04:05 CST"))
 	ctxBuf.WriteByte('\n')
 	if location != "" {
 		ctxBuf.WriteString("Location: ")
