@@ -48,7 +48,7 @@ type StreamResult struct {
 // ToolConfirmRequest is emitted via Wails event when a tool requests user confirmation.
 type ToolConfirmRequest struct {
 	ID         string `json:"id"`
-	ToolType   string `json:"tool_type"`   // "shell" or "code"
+	ToolType   string `json:"tool_type"` // "shell" or "code"
 	Command    string `json:"command,omitempty"`
 	Code       string `json:"code,omitempty"`
 	Language   string `json:"language,omitempty"`
@@ -110,14 +110,14 @@ func cachedLocation() string {
 
 // Agent wraps an eino ReAct agent with short/long-term memory integration.
 type Agent struct {
-	runner        *adk.Runner
-	shortMem      *memory.ShortStore
-	longMem       *memory.LongStore
-	cfg           *config.Config
-	dataDir       string // ~/.aiko data directory, used to read USER.md
-	turnCount     atomic.Int64 // completed conversation turns (resets on restart)
-	nudgeInterval int    // how often to trigger self-growth nudge
-	pendingConfirms *sync.Map // map[string]chan ToolConfirmResponse; bridged from App
+	runner          *adk.Runner
+	shortMem        *memory.ShortStore
+	longMem         *memory.LongStore
+	cfg             *config.Config
+	dataDir         string                          // ~/.aiko data directory, used to read USER.md
+	turnCount       atomic.Int64                    // completed conversation turns (resets on restart)
+	nudgeInterval   int                             // how often to trigger self-growth nudge
+	pendingConfirms *sync.Map                       // map[string]chan ToolConfirmResponse; bridged from App
 	emitEvent       func(event string, data ...any) // Wails EventsEmit
 }
 
@@ -148,12 +148,12 @@ func New(
 	}
 
 	deepCfg := &deep.Config{
-		Name:           "aiko",
-		Description:    "A desktop pet AI assistant",
-		Instruction:    cfg.SystemPrompt,
-		ChatModel:      chatModel,
-		MaxIteration:   30,
-		Handlers:       handlers,
+		Name:         "aiko",
+		Description:  "A desktop pet AI assistant",
+		Instruction:  cfg.SystemPrompt,
+		ChatModel:    chatModel,
+		MaxIteration: 30,
+		Handlers:     handlers,
 		ModelRetryConfig: &adk.ModelRetryConfig{
 			MaxRetries: 5,
 			IsRetryAble: func(_ context.Context, err error) bool {
@@ -180,7 +180,7 @@ func New(
 
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
 		Agent:           agent,
-		EnableStreaming:  true,
+		EnableStreaming: true,
 		CheckPointStore: &memCheckPointStore{m: map[string][]byte{}},
 	})
 
@@ -599,7 +599,7 @@ func (a *Agent) buildContext(ctx context.Context, userInput string) ([]adk.Messa
 	// Build context pair (user + assistant "Understood.") — always includes current time.
 	var ctxBuf strings.Builder
 	ctxBuf.WriteString("Current time: ")
-	ctxBuf.WriteString(time.Now().In(time.FixedZone("CST", 8*3600)).Format("2006-01-02 15:04:05 CST"))
+	ctxBuf.WriteString(time.Now().Format("2006-01-02 15:04:05 CST"))
 	ctxBuf.WriteByte('\n')
 	if location != "" {
 		ctxBuf.WriteString("Location: ")
