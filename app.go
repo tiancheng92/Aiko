@@ -1731,6 +1731,29 @@ func (a *App) LarkRunCommand(args string) (string, error) {
 	return lark.NewClient(cliPath).Run(a.ctx, strings.Fields(args)...)
 }
 
+// PingLLM measures the round-trip latency to the active model provider's
+// Base URL by issuing an HTTP HEAD request with a 4-second timeout.
+// Returns elapsed milliseconds, or -1 on any error (empty URL, timeout, etc.).
+func (a *App) PingLLM() int64 {
+	a.mu.RLock()
+	baseURL := a.cfg.LLMBaseURL
+	a.mu.RUnlock()
+
+	if baseURL == "" {
+		return -1
+	}
+
+	client := &http.Client{Timeout: 4 * time.Second}
+	start := time.Now()
+	resp, err := client.Head(baseURL)
+	elapsed := time.Since(start).Milliseconds()
+	if err != nil {
+		return -1
+	}
+	resp.Body.Close()
+	return elapsed
+}
+
 // stripNonSpeech removes emoji and kaomoji from text before TTS synthesis.
 // Emoji are identified by Unicode ranges (Emoji/Symbol/Misc blocks).
 // Kaomoji are matched by common bracket patterns like (=^･ω･^=) and (╥_╥).

@@ -194,6 +194,10 @@ export function OpenFileDialog(arg1, arg2) {
   return window['go']['main']['App']['OpenFileDialog'](arg1, arg2);
 }
 
+export function PingLLM() {
+  return window['go']['main']['App']['PingLLM']();
+}
+
 export function ResetBallPosition(arg1, arg2) {
   return window['go']['main']['App']['ResetBallPosition'](arg1, arg2);
 }
