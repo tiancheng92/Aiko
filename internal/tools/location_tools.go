@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	json "github.com/bytedance/sonic"
@@ -67,6 +68,34 @@ func (t *GetLocationTool) InvokableRun(_ context.Context, _ string, _ ...tool.Op
 		return "", fmt.Errorf("定位失败: %w", ipErr)
 	}
 	return "来源: IP 定位\n" + ipResult, nil
+}
+
+// FetchIPLocation returns a compact location string for context injection (city, region, country, timezone).
+// It uses IP geolocation only — no system permission required.
+func FetchIPLocation() string {
+	result, err := ipLocation()
+	if err != nil {
+		return ""
+	}
+	// Extract just the compact fields useful as context: city, region, country, timezone.
+	// Full result is multi-line; parse it into a single line.
+	var country, region, city, timezone string
+	for _, line := range strings.Split(result, "\n") {
+		switch {
+		case strings.HasPrefix(line, "国家:"):
+			country = strings.TrimPrefix(line, "国家: ")
+		case strings.HasPrefix(line, "地区:"):
+			region = strings.TrimPrefix(line, "地区: ")
+		case strings.HasPrefix(line, "城市:"):
+			city = strings.TrimPrefix(line, "城市: ")
+		case strings.HasPrefix(line, "时区:"):
+			timezone = strings.TrimPrefix(line, "时区: ")
+		}
+	}
+	if city == "" && country == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s, %s, %s (时区: %s)", city, region, country, timezone)
 }
 
 // ipLocation fetches approximate location via ip-api.com.

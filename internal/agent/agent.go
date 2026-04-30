@@ -84,6 +84,30 @@ func (s *memCheckPointStore) Set(_ context.Context, key string, value []byte) er
 	return nil
 }
 
+// locationCache caches the IP-based location string to avoid a network call every turn.
+var locationCache struct {
+	sync.Mutex
+	value     string
+	fetchedAt time.Time
+}
+
+const locationCacheTTL = 30 * time.Minute
+
+// cachedLocation returns the cached location string, refreshing via IP geolocation when stale.
+func cachedLocation() string {
+	locationCache.Lock()
+	defer locationCache.Unlock()
+	if locationCache.value != "" && time.Since(locationCache.fetchedAt) < locationCacheTTL {
+		return locationCache.value
+	}
+	loc := internaltools.FetchIPLocation()
+	if loc != "" {
+		locationCache.value = loc
+		locationCache.fetchedAt = time.Now()
+	}
+	return loc
+}
+
 // Agent wraps an eino ReAct agent with short/long-term memory integration.
 type Agent struct {
 	runner        *adk.Runner
@@ -518,6 +542,7 @@ func (a *Agent) buildContext(ctx context.Context, userInput string) ([]adk.Messa
 	var profile string
 	var memResult memory.MemorySearchResult
 	var recentMsgs []*schema.Message
+	var location string
 
 	g, gctx := errgroup.WithContext(ctx)
 
@@ -560,6 +585,11 @@ func (a *Agent) buildContext(ctx context.Context, userInput string) ([]adk.Messa
 		return nil
 	})
 
+	g.Go(func() error {
+		location = cachedLocation()
+		return nil
+	})
+
 	if err := g.Wait(); err != nil {
 		return nil, err
 	}
@@ -571,6 +601,11 @@ func (a *Agent) buildContext(ctx context.Context, userInput string) ([]adk.Messa
 	ctxBuf.WriteString("Current time: ")
 	ctxBuf.WriteString(time.Now().Format("2006-01-02 15:04:05 MST"))
 	ctxBuf.WriteByte('\n')
+	if location != "" {
+		ctxBuf.WriteString("Location: ")
+		ctxBuf.WriteString(location)
+		ctxBuf.WriteByte('\n')
+	}
 	if profile != "" {
 		ctxBuf.WriteString("\nUser Profile:\n")
 		ctxBuf.WriteString(profile)
