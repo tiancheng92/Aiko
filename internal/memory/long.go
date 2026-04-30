@@ -14,6 +14,7 @@ import (
 	"github.com/cloudwego/eino/components/embedding"
 	"github.com/google/uuid"
 	chromem "github.com/philippgille/chromem-go"
+	"golang.org/x/sync/errgroup"
 
 	"aiko/internal/llm"
 )
@@ -170,6 +171,64 @@ func (l *LongStore) Search(ctx context.Context, query string, k int) ([]string, 
 		out = append(out, c.content)
 	}
 	return out, nil
+}
+
+// MemorySearchResult holds separately retrieved summaries and raw memory blocks.
+type MemorySearchResult struct {
+	Summaries []string // one-sentence summaries of past conversations
+	Raws      []string // full raw conversation blocks
+}
+
+// SearchSplit retrieves the top-k most relevant summaries and raw memory blocks
+// separately via metadata filter, so both dimensions contribute top-k slots
+// without competing against each other.
+func (l *LongStore) SearchSplit(ctx context.Context, query string, k int) (MemorySearchResult, error) {
+	l.mu.RLock()
+	col := l.col
+	l.mu.RUnlock()
+
+	if col.Count() == 0 {
+		return MemorySearchResult{}, nil
+	}
+
+	var res MemorySearchResult
+	var mu sync.Mutex
+	g, gctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		results, err := col.Query(gctx, query, k, map[string]string{"type": "summary"}, nil)
+		if err != nil {
+			return err
+		}
+		summaries := make([]string, 0, len(results))
+		for _, r := range results {
+			summaries = append(summaries, r.Content)
+		}
+		mu.Lock()
+		res.Summaries = summaries
+		mu.Unlock()
+		return nil
+	})
+
+	g.Go(func() error {
+		results, err := col.Query(gctx, query, k, map[string]string{"type": "raw"}, nil)
+		if err != nil {
+			return err
+		}
+		raws := make([]string, 0, len(results))
+		for _, r := range results {
+			raws = append(raws, r.Content)
+		}
+		mu.Lock()
+		res.Raws = raws
+		mu.Unlock()
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		return MemorySearchResult{}, err
+	}
+	return res, nil
 }
 
 // DeleteAll removes all documents from the long-term memory collection and
