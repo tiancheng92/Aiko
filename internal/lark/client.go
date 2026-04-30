@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -54,12 +56,40 @@ func (c *Client) Status(ctx context.Context) (string, error) {
 	return c.Run(ctx, "auth", "status")
 }
 
-// FindCLI returns the absolute path of lark-cli resolved from PATH,
-// or an empty string if not found.
+// candidateDirs lists directories where npm/node package managers commonly
+// install global binaries on macOS. These are not in the minimal PATH that
+// macOS uses when launching a .app bundle from Finder/Dock.
+var candidateDirs = []string{
+	"/usr/local/bin",
+	"/opt/homebrew/bin",
+	"/opt/homebrew/sbin",
+}
+
+// FindCLI returns the absolute path of lark-cli, or an empty string if not
+// found. It first checks $PATH (works when launched from a terminal), then
+// falls back to common npm/node global bin directories and the user's home
+// directory prefixes so that .app bundles launched from Finder can also locate
+// the binary.
 func FindCLI() string {
-	p, err := exec.LookPath("lark-cli")
-	if err != nil {
-		return ""
+	if p, err := exec.LookPath("lark-cli"); err == nil {
+		return p
 	}
-	return p
+	home, _ := os.UserHomeDir()
+	extra := append([]string{}, candidateDirs...)
+	if home != "" {
+		extra = append(extra,
+			filepath.Join(home, ".local/share/npm/bin"),
+			filepath.Join(home, ".npm-global/bin"),
+			filepath.Join(home, ".yarn/bin"),
+			filepath.Join(home, "node_modules/.bin"),
+			filepath.Join(home, ".nvm/versions/node"),
+		)
+	}
+	for _, dir := range extra {
+		p := filepath.Join(dir, "lark-cli")
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
 }
