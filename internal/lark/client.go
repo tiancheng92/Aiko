@@ -33,6 +33,7 @@ func NewClient(cliPath string) *Client {
 // message bodies, and other values we don't want in logs or UI toasts.
 func (c *Client) Run(ctx context.Context, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, c.CLIPath, args...)
+	cmd.Env = append(os.Environ(), "PATH="+augmentedPATH())
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -63,6 +64,29 @@ var candidateDirs = []string{
 	"/usr/local/bin",
 	"/opt/homebrew/bin",
 	"/opt/homebrew/sbin",
+}
+
+// augmentedPATH returns a PATH value that prepends common Node.js and npm
+// binary directories to the current PATH. This is required because .app
+// bundles launched from Finder/Dock start with a minimal PATH that omits
+// Homebrew, nvm, and npm global bin dirs — causing lark-cli's
+// `#!/usr/bin/env node` shebang to fail with "node: No such file or directory".
+func augmentedPATH() string {
+	home, _ := os.UserHomeDir()
+	extra := append([]string{}, candidateDirs...)
+	if home != "" {
+		extra = append(extra,
+			filepath.Join(home, ".local/share/npm/bin"),
+			filepath.Join(home, ".npm-global/bin"),
+			filepath.Join(home, ".yarn/bin"),
+			filepath.Join(home, "node_modules/.bin"),
+		)
+	}
+	current := os.Getenv("PATH")
+	if current != "" {
+		extra = append(extra, current)
+	}
+	return strings.Join(extra, ":")
 }
 
 // FindCLI returns the absolute path of lark-cli, or an empty string if not
