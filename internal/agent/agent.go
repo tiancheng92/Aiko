@@ -566,10 +566,13 @@ func (a *Agent) buildContext(ctx context.Context, userInput string) ([]adk.Messa
 
 	var msgs []adk.Message
 
-	// Build context pair (user + assistant "Understood.") only if there is content.
+	// Build context pair (user + assistant "Understood.") — always includes current time.
 	var ctxBuf strings.Builder
+	ctxBuf.WriteString("Current time: ")
+	ctxBuf.WriteString(time.Now().Format("2006-01-02 15:04:05 MST"))
+	ctxBuf.WriteByte('\n')
 	if profile != "" {
-		ctxBuf.WriteString("User Profile:\n")
+		ctxBuf.WriteString("\nUser Profile:\n")
 		ctxBuf.WriteString(profile)
 	}
 	if len(memResult.Summaries) > 0 {
