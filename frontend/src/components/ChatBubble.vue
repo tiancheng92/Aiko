@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import ChatPanel from './ChatPanel.vue'
 import ContextMenu from './ContextMenu.vue'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
-import { ExportChatHistory, GetChatSize, SaveChatSize } from '../../wailsjs/go/main/App'
+import { ExportChatHistory, GetChatSize, PingLLM, SaveChatSize } from '../../wailsjs/go/main/App'
 
 const props = defineProps({
   ballPos:  { type: Object, default: () => ({ x: -1, y: -1 }) },
@@ -11,6 +11,22 @@ const props = defineProps({
   activeScreen: { type: Object, default: () => ({ width: 0, height: 0 }) },
 })
 const emit = defineEmits(['close', 'open-settings'])
+
+const latencyMs = ref(null)  // null = not yet measured, -1 = error, ≥0 = ms
+
+/** latencyColor returns the dot/text color for the current latency value. */
+function latencyColor(ms) {
+  if (ms === null || ms < 0) return 'rgba(255,255,255,0.25)'
+  if (ms < 300) return '#4ade80'
+  if (ms <= 800) return '#facc15'
+  return '#f87171'
+}
+
+/** latencyLabel returns the display text for the current latency value. */
+function latencyLabel(ms) {
+  if (ms === null || ms < 0) return '—'
+  return ms + 'ms'
+}
 
 const DEFAULT_W = Math.min(520, Math.max(340, Math.round(window.innerWidth  * 0.24)))
 const DEFAULT_H = Math.min(680, Math.max(400, Math.round(window.innerHeight * 0.58)))
@@ -36,6 +52,8 @@ function applySize({ width, height }) {
 
 let offSizeChange = null
 let offScreenChanged = null
+let latencyTimer = null
+let offModelChangedLatency = null
 
 let mounted = false
 
@@ -47,6 +65,10 @@ onMounted(async () => {
     console.error('load chat size failed:', e)
   }
   offSizeChange = EventsOn('config:chat:size:changed', applySize)
+  const pingOnce = () => PingLLM().then(ms => { latencyMs.value = ms }).catch(() => { latencyMs.value = -1 })
+  pingOnce()
+  latencyTimer = setInterval(pingOnce, 5000)
+  offModelChangedLatency = EventsOn('config:model:changed', pingOnce)
   offScreenChanged = EventsOn('screen:active:changed', async (info) => {
     try {
       const [w, h] = await GetChatSize(info.width, info.height)
@@ -61,6 +83,8 @@ onMounted(async () => {
 onUnmounted(() => {
   offSizeChange?.()
   offScreenChanged?.()
+  clearInterval(latencyTimer)
+  offModelChangedLatency?.()
 })
 
 const isFullscreen = ref(false)
@@ -140,6 +164,10 @@ defineExpose({ focusInput, scrollToBottom })
   >
     <div class="title-bar">
       <span class="title">聊天</span>
+      <div class="latency-badge" :style="{ color: latencyColor(latencyMs) }">
+        <span class="latency-dot">●</span>
+        <span class="latency-value">{{ latencyLabel(latencyMs) }}</span>
+      </div>
       <button class="icon-btn" @click="toggleFullscreen" :title="isFullscreen ? '退出全屏' : '全屏'">
         <svg v-if="!isFullscreen" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
         <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>
@@ -187,11 +215,30 @@ defineExpose({ focusInput, scrollToBottom })
   background: rgba(255, 255, 255, 0.02);
 }
 .title {
-  flex: 1;
   color: rgba(255, 255, 255, 0.85);
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.02em;
+}
+.latency-badge {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.85;
+  transition: color 0.4s;
+  white-space: nowrap;
+  user-select: none;
+}
+.latency-dot {
+  font-size: 8px;
+  line-height: 1;
+}
+.latency-value {
+  line-height: 1;
+  min-width: 28px;
 }
 .close-btn {
   background: none;
