@@ -463,7 +463,27 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 			return
 		}
 
-		msgs := append(ctxMsgs, msg)
+		// Apply self-growth nudge if due (same logic as Chat).
+		sendMsg := msg
+		if a.nudgeInterval > 0 && a.turnCount.Load() > 0 &&
+			a.turnCount.Load()%int64(a.nudgeInterval) == 0 {
+			cp := *msg
+			if cp.Content != "" {
+				cp.Content += "\n\n" + nudgeText
+			} else {
+				// Multimodal message: append nudge as an extra text part.
+				parts := make([]schema.MessageInputPart, len(msg.UserInputMultiContent)+1)
+				copy(parts, msg.UserInputMultiContent)
+				parts[len(parts)-1] = schema.MessageInputPart{
+					Type: schema.ChatMessagePartTypeText,
+					Text: nudgeText,
+				}
+				cp.UserInputMultiContent = parts
+			}
+			sendMsg = &cp
+		}
+
+		msgs := append(ctxMsgs, sendMsg)
 		checkpointID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
 		fullResponse, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID)
 		if !ok {
