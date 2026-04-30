@@ -263,12 +263,12 @@ func drainRunner(ctx context.Context, runner *adk.Runner, query string, ch chan<
 	return drainIter(ctx, runner, iter, ch, pendingConfirms, emitEvent, checkpointID)
 }
 
-// drainRunnerMsg consumes all events from runner.Run with a pre-built Message,
+// drainRunnerMsg consumes all events from runner.Run with a pre-built message list,
 // forwards tokens to ch, and returns the accumulated response string.
 // Returns (response, true) on success or ("", false) after sending an error to ch.
-func drainRunnerMsg(ctx context.Context, runner *adk.Runner, msg *schema.Message, ch chan<- StreamResult,
+func drainRunnerMsg(ctx context.Context, runner *adk.Runner, msgs []adk.Message, ch chan<- StreamResult,
 	pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, bool) {
-	iter := runner.Run(ctx, []adk.Message{msg}, adk.WithCheckPointID(checkpointID))
+	iter := runner.Run(ctx, msgs, adk.WithCheckPointID(checkpointID))
 	return drainIter(ctx, runner, iter, ch, pendingConfirms, emitEvent, checkpointID)
 }
 
@@ -477,7 +477,7 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 		}
 
 		checkpointID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
-		fullResponse, ok := drainRunnerMsg(ctx, a.runner, &sendMsg, ch, a.pendingConfirms, a.emitEvent, checkpointID)
+		fullResponse, ok := drainRunnerMsg(ctx, a.runner, []adk.Message{&sendMsg}, ch, a.pendingConfirms, a.emitEvent, checkpointID)
 		if !ok {
 			return
 		}
