@@ -619,8 +619,17 @@ func (a *App) SaveConfig(cfg *config.Config) error {
 	cfg.VoiceAutoSend = a.cfg.VoiceAutoSend
 	cfg.SoundsEnabled = a.cfg.SoundsEnabled
 	cfg.TTSAutoPlay = a.cfg.TTSAutoPlay
-	// Preserve profile-derived fields so SaveConfig never clobbers them.
-	// These fields live in model_profiles, not settings, and are applied via ApplyProfile.
+	// Preserve ALL profile-derived fields so SaveConfig never clobbers them.
+	// These fields live in model_profiles and are set exclusively via
+	// SaveModelProfile / ActivateModelProfile. Any stale frontend value
+	// (e.g. from a cfg.value that was loaded before a profile switch) must
+	// not overwrite the profile that is currently active in a.cfg.
+	cfg.LLMBaseURL = a.cfg.LLMBaseURL
+	cfg.LLMAPIKey = a.cfg.LLMAPIKey
+	cfg.LLMModel = a.cfg.LLMModel
+	cfg.LLMProvider = a.cfg.LLMProvider
+	cfg.EmbeddingModel = a.cfg.EmbeddingModel
+	cfg.EmbeddingDim = a.cfg.EmbeddingDim
 	cfg.TTSVoice = a.cfg.TTSVoice
 	cfg.TTSSpeed = a.cfg.TTSSpeed
 	cfg.TTSBackend = a.cfg.TTSBackend

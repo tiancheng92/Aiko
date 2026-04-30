@@ -243,6 +243,10 @@ async function activateProfile(id) {
   try {
     await ActivateModelProfile(id)
     activeProfileID.value = id
+    // Refresh cfg so subsequent Save() doesn't overwrite the new profile's
+    // LLM fields with stale values loaded before the profile switch.
+    const loaded = await GetConfig()
+    if (loaded) Object.assign(cfg.value, loaded)
     statusMsg.value = '已切换模型配置'
   } catch (e) {
     statusMsg.value = '切换失败: ' + e
