@@ -148,12 +148,13 @@ func New(
 	}
 
 	deepCfg := &deep.Config{
-		Name:         "aiko",
-		Description:  "A desktop pet AI assistant",
-		Instruction:  cfg.SystemPrompt,
-		ChatModel:    chatModel,
-		MaxIteration: 30,
-		Handlers:     handlers,
+		Name:                   "aiko",
+		Description:            "A desktop pet AI assistant",
+		Instruction:            cfg.SystemPrompt,
+		ChatModel:              chatModel,
+		MaxIteration:           30,
+		Handlers:               handlers,
+		WithoutGeneralSubAgent: true, // Aiko is a single-agent; disable the Task tool and its misleading subagent prompt.
 		ModelRetryConfig: &adk.ModelRetryConfig{
 			MaxRetries: 5,
 			IsRetryAble: func(_ context.Context, err error) bool {

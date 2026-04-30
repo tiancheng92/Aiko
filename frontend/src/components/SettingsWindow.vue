@@ -343,7 +343,6 @@ async function save() {
       ActiveProfileID: activeProfileID.value,
     }
     await SaveConfig(payload)
-    EventsEmit('config:model:changed', cfg.value.Live2DModel)
     statusMsg.value = '已保存'
   } catch (e) {
     statusMsg.value = '保存失败: ' + e

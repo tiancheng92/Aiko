@@ -1,9 +1,13 @@
 package llm
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
+	"sync"
 
 	embeddopenai "github.com/cloudwego/eino-ext/components/embedding/openai"
 	einoopenai "github.com/cloudwego/eino-ext/components/model/openai"
@@ -15,28 +19,82 @@ import (
 	"aiko/internal/config"
 )
 
+// ErrorBodyTransport wraps http.DefaultTransport and stores the raw response
+// body of the most recent non-2xx response. This lets callers retrieve the
+// original provider error JSON that go-openai's APIError may not fully expose
+// (e.g. OpenRouter's error.metadata.raw field).
+type ErrorBodyTransport struct {
+	mu   sync.Mutex
+	body []byte
+	base http.RoundTripper
+}
+
+// RoundTrip executes the request. For non-2xx responses it buffers the body so
+// it can be read both by the underlying go-openai client and by LastErrorBody.
+func (t *ErrorBodyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	base := t.base
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	resp, err := base.RoundTrip(req)
+	if err != nil || resp == nil {
+		return resp, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		raw, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if readErr == nil {
+			t.mu.Lock()
+			t.body = raw
+			t.mu.Unlock()
+			// Restore body so go-openai can still parse the error response.
+			resp.Body = io.NopCloser(bytes.NewReader(raw))
+		}
+	}
+	return resp, nil
+}
+
+// LastErrorBody returns the raw body from the most recent non-2xx response.
+func (t *ErrorBodyTransport) LastErrorBody() []byte {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if len(t.body) == 0 {
+		return nil
+	}
+	cp := make([]byte, len(t.body))
+	copy(cp, t.body)
+	return cp
+}
+
 // NewChatModel creates an eino ToolCallingChatModel from config.
 // Selects the backend based on cfg.LLMProvider.
-func NewChatModel(ctx context.Context, cfg *config.Config) (model.ToolCallingChatModel, error) {
+// Returns the model and an ErrorBodyTransport that captures raw error responses.
+func NewChatModel(ctx context.Context, cfg *config.Config) (model.ToolCallingChatModel, *ErrorBodyTransport, error) {
 	if cfg.LLMBaseURL == "" && cfg.LLMProvider != string(config.ProviderOpenRouter) {
-		return nil, fmt.Errorf("llm_base_url is required")
+		return nil, nil, fmt.Errorf("llm_base_url is required")
 	}
 	if cfg.LLMModel == "" {
-		return nil, fmt.Errorf("llm_model is required")
+		return nil, nil, fmt.Errorf("llm_model is required")
 	}
+	transport := &ErrorBodyTransport{}
+	httpClient := &http.Client{Transport: transport}
 	switch config.Provider(cfg.LLMProvider) {
 	case config.ProviderOpenRouter:
-		return einoopenrouter.NewChatModel(ctx, &einoopenrouter.Config{
-			APIKey:  cfg.LLMAPIKey,
-			BaseURL: cfg.LLMBaseURL, // empty = default openrouter endpoint
-			Model:   cfg.LLMModel,
+		m, err := einoopenrouter.NewChatModel(ctx, &einoopenrouter.Config{
+			APIKey:     cfg.LLMAPIKey,
+			BaseURL:    cfg.LLMBaseURL,
+			Model:      cfg.LLMModel,
+			HTTPClient: httpClient,
 		})
+		return m, transport, err
 	default: // openai-compatible
-		return einoopenai.NewChatModel(ctx, &einoopenai.ChatModelConfig{
-			BaseURL: cfg.LLMBaseURL,
-			APIKey:  cfg.LLMAPIKey,
-			Model:   cfg.LLMModel,
+		m, err := einoopenai.NewChatModel(ctx, &einoopenai.ChatModelConfig{
+			BaseURL:    cfg.LLMBaseURL,
+			APIKey:     cfg.LLMAPIKey,
+			Model:      cfg.LLMModel,
+			HTTPClient: httpClient,
 		})
+		return m, transport, err
 	}
 }
 
@@ -69,7 +127,7 @@ func NewSummarizer(ctx context.Context, cfg *config.Config) (Summarizer, error) 
 	if cfg.LLMModel == "" {
 		return nil, nil
 	}
-	m, err := NewChatModel(ctx, cfg)
+	m, _, err := NewChatModel(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("new summarizer model: %w", err)
 	}

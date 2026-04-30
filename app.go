@@ -23,6 +23,7 @@ import (
 	"unicode"
 
 	chromem "github.com/philippgille/chromem-go"
+	openai "github.com/meguminnnnnnnnn/go-openai"
 	"github.com/cloudwego/eino/schema"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -72,6 +73,7 @@ type App struct {
 	isChatVisible   bool               // tracks whether the chat panel is open; guarded by mu
 	proactiveEngine *proactive.ProactiveEngine
 	mcpClosers      []io.Closer // guarded by mu; closed and rebuilt on initLLMComponents
+	llmTransport    *llm.ErrorBodyTransport // captures raw error bodies from the active LLM HTTP client; guarded by mu
 	runningCmds     sync.Map
 	pendingConfirms sync.Map
 	watcherWG       sync.WaitGroup  // tracks background watchers started in startup
@@ -286,7 +288,7 @@ func (a *App) ChatDirect(ctx context.Context, prompt string) error {
 	ch := ag.ChatDirect(ctx, prompt)
 	for r := range ch {
 		if r.Err != nil {
-			wailsruntime.EventsEmit(a.ctx, "chat:error", r.Err.Error())
+			wailsruntime.EventsEmit(a.ctx, "chat:error", a.formatChatError(r.Err))
 			wailsruntime.EventsEmit(a.ctx, "chat:done", nil)
 			return r.Err
 		}
@@ -418,26 +420,31 @@ func (a *App) startup(ctx context.Context) {
 // initLLMComponents initializes chat model, embedder, memory stores, skills, and agent.
 // Callers must NOT hold mu when calling this function.
 func (a *App) initLLMComponents(ctx context.Context) error {
+	a.mu.RLock()
+	cfgSnapshot := *a.cfg
+	a.mu.RUnlock()
+	cfg := &cfgSnapshot
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("get home dir: %w", err)
 	}
 	dataDir := filepath.Join(home, ".aiko")
 
-	chatModel, err := llm.NewChatModel(ctx, a.cfg)
+	chatModel, transport, err := llm.NewChatModel(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("new chat model: %w", err)
 	}
 
 	// Create optional summarizer.
-	summarizer, err := llm.NewSummarizer(ctx, a.cfg)
+	summarizer, err := llm.NewSummarizer(ctx, cfg)
 	if err != nil {
 		// Non-fatal: proceed without summarization.
 		slog.Warn("summarizer init failed, continuing without summarization", "err", err)
 		summarizer = nil
 	}
 
-	embedder, err := llm.NewEmbedder(ctx, a.cfg)
+	embedder, err := llm.NewEmbedder(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("new embedder: %w", err)
 	}
@@ -524,7 +531,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 
 	// Build skill middleware from configured directories.
 	autoSkillsDir := filepath.Join(dataDir, "auto-skills")
-	skillDirs := append(append([]string{}, a.cfg.SkillsDirs...), autoSkillsDir)
+	skillDirs := append(append([]string{}, cfg.SkillsDirs...), autoSkillsDir)
 	skillMW, err := skill.NewMiddleware(ctx, skillDirs)
 	if err != nil {
 		return fmt.Errorf("load skills: %w", err)
@@ -562,6 +569,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	a.longMem = longMem
 	a.knowledgeSt = knowledgeSt
 	a.petAgent = newAgent
+	a.llmTransport = transport
 	// 只在 backend 或模型目录变化时重建 TTS 实例。
 	newKey := a.cfg.TTSBackend + "|" + a.cfg.TTSModelDir
 	if a.ttsSpeaker == nil || newKey != a.ttsBackendKey {
@@ -629,6 +637,8 @@ func (a *App) SaveConfig(cfg *config.Config) error {
 
 	if err := a.initLLMComponents(a.ctx); err != nil {
 		slog.Warn("SaveConfig: LLM reinit skipped", "err", err)
+	} else {
+		wailsruntime.EventsEmit(a.ctx, "config:model:changed", nil)
 	}
 	return nil
 }
@@ -649,8 +659,17 @@ func (a *App) SaveModelProfile(p config.ModelProfile) (config.ModelProfile, erro
 	if err := a.profileStore.Save(&p); err != nil {
 		return p, err
 	}
-	// Sync cfg when saving the active profile, so voice/speed/backend changes apply immediately.
+	// Sync cfg when saving the active profile, so changes apply immediately.
 	if p.ID == activeID {
+		a.mu.RLock()
+		oldBaseURL := a.cfg.LLMBaseURL
+		oldAPIKey := a.cfg.LLMAPIKey
+		oldModel := a.cfg.LLMModel
+		oldProvider := string(a.cfg.LLMProvider)
+		a.mu.RUnlock()
+
+		llmChanged := p.BaseURL != oldBaseURL || p.APIKey != oldAPIKey || p.Model != oldModel || string(p.Provider) != oldProvider
+
 		a.mu.Lock()
 		a.cfg.ApplyProfile(&p)
 		slog.Info("SaveModelProfile: applied to cfg", "voice", a.cfg.TTSVoice)
@@ -663,6 +682,14 @@ func (a *App) SaveModelProfile(p config.ModelProfile) (config.ModelProfile, erro
 			slog.Info("SaveModelProfile: tts rebuilt", "type", fmt.Sprintf("%T", a.ttsSpeaker))
 		}
 		a.mu.Unlock()
+
+		if llmChanged {
+			if err := a.initLLMComponents(a.ctx); err != nil {
+				slog.Warn("SaveModelProfile: LLM reinit skipped", "err", err)
+			} else {
+				wailsruntime.EventsEmit(a.ctx, "config:model:changed", nil)
+			}
+		}
 	}
 	return p, nil
 }
@@ -689,7 +716,11 @@ func (a *App) ActivateModelProfile(id int64) error {
 	if err := a.configStore.Save(&cfgCopy); err != nil {
 		return err
 	}
-	return a.initLLMComponents(a.ctx)
+	if err := a.initLLMComponents(a.ctx); err != nil {
+		return err
+	}
+	wailsruntime.EventsEmit(a.ctx, "config:model:changed", nil)
+	return nil
 }
 
 // GetBallPosition returns the saved ball [x, y] for the given screen resolution,
@@ -934,7 +965,7 @@ func (a *App) SendMessage(userInput string) error {
 				if errors.Is(result.Err, context.Canceled) {
 					return
 				}
-				wailsruntime.EventsEmit(a.ctx, "chat:error", result.Err.Error())
+				wailsruntime.EventsEmit(a.ctx, "chat:error", a.formatChatError(result.Err))
 				return
 			}
 			if result.Done {
@@ -1022,7 +1053,7 @@ func (a *App) SendMessageWithImages(userInput string, images []string) error {
 				if errors.Is(result.Err, context.Canceled) {
 					return
 				}
-				wailsruntime.EventsEmit(a.ctx, "chat:error", result.Err.Error())
+				wailsruntime.EventsEmit(a.ctx, "chat:error", a.formatChatError(result.Err))
 				return
 			}
 			if result.Done {
@@ -1122,7 +1153,7 @@ func (a *App) SendMessageWithFiles(userInput string, images []string, files []Fi
 				if errors.Is(result.Err, context.Canceled) {
 					return
 				}
-				wailsruntime.EventsEmit(a.ctx, "chat:error", result.Err.Error())
+				wailsruntime.EventsEmit(a.ctx, "chat:error", a.formatChatError(result.Err))
 				return
 			}
 			if result.Done {
@@ -1752,6 +1783,39 @@ func (a *App) PingLLM() int64 {
 	}
 	resp.Body.Close()
 	return elapsed
+}
+
+// formatChatError extracts the richest available error message from an LLM
+// provider error. It appends APIError.Type/Code when present, and falls back
+// to the raw HTTP response body captured by llmTransport (useful for OpenRouter
+// errors that embed the upstream provider detail in error.metadata.raw).
+func (a *App) formatChatError(err error) string {
+	var apiErr *openai.APIError
+	if errors.As(err, &apiErr) {
+		msg := apiErr.Error()
+		var extras []string
+		if apiErr.Type != "" {
+			extras = append(extras, "type: "+apiErr.Type)
+		}
+		if apiErr.Code != nil {
+			extras = append(extras, fmt.Sprintf("code: %v", apiErr.Code))
+		}
+		// Append raw body from the transport — it may contain OpenRouter's
+		// error.metadata.raw with the actual upstream provider error.
+		a.mu.RLock()
+		t := a.llmTransport
+		a.mu.RUnlock()
+		if t != nil {
+			if raw := t.LastErrorBody(); len(raw) > 0 {
+				extras = append(extras, "body: "+string(raw))
+			}
+		}
+		if len(extras) > 0 {
+			msg += "\n" + strings.Join(extras, "\n")
+		}
+		return msg
+	}
+	return err.Error()
 }
 
 // stripNonSpeech removes emoji and kaomoji from text before TTS synthesis.

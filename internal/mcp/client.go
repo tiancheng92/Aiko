@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"regexp"
 	"strings"
 
 	json "github.com/bytedance/sonic"
@@ -15,6 +16,22 @@ import (
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 )
+
+// geminiNameRe matches characters that Gemini does not allow in function names.
+// Gemini allows: a-z, A-Z, 0-9, _, ., :, -  (max 128 chars).
+var geminiNameRe = regexp.MustCompile(`[^a-zA-Z0-9_.:\-]`)
+
+// sanitizeName converts a raw tool name into one acceptable by Gemini's API.
+func sanitizeName(raw string) string {
+	s := geminiNameRe.ReplaceAllString(raw, "_")
+	if len(s) > 0 && s[0] >= '0' && s[0] <= '9' {
+		s = "_" + s
+	}
+	if len(s) > 128 {
+		s = s[:128]
+	}
+	return s
+}
 
 // LoadTools connects to all enabled MCP servers and returns their tools as eino BaseTool slice.
 // Servers that fail to connect are logged and skipped (non-fatal).
@@ -131,9 +148,10 @@ type mcpToolAdapter struct {
 	toolDef    mcp.Tool
 }
 
-// qualifiedName returns "{serverName}__{toolName}" to avoid collisions.
+// qualifiedName returns a sanitized "{serverName}__{toolName}" that is safe
+// for all LLM APIs including Gemini (alphanumeric, _, ., :, - only, max 128).
 func (a *mcpToolAdapter) qualifiedName() string {
-	return a.serverName + "__" + a.toolDef.Name
+	return sanitizeName(a.serverName + "__" + a.toolDef.Name)
 }
 
 // Info returns the tool's schema information for eino.
@@ -192,6 +210,13 @@ func jsonSchemaPropToEinoParam(prop map[string]any, required bool) *schema.Param
 		info.Type = schema.Boolean
 	case "array":
 		info.Type = schema.Array
+		// Gemini requires items to be present for array parameters.
+		// Extract from the "items" sub-schema if available; default to string.
+		if itemsProp, ok := prop["items"].(map[string]any); ok {
+			info.ElemInfo = jsonSchemaPropToEinoParam(itemsProp, false)
+		} else {
+			info.ElemInfo = &schema.ParameterInfo{Type: schema.String}
+		}
 	case "object":
 		info.Type = schema.Object
 	default:
