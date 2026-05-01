@@ -527,18 +527,29 @@ static void stopVoiceRecognition() {
 }
 
 // enableClickThrough sets the window to ignore mouse events by default,
+// findScrollViewInView performs a bounded-depth BFS search in |root|'s view
+// hierarchy and returns the first NSScrollView found, or nil.
+// Depth 4 is enough for the two-level WKLayerHostingScrollView inside WKWebView.
+static NSScrollView *findScrollViewInView(NSView *root, int maxDepth) {
+    if (!root || maxDepth <= 0) return nil;
+    if ([root isKindOfClass:[NSScrollView class]]) return (NSScrollView *)root;
+    for (NSView *sub in root.subviews) {
+        NSScrollView *found = findScrollViewInView(sub, maxDepth - 1);
+        if (found) return found;
+    }
+    return nil;
+}
+
 // doHideNativeScrollbars must be called on the main thread.
 // It disables the native macOS overlay scrollbar that WKWebView renders on hover.
-// Tries enclosingScrollView first; falls back to the private _scrollView KVC key
-// for the common Wails layout where WKWebView is the direct window content view
-// (no outer NSScrollView wrapper), in which case enclosingScrollView returns nil.
+// In compiled Wails builds, WKWebView is the window's direct contentView (no outer
+// NSScrollView), so enclosingScrollView always returns nil. We locate the internal
+// NSScrollView by traversing WKWebView's subview tree — reliable across macOS 13-26
+// without relying on the private _scrollView KVC key.
 static void doHideNativeScrollbars() {
     if (!gWebView) return;
     NSScrollView *sv = (NSScrollView *)[gWebView enclosingScrollView];
-    if (!sv) {
-        @try { sv = (NSScrollView *)[gWebView valueForKey:@"_scrollView"]; }
-        @catch (...) {}
-    }
+    if (!sv) sv = findScrollViewInView(gWebView, 5);
     if (!sv) return;
     [sv setHasVerticalScroller:NO];
     [sv setHasHorizontalScroller:NO];
