@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 
 	json "github.com/bytedance/sonic"
 	"github.com/cloudwego/eino/components/tool"
@@ -31,6 +33,57 @@ func sanitizeName(raw string) string {
 		s = s[:128]
 	}
 	return s
+}
+
+// LoadToolsAsync connects to all enabled MCP servers concurrently and calls done when finished.
+// Each server runs in its own goroutine; servers that fail are logged and skipped.
+// If perServerTimeout > 0, each server gets an individual deadline.
+// The done callback is always called exactly once, even if no servers are configured.
+// The caller owns the returned closers and must Close them when the tool set is replaced.
+func LoadToolsAsync(ctx context.Context, store *ServerStore, perServerTimeout time.Duration, done func([]tool.BaseTool, []io.Closer)) {
+	go func() {
+		cfgs, err := store.List(ctx)
+		if err != nil {
+			slog.Error("LoadToolsAsync: failed to list mcp_servers", "err", err)
+			done(nil, nil)
+			return
+		}
+
+		var mu sync.Mutex
+		var tools []tool.BaseTool
+		var closers []io.Closer
+
+		var wg sync.WaitGroup
+		for _, cfg := range cfgs {
+			if !cfg.Enabled {
+				continue
+			}
+			wg.Add(1)
+			go func(cfg ServerConfig) {
+				defer wg.Done()
+				sctx := ctx
+				if perServerTimeout > 0 {
+					var cancel context.CancelFunc
+					sctx, cancel = context.WithTimeout(ctx, perServerTimeout)
+					defer cancel()
+				}
+				serverTools, client, err := connectAndDiscover(sctx, cfg)
+				if err != nil {
+					slog.Warn("mcp server connect failed, skipping", "server", cfg.Name, "err", err)
+					return
+				}
+				slog.Info("mcp server connected", "server", cfg.Name, "tools", len(serverTools))
+				mu.Lock()
+				tools = append(tools, serverTools...)
+				if client != nil {
+					closers = append(closers, client)
+				}
+				mu.Unlock()
+			}(cfg)
+		}
+		wg.Wait()
+		done(tools, closers)
+	}()
 }
 
 // LoadTools connects to all enabled MCP servers and returns their tools as eino BaseTool slice.

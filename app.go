@@ -19,11 +19,14 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 
 	chromem "github.com/philippgille/chromem-go"
 	openai "github.com/meguminnnnnnnnn/go-openai"
+	"github.com/cloudwego/eino/components/model"
+	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -74,6 +77,8 @@ type App struct {
 	proactiveEngine *proactive.ProactiveEngine
 	mcpClosers      []io.Closer // guarded by mu; closed and rebuilt on initLLMComponents
 	llmTransport    *llm.ErrorBodyTransport // captures raw error bodies from the active LLM HTTP client; guarded by mu
+	chatModel       model.ToolCallingChatModel // current chat model; guarded by mu; reused by rebuildAgentTools
+	rebuildGen      atomic.Int64              // incremented on each initLLMComponents; guards stale async MCP results
 	runningCmds     sync.Map
 	pendingConfirms sync.Map
 	watcherWG       sync.WaitGroup  // tracks background watchers started in startup
@@ -522,11 +527,10 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 			wailsruntime.EventsEmit(a.ctx, "tool:executed", map[string]interface{}{"id": id})
 		},
 	)
-	mcpTools, mcpClosers := mcp.LoadTools(ctx, a.mcpStore)
 	proactiveStore := proactive.NewStore(a.sqlDB)
 	followupTool := internaltools.ToEino(proactive.NewScheduleFollowupTool(proactiveStore), a.permStore)
+	// MCP tools are loaded asynchronously after the agent is online (see below).
 	allTools := append(builtinTools, contextTools...)
-	allTools = append(allTools, mcpTools...)
 	allTools = append(allTools, followupTool)
 
 	// Build skill middleware from configured directories.
@@ -561,15 +565,15 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	if a.proactiveEngine != nil {
 		a.proactiveEngine.Stop()
 	}
-	// Swap MCP closers: capture the old list so we can close it outside the
-	// lock (Close may block on stdio subprocess teardown).
+	// Swap MCP closers: close old connections, leave new list empty until async load finishes.
 	oldClosers := a.mcpClosers
-	a.mcpClosers = mcpClosers
+	a.mcpClosers = nil
 	a.scheduler = sched
 	a.longMem = longMem
 	a.knowledgeSt = knowledgeSt
 	a.petAgent = newAgent
 	a.llmTransport = transport
+	a.chatModel = chatModel
 	// 只在 backend 或模型目录变化时重建 TTS 实例。
 	newKey := a.cfg.TTSBackend + "|" + a.cfg.TTSModelDir
 	if a.ttsSpeaker == nil || newKey != a.ttsBackendKey {
@@ -578,6 +582,8 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	}
 	engine := proactive.NewEngine(a, proactiveStore)
 	a.proactiveEngine = engine
+	// Capture the current generation so the async MCP callback can detect stale results.
+	gen := a.rebuildGen.Add(1)
 	a.mu.Unlock()
 
 	for _, c := range oldClosers {
@@ -592,6 +598,138 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		slog.Error("scheduler start failed", "err", err)
 	}
 	engine.Start(a.ctx)
+
+	// Phase 2: connect MCP servers in the background and inject their tools into the agent.
+	// Each server gets 30 s; the done callback is always called exactly once.
+	mcp.LoadToolsAsync(a.ctx, a.mcpStore, 30*time.Second, func(mcpTools []tool.BaseTool, closers []io.Closer) {
+		// If initLLMComponents was called again while we were connecting, discard stale results.
+		if a.rebuildGen.Load() != gen {
+			for _, c := range closers {
+				_ = c.Close()
+			}
+			slog.Info("mcp async load: discarding stale results (gen mismatch)")
+			return
+		}
+		if len(mcpTools) == 0 {
+			return
+		}
+		if err := a.rebuildAgentTools(a.ctx, mcpTools, closers); err != nil {
+			slog.Error("mcp async load: rebuildAgentTools failed", "err", err)
+			for _, c := range closers {
+				_ = c.Close()
+			}
+			return
+		}
+		wailsruntime.EventsEmit(a.ctx, "mcp:ready", map[string]any{"count": len(mcpTools)})
+		slog.Info("mcp async load: agent rebuilt with mcp tools", "count", len(mcpTools))
+	})
+	return nil
+}
+
+// rebuildAgentTools rebuilds the eino Agent using the current chatModel / longMem / scheduler
+// plus the provided MCP tools, then atomically swaps a.petAgent and a.mcpClosers.
+// It is called from the async MCP-load goroutine after all MCP servers have connected.
+// Callers must NOT hold a.mu when calling this function.
+func (a *App) rebuildAgentTools(ctx context.Context, mcpTools []tool.BaseTool, closers []io.Closer) error {
+	// Snapshot the stable components under RLock.
+	a.mu.RLock()
+	chatModel := a.chatModel
+	longMem := a.longMem
+	knowledgeSt := a.knowledgeSt
+	sched := a.scheduler
+	a.mu.RUnlock()
+
+	if chatModel == nil {
+		return fmt.Errorf("rebuildAgentTools: chatModel not initialised")
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("get home dir: %w", err)
+	}
+	dataDir := filepath.Join(home, ".aiko")
+
+	builtinTools := internaltools.AllEino(a.permStore)
+	chatFn := func(ctx context.Context, prompt string) (string, error) {
+		a.mu.RLock()
+		ag := a.petAgent
+		a.mu.RUnlock()
+		if ag == nil {
+			return "", fmt.Errorf("agent not ready")
+		}
+		ch := ag.ChatDirect(ctx, prompt)
+		var sb strings.Builder
+		for r := range ch {
+			if r.Err != nil {
+				return "", r.Err
+			}
+			if r.Done {
+				break
+			}
+			sb.WriteString(r.Token)
+		}
+		return sb.String(), nil
+	}
+	contextTools := internaltools.AllContextual(
+		a.permStore,
+		knowledgeSt,
+		sched,
+		longMem,
+		dataDir,
+		a.cfg,
+		func(id string, cancel func()) {
+			a.runningCmds.Store(id, cancel)
+			wailsruntime.EventsEmit(a.ctx, "tool:executing", map[string]any{"id": id})
+		},
+		func(id string) {
+			a.runningCmds.Delete(id)
+			wailsruntime.EventsEmit(a.ctx, "tool:executed", map[string]any{"id": id})
+		},
+	)
+	proactiveStore := proactive.NewStore(a.sqlDB)
+	followupTool := internaltools.ToEino(proactive.NewScheduleFollowupTool(proactiveStore), a.permStore)
+	allTools := append(builtinTools, contextTools...)
+	allTools = append(allTools, mcpTools...)
+	allTools = append(allTools, followupTool)
+
+	autoSkillsDir := filepath.Join(dataDir, "auto-skills")
+	a.mu.RLock()
+	cfgSnapshot := *a.cfg
+	a.mu.RUnlock()
+	skillDirs := append(append([]string{}, cfgSnapshot.SkillsDirs...), autoSkillsDir)
+	skillMW, err := skill.NewMiddleware(ctx, skillDirs)
+	if err != nil {
+		return fmt.Errorf("load skills: %w", err)
+	}
+
+	mw := middleware.Chain(
+		middleware.Logging(),
+		middleware.Retry(3, 200*time.Millisecond),
+		middleware.ErrorRecovery(),
+	)
+
+	newAgent, err := agent.New(ctx, chatModel, a.shortMem, longMem, allTools, a.cfg, mw, skillMW, dataDir,
+		&a.pendingConfirms,
+		func(event string, data ...any) {
+			wailsruntime.EventsEmit(a.ctx, event, data...)
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("new agent: %w", err)
+	}
+	_ = chatFn // used above via contextTools closure
+
+	a.mu.Lock()
+	oldClosers := a.mcpClosers
+	a.mcpClosers = closers
+	a.petAgent = newAgent
+	a.mu.Unlock()
+
+	for _, c := range oldClosers {
+		if err := c.Close(); err != nil {
+			slog.Warn("mcp client close failed on mcp inject", "err", err)
+		}
+	}
 	return nil
 }
 
