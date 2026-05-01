@@ -1501,6 +1501,9 @@ func (a *App) ListMCPServers() ([]mcp.ServerConfig, error) {
 // so macOS will show proper permission dialogs instead of silent banners.
 func (a *App) domReady(_ context.Context) {
 	requestPermissionsEarly()
+	// Re-apply scrollbar suppression after DOM is ready — WKWebView's internal
+	// scroll view may not exist yet during startup(), so we call it again here.
+	hideNativeScrollbars()
 }
 
 func (a *App) shutdown(_ context.Context) {

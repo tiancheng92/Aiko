@@ -527,6 +527,29 @@ static void stopVoiceRecognition() {
 }
 
 // enableClickThrough sets the window to ignore mouse events by default,
+// doHideNativeScrollbars must be called on the main thread.
+// It disables the native macOS overlay scrollbar that WKWebView renders on hover.
+// Tries enclosingScrollView first; falls back to the private _scrollView KVC key
+// for the common Wails layout where WKWebView is the direct window content view
+// (no outer NSScrollView wrapper), in which case enclosingScrollView returns nil.
+static void doHideNativeScrollbars() {
+    if (!gWebView) return;
+    NSScrollView *sv = (NSScrollView *)[gWebView enclosingScrollView];
+    if (!sv) {
+        @try { sv = (NSScrollView *)[gWebView valueForKey:@"_scrollView"]; }
+        @catch (...) {}
+    }
+    if (!sv) return;
+    [sv setHasVerticalScroller:NO];
+    [sv setHasHorizontalScroller:NO];
+}
+
+// hideNativeScrollbarsC dispatches doHideNativeScrollbars to the main queue.
+// Safe to call from any thread (e.g. from Go's domReady callback).
+static void hideNativeScrollbarsC() {
+    dispatch_async(dispatch_get_main_queue(), ^{ doHideNativeScrollbars(); });
+}
+
 // then installs global and local NSEvent monitors so that the window
 // temporarily accepts events only when the cursor is over interactive elements.
 //
@@ -543,16 +566,7 @@ static void enableClickThrough() {
         }
         if (!gWindow || !gWebView) return;
 
-        // Disable the native overlay scrollbar that WKWebView's enclosing NSScrollView
-        // renders on mouse hover. setHidden:YES is not persistent — NSScrollerKnobStyle
-        // animations restore visibility on each hover. Removing the scrollers entirely
-        // via hasVerticalScroller/hasHorizontalScroller is the only reliable approach;
-        // WKWebView drives its own page scrolling through WebCore so this is safe.
-        NSScrollView *sv = (NSScrollView *)[gWebView enclosingScrollView];
-        if (sv) {
-            [sv setHasVerticalScroller:NO];
-            [sv setHasHorizontalScroller:NO];
-        }
+        doHideNativeScrollbars();
 
         // Remove system shadow and ensure the window is transparent so no border rendering occurs.
         [gWindow setHasShadow:NO];
@@ -622,6 +636,14 @@ func enableClickThrough() {
 // so macOS shows a proper alert dialog while the app is still in the foreground.
 func requestPermissionsEarly() {
 	C.requestPermissionsEarly()
+}
+
+// hideNativeScrollbars disables the native macOS overlay scrollbar inside
+// WKWebView. It is safe to call from any goroutine; it dispatches to the main
+// queue internally. Call it again from domReady to cover the case where the
+// WKWebView scroll view is not yet initialized during startup.
+func hideNativeScrollbars() {
+	C.hideNativeScrollbarsC()
 }
 
 // registerGlobalHotkey creates a pipe, passes the write-end to the ObjC monitor,
