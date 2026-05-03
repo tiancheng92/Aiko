@@ -8,7 +8,9 @@ DMG     := $(shell pwd)/build/bin/Aiko-$(VERSION).dmg
 ## build: compile and sign Aiko.app with local self-signed cert (stable csreq = persistent TCC permissions)
 build:
 	wails build -trimpath -ldflags="-s -w"
-	codesign --force --deep --sign "Aiko" --identifier "com.xutiancheng.aiko" $(APP)
+	codesign --force --sign "Aiko" --identifier "com.xutiancheng.aiko" \
+		--entitlements build/darwin/Aiko.entitlements $(APP)
+	@test -f "$(BINARY)" || (echo "❌ Binary missing, aborting install"; exit 1)
 	rsync -a --delete $(APP)/ /Applications/Aiko.app/
 	xattr -cr /Applications/Aiko.app
 	@echo "✅ Build complete: $(APP)"
