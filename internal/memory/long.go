@@ -44,6 +44,15 @@ func (l *LongStore) Store(ctx context.Context, text string) error {
 	col := l.col
 	l.mu.RUnlock()
 
+	// Deduplication: skip if a near-identical raw vector already exists.
+	// This prevents the same fact from accumulating across conversations.
+	if col.Count() > 0 {
+		dupes, err := col.Query(ctx, text, 1, map[string]string{"type": "raw"}, nil)
+		if err == nil && len(dupes) > 0 && dupes[0].Similarity > 0.92 {
+			return nil
+		}
+	}
+
 	id := uuid.NewString()
 	now := time.Now()
 
@@ -98,6 +107,50 @@ func (l *LongStore) Store(ctx context.Context, text string) error {
 	return nil
 }
 
+// timeDecayScore blends a chromem similarity score with a 30-day half-life
+// time-decay factor: 70% semantic + 30% recency.
+func timeDecayScore(r chromem.Result, now float64) float32 {
+	const halfLifeSecs = 30.0 * 86400
+	var createdAt float64
+	if ts := r.Metadata["created_at"]; ts != "" {
+		if v, err := strconv.ParseFloat(ts, 64); err == nil {
+			createdAt = v
+		}
+	}
+	decay := 1.0
+	if createdAt > 0 {
+		if delta := now - createdAt; delta > 0 {
+			decay = math.Exp(-0.693147 * delta / halfLifeSecs)
+		}
+	}
+	return float32(float64(r.Similarity)*0.7 + decay*0.3)
+}
+
+// decayRank re-ranks a slice of chromem results by timeDecayScore and returns
+// the top-k content strings. No deduplication is performed.
+func decayRank(results []chromem.Result, k int) []string {
+	type scored struct {
+		content string
+		score   float32
+	}
+	now := float64(time.Now().Unix())
+	candidates := make([]scored, 0, len(results))
+	for _, r := range results {
+		candidates = append(candidates, scored{content: r.Content, score: timeDecayScore(r, now)})
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].score > candidates[j].score
+	})
+	out := make([]string, 0, k)
+	for i, c := range candidates {
+		if i >= k {
+			break
+		}
+		out = append(out, c.content)
+	}
+	return out
+}
+
 // Search returns the top-k most relevant memory blocks for the query,
 // re-ranked by a time-decay factor that boosts recent memories.
 func (l *LongStore) Search(ctx context.Context, query string, k int) ([]string, error) {
@@ -122,9 +175,6 @@ func (l *LongStore) Search(ctx context.Context, query string, k int) ([]string, 
 	}
 
 	now := float64(time.Now().Unix())
-	const halfLifeDays = 30.0
-	halfLifeSecs := halfLifeDays * 86400
-
 	var candidates []scored
 	seen := make(map[string]bool) // deduplicate by raw_id
 	for _, r := range results {
@@ -135,26 +185,7 @@ func (l *LongStore) Search(ctx context.Context, query string, k int) ([]string, 
 			}
 			seen[rawID] = true
 		}
-
-		// Parse stored timestamp for time-decay.
-		var createdAt float64
-		if ts := r.Metadata["created_at"]; ts != "" {
-			if v, err := strconv.ParseFloat(ts, 64); err == nil {
-				createdAt = v
-			}
-		}
-
-		// Time-decay: e^(-λ·Δt), λ = ln2 / halfLife
-		var decay float64 = 1.0
-		if createdAt > 0 {
-			delta := now - createdAt
-			if delta > 0 {
-				decay = math.Exp(-0.693147 * delta / halfLifeSecs)
-			}
-		}
-		// Blend: 70% semantic + 30% recency.
-		blended := float32(float64(r.Similarity)*0.7 + decay*0.3)
-		candidates = append(candidates, scored{content: r.Content, score: blended})
+		candidates = append(candidates, scored{content: r.Content, score: timeDecayScore(r, now)})
 	}
 
 	// Sort by blended score descending.
@@ -195,32 +226,28 @@ func (l *LongStore) SearchSplit(ctx context.Context, query string, k int) (Memor
 	var mu sync.Mutex
 	g, gctx := errgroup.WithContext(ctx)
 
+	// Fetch k*2 candidates per type to allow time-decay re-ranking before
+	// taking the final top-k.
+	fetch := min(k*2, col.Count())
+
 	g.Go(func() error {
-		results, err := col.Query(gctx, query, k, map[string]string{"type": "summary"}, nil)
+		results, err := col.Query(gctx, query, fetch, map[string]string{"type": "summary"}, nil)
 		if err != nil {
 			return err
 		}
-		summaries := make([]string, 0, len(results))
-		for _, r := range results {
-			summaries = append(summaries, r.Content)
-		}
 		mu.Lock()
-		res.Summaries = summaries
+		res.Summaries = decayRank(results, k)
 		mu.Unlock()
 		return nil
 	})
 
 	g.Go(func() error {
-		results, err := col.Query(gctx, query, k, map[string]string{"type": "raw"}, nil)
+		results, err := col.Query(gctx, query, fetch, map[string]string{"type": "raw"}, nil)
 		if err != nil {
 			return err
 		}
-		raws := make([]string, 0, len(results))
-		for _, r := range results {
-			raws = append(raws, r.Content)
-		}
 		mu.Lock()
-		res.Raws = raws
+		res.Raws = decayRank(results, k)
 		mu.Unlock()
 		return nil
 	})

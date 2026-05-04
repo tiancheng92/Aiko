@@ -564,7 +564,7 @@ func (a *Agent) buildContext(ctx context.Context, userInput string) ([]adk.Messa
 		if a.longMem == nil {
 			return nil
 		}
-		res, err := a.longMem.SearchSplit(gctx, userInput, 3)
+		res, err := a.longMem.SearchSplit(gctx, userInput, 5)
 		if err != nil {
 			slog.Warn("longMem.SearchSplit failed", "err", err)
 			return nil
@@ -611,20 +611,24 @@ func (a *Agent) buildContext(ctx context.Context, userInput string) ([]adk.Messa
 		ctxBuf.WriteString("\nUser Profile:\n")
 		ctxBuf.WriteString(profile)
 	}
-	if len(memResult.Summaries) > 0 {
-		ctxBuf.WriteString("\nRelevant memory summaries:\n")
-		for _, s := range memResult.Summaries {
-			ctxBuf.WriteString("- ")
-			ctxBuf.WriteString(s)
-			ctxBuf.WriteByte('\n')
+	if len(memResult.Summaries) > 0 || len(memResult.Raws) > 0 {
+		ctxBuf.WriteString("\n[Long-term memories — retrieved by semantic similarity; may be outdated. Use as background context, not as absolute truth.]\n")
+		if len(memResult.Summaries) > 0 {
+			ctxBuf.WriteString("Relevant memory summaries:\n")
+			for _, s := range memResult.Summaries {
+				ctxBuf.WriteString("- ")
+				ctxBuf.WriteString(s)
+				ctxBuf.WriteByte('\n')
+			}
 		}
-	}
-	if len(memResult.Raws) > 0 {
-		ctxBuf.WriteString("\nRelevant memory details:\n")
-		for _, r := range memResult.Raws {
-			ctxBuf.WriteString(r)
-			ctxBuf.WriteByte('\n')
+		if len(memResult.Raws) > 0 {
+			ctxBuf.WriteString("Relevant memory details:\n")
+			for _, r := range memResult.Raws {
+				ctxBuf.WriteString(r)
+				ctxBuf.WriteByte('\n')
+			}
 		}
+		ctxBuf.WriteString("[End of long-term memories]\n")
 	}
 	if ctxBuf.Len() > 0 {
 		msgs = append(msgs,
