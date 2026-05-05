@@ -27,17 +27,6 @@ import (
 	internaltools "aiko/internal/tools"
 )
 
-// nudgeText is appended to the user message every nudgeInterval turns to
-// prompt the agent to reflect and persist useful knowledge.
-const nudgeText = `
-[SELF-GROWTH NUDGE]
-请在本次回复前，回顾刚才的对话，考虑是否需要：
-1. 调用 save_memory 保存一条具体事实或偏好（一两句话，不需要摘要对话）
-2. 调用 update_user_profile 更新用户画像（发现了新的习惯/偏好/背景信息）
-3. 调用 save_skill 将本次解决的问题模式提炼为可复用技能
-如果都不需要，直接回复即可，无需解释。
-`
-
 // StreamResult is a single streamed token or a terminal signal.
 type StreamResult struct {
 	Token string
@@ -119,6 +108,11 @@ type Agent struct {
 	nudgeInterval   int                             // how often to trigger self-growth nudge
 	pendingConfirms *sync.Map                       // map[string]chan ToolConfirmResponse; bridged from App
 	emitEvent       func(event string, data ...any) // Wails EventsEmit
+
+	// self-growth
+	hasSkills     bool        // true if auto-skills/ directory has any *.md files at startup
+	lastSkillHint string      // set by SetSkillHint; cleared by shouldReflect
+	skillHintMu   sync.Mutex  // guards lastSkillHint
 }
 
 // New constructs an Agent with a ReAct runner backed by the given chat model,
@@ -189,6 +183,17 @@ func New(
 	if ni <= 0 {
 		ni = 5
 	}
+
+	skillsDir := filepath.Join(dataDir, "auto-skills")
+	entries, _ := os.ReadDir(skillsDir)
+	hasSkills := false
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
+			hasSkills = true
+			break
+		}
+	}
+
 	return &Agent{
 		runner:          runner,
 		shortMem:        shortMem,
@@ -198,7 +203,17 @@ func New(
 		nudgeInterval:   ni,
 		pendingConfirms: pendingConfirms,
 		emitEvent:       emitEvent,
+		hasSkills:       hasSkills,
 	}, nil
+}
+
+// SetSkillHint records that a skill was activated during this turn.
+// Called by the skill middleware after injecting a skill into the prompt.
+// The hint is consumed and cleared by shouldReflect after the reply.
+func (a *Agent) SetSkillHint(skillName string) {
+	a.skillHintMu.Lock()
+	defer a.skillHintMu.Unlock()
+	a.lastSkillHint = fmt.Sprintf("本次激活了 skill %q，回复结束后思考该 skill 是否需要更新。", skillName)
 }
 
 // Chat sends a user message to the agent and returns a channel that streams
@@ -223,10 +238,6 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 		}
 
 		content := userInput
-		if a.nudgeInterval > 0 && a.turnCount.Load() > 0 &&
-			a.turnCount.Load()%int64(a.nudgeInterval) == 0 {
-			content += "\n\n" + nudgeText
-		}
 
 		msgs := append(ctxMsgs, &schema.Message{Role: schema.User, Content: content})
 		checkpointID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
@@ -488,25 +499,7 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 			return
 		}
 
-		// Apply self-growth nudge if due (same logic as Chat).
 		sendMsg := msg
-		if a.nudgeInterval > 0 && a.turnCount.Load() > 0 &&
-			a.turnCount.Load()%int64(a.nudgeInterval) == 0 {
-			cp := *msg
-			if cp.Content != "" {
-				cp.Content += "\n\n" + nudgeText
-			} else {
-				// Multimodal message: append nudge as an extra text part.
-				parts := make([]schema.MessageInputPart, len(msg.UserInputMultiContent)+1)
-				copy(parts, msg.UserInputMultiContent)
-				parts[len(parts)-1] = schema.MessageInputPart{
-					Type: schema.ChatMessagePartTypeText,
-					Text: nudgeText,
-				}
-				cp.UserInputMultiContent = parts
-			}
-			sendMsg = &cp
-		}
 
 		msgs := append(ctxMsgs, sendMsg)
 		checkpointID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
