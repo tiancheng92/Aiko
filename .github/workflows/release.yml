@@ -13,16 +13,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "24"
           cache: "yarn"
@@ -40,7 +40,7 @@ jobs:
 
       - name: Cache create-dmg
         id: cache-create-dmg
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /usr/local/bin/create-dmg
           key: create-dmg-${{ runner.os }}
@@ -79,7 +79,7 @@ jobs:
             "build/bin/Aiko.app"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: build/bin/Aiko-*.dmg
           generate_release_notes: true
