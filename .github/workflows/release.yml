@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-macos:
-    runs-on: macos-latest
+    runs-on: macos-26
     permissions:
       contents: write   # needed to create GitHub Release and upload assets
 
@@ -25,29 +25,43 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "24"
+          cache: "yarn"
+          cache-dependency-path: frontend/yarn.lock
 
       - name: Enable Corepack (yarn)
         run: corepack enable
 
       - name: Install Wails
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
 
       - name: Install frontend deps
         working-directory: frontend
         run: yarn install --frozen-lockfile
 
+      - name: Cache create-dmg
+        id: cache-create-dmg
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/create-dmg
+          key: create-dmg-${{ runner.os }}
+
       - name: Install create-dmg
+        if: steps.cache-create-dmg.outputs.cache-hit != 'true'
         run: brew install create-dmg
 
       - name: Build Aiko.app
         run: wails build -trimpath -ldflags="-s -w"
 
-      # Ad-hoc sign — no Apple Developer account required.
+      # Ad-hoc sign with entitlements (network + microphone).
+      # Sign frameworks first, then the app bundle — avoids deprecated --deep flag.
       # Users must run `xattr -cr Aiko.app` after unzipping, or right-click → Open.
       - name: Sign app (ad-hoc)
         run: |
-          codesign --force --deep --sign - \
+          find build/bin/Aiko.app/Contents/Frameworks -name "*.framework" -o -name "*.dylib" 2>/dev/null | \
+            xargs -I{} codesign --force --sign - --identifier com.xutiancheng.aiko {}
+          codesign --force --sign - \
             --identifier com.xutiancheng.aiko \
+            --entitlements build/darwin/Aiko.entitlements \
             build/bin/Aiko.app
 
       - name: Package DMG

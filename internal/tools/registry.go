@@ -204,6 +204,8 @@ func (d namedPermDecl) Name() string { return d.Name_ }
 func (d namedPermDecl) Permission() PermissionLevel { return d.Perm_ }
 
 // AllContextual returns tools that require runtime dependencies injected at startup.
+// onSkillSaved is called asynchronously whenever save_skill writes a new file,
+// allowing the caller to hot-reload the skill middleware without a full restart.
 func AllContextual(
 	permStore *PermissionStore,
 	knowledgeSt *knowledge.Store,
@@ -213,6 +215,7 @@ func AllContextual(
 	cfg *config.Config,
 	registerCmd func(id string, cancel func()),
 	unregisterCmd func(id string),
+	onSkillSaved func(),
 ) []tool.BaseTool {
 	contextTools := []Tool{
 		&SearchKnowledgeTool{KnowledgeSt: knowledgeSt},
@@ -220,7 +223,7 @@ func AllContextual(
 		&SaveMemoryTool{LongMem: longMem},
 		&SearchMemoryTool{LongMem: longMem},
 		&UpdateUserProfileTool{DataDir: dataDir},
-		&SaveSkillTool{DataDir: dataDir},
+		&SaveSkillTool{DataDir: dataDir, OnSaved: onSkillSaved},
 		// File system tools
 		&ListDirectoryTool{Cfg: cfg},
 		&ReadFileTool{Cfg: cfg},

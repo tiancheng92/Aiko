@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
@@ -166,6 +167,9 @@ func (t *UpdateUserProfileTool) InvokableRun(_ context.Context, input string, _ 
 // SaveSkillTool writes a reusable skill file to ~/.aiko/auto-skills/<name>/SKILL.md.
 type SaveSkillTool struct {
 	DataDir string
+	// OnSaved is called asynchronously after a skill is successfully written.
+	// Used by app.go to trigger skill middleware hot-reload.
+	OnSaved func()
 }
 
 // Name returns the tool's stable identifier.
@@ -198,7 +202,8 @@ func (t *SaveSkillTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	), nil
 }
 
-// InvokableRun creates or overwrites ~/.aiko/auto-skills/<name>/SKILL.md.
+// InvokableRun creates or overwrites ~/.aiko/auto-skills/<name>/SKILL.md,
+// then calls OnSaved asynchronously so the caller can hot-reload the skill middleware.
 func (t *SaveSkillTool) InvokableRun(_ context.Context, input string, _ ...tool.Option) (string, error) {
 	args := parseArgs(input)
 	name, _ := args["name"].(string)
@@ -211,6 +216,9 @@ func (t *SaveSkillTool) InvokableRun(_ context.Context, input string, _ ...tool.
 	skillPath, err := writeSkillFile(t.DataDir, name, description, content)
 	if err != nil {
 		return "", fmt.Errorf("save skill: %w", err)
+	}
+	if t.OnSaved != nil {
+		go t.OnSaved()
 	}
 	return fmt.Sprintf("已保存技能文件：%s", skillPath), nil
 }
@@ -231,7 +239,7 @@ func upsertProfileLine(path, key, value string) (updated bool, err error) {
 	}
 
 	prefix := fmt.Sprintf("- %s:", key)
-	newLine := fmt.Sprintf("- %s: %s", key, value)
+	newLine := fmt.Sprintf("- %s: %s  (updated: %s)", key, value, time.Now().Format("2006-01-02"))
 	found := false
 	for i, line := range lines {
 		if strings.HasPrefix(line, prefix) {
@@ -263,6 +271,10 @@ func writeSkillFile(dataDir, name, description, content string) (string, error) 
 		return "", fmt.Errorf("mkdir auto-skills: %w", err)
 	}
 	skillPath := filepath.Join(dir, "SKILL.md")
+	// Back up the previous version before overwriting so Agent-driven updates are recoverable.
+	if data, err := os.ReadFile(skillPath); err == nil {
+		_ = os.WriteFile(skillPath+".bak", data, 0o644)
+	}
 	body := fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n\n%s\n", name, description, content)
 	if err := atomicWrite(skillPath, []byte(body)); err != nil {
 		return "", err

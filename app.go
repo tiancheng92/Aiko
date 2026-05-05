@@ -526,6 +526,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 			a.runningCmds.Delete(id)
 			wailsruntime.EventsEmit(a.ctx, "tool:executed", map[string]interface{}{"id": id})
 		},
+		func() { go a.initLLMComponents(a.ctx) },
 	)
 	proactiveStore := proactive.NewStore(a.sqlDB)
 	followupTool := internaltools.ToEino(proactive.NewScheduleFollowupTool(proactiveStore), a.permStore)
@@ -685,6 +686,7 @@ func (a *App) rebuildAgentTools(ctx context.Context, mcpTools []tool.BaseTool, c
 			a.runningCmds.Delete(id)
 			wailsruntime.EventsEmit(a.ctx, "tool:executed", map[string]any{"id": id})
 		},
+		func() { go a.initLLMComponents(a.ctx) },
 	)
 	proactiveStore := proactive.NewStore(a.sqlDB)
 	followupTool := internaltools.ToEino(proactive.NewScheduleFollowupTool(proactiveStore), a.permStore)
