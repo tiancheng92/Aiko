@@ -20,9 +20,9 @@ func (t *ListDirectoryTool) Permission() PermissionLevel { return PermProtected 
 
 // Info returns eino tool metadata.
 func (t *ListDirectoryTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "列出指定目录下的文件和子目录。",
+	return infoFromSchema(t.Name(), "列出目录下的文件和子目录（含大小、类型、修改时间）。仅限用户授权的白名单路径。",
 		map[string]*schema.ParameterInfo{
-			"path": {Type: schema.String, Desc: "要列出的目录路径", Required: true},
+			"path": {Type: schema.String, Desc: "目录的绝对路径", Required: true},
 		},
 	), nil
 }
@@ -38,9 +38,9 @@ func (t *ReadFileTool) Permission() PermissionLevel { return PermProtected }
 
 // Info returns eino tool metadata.
 func (t *ReadFileTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "读取文件的文本内容（UTF-8）。",
+	return infoFromSchema(t.Name(), "读取文件的 UTF-8 文本内容。大文件会截断返回。仅限白名单路径。",
 		map[string]*schema.ParameterInfo{
-			"path": {Type: schema.String, Desc: "文件路径", Required: true},
+			"path": {Type: schema.String, Desc: "文件的绝对路径", Required: true},
 		},
 	), nil
 }
@@ -56,11 +56,11 @@ func (t *WriteFileTool) Permission() PermissionLevel { return PermProtected }
 
 // Info returns eino tool metadata.
 func (t *WriteFileTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "将文本内容写入（或追加到）文件。",
+	return infoFromSchema(t.Name(), "将文本写入文件（覆盖或追加）；文件不存在时自动创建。仅限白名单路径。",
 		map[string]*schema.ParameterInfo{
-			"path":    {Type: schema.String, Desc: "文件路径", Required: true},
+			"path":    {Type: schema.String, Desc: "文件的绝对路径", Required: true},
 			"content": {Type: schema.String, Desc: "要写入的文本内容", Required: true},
-			"append":  {Type: schema.Boolean, Desc: "true 表示追加，false 表示覆盖（默认 false）", Required: false},
+			"append":  {Type: schema.Boolean, Desc: "true 表示追加到末尾，false 表示覆盖全文（默认 false）", Required: false},
 		},
 	), nil
 }
@@ -76,9 +76,9 @@ func (t *DeleteFileTool) Permission() PermissionLevel { return PermProtected }
 
 // Info returns eino tool metadata.
 func (t *DeleteFileTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "删除指定路径的文件。",
+	return infoFromSchema(t.Name(), "永久删除文件（不可恢复，请谨慎操作）。仅限白名单路径。",
 		map[string]*schema.ParameterInfo{
-			"path": {Type: schema.String, Desc: "要删除的文件路径", Required: true},
+			"path": {Type: schema.String, Desc: "要删除的文件绝对路径", Required: true},
 		},
 	), nil
 }
@@ -94,9 +94,9 @@ func (t *MakeDirectoryTool) Permission() PermissionLevel { return PermProtected 
 
 // Info returns eino tool metadata.
 func (t *MakeDirectoryTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "创建目录（包括所有必要的父目录）。",
+	return infoFromSchema(t.Name(), "创建目录（包括所有必要的父目录）。仅限白名单路径。",
 		map[string]*schema.ParameterInfo{
-			"path": {Type: schema.String, Desc: "要创建的目录路径", Required: true},
+			"path": {Type: schema.String, Desc: "要创建的目录绝对路径", Required: true},
 		},
 	), nil
 }
@@ -112,10 +112,10 @@ func (t *MoveFileTool) Permission() PermissionLevel { return PermProtected }
 
 // Info returns eino tool metadata.
 func (t *MoveFileTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "移动或重命名文件/目录。",
+	return infoFromSchema(t.Name(), "移动或重命名文件/目录（同一路径内改名也用此工具）。仅限白名单路径。",
 		map[string]*schema.ParameterInfo{
-			"source":      {Type: schema.String, Desc: "源路径", Required: true},
-			"destination": {Type: schema.String, Desc: "目标路径", Required: true},
+			"source":      {Type: schema.String, Desc: "源文件或目录的绝对路径", Required: true},
+			"destination": {Type: schema.String, Desc: "目标绝对路径（含新文件名）", Required: true},
 		},
 	), nil
 }

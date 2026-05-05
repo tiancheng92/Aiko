@@ -23,7 +23,7 @@ func (t *GetOSInfoTool) Permission() PermissionLevel { return PermProtected }
 
 // Info returns the eino tool schema for get_os_info.
 func (t *GetOSInfoTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "获取操作系统名称、版本、架构、主机名、CPU核心数、总内存和磁盘容量", nil), nil
+	return infoFromSchema(t.Name(), "获取系统静态配置：OS 名称/版本、CPU 架构、主机名、逻辑核心数、总内存和磁盘容量。回答「这台电脑是什么型号/配置」时使用。实时使用率请用 get_system_stats。", nil), nil
 }
 
 // InvokableRun returns OS info plus total memory and disk capacity.
@@ -73,7 +73,7 @@ func (t *GetHardwareInfoTool) Permission() PermissionLevel { return PermProtecte
 
 // Info returns the eino tool schema for get_hardware_info.
 func (t *GetHardwareInfoTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "获取CPU型号、核心数等基础硬件信息", nil), nil
+	return infoFromSchema(t.Name(), "获取 CPU 型号和核心数。若需内存/磁盘容量用 get_os_info；若需实时使用率用 get_system_stats。", nil), nil
 }
 
 // InvokableRun returns CPU model and core counts.
@@ -97,7 +97,7 @@ func (t *GetSystemStatsTool) Permission() PermissionLevel { return PermProtected
 
 // Info returns the eino tool schema for get_system_stats.
 func (t *GetSystemStatsTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "获取当前 CPU 使用率、内存使用情况和磁盘使用情况（实时状态）", nil), nil
+	return infoFromSchema(t.Name(), "获取实时 CPU 使用率、内存占用和磁盘使用百分比。适合查看「系统现在是否繁忙/内存不足」。静态配置信息请用 get_os_info。", nil), nil
 }
 
 // InvokableRun collects CPU, memory and disk usage statistics.
@@ -139,7 +139,7 @@ func (t *GetNetworkStatusTool) Permission() PermissionLevel { return PermProtect
 
 // Info returns the eino tool schema for get_network_status.
 func (t *GetNetworkStatusTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "检测当前网络连接状态（在线/离线）", nil), nil
+	return infoFromSchema(t.Name(), "检测当前是否能访问互联网（在线/离线）。在执行网络操作前可先调用此工具确认连通性。", nil), nil
 }
 
 // InvokableRun dials 1.1.1.1:53 to determine connectivity.

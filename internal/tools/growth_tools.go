@@ -29,7 +29,7 @@ func (t *SaveMemoryTool) Permission() PermissionLevel { return PermPublic }
 // Info returns the eino tool schema for save_memory.
 func (t *SaveMemoryTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return infoFromSchema(t.Name(),
-		"保存单条具体事实、偏好或结论到长期记忆（一两句话）。不用摘要整段对话——对话历史由系统自动处理。",
+		"保存单条具体事实、偏好或结论到长期记忆（一两句话）。保存前先用 search_memory 确认尚未存储类似内容，避免重复。对话历史由系统自动处理，无需摘要。",
 		map[string]*schema.ParameterInfo{
 			"content": {
 				Type:     schema.String,

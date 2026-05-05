@@ -41,11 +41,11 @@ func (t *WebSearchTool) Permission() PermissionLevel { return PermProtected }
 
 // Info returns the eino tool schema for web_search.
 func (t *WebSearchTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "使用 DuckDuckGo 搜索互联网，返回相关结果摘要",
+	return infoFromSchema(t.Name(), "用 DuckDuckGo 搜索互联网，返回结果标题、URL 和摘要。适合查找最新资讯、文档或概念解释。若已知具体页面 URL，直接用 web_fetch 更精准。",
 		map[string]*schema.ParameterInfo{
 			"query": {
 				Type:     schema.String,
-				Desc:     "搜索词",
+				Desc:     "搜索词或自然语言问题",
 				Required: true,
 			},
 			"num_results": {
@@ -200,11 +200,11 @@ func (t *WebFetchTool) Permission() PermissionLevel { return PermProtected }
 
 // Info returns the eino tool schema for web_fetch.
 func (t *WebFetchTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "抓取指定 URL 的网页内容，返回去除 HTML 标签后的纯文本",
+	return infoFromSchema(t.Name(), "抓取指定 URL 的网页纯文本内容（去除 HTML/JS/CSS）。适合阅读文章、文档、GitHub README 等具体页面。先用 web_search 找到 URL 再用此工具读取详情。",
 		map[string]*schema.ParameterInfo{
 			"url": {
 				Type:     schema.String,
-				Desc:     "要抓取的完整 URL",
+				Desc:     "要抓取的完整 URL（含 https://）",
 				Required: true,
 			},
 			"max_chars": {

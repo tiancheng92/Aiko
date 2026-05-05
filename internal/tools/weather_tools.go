@@ -50,11 +50,11 @@ func (t *GetWeatherTool) Permission() PermissionLevel { return PermProtected }
 func (t *GetWeatherTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: t.Name(),
-		Desc: "查询指定城市或地点的当前天气，返回温度、湿度、风速、天气描述等信息。",
+		Desc: "查询指定城市或地点的当前天气，返回温度、湿度、风速、天气描述等信息。未提供 location 时自动按 IP 定位；需精确位置可先调用 get_location。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"location": {
 				Type:     schema.String,
-				Desc:     "查询地点，支持城市名（中英文均可）、经纬度（如 \"31.2,121.4\"）。留空则根据当前 IP 定位。",
+				Desc:     "查询地点，支持城市名（中英文均可）、经纬度（如 \"31.2,121.4\"）。留空则自动按当前 IP 定位。",
 				Required: false,
 			},
 		}),

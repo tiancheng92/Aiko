@@ -20,7 +20,7 @@ func (t *ReadClipboardTool) Permission() PermissionLevel { return PermProtected 
 func (t *ReadClipboardTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name:        t.Name(),
-		Desc:        "读取系统剪贴板中的文本内容。",
+		Desc:        "读取系统剪贴板中的文本内容（仅文本，不支持图片/文件）。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{}),
 	}, nil
 }
@@ -36,7 +36,7 @@ func (t *WriteClipboardTool) Permission() PermissionLevel { return PermProtected
 
 // Info returns eino tool metadata.
 func (t *WriteClipboardTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "将文本写入系统剪贴板。",
+	return infoFromSchema(t.Name(), "将文本写入系统剪贴板，用户随后可在任意应用中粘贴。",
 		map[string]*schema.ParameterInfo{
 			"text": {
 				Type:     schema.String,

@@ -22,7 +22,7 @@ func (t *CronTool) Permission() PermissionLevel { return PermProtected }
 
 // Info returns the eino tool schema for cron.
 func (t *CronTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "管理定时任务：创建、列出、修改、删除。action 可为 add / list / update / remove",
+	return infoFromSchema(t.Name(), "管理定时任务（cron）：创建、列出、修改、删除。任务触发时会将 prompt 作为消息发给 AI 并自动执行。",
 		map[string]*schema.ParameterInfo{
 			"action": {
 				Type:     schema.String,

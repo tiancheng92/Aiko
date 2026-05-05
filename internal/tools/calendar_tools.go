@@ -52,7 +52,7 @@ func (t *CreateCalendarEventTool) Permission() PermissionLevel { return PermProt
 // Info returns eino tool metadata.
 func (t *CreateCalendarEventTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return infoFromSchema(t.Name(),
-		"在 macOS 日历中创建新事件。",
+		"在 macOS 日历中创建新事件。创建前可用 get_calendar_events 确认该时间段没有冲突。",
 		map[string]*schema.ParameterInfo{
 			"title": {
 				Desc:     "事件标题（必填）",

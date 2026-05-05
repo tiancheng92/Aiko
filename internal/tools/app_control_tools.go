@@ -20,7 +20,7 @@ func (t *ListRunningAppsTool) Permission() PermissionLevel { return PermPublic }
 func (t *ListRunningAppsTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name:        t.Name(),
-		Desc:        "列出当前正在运行的所有可见应用程序名称。",
+		Desc:        "列出当前正在运行的所有可见应用程序名称。在使用 control_app 前可先调用此工具获取准确的应用名称。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{}),
 	}, nil
 }

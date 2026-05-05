@@ -18,7 +18,7 @@ func (t *GetCurrentTimeTool) Permission() PermissionLevel { return PermPublic }
 
 // Info returns the eino tool schema for get_current_time.
 func (t *GetCurrentTimeTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "获取当前本地时间和日期", nil), nil
+	return infoFromSchema(t.Name(), "获取当前本地时间、日期和时区。需要知道「现在几点」时优先调用此工具。", nil), nil
 }
 
 // InvokableRun returns the current local time as a string.
@@ -36,7 +36,7 @@ func (t *GetTimezoneTool) Permission() PermissionLevel { return PermPublic }
 
 // Info returns the eino tool schema for get_timezone.
 func (t *GetTimezoneTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "获取系统当前时区信息", nil), nil
+	return infoFromSchema(t.Name(), "获取系统当前时区名称和 UTC 偏移量（如 Asia/Shanghai, UTC+08:00）。", nil), nil
 }
 
 // InvokableRun returns the system timezone name and UTC offset.

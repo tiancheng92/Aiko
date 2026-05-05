@@ -22,11 +22,11 @@ func (t *SearchKnowledgeTool) Permission() PermissionLevel { return PermPublic }
 
 // Info returns the eino tool schema for search_knowledge.
 func (t *SearchKnowledgeTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "搜索已导入的知识库文档，返回与查询最相关的段落",
+	return infoFromSchema(t.Name(), "在已导入的知识库文档中语义搜索，返回最相关的段落。当问题可能在用户上传的文件或文档中有答案时，优先调用此工具。",
 		map[string]*schema.ParameterInfo{
 			"query": {
 				Type:     schema.String,
-				Desc:     "搜索词或问题",
+				Desc:     "搜索词或自然语言问题",
 				Required: true,
 			},
 		},
