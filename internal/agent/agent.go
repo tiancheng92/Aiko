@@ -297,6 +297,21 @@ func buildReflectionPrompt(userInput, assistantReply string, hints []string) str
 	return sb.String()
 }
 
+// reflect runs a background self-growth reflection turn after the main reply.
+// It builds a structured prompt and calls ChatDirectCollect; errors are logged
+// and discarded — reflection failures must never surface to the user.
+func (a *Agent) reflect(ctx context.Context, userInput, assistantReply string, hints []string) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Warn("reflect panic recovered", "err", r)
+		}
+	}()
+	prompt := buildReflectionPrompt(userInput, assistantReply, hints)
+	if _, err := a.ChatDirectCollect(ctx, prompt); err != nil {
+		slog.Warn("self-growth reflection failed", "err", err)
+	}
+}
+
 // Chat sends a user message to the agent and returns a channel that streams
 // tokens. After the final Done=true result, user and assistant messages are
 // persisted to short-term memory and excess messages are migrated to
@@ -744,6 +759,11 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userIma
 	if _, err := a.shortMem.Add("assistant", assistantReply); err != nil {
 		slog.Error("save assistant message failed", "err", err)
 		return
+	}
+
+	// Trigger async self-growth reflection if warranted.
+	if trigger, hints := a.shouldReflect(userInput, toolCallCount); trigger {
+		go a.reflect(ctx, userInput, assistantReply, hints)
 	}
 
 	limit := a.cfg.ShortTermLimit
