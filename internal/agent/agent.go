@@ -216,6 +216,87 @@ func (a *Agent) SetSkillHint(skillName string) {
 	a.lastSkillHint = fmt.Sprintf("本次激活了 skill %q，回复结束后思考该 skill 是否需要更新。", skillName)
 }
 
+// shouldReflect decides whether to trigger a self-growth reflection after this turn.
+// Returns (trigger, hints). trigger is true under any of:
+//   - periodic: turnCount % nudgeInterval == 0
+//   - user correction keywords detected in userInput
+//   - multi-tool chain (≥3 tool-call blocks) detected in assistantReply
+//   - explicit preference keywords detected in userInput
+//   - hints is non-empty (skill activation signal from middleware)
+func (a *Agent) shouldReflect(userInput, assistantReply string) (bool, []string) {
+	var hints []string
+
+	// Collect skill-activation hint (cleared here, not in persistAndMigrate).
+	a.skillHintMu.Lock()
+	if a.lastSkillHint != "" {
+		hints = append(hints, a.lastSkillHint)
+		a.lastSkillHint = ""
+	}
+	a.skillHintMu.Unlock()
+
+	// Periodic trigger.
+	tc := a.turnCount.Load()
+	if a.nudgeInterval > 0 && tc > 0 && tc%int64(a.nudgeInterval) == 0 {
+		return true, hints
+	}
+
+	// User correction signal.
+	correctionKW := []string{"不对", "你刚才说错了", "其实是", "纠正"}
+	for _, kw := range correctionKW {
+		if strings.Contains(userInput, kw) {
+			hints = append(hints, "检测到用户纠错，检查相关 skill 是否需要更新。")
+			break
+		}
+	}
+
+	// Multi-tool chain signal: count "\"tool_calls\"" occurrences in assistantReply.
+	toolCallCount := strings.Count(assistantReply, `"tool_calls"`)
+	if toolCallCount >= 3 {
+		hints = append(hints, fmt.Sprintf("本次涉及 %d 个工具调用，考虑提炼为可复用技能。", toolCallCount))
+	}
+
+	// Explicit preference signal.
+	prefKW := []string{"以后都", "我不喜欢", "记住", "每次都"}
+	for _, kw := range prefKW {
+		if strings.Contains(userInput, kw) {
+			hints = append(hints, "检测到显式偏好表达，优先更新用户画像。")
+			break
+		}
+	}
+
+	return len(hints) > 0, hints
+}
+
+// buildReflectionPrompt constructs a structured fill-in-the-blank reflection prompt.
+// hints is an optional list of targeted guidance lines appended after the checklist.
+func buildReflectionPrompt(userInput, assistantReply string, hints []string) string {
+	var sb strings.Builder
+	sb.WriteString("[SELF-GROWTH REFLECTION]\n")
+	sb.WriteString("请先调用 search_memory 检索相关记忆，再决定行动。\n\n")
+	sb.WriteString("本轮对话摘要（请填写）：\n")
+	sb.WriteString("- 用户意图：<一句话>\n")
+	sb.WriteString("- 解决方案：<一句话>\n")
+	sb.WriteString("- 结果：成功 / 失败 / 部分完成\n\n")
+	sb.WriteString("请选择（可不选）：\n")
+	sb.WriteString("□ save_memory — 有新的具体事实或偏好值得记录\n")
+	sb.WriteString("□ update_user_profile — 发现了用户新的习惯/背景\n")
+	sb.WriteString("□ save_skill — 本次解决模式可复用\n")
+	if len(hints) > 0 {
+		sb.WriteString("\n重点提示：\n")
+		for _, h := range hints {
+			sb.WriteString("⚠️ ")
+			sb.WriteString(h)
+			sb.WriteByte('\n')
+		}
+	}
+	sb.WriteString("\n以下是本轮对话内容供参考：\n")
+	sb.WriteString("用户：")
+	sb.WriteString(userInput)
+	sb.WriteString("\n助手：")
+	sb.WriteString(assistantReply)
+	return sb.String()
+}
+
 // Chat sends a user message to the agent and returns a channel that streams
 // tokens. After the final Done=true result, user and assistant messages are
 // persisted to short-term memory and excess messages are migrated to
