@@ -217,16 +217,17 @@ func (a *Agent) SetSkillHint(skillName string) {
 }
 
 // shouldReflect decides whether to trigger a self-growth reflection after this turn.
+// toolCallCount is the number of tool calls made during the turn, as counted by drainIter.
 // Returns (trigger, hints). trigger is true under any of:
 //   - periodic: turnCount % nudgeInterval == 0
 //   - user correction keywords detected in userInput
-//   - multi-tool chain (≥3 tool-call blocks) detected in assistantReply
+//   - multi-tool chain (toolCallCount ≥ 3)
 //   - explicit preference keywords detected in userInput
 //   - hints is non-empty (skill activation signal from middleware)
-func (a *Agent) shouldReflect(userInput, assistantReply string) (bool, []string) {
+func (a *Agent) shouldReflect(userInput string, toolCallCount int) (bool, []string) {
 	var hints []string
 
-	// Collect skill-activation hint (cleared here, not in persistAndMigrate).
+	// Collect skill-activation hint (cleared here).
 	a.skillHintMu.Lock()
 	if a.lastSkillHint != "" {
 		hints = append(hints, a.lastSkillHint)
@@ -249,8 +250,7 @@ func (a *Agent) shouldReflect(userInput, assistantReply string) (bool, []string)
 		}
 	}
 
-	// Multi-tool chain signal: count "\"tool_calls\"" occurrences in assistantReply.
-	toolCallCount := strings.Count(assistantReply, `"tool_calls"`)
+	// Multi-tool chain signal.
 	if toolCallCount >= 3 {
 		hints = append(hints, fmt.Sprintf("本次涉及 %d 个工具调用，考虑提炼为可复用技能。", toolCallCount))
 	}
@@ -322,13 +322,13 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 
 		msgs := append(ctxMsgs, &schema.Message{Role: schema.User, Content: content})
 		checkpointID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
-		fullResponse, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID)
+		fullResponse, toolCallCount, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID)
 		if !ok {
 			return
 		}
 
 		ch <- StreamResult{Done: true}
-		go a.persistAndMigrate(context.Background(), userInput, nil, nil, fullResponse)
+		go a.persistAndMigrate(context.Background(), userInput, nil, nil, fullResponse, toolCallCount)
 	}()
 
 	return ch
@@ -346,7 +346,7 @@ func (a *Agent) ChatDirect(ctx context.Context, prompt string) <-chan StreamResu
 				ch <- StreamResult{Err: fmt.Errorf("agent panic: %v", r)}
 			}
 		}()
-		_, ok := drainRunner(ctx, a.runner, prompt, ch, nil, nil, fmt.Sprintf("direct-%d", time.Now().UnixNano()))
+		_, _, ok := drainRunner(ctx, a.runner, prompt, ch, nil, nil, fmt.Sprintf("direct-%d", time.Now().UnixNano()))
 		if !ok {
 			return
 		}
@@ -376,28 +376,29 @@ func (a *Agent) ChatDirectCollect(ctx context.Context, prompt string) (string, e
 }
 
 // drainRunner consumes all events from runner.Query, forwards tokens to ch,
-// and returns the accumulated response string. Returns (response, true) on
-// success or ("", false) after sending an error to ch.
+// and returns the accumulated response string and tool-call count.
+// Returns (response, toolCalls, true) on success or ("", 0, false) after sending an error to ch.
 func drainRunner(ctx context.Context, runner *adk.Runner, query string, ch chan<- StreamResult,
-	pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, bool) {
+	pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, int, bool) {
 	iter := runner.Query(ctx, query, adk.WithCheckPointID(checkpointID))
 	return drainIter(ctx, runner, iter, ch, pendingConfirms, emitEvent, checkpointID)
 }
 
 // drainRunnerMsg consumes all events from runner.Run with a pre-built message list,
-// forwards tokens to ch, and returns the accumulated response string.
-// Returns (response, true) on success or ("", false) after sending an error to ch.
+// forwards tokens to ch, and returns the accumulated response string and tool-call count.
+// Returns (response, toolCalls, true) on success or ("", 0, false) after sending an error to ch.
 func drainRunnerMsg(ctx context.Context, runner *adk.Runner, msgs []adk.Message, ch chan<- StreamResult,
-	pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, bool) {
+	pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, int, bool) {
 	iter := runner.Run(ctx, msgs, adk.WithCheckPointID(checkpointID))
 	return drainIter(ctx, runner, iter, ch, pendingConfirms, emitEvent, checkpointID)
 }
 
 // drainIter consumes all events from an AsyncIterator, forwards tokens to ch,
-// handles interrupt events, and returns the accumulated response string.
+// handles interrupt events, and returns the accumulated response string and tool-call count.
 func drainIter(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIterator[*adk.AgentEvent],
-	ch chan<- StreamResult, pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, bool) {
+	ch chan<- StreamResult, pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, int, bool) {
 	var sb strings.Builder
+	var toolCallCount int
 
 	for {
 		event, ok := iter.Next()
@@ -406,19 +407,20 @@ func drainIter(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIterator[
 		}
 		if event.Err != nil {
 			ch <- StreamResult{Err: event.Err}
-			return "", false
+			return "", 0, false
 		}
 		if event.Action != nil && event.Action.Interrupted != nil {
 			resumeIter, err := handleInterrupt(ctx, runner, event, ch, pendingConfirms, emitEvent, checkpointID)
 			if err != nil {
-				return "", false
+				return "", 0, false
 			}
 			if resumeIter != nil {
-				resp, ok := drainIter(ctx, runner, resumeIter, ch, pendingConfirms, emitEvent, checkpointID)
+				resp, n, ok := drainIter(ctx, runner, resumeIter, ch, pendingConfirms, emitEvent, checkpointID)
 				if !ok {
-					return "", false
+					return "", 0, false
 				}
 				sb.WriteString(resp)
+				toolCallCount += n
 			}
 			continue
 		}
@@ -435,12 +437,15 @@ func drainIter(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIterator[
 						break
 					}
 					ch <- StreamResult{Err: recvErr}
-					return "", false
+					return "", 0, false
 				}
 				if m == nil || m.Content == "" {
 					continue
 				}
 				if m.Role == schema.Tool || len(m.ToolCalls) > 0 {
+					if len(m.ToolCalls) > 0 {
+						toolCallCount++
+					}
 					continue
 				}
 				ch <- StreamResult{Token: m.Content}
@@ -451,9 +456,11 @@ func drainIter(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIterator[
 				ch <- StreamResult{Token: mo.Message.Content}
 				sb.WriteString(mo.Message.Content)
 			}
+		} else if mo.Message != nil && len(mo.Message.ToolCalls) > 0 {
+			toolCallCount++
 		}
 	}
-	return sb.String(), true
+	return sb.String(), toolCallCount, true
 }
 
 // handleInterrupt processes an eino interrupt event by notifying the frontend and
@@ -584,7 +591,7 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 
 		msgs := append(ctxMsgs, sendMsg)
 		checkpointID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
-		fullResponse, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID)
+		fullResponse, toolCallCount, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID)
 		if !ok {
 			return
 		}
@@ -603,7 +610,7 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 				userFiles = names
 			}
 		}
-		go a.persistAndMigrate(context.Background(), userMemory, userImages, userFiles, fullResponse)
+		go a.persistAndMigrate(context.Background(), userMemory, userImages, userFiles, fullResponse, toolCallCount)
 	}()
 
 	return ch
@@ -720,7 +727,7 @@ func (a *Agent) buildContext(ctx context.Context, userInput string) ([]adk.Messa
 // persistAndMigrate saves user and assistant messages to SQLite, then checks
 // whether the total message count exceeds ShortTermLimit. If so, the oldest
 // excess messages are migrated to long-term vector memory.
-func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userImages []string, userFiles []string, assistantReply string) {
+func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userImages []string, userFiles []string, assistantReply string, toolCallCount int) {
 	if a.shortMem == nil {
 		return
 	}
