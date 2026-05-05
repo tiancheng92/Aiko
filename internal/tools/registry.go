@@ -168,6 +168,7 @@ func AllPermissionDeclarations() []namedPermDecl {
 		&SaveMemoryTool{},
 		&SearchMemoryTool{},
 		&UpdateUserProfileTool{},
+		&ListSkillsTool{},
 		&SaveSkillTool{},
 		&ListDirectoryTool{},
 		&ReadFileTool{},
@@ -223,6 +224,7 @@ func AllContextual(
 		&SaveMemoryTool{LongMem: longMem},
 		&SearchMemoryTool{LongMem: longMem},
 		&UpdateUserProfileTool{DataDir: dataDir},
+		&ListSkillsTool{DataDir: dataDir},
 		&SaveSkillTool{DataDir: dataDir, OnSaved: onSkillSaved},
 		// File system tools
 		&ListDirectoryTool{Cfg: cfg},

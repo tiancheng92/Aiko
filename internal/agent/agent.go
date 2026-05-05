@@ -217,11 +217,11 @@ func (a *Agent) SetSkillHint(skillName string) {
 }
 
 // shouldReflect decides whether to trigger a self-growth reflection after this turn.
-// toolCallCount is the number of tool calls made during the turn, as counted by drainIter.
-// Returns (trigger, hints). trigger is true under any of:
+// toolCallCount is the number of distinct tool names invoked during the turn, as
+// counted by drainIter. Returns (trigger, hints). trigger is true under any of:
 //   - periodic: turnCount % nudgeInterval == 0
 //   - user correction keywords detected in userInput
-//   - multi-tool chain (toolCallCount ≥ 3)
+//   - multi-tool chain (toolCallCount ≥ 3 distinct tools)
 //   - explicit preference keywords detected in userInput
 //   - hints is non-empty (skill activation signal from middleware)
 func (a *Agent) shouldReflect(userInput string, toolCallCount int) (bool, []string) {
@@ -250,9 +250,9 @@ func (a *Agent) shouldReflect(userInput string, toolCallCount int) (bool, []stri
 		}
 	}
 
-	// Multi-tool chain signal.
+	// Multi-tool chain signal (distinct tool names, not raw invocation count).
 	if toolCallCount >= 3 {
-		hints = append(hints, fmt.Sprintf("本次涉及 %d 个工具调用，考虑提炼为可复用技能。", toolCallCount))
+		hints = append(hints, fmt.Sprintf("本次调用了 %d 种不同工具，考虑提炼为可复用技能。", toolCallCount))
 	}
 
 	// Explicit preference signal.
@@ -272,7 +272,7 @@ func (a *Agent) shouldReflect(userInput string, toolCallCount int) (bool, []stri
 func buildReflectionPrompt(userInput, assistantReply string, hints []string) string {
 	var sb strings.Builder
 	sb.WriteString("[SELF-GROWTH REFLECTION]\n")
-	sb.WriteString("请先调用 search_memory 检索相关记忆，再决定行动。\n\n")
+	sb.WriteString("决定是否 save_skill 前，请先调用 list_skills 查看已有技能，避免创建重复或名称冲突的技能。\n\n")
 	sb.WriteString("本轮对话摘要（请填写）：\n")
 	sb.WriteString("- 用户意图：<一句话>\n")
 	sb.WriteString("- 解决方案：<一句话>\n")
@@ -409,11 +409,21 @@ func drainRunnerMsg(ctx context.Context, runner *adk.Runner, msgs []adk.Message,
 }
 
 // drainIter consumes all events from an AsyncIterator, forwards tokens to ch,
-// handles interrupt events, and returns the accumulated response string and tool-call count.
+// handles interrupt events, and returns the accumulated response string and the
+// number of distinct tool names invoked this turn.
 func drainIter(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIterator[*adk.AgentEvent],
 	ch chan<- StreamResult, pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, int, bool) {
+	uniqueTools := make(map[string]struct{})
+	resp, ok := drainIterInner(ctx, runner, iter, ch, pendingConfirms, emitEvent, checkpointID, uniqueTools)
+	return resp, len(uniqueTools), ok
+}
+
+// drainIterInner is the recursive core of drainIter; it accepts a shared uniqueTools
+// map so that distinct tool names are accumulated correctly across interrupt/resume cycles.
+func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIterator[*adk.AgentEvent],
+	ch chan<- StreamResult, pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string,
+	uniqueTools map[string]struct{}) (string, bool) {
 	var sb strings.Builder
-	var toolCallCount int
 
 	for {
 		event, ok := iter.Next()
@@ -422,20 +432,19 @@ func drainIter(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIterator[
 		}
 		if event.Err != nil {
 			ch <- StreamResult{Err: event.Err}
-			return "", 0, false
+			return "", false
 		}
 		if event.Action != nil && event.Action.Interrupted != nil {
 			resumeIter, err := handleInterrupt(ctx, runner, event, ch, pendingConfirms, emitEvent, checkpointID)
 			if err != nil {
-				return "", 0, false
+				return "", false
 			}
 			if resumeIter != nil {
-				resp, n, ok := drainIter(ctx, runner, resumeIter, ch, pendingConfirms, emitEvent, checkpointID)
+				resp, ok := drainIterInner(ctx, runner, resumeIter, ch, pendingConfirms, emitEvent, checkpointID, uniqueTools)
 				if !ok {
-					return "", 0, false
+					return "", false
 				}
 				sb.WriteString(resp)
-				toolCallCount += n
 			}
 			continue
 		}
@@ -452,14 +461,14 @@ func drainIter(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIterator[
 						break
 					}
 					ch <- StreamResult{Err: recvErr}
-					return "", 0, false
+					return "", false
 				}
 				if m == nil || m.Content == "" {
 					continue
 				}
 				if m.Role == schema.Tool || len(m.ToolCalls) > 0 {
-					if len(m.ToolCalls) > 0 {
-						toolCallCount++
+					for _, tc := range m.ToolCalls {
+						uniqueTools[tc.Function.Name] = struct{}{}
 					}
 					continue
 				}
@@ -472,10 +481,12 @@ func drainIter(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIterator[
 				sb.WriteString(mo.Message.Content)
 			}
 		} else if mo.Message != nil && len(mo.Message.ToolCalls) > 0 {
-			toolCallCount++
+			for _, tc := range mo.Message.ToolCalls {
+				uniqueTools[tc.Function.Name] = struct{}{}
+			}
 		}
 	}
-	return sb.String(), toolCallCount, true
+	return sb.String(), true
 }
 
 // handleInterrupt processes an eino interrupt event by notifying the frontend and

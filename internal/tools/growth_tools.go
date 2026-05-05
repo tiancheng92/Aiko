@@ -164,6 +164,86 @@ func (t *UpdateUserProfileTool) InvokableRun(_ context.Context, input string, _ 
 	return fmt.Sprintf("已追加用户画像：%s = %s", key, value), nil
 }
 
+// ListSkillsTool lists all auto-saved skills stored under ~/.aiko/auto-skills/.
+type ListSkillsTool struct {
+	DataDir string
+}
+
+// Name returns the tool's stable identifier.
+func (t *ListSkillsTool) Name() string { return "list_skills" }
+
+// Permission returns the required permission level.
+func (t *ListSkillsTool) Permission() PermissionLevel { return PermPublic }
+
+// Info returns the eino tool schema for list_skills.
+func (t *ListSkillsTool) Info(_ context.Context) (*schema.ToolInfo, error) {
+	return infoFromSchema(t.Name(),
+		"列出所有已保存的自动技能（名称+描述）。在调用 save_skill 前，先调用此工具确认是否已存在同名或类似技能，避免重复；改名前也应先调用以获取旧技能名称。",
+		map[string]*schema.ParameterInfo{},
+	), nil
+}
+
+// InvokableRun scans ~/.aiko/auto-skills/ and returns a formatted list of skill names and descriptions.
+func (t *ListSkillsTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (string, error) {
+	baseDir := filepath.Join(t.DataDir, "auto-skills")
+	entries, err := os.ReadDir(baseDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "暂无已保存的技能。", nil
+		}
+		return "", fmt.Errorf("list skills: %w", err)
+	}
+
+	type skillEntry struct{ name, desc string }
+	var skills []skillEntry
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		skillPath := filepath.Join(baseDir, e.Name(), "SKILL.md")
+		data, readErr := os.ReadFile(skillPath)
+		if readErr != nil {
+			continue
+		}
+		desc := extractFrontmatterField(string(data), "description")
+		skills = append(skills, skillEntry{name: e.Name(), desc: desc})
+	}
+	if len(skills) == 0 {
+		return "暂无已保存的技能。", nil
+	}
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "已保存 %d 个技能：\n\n", len(skills))
+	for _, s := range skills {
+		if s.desc != "" {
+			fmt.Fprintf(&sb, "• %s — %s\n", s.name, s.desc)
+		} else {
+			fmt.Fprintf(&sb, "• %s\n", s.name)
+		}
+	}
+	return strings.TrimRight(sb.String(), "\n"), nil
+}
+
+// extractFrontmatterField reads a YAML frontmatter value from Markdown content.
+// It matches lines of the form "key: value" within the leading "---" block.
+func extractFrontmatterField(content, key string) string {
+	lines := strings.SplitN(content, "\n", 50)
+	inFrontmatter := false
+	prefix := key + ":"
+	for _, line := range lines {
+		if line == "---" {
+			if !inFrontmatter {
+				inFrontmatter = true
+				continue
+			}
+			break
+		}
+		if inFrontmatter && strings.HasPrefix(line, prefix) {
+			return strings.TrimSpace(line[len(prefix):])
+		}
+	}
+	return ""
+}
+
 // SaveSkillTool writes a reusable skill file to ~/.aiko/auto-skills/<name>/SKILL.md.
 type SaveSkillTool struct {
 	DataDir string
@@ -181,7 +261,7 @@ func (t *SaveSkillTool) Permission() PermissionLevel { return PermPublic }
 // Info returns the eino tool schema for save_skill.
 func (t *SaveSkillTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return infoFromSchema(t.Name(),
-		"将当前解决的问题模式保存为可复用的技能文件。已存在的同名技能会被更新（自我改进）。",
+		"将当前解决的问题模式保存为可复用的技能文件。已存在的同名技能会被更新（自我改进）。改名时通过 old_name 传入旧技能名，旧目录会被自动删除。",
 		map[string]*schema.ParameterInfo{
 			"name": {
 				Type:     schema.String,
@@ -198,17 +278,23 @@ func (t *SaveSkillTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 				Desc:     "技能的详细内容（Markdown 格式，说明何时使用及具体步骤）",
 				Required: true,
 			},
+			"old_name": {
+				Type: schema.String,
+				Desc: "改名时填写旧技能名称；写入新技能后会自动删除旧技能目录。留空则不删除任何旧技能。",
+			},
 		},
 	), nil
 }
 
 // InvokableRun creates or overwrites ~/.aiko/auto-skills/<name>/SKILL.md,
 // then calls OnSaved asynchronously so the caller can hot-reload the skill middleware.
+// If old_name is provided and differs from name, the old skill directory is removed.
 func (t *SaveSkillTool) InvokableRun(_ context.Context, input string, _ ...tool.Option) (string, error) {
 	args := parseArgs(input)
 	name, _ := args["name"].(string)
 	description, _ := args["description"].(string)
 	content, _ := args["content"].(string)
+	oldName, _ := args["old_name"].(string)
 	if name == "" {
 		return "请提供技能名称", nil
 	}
@@ -217,10 +303,24 @@ func (t *SaveSkillTool) InvokableRun(_ context.Context, input string, _ ...tool.
 	if err != nil {
 		return "", fmt.Errorf("save skill: %w", err)
 	}
+
+	var msg strings.Builder
+	msg.WriteString("已保存技能文件：")
+	msg.WriteString(skillPath)
+
+	if oldName != "" && oldName != name {
+		oldDir := filepath.Join(t.DataDir, "auto-skills", oldName)
+		if rmErr := os.RemoveAll(oldDir); rmErr != nil {
+			fmt.Fprintf(&msg, "；旧技能目录删除失败：%v", rmErr)
+		} else {
+			fmt.Fprintf(&msg, "；已删除旧技能 %q", oldName)
+		}
+	}
+
 	if t.OnSaved != nil {
 		go t.OnSaved()
 	}
-	return fmt.Sprintf("已保存技能文件：%s", skillPath), nil
+	return msg.String(), nil
 }
 
 // userProfilePath returns the path to USER.md in the given data directory.
