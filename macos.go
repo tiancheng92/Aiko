@@ -4,13 +4,14 @@ package main
 
 /*
 #cgo CFLAGS: -x objective-c -mmacosx-version-min=10.15
-#cgo LDFLAGS: -framework Cocoa -framework WebKit -framework ApplicationServices -framework AVFoundation -framework Speech
+#cgo LDFLAGS: -framework Cocoa -framework WebKit -framework ApplicationServices -framework AVFoundation -framework Speech -framework CoreLocation
 
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <ApplicationServices/ApplicationServices.h>
 #import <AVFoundation/AVFoundation.h>
 #import <Speech/Speech.h>
+#import <CoreLocation/CoreLocation.h>
 #include <unistd.h>
 
 static id gGlobalMonitor    = nil;
@@ -608,23 +609,69 @@ static void enableClickThrough() {
     });
 }
 
-// requestPermissionsEarly pre-requests microphone permission at startup while the
-// app is still in the foreground, so macOS shows a proper alert dialog rather than
-// a silent notification banner.
+// requestPermissionsEarly pre-requests all requestable macOS permissions at
+// startup while the app is in the foreground, so the system shows proper alert
+// dialogs rather than silent notification banners. Requests are staggered so
+// the user is not hit with multiple dialogs simultaneously.
 //
-// Speech recognition is intentionally NOT requested here. On macOS 26 (Tahoe),
-// calling [SFSpeechRecognizer requestAuthorization:] during domReady triggers
-// system UI that interacts with WKWebView's _NSTrackingAreaAKManager during its
-// first display-cycle flush, causing a SIGABRT. The lazy check in
-// startVoiceRecognition() is sufficient — the system auto-prompts on first use.
+// Speech recognition is delayed 4 s. On macOS 26 (Tahoe), calling
+// [SFSpeechRecognizer requestAuthorization:] during domReady triggers system
+// UI that interacts with WKWebView's _NSTrackingAreaAKManager during its first
+// display-cycle flush, causing a SIGABRT. A 4-second delay clears that window.
 static void requestPermissionsEarly() {
     dispatch_async(dispatch_get_main_queue(), ^{
-        AVAuthorizationStatus micStatus = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
+        // --- 1. Microphone (immediate) ---
+        AVAuthorizationStatus micStatus =
+            [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
         if (micStatus == AVAuthorizationStatusNotDetermined) {
-            [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted) {
-                NSLog(@"[Aiko] microphone permission: %@", granted ? @"granted" : @"denied");
+            [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio
+                                    completionHandler:^(BOOL granted) {
+                NSLog(@"[Aiko] microphone: %@", granted ? @"granted" : @"denied");
             }];
         }
+
+        // --- 2. Screen Recording (1 s delay, macOS 10.15+) ---
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            if (@available(macOS 10.15, *)) {
+                BOOL granted = CGRequestScreenCaptureAccess();
+                NSLog(@"[Aiko] screen recording: %@", granted ? @"granted" : @"denied/prompted");
+            }
+        });
+
+        // --- 3. Location (2 s delay) ---
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            CLAuthorizationStatus locStatus;
+            if (@available(macOS 11.0, *)) {
+                locStatus = [CLLocationManager new].authorizationStatus;
+            } else {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+                locStatus = [CLLocationManager authorizationStatus];
+#pragma clang diagnostic pop
+            }
+            if (locStatus == kCLAuthorizationStatusNotDetermined) {
+                // Keep a static reference so the manager is not released before
+                // the delegate callback delivers the authorization result.
+                static CLLocationManager *gPermLocMgr = nil;
+                gPermLocMgr = [[CLLocationManager alloc] init];
+                [gPermLocMgr requestWhenInUseAuthorization];
+                NSLog(@"[Aiko] location: requesting");
+            }
+        });
+
+        // --- 4. Speech Recognition (4 s delay to avoid macOS 26 SIGABRT) ---
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            if ([SFSpeechRecognizer authorizationStatus] ==
+                    SFSpeechRecognizerAuthorizationStatusNotDetermined) {
+                [SFSpeechRecognizer requestAuthorization:
+                    ^(SFSpeechRecognizerAuthorizationStatus s) {
+                    NSLog(@"[Aiko] speech recognition: %ld", (long)s);
+                }];
+            }
+        });
     });
 }
 */
@@ -632,8 +679,10 @@ import "C"
 import (
 	"encoding/binary"
 	"log/slog"
+	"os/exec"
 	"strings"
 	"syscall"
+	"time"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -643,10 +692,22 @@ func enableClickThrough() {
 	C.enableClickThrough()
 }
 
-// requestPermissionsEarly pre-requests microphone and speech recognition at startup
-// so macOS shows a proper alert dialog while the app is still in the foreground.
+// requestPermissionsEarly pre-requests microphone, screen recording, location,
+// and speech recognition at startup so macOS shows proper alert dialogs while
+// the app is still in the foreground.
 func requestPermissionsEarly() {
 	C.requestPermissionsEarly()
+}
+
+// requestAutomationPermissions triggers the macOS Automation TCC prompt for
+// System Events after a short delay. Called as a goroutine from domReady so
+// the system permission dialogs from requestPermissionsEarly() have time to
+// appear first. System Events is always running; the call returns immediately
+// without user-visible side effects.
+func requestAutomationPermissions() {
+	time.Sleep(8 * time.Second)
+	exec.Command("osascript", "-e",
+		`tell application "System Events" to get name`).Run() //nolint:errcheck
 }
 
 // hideNativeScrollbars disables the native macOS overlay scrollbar inside

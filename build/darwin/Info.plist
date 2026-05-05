@@ -29,6 +29,8 @@
         <string>Aiko 需要麦克风权限以接收语音输入。</string>
         <key>NSSpeechRecognitionUsageDescription</key>
         <string>Aiko 需要语音识别权限以将您的语音转换为文字。</string>
+        <key>NSScreenRecordingUsageDescription</key>
+        <string>Aiko 需要屏幕录制权限以截取当前屏幕内容供 AI 分析。</string>
         {{if .Info.FileAssociations}}
         <key>CFBundleDocumentTypes</key>
         <array>
