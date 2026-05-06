@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"aiko/internal/execenv"
 
 	json "github.com/bytedance/sonic"
 	"github.com/cloudwego/eino/components/tool"
@@ -20,70 +20,6 @@ import (
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 )
-
-// commonBinDirs are user-space bin directories typically required by
-// interpreters that MCP stdio servers shell out to (node via /usr/bin/env,
-// python, bun, etc.). Prepended to PATH so subprocesses launched from a
-// macOS .app bundle (launchd PATH = /usr/bin:/bin:/usr/sbin:/sbin) can
-// still resolve them.
-var commonBinDirs = []string{
-	"/opt/homebrew/bin",
-	"/usr/local/bin",
-}
-
-// buildStdioEnv returns an env slice to pass to NewStdioMCPClient for a stdio
-// MCP server. It inherits the parent environment, and prepends the command's
-// directory plus common user-space bin dirs to PATH so shebang scripts like
-// /opt/homebrew/bin/npx (which re-exec `/usr/bin/env node`) can locate their
-// interpreter when the parent was launched with a minimal PATH.
-func buildStdioEnv(command string, parent []string) []string {
-	// Find and strip PATH from the parent env; keep everything else.
-	var parentPath string
-	out := make([]string, 0, len(parent)+1)
-	for _, kv := range parent {
-		if strings.HasPrefix(kv, "PATH=") {
-			parentPath = strings.TrimPrefix(kv, "PATH=")
-			continue
-		}
-		out = append(out, kv)
-	}
-
-	// Collect dirs to prepend: command's dir first (most specific), then common dirs.
-	var prepend []string
-	if filepath.IsAbs(command) {
-		if dir := filepath.Dir(command); dir != "" && dir != "." && dir != "/" {
-			prepend = append(prepend, dir)
-		}
-	}
-	prepend = append(prepend, commonBinDirs...)
-
-	// Deduplicate: keep only dirs not already in parentPath.
-	existing := make(map[string]struct{})
-	for _, p := range strings.Split(parentPath, ":") {
-		if p != "" {
-			existing[p] = struct{}{}
-		}
-	}
-	var newDirs []string
-	for _, d := range prepend {
-		if _, ok := existing[d]; ok {
-			continue
-		}
-		existing[d] = struct{}{}
-		newDirs = append(newDirs, d)
-	}
-
-	merged := strings.Join(newDirs, ":")
-	if parentPath != "" {
-		if merged != "" {
-			merged += ":" + parentPath
-		} else {
-			merged = parentPath
-		}
-	}
-	out = append(out, "PATH="+merged)
-	return out
-}
 
 // geminiNameRe matches characters that Gemini does not allow in function names.
 // Gemini allows: a-z, A-Z, 0-9, _, ., :, -  (max 128 chars).
@@ -197,8 +133,7 @@ func connectAndDiscover(ctx context.Context, cfg ServerConfig) ([]tool.BaseTool,
 			return nil, nil, fmt.Errorf("stdio transport requires a command")
 		}
 		args := append([]string{cfg.Command}, cfg.Args...)
-		env := buildStdioEnv(cfg.Command, os.Environ())
-		client, err = mcpgo.NewStdioMCPClient(args[0], env, args[1:]...)
+		client, err = mcpgo.NewStdioMCPClient(args[0], execenv.AugmentedEnv(), args[1:]...)
 	case "sse":
 		if cfg.URL == "" {
 			return nil, nil, fmt.Errorf("sse transport requires a url")
