@@ -94,6 +94,15 @@ const smsWatcherRunning = ref(false)
 const smsWatcherLoading = ref(false)
 const smsWatcherError = ref('')
 
+/** applyConfig merges a raw GetConfig() result into cfg.value, converting
+ * array fields that the textarea UI expects as newline-separated strings. */
+function applyConfig(loaded) {
+  Object.assign(cfg.value, loaded)
+  cfg.value.SkillsDirs = Array.isArray(loaded.SkillsDirs)
+    ? loaded.SkillsDirs.join('\n')
+    : (loaded.SkillsDirs || '')
+}
+
 // Draggable window state
 const pos = ref({ x: Math.round(window.innerWidth / 2 - 300), y: Math.round(window.innerHeight / 2 - 250) })
 let dragStart = null
@@ -103,13 +112,7 @@ let offScreen = null
 onMounted(async () => {
   loadModels()
   const loaded = await GetConfig()
-  if (loaded) {
-    Object.assign(cfg.value, loaded)
-    // SkillsDirs comes as []string from Go; join to newline-separated string for textarea.
-    cfg.value.SkillsDirs = Array.isArray(loaded.SkillsDirs)
-      ? loaded.SkillsDirs.join('\n')
-      : (loaded.SkillsDirs || '')
-  }
+  if (loaded) applyConfig(loaded)
   sources.value = await ListKnowledgeSources() || []
   // Override PetSize / ChatWidth / ChatHeight with per-screen saved values so the
   // settings UI shows the config that is actually active for the current screen.
@@ -246,7 +249,7 @@ async function activateProfile(id) {
     // Refresh cfg so subsequent Save() doesn't overwrite the new profile's
     // LLM fields with stale values loaded before the profile switch.
     const loaded = await GetConfig()
-    if (loaded) Object.assign(cfg.value, loaded)
+    if (loaded) applyConfig(loaded)
     statusMsg.value = '已切换模型配置'
   } catch (e) {
     statusMsg.value = '切换失败: ' + e
@@ -314,12 +317,7 @@ async function reload() {
   statusMsg.value = ''
   try {
     const loaded = await GetConfig()
-    if (loaded) {
-      Object.assign(cfg.value, loaded)
-      cfg.value.SkillsDirs = Array.isArray(loaded.SkillsDirs)
-        ? loaded.SkillsDirs.join('\n')
-        : (loaded.SkillsDirs || '')
-    }
+    if (loaded) applyConfig(loaded)
     sources.value = await ListKnowledgeSources() || []
     try { toolPerms.value = await GetToolPermissions() || [] } catch {}
     await fetchMCPServers()
