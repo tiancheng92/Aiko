@@ -37,6 +37,7 @@ import (
 	"aiko/internal/agent/middleware"
 	"aiko/internal/config"
 	"aiko/internal/db"
+	"aiko/internal/execenv"
 	"aiko/internal/knowledge"
 	"aiko/internal/llm"
 	"aiko/internal/lark"
@@ -2147,8 +2148,10 @@ func (a *App) SetupKokoroTTS() error {
 		pip := filepath.Join(venvDir, "bin", "pip")
 
 		// Step 0: check Python version (kokoro-onnx requires >= 3.10)
-		verOut, verErr := exec.Command("python3", "-c",
-			"import sys; v=sys.version_info; print(v.major,v.minor)").Output()
+		verCmd := exec.Command("python3", "-c",
+			"import sys; v=sys.version_info; print(v.major,v.minor)")
+		verCmd.Env = execenv.AugmentedEnv()
+		verOut, verErr := verCmd.Output()
 		if verErr != nil {
 			notify("❌ TTS 安装失败", "未找到 python3，请先安装 Python 3.10+")
 			return
@@ -2207,9 +2210,12 @@ func (a *App) SetupKokoroTTS() error {
 }
 
 // run 执行外部命令并等待完成，将 stderr 合并到错误信息中。
+// cmd.Env 使用 execenv.AugmentedEnv() 以便在 .app bundle 启动时也能找到
+// Homebrew/npm/pipx 等用户安装的工具。
 func run(name string, args ...string) error {
 	var stderr bytes.Buffer
 	cmd := exec.Command(name, args...)
+	cmd.Env = execenv.AugmentedEnv()
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%s: %w\n%s", name, err, stderr.String())
