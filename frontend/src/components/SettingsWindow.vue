@@ -18,6 +18,7 @@ import {
   GetVoiceAutoSend, SetVoiceAutoSend,
   GetSoundsEnabled, SetSoundsEnabled,
   GetKokoroTTSVoices, SetTTSAutoPlay, SetupKokoroTTS,
+  GetVersion, CheckUpdate, InstallUpdate,
 } from '../../wailsjs/go/main/App'
 import { ListProactiveItems, DeleteProactiveItem } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
@@ -94,6 +95,15 @@ const smsWatcherRunning = ref(false)
 const smsWatcherLoading = ref(false)
 const smsWatcherError = ref('')
 
+// Version / update
+const currentVersion = ref('…')
+const updateInfo = ref(null)       // null | UpdateInfo
+const updateChecking = ref(false)
+const updateInstalling = ref(false)
+const updateProgress = ref(0)
+const updateProgressMsg = ref('')
+const updateError = ref('')
+
 /** applyConfig merges a raw GetConfig() result into cfg.value, converting
  * array fields that the textarea UI expects as newline-separated strings. */
 function applyConfig(loaded) {
@@ -108,11 +118,14 @@ const pos = ref({ x: Math.round(window.innerWidth / 2 - 300), y: Math.round(wind
 let dragStart = null
 let offProgress = null
 let offScreen = null
+let offUpdateProgress = null
 
 onMounted(async () => {
   loadModels()
   const loaded = await GetConfig()
   if (loaded) applyConfig(loaded)
+  try { currentVersion.value = await GetVersion() } catch {}
+
   sources.value = await ListKnowledgeSources() || []
   // Override PetSize / ChatWidth / ChatHeight with per-screen saved values so the
   // settings UI shows the config that is actually active for the current screen.
@@ -149,11 +162,17 @@ onMounted(async () => {
   })
   // Auto-fetch model list if URL is already configured.
   if (cfg.value.LLMBaseURL) fetchLLMModels()
+
+  offUpdateProgress = EventsOn('update:progress', (data) => {
+    updateProgress.value = data.pct
+    updateProgressMsg.value = data.msg
+  })
 })
 
 onUnmounted(() => {
   offProgress?.()
   offScreen?.()
+  offUpdateProgress?.()
   // Safety net — ensure no drag listeners linger if the component unmounts mid-drag.
   window.removeEventListener('mousemove', onMouseMove)
   window.removeEventListener('mouseup', onMouseUp)
@@ -173,6 +192,36 @@ async function fetchLLMModels() {
   } finally {
     fetchingModels.value = false
   }
+}
+
+/** checkUpdate queries GitHub for the latest release. */
+async function checkUpdate() {
+  updateChecking.value = true
+  updateError.value = ''
+  updateInfo.value = null
+  try {
+    updateInfo.value = await CheckUpdate()
+  } catch (e) {
+    updateError.value = '检查失败: ' + e
+  } finally {
+    updateChecking.value = false
+  }
+}
+
+/** installUpdate downloads and installs the latest release, then restarts. */
+async function installUpdate() {
+  if (!updateInfo.value?.download_url) return
+  updateInstalling.value = true
+  updateProgress.value = 0
+  updateProgressMsg.value = ''
+  updateError.value = ''
+  try {
+    await InstallUpdate(updateInfo.value.download_url)
+  } catch (e) {
+    updateError.value = '安装失败: ' + e
+    updateInstalling.value = false
+  }
+  // On success the app will quit/restart; no need to reset installing state.
 }
 
 /** fetchProfiles loads all model profiles from the backend. */
@@ -754,6 +803,9 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
         </button>
         <button :class="{ active: activeTab === 'sms' }" @click="activeTab = 'sms'">
           <span class="nav-icon">📱</span><span class="nav-label">短信监听</span>
+        </button>
+        <button :class="{ active: activeTab === 'about' }" @click="activeTab = 'about'">
+          <span class="nav-icon">ℹ️</span><span class="nav-label">关于</span>
         </button>
       </nav>
 
@@ -1338,6 +1390,55 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             </div>
           </div>
 
+        </div>
+
+        <!-- 关于 -->
+        <div v-if="activeTab === 'about'" class="tab-pane about-pane">
+          <div class="section-header"><h3>关于 Aiko</h3></div>
+
+          <div class="about-version-row">
+            <span class="about-label">当前版本</span>
+            <span class="about-version">v{{ currentVersion }}</span>
+          </div>
+
+          <div class="about-update-area">
+            <!-- Not yet checked -->
+            <button v-if="!updateInfo && !updateChecking && !updateInstalling"
+              class="fetch-btn" @click="checkUpdate">
+              检查更新
+            </button>
+
+            <!-- Checking -->
+            <span v-if="updateChecking" class="about-hint">正在检查…</span>
+
+            <!-- No update -->
+            <div v-if="updateInfo && !updateInfo.has_update && !updateInstalling" class="about-hint">
+              已是最新版本（v{{ updateInfo.latest_version }}）
+            </div>
+
+            <!-- Has update -->
+            <div v-if="updateInfo && updateInfo.has_update && !updateInstalling" class="about-update-available">
+              <span>发现新版本 <strong>v{{ updateInfo.latest_version }}</strong></span>
+              <button class="fetch-btn fetch-btn--primary" @click="installUpdate"
+                :disabled="!updateInfo.download_url">
+                {{ updateInfo.download_url ? '立即更新' : '无可用下载' }}
+              </button>
+            </div>
+
+            <!-- Installing -->
+            <div v-if="updateInstalling" class="about-installing">
+              <div class="about-progress-bar">
+                <div class="about-progress-fill" :style="{ width: updateProgress + '%' }"></div>
+              </div>
+              <span class="about-hint">{{ updateProgressMsg || '准备中…' }}（{{ updateProgress }}%）</span>
+            </div>
+
+            <div v-if="updateError" class="lark-status lark-status--err" style="margin-top:8px">{{ updateError }}</div>
+          </div>
+
+          <div class="about-meta">
+            <p>Powered by eino · Built with Wails</p>
+          </div>
         </div>
 
       </div>
@@ -2149,4 +2250,47 @@ li button:hover { background: rgba(220, 38, 38, 0.25); border-color: rgba(220, 3
 .path-input:focus {
   border-color: rgba(37, 99, 235, 0.4);
 }
+
+/* About tab */
+.about-pane { display: flex; flex-direction: column; gap: 20px; }
+.about-version-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.about-label { font-size: 13px; color: #9ca3af; }
+.about-version {
+  font-size: 15px;
+  font-weight: 600;
+  color: #f9fafb;
+  font-family: 'Fira Code', monospace;
+}
+.about-update-area { display: flex; flex-direction: column; gap: 8px; }
+.about-update-available {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: #f9fafb;
+}
+.fetch-btn--primary {
+  background: rgba(37,99,235,0.8);
+  border-color: rgba(37,99,235,0.5);
+}
+.fetch-btn--primary:hover { background: rgba(37,99,235,1); }
+.about-hint { font-size: 12px; color: #9ca3af; }
+.about-installing { display: flex; flex-direction: column; gap: 6px; }
+.about-progress-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.1);
+  overflow: hidden;
+}
+.about-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: #3b82f6;
+  transition: width 0.2s ease;
+}
+.about-meta { font-size: 11px; color: #6b7280; margin-top: auto; }
 </style>

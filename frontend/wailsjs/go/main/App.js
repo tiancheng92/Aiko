@@ -18,6 +18,10 @@ export function ChatDirectCollect(arg1, arg2) {
   return window['go']['main']['App']['ChatDirectCollect'](arg1, arg2);
 }
 
+export function CheckUpdate() {
+  return window['go']['main']['App']['CheckUpdate']();
+}
+
 export function ClearChatHistory() {
   return window['go']['main']['App']['ClearChatHistory']();
 }
@@ -118,12 +122,20 @@ export function GetToolPermissions() {
   return window['go']['main']['App']['GetToolPermissions']();
 }
 
+export function GetVersion() {
+  return window['go']['main']['App']['GetVersion']();
+}
+
 export function GetVoiceAutoSend() {
   return window['go']['main']['App']['GetVoiceAutoSend']();
 }
 
 export function ImportKnowledge(arg1) {
   return window['go']['main']['App']['ImportKnowledge'](arg1);
+}
+
+export function InstallUpdate(arg1) {
+  return window['go']['main']['App']['InstallUpdate'](arg1);
 }
 
 export function IsChatVisible() {

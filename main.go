@@ -14,6 +14,10 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+// version is injected at build time via -ldflags "-X main.version=x.y.z".
+// It falls back to "dev" when running without ldflags (e.g. wails dev).
+var version = "dev"
+
 //go:embed all:frontend/dist
 var assets embed.FS
 
@@ -65,7 +69,7 @@ func main() {
 			WindowIsTranslucent:  false,
 			About: &mac.AboutInfo{
 				Title:   "Aiko",
-				Message: "Your AI companion on the desktop.\n\nPowered by eino · Built with Wails",
+				Message: "Version " + version + "\n\nYour AI companion on the desktop.\n\nPowered by eino · Built with Wails",
 			},
 		},
 	})

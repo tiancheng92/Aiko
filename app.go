@@ -5,7 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/base64"
-	json "github.com/bytedance/sonic"
+	stdjson "encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -20,8 +20,11 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 	"unicode"
+
+	json "github.com/bytedance/sonic"
 
 	chromem "github.com/philippgille/chromem-go"
 	openai "github.com/meguminnnnnnnnn/go-openai"
@@ -2213,6 +2216,199 @@ func run(name string, args ...string) error {
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%s: %w\n%s", name, err, stderr.String())
+	}
+	return nil
+}
+
+// --- In-app update -------------------------------------------------------
+
+// UpdateInfo holds the result of a CheckUpdate call.
+type UpdateInfo struct {
+	CurrentVersion string `json:"current_version"`
+	LatestVersion  string `json:"latest_version"`
+	DownloadURL    string `json:"download_url"`
+	HasUpdate      bool   `json:"has_update"`
+}
+
+// ghRelease is a partial GitHub API release response.
+type ghRelease struct {
+	TagName string `json:"tag_name"`
+	Assets  []struct {
+		Name               string `json:"name"`
+		BrowserDownloadURL string `json:"browser_download_url"`
+	} `json:"assets"`
+}
+
+const githubRepo = "tiancheng92/Aiko"
+
+// GetVersion returns the version string injected at build time.
+func (a *App) GetVersion() string { return version }
+
+// CheckUpdate queries the GitHub Releases API and returns update information.
+func (a *App) CheckUpdate() (UpdateInfo, error) {
+	info := UpdateInfo{CurrentVersion: version}
+	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", githubRepo)
+	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
+	if err != nil {
+		return info, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "Aiko/"+version)
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return info, fmt.Errorf("请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return info, fmt.Errorf("GitHub API 返回 %d", resp.StatusCode)
+	}
+
+	var rel ghRelease
+	if err := stdjson.NewDecoder(resp.Body).Decode(&rel); err != nil {
+		return info, fmt.Errorf("解析响应失败: %w", err)
+	}
+
+	latest := strings.TrimPrefix(rel.TagName, "v")
+	info.LatestVersion = latest
+	info.HasUpdate = latest != "" && latest != version && version != "dev"
+
+	// Find the macOS DMG asset.
+	for _, a := range rel.Assets {
+		if strings.HasSuffix(a.Name, ".dmg") {
+			info.DownloadURL = a.BrowserDownloadURL
+			break
+		}
+	}
+	return info, nil
+}
+
+// InstallUpdate downloads the DMG at downloadURL, mounts it, copies Aiko.app
+// over the currently running bundle, clears the quarantine flag, then launches
+// a detached shell script that restarts the app after this process exits.
+// Progress is emitted as "update:progress" Wails events (0–100).
+func (a *App) InstallUpdate(downloadURL string) error {
+	emit := func(pct int, msg string) {
+		wailsruntime.EventsEmit(a.ctx, "update:progress", map[string]any{"pct": pct, "msg": msg})
+	}
+
+	// Resolve current bundle path: <exe>/../../.. = Aiko.app
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("无法获取当前路径: %w", err)
+	}
+	// Follow symlinks (wails dev mode resolves to a tmp path)
+	exe, _ = filepath.EvalSymlinks(exe)
+	appBundle := filepath.Dir(filepath.Dir(filepath.Dir(exe)))
+	if !strings.HasSuffix(appBundle, ".app") {
+		return fmt.Errorf("未能定位到 .app bundle（路径: %s）", appBundle)
+	}
+	installDir := filepath.Dir(appBundle)
+
+	// 1. Download DMG.
+	emit(5, "正在下载新版本…")
+	tmpDMG := filepath.Join(os.TempDir(), "Aiko-update.dmg")
+	if err := downloadFileWithProgress(a.ctx, tmpDMG, downloadURL, func(pct int) {
+		emit(5+pct*55/100, fmt.Sprintf("下载中 %d%%…", pct))
+	}); err != nil {
+		return fmt.Errorf("下载失败: %w", err)
+	}
+
+	// 2. Mount DMG.
+	emit(62, "挂载 DMG…")
+	mountPoint := filepath.Join(os.TempDir(), "AikoUpdateMount")
+	_ = os.MkdirAll(mountPoint, 0o755)
+	if err := run("hdiutil", "attach", "-nobrowse", "-quiet", tmpDMG, "-mountpoint", mountPoint); err != nil {
+		return fmt.Errorf("挂载失败: %w", err)
+	}
+	defer func() {
+		_ = run("hdiutil", "detach", "-quiet", mountPoint)
+		_ = os.Remove(tmpDMG)
+	}()
+
+	// 3. Locate Aiko.app inside the mounted DMG.
+	emit(70, "解析安装包…")
+	srcApp := ""
+	entries, _ := os.ReadDir(mountPoint)
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".app") {
+			srcApp = filepath.Join(mountPoint, e.Name())
+			break
+		}
+	}
+	if srcApp == "" {
+		return fmt.Errorf("DMG 中未找到 .app")
+	}
+
+	// 4. Copy new bundle over existing one.
+	emit(75, "安装中…")
+	dstApp := filepath.Join(installDir, filepath.Base(srcApp))
+	if err := run("cp", "-Rf", srcApp, dstApp); err != nil {
+		return fmt.Errorf("复制失败: %w", err)
+	}
+
+	// 5. Clear quarantine flag from the copied bundle.
+	emit(90, "清理权限标记…")
+	_ = run("xattr", "-cr", dstApp)
+
+	// 6. Write a tiny restart script and run it detached.
+	emit(95, "准备重启…")
+	script := fmt.Sprintf("#!/bin/sh\nsleep 1\nopen %q\n", dstApp)
+	scriptPath := filepath.Join(os.TempDir(), "aiko-restart.sh")
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		return fmt.Errorf("写入重启脚本失败: %w", err)
+	}
+	restartCmd := exec.Command("/bin/sh", scriptPath)
+	restartCmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := restartCmd.Start(); err != nil {
+		return fmt.Errorf("启动重启脚本失败: %w", err)
+	}
+
+	emit(100, "正在重启…")
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		wailsruntime.Quit(a.ctx)
+	}()
+	return nil
+}
+
+// downloadFileWithProgress downloads url to dst and calls progress(0–100) as data arrives.
+func downloadFileWithProgress(_ context.Context, dst, rawURL string, progress func(int)) error {
+	resp, err := http.Get(rawURL) //nolint:gosec
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	f, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	total := resp.ContentLength
+	var written int64
+	buf := make([]byte, 32*1024)
+	for {
+		n, readErr := resp.Body.Read(buf)
+		if n > 0 {
+			if _, writeErr := f.Write(buf[:n]); writeErr != nil {
+				return writeErr
+			}
+			written += int64(n)
+			if total > 0 {
+				progress(int(written * 100 / total))
+			}
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return readErr
+		}
 	}
 	return nil
 }
