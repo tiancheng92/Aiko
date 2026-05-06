@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"aiko/internal/execenv"
+
 	einotool "github.com/cloudwego/eino/components/tool"
 )
 
@@ -92,6 +94,7 @@ func runShellCommand(ctx context.Context, command, workingDir string, timeoutSec
 	defer cancel()
 
 	cmd := exec.CommandContext(cmdCtx, "bash", "-c", command)
+	cmd.Env = execenv.AugmentedEnv()
 	cmd.Dir = workingDir
 
 	if register != nil {

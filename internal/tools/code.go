@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"aiko/internal/execenv"
+
 	einotool "github.com/cloudwego/eino/components/tool"
 )
 
@@ -111,6 +113,7 @@ func runCodeExecution(ctx context.Context, language, code, workingDir string, ti
 	}
 
 	cmd := exec.CommandContext(cmdCtx, binary, tmpPath)
+	cmd.Env = execenv.AugmentedEnv()
 	cmd.Dir = filepath.Clean(workingDir)
 
 	if register != nil {
