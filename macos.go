@@ -609,15 +609,16 @@ static void enableClickThrough() {
     });
 }
 
-// requestPermissionsEarly pre-requests all requestable macOS permissions at
+// requestPermissionsEarly pre-requests microphone and screen recording at
 // startup while the app is in the foreground, so the system shows proper alert
 // dialogs rather than silent notification banners. Requests are staggered so
 // the user is not hit with multiple dialogs simultaneously.
 //
-// Speech recognition is delayed 4 s. On macOS 26 (Tahoe), calling
-// [SFSpeechRecognizer requestAuthorization:] during domReady triggers system
-// UI that interacts with WKWebView's _NSTrackingAreaAKManager during its first
-// display-cycle flush, causing a SIGABRT. A 4-second delay clears that window.
+// Speech recognition and Automation TCC are NOT requested here — both trigger
+// SIGABRT on macOS 26 (Tahoe) when the permission dialog interacts with
+// WKWebView's _NSTrackingAreaAKManager during the first display-cycle flush.
+// Speech recognition is instead auto-prompted on first use by startVoiceRecognition();
+// Automation TCC is auto-prompted on the first osascript tool invocation.
 static void requestPermissionsEarly() {
     dispatch_async(dispatch_get_main_queue(), ^{
         // --- 1. Microphone (immediate) ---
@@ -660,18 +661,6 @@ static void requestPermissionsEarly() {
                 NSLog(@"[Aiko] location: requesting");
             }
         });
-
-        // --- 4. Speech Recognition (4 s delay to avoid macOS 26 SIGABRT) ---
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            if ([SFSpeechRecognizer authorizationStatus] ==
-                    SFSpeechRecognizerAuthorizationStatusNotDetermined) {
-                [SFSpeechRecognizer requestAuthorization:
-                    ^(SFSpeechRecognizerAuthorizationStatus s) {
-                    NSLog(@"[Aiko] speech recognition: %ld", (long)s);
-                }];
-            }
-        });
     });
 }
 */
@@ -679,10 +668,8 @@ import "C"
 import (
 	"encoding/binary"
 	"log/slog"
-	"os/exec"
 	"strings"
 	"syscall"
-	"time"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -692,22 +679,11 @@ func enableClickThrough() {
 	C.enableClickThrough()
 }
 
-// requestPermissionsEarly pre-requests microphone, screen recording, location,
-// and speech recognition at startup so macOS shows proper alert dialogs while
-// the app is still in the foreground.
+// requestPermissionsEarly pre-requests microphone, screen recording, and
+// location at startup so macOS shows proper alert dialogs while the app is
+// still in the foreground.
 func requestPermissionsEarly() {
 	C.requestPermissionsEarly()
-}
-
-// requestAutomationPermissions triggers the macOS Automation TCC prompt for
-// System Events after a short delay. Called as a goroutine from domReady so
-// the system permission dialogs from requestPermissionsEarly() have time to
-// appear first. System Events is always running; the call returns immediately
-// without user-visible side effects.
-func requestAutomationPermissions() {
-	time.Sleep(8 * time.Second)
-	exec.Command("osascript", "-e",
-		`tell application "System Events" to get name`).Run() //nolint:errcheck
 }
 
 // hideNativeScrollbars disables the native macOS overlay scrollbar inside

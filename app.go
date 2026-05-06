@@ -1647,9 +1647,6 @@ func (a *App) domReady(_ context.Context) {
 	// Re-apply scrollbar suppression after DOM is ready — WKWebView's internal
 	// scroll view may not exist yet during startup(), so we call it again here.
 	hideNativeScrollbars()
-	// Trigger the Automation TCC prompt for System Events after other dialogs
-	// have had time to appear; runs in background so it never blocks the UI.
-	go requestAutomationPermissions()
 }
 
 func (a *App) shutdown(_ context.Context) {
