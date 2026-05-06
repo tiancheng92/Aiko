@@ -2314,7 +2314,10 @@ func (a *App) InstallUpdate(downloadURL string) error {
 	// Detect the signing identity used by the current app so we can re-sign
 	// with the same identity after replacing the binary, which preserves TCC
 	// permission grants keyed on the code-signing requirement.
-	sigOut, _ := exec.Command("codesign", "--display", "--verbose=1", appBundle).CombinedOutput()
+	// --verbose=2 is the minimum level that emits the "Authority=" line;
+	// at --verbose=1 the line is omitted and detection silently falls back
+	// to ad-hoc, producing a cdhash-based csreq that breaks TCC.
+	sigOut, _ := exec.Command("codesign", "--display", "--verbose=2", appBundle).CombinedOutput()
 	signID := "-" // default: ad-hoc
 	for _, line := range strings.Split(string(sigOut), "\n") {
 		if after, ok := strings.CutPrefix(line, "Authority="); ok {
