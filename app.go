@@ -2269,7 +2269,12 @@ func (a *App) CheckUpdate() (UpdateInfo, error) {
 
 	latest := strings.TrimPrefix(rel.TagName, "v")
 	info.LatestVersion = latest
-	info.HasUpdate = latest != "" && latest != version && version != "dev"
+	if version == "dev" {
+		// In dev mode always show update so the full flow can be tested.
+		info.HasUpdate = latest != ""
+	} else {
+		info.HasUpdate = latest != "" && latest != version
+	}
 
 	// Find the macOS DMG asset.
 	for _, a := range rel.Assets {
@@ -2281,27 +2286,42 @@ func (a *App) CheckUpdate() (UpdateInfo, error) {
 	return info, nil
 }
 
-// InstallUpdate downloads the DMG at downloadURL, mounts it, copies Aiko.app
-// over the currently running bundle, clears the quarantine flag, then launches
-// a detached shell script that restarts the app after this process exits.
+// InstallUpdate downloads the DMG at downloadURL, replaces only the main
+// binary inside the running .app bundle, re-signs with the original signing
+// identity (preserving TCC permission grants), then restarts the app.
 // Progress is emitted as "update:progress" Wails events (0–100).
 func (a *App) InstallUpdate(downloadURL string) error {
 	emit := func(pct int, msg string) {
 		wailsruntime.EventsEmit(a.ctx, "update:progress", map[string]any{"pct": pct, "msg": msg})
 	}
 
-	// Resolve current bundle path: <exe>/../../.. = Aiko.app
+	// Resolve the running .app bundle path from the executable.
+	// In wails dev mode the exe lives in a temp dir (not inside a .app), so
+	// fall back to /Applications/Aiko.app for testing convenience.
 	exe, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("无法获取当前路径: %w", err)
 	}
-	// Follow symlinks (wails dev mode resolves to a tmp path)
 	exe, _ = filepath.EvalSymlinks(exe)
 	appBundle := filepath.Dir(filepath.Dir(filepath.Dir(exe)))
-	if !strings.HasSuffix(appBundle, ".app") {
-		return fmt.Errorf("未能定位到 .app bundle（路径: %s）", appBundle)
+	// In wails dev mode the exe resolves to build/bin/Aiko.app — also ends
+	// with ".app" but is the build output, not the installed app. Force the
+	// production /Applications path whenever running as a dev build.
+	if !strings.HasSuffix(appBundle, ".app") || version == "dev" {
+		appBundle = "/Applications/Aiko.app"
 	}
-	installDir := filepath.Dir(appBundle)
+
+	// Detect the signing identity used by the current app so we can re-sign
+	// with the same identity after replacing the binary, which preserves TCC
+	// permission grants keyed on the code-signing requirement.
+	sigOut, _ := exec.Command("codesign", "--display", "--verbose=1", appBundle).CombinedOutput()
+	signID := "-" // default: ad-hoc
+	for _, line := range strings.Split(string(sigOut), "\n") {
+		if after, ok := strings.CutPrefix(line, "Authority="); ok {
+			signID = strings.TrimSpace(after)
+			break
+		}
+	}
 
 	// 1. Download DMG.
 	emit(5, "正在下载新版本…")
@@ -2338,20 +2358,34 @@ func (a *App) InstallUpdate(downloadURL string) error {
 		return fmt.Errorf("DMG 中未找到 .app")
 	}
 
-	// 4. Copy new bundle over existing one.
+	// 4. Replace only the main binary (preserves Info.plist, Resources, etc.).
 	emit(75, "安装中…")
-	dstApp := filepath.Join(installDir, filepath.Base(srcApp))
-	if err := run("cp", "-Rf", srcApp, dstApp); err != nil {
-		return fmt.Errorf("复制失败: %w", err)
+	exeName := filepath.Base(exe)
+	if exeName == "" || exeName == "." {
+		exeName = "Aiko"
+	}
+	srcBin := filepath.Join(srcApp, "Contents", "MacOS", exeName)
+	dstBin := filepath.Join(appBundle, "Contents", "MacOS", exeName)
+	if err := run("cp", srcBin, dstBin); err != nil {
+		return fmt.Errorf("复制二进制失败: %w", err)
 	}
 
-	// 5. Clear quarantine flag from the copied bundle.
-	emit(90, "清理权限标记…")
-	_ = run("xattr", "-cr", dstApp)
+	// 5. Re-sign the bundle with the original identity so TCC grants survive.
+	// If the certificate is no longer in the keychain, fall back to ad-hoc.
+	emit(88, "重新签名…")
+	if err := run("codesign", "--force", "--sign", signID,
+		"--identifier", "com.xutiancheng.aiko", appBundle); err != nil && signID != "-" {
+		_ = run("codesign", "--force", "--sign", "-",
+			"--identifier", "com.xutiancheng.aiko", appBundle)
+	}
 
-	// 6. Write a tiny restart script and run it detached.
+	// 6. Clear quarantine flag.
+	emit(93, "清理权限标记…")
+	_ = run("xattr", "-cr", appBundle)
+
+	// 7. Write a tiny restart script and run it detached.
 	emit(95, "准备重启…")
-	script := fmt.Sprintf("#!/bin/sh\nsleep 1\nopen %q\n", dstApp)
+	script := fmt.Sprintf("#!/bin/sh\nsleep 1\nopen %q\n", appBundle)
 	scriptPath := filepath.Join(os.TempDir(), "aiko-restart.sh")
 	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
 		return fmt.Errorf("写入重启脚本失败: %w", err)
