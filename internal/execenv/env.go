@@ -17,7 +17,6 @@ package execenv
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -170,7 +169,3 @@ func LookPath(name string) string {
 	}
 	return ""
 }
-
-// Ensure exec package stays imported even if LookPath removes its last use
-// in future refactors (keeps error-free compile if called sites change).
-var _ = exec.LookPath
