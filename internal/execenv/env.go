@@ -143,29 +143,41 @@ func AugmentedEnv() []string {
 	return out
 }
 
-// LookPath searches AugmentedPATH() for name and returns the absolute path
-// if found and executable. Returns "" on miss. Unlike exec.LookPath, it
-// does not rely on the current process PATH.
-func LookPath(name string) string {
-	// Absolute/relative path — fall through to exec.LookPath behavior.
+// isExecutableFile reports whether path refers to an existing regular
+// (non-directory) file with at least one exec bit set.
+func isExecutableFile(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return false
+	}
+	return info.Mode()&0o111 != 0
+}
+
+// lookPathIn searches the provided paths for name and returns the first
+// executable file match. If name contains '/', paths is ignored and name
+// itself is checked. Empty entries in paths are skipped. Returns "" on miss.
+func lookPathIn(name string, paths []string) string {
 	if strings.ContainsRune(name, '/') {
-		if _, err := os.Stat(name); err == nil {
+		if isExecutableFile(name) {
 			return name
 		}
 		return ""
 	}
-	for _, dir := range strings.Split(AugmentedPATH(), ":") {
+	for _, dir := range paths {
 		if dir == "" {
 			continue
 		}
 		full := filepath.Join(dir, name)
-		info, err := os.Stat(full)
-		if err != nil || info.IsDir() {
-			continue
-		}
-		if info.Mode()&0o111 != 0 {
+		if isExecutableFile(full) {
 			return full
 		}
 	}
 	return ""
+}
+
+// LookPath searches AugmentedPATH() for name and returns the absolute path
+// if found and executable. Returns "" on miss. Unlike exec.LookPath, it
+// does not rely on the current process PATH.
+func LookPath(name string) string {
+	return lookPathIn(name, strings.Split(AugmentedPATH(), ":"))
 }

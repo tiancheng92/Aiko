@@ -1,6 +1,8 @@
 package execenv
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -92,5 +94,133 @@ func TestHomeCandidateDirsEmptyHOME(t *testing.T) {
 	got := homeCandidateDirs()
 	if got != nil {
 		t.Errorf("expected nil, got %v", got)
+	}
+}
+
+// writeExec is a test helper that writes an executable file with mode 0o755.
+func writeExec(t *testing.T, path string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write %q: %v", path, err)
+	}
+}
+
+// TestLookPathInAbsolutePath returns the path when it points to an executable file.
+func TestLookPathInAbsolutePath(t *testing.T) {
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "tool")
+	writeExec(t, exe)
+	if got := lookPathIn(exe, nil); got != exe {
+		t.Errorf("lookPathIn(%q, nil) = %q, want %q", exe, got, exe)
+	}
+}
+
+// TestLookPathInAbsolutePathToDir returns "" when the path is a directory.
+func TestLookPathInAbsolutePathToDir(t *testing.T) {
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "subdir")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if got := lookPathIn(sub, nil); got != "" {
+		t.Errorf("lookPathIn(%q, nil) = %q, want \"\"", sub, got)
+	}
+}
+
+// TestLookPathInAbsolutePathNonExecutable returns "" when the file lacks exec bits.
+func TestLookPathInAbsolutePathNonExecutable(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "not-exec")
+	if err := os.WriteFile(file, []byte("data"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if got := lookPathIn(file, nil); got != "" {
+		t.Errorf("lookPathIn(%q, nil) = %q, want \"\"", file, got)
+	}
+}
+
+// TestLookPathInAbsolutePathMissing returns "" for a nonexistent path.
+func TestLookPathInAbsolutePathMissing(t *testing.T) {
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "nope")
+	if got := lookPathIn(missing, nil); got != "" {
+		t.Errorf("lookPathIn(%q, nil) = %q, want \"\"", missing, got)
+	}
+}
+
+// TestLookPathInRelativeWithSlash accepts a path containing '/' via direct stat.
+func TestLookPathInRelativeWithSlash(t *testing.T) {
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "subdir")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	exe := filepath.Join(sub, "tool")
+	writeExec(t, exe)
+	if got := lookPathIn(exe, nil); got != exe {
+		t.Errorf("lookPathIn(%q, nil) = %q, want %q", exe, got, exe)
+	}
+}
+
+// TestLookPathInBareNameHit returns the full path when a bare name exists in paths.
+func TestLookPathInBareNameHit(t *testing.T) {
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "mytool")
+	writeExec(t, exe)
+	if got := lookPathIn("mytool", []string{dir}); got != exe {
+		t.Errorf("lookPathIn(\"mytool\", [%q]) = %q, want %q", dir, got, exe)
+	}
+}
+
+// TestLookPathInBareNameMissesDirs skips matches that are directories.
+func TestLookPathInBareNameMissesDirs(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "mytool"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if got := lookPathIn("mytool", []string{dir}); got != "" {
+		t.Errorf("lookPathIn(\"mytool\", [%q]) = %q, want \"\"", dir, got)
+	}
+}
+
+// TestLookPathInBareNameMissesNonExec skips matches without exec bits.
+func TestLookPathInBareNameMissesNonExec(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "mytool"), []byte("data"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if got := lookPathIn("mytool", []string{dir}); got != "" {
+		t.Errorf("lookPathIn(\"mytool\", [%q]) = %q, want \"\"", dir, got)
+	}
+}
+
+// TestLookPathInBareNameNoMatch returns "" when no path contains the name.
+func TestLookPathInBareNameNoMatch(t *testing.T) {
+	dir := t.TempDir()
+	if got := lookPathIn("mytool", []string{dir}); got != "" {
+		t.Errorf("lookPathIn(\"mytool\", [%q]) = %q, want \"\"", dir, got)
+	}
+}
+
+// TestLookPathInSkipsEmptyDirs ignores empty entries in the paths slice.
+func TestLookPathInSkipsEmptyDirs(t *testing.T) {
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "mytool")
+	writeExec(t, exe)
+	if got := lookPathIn("mytool", []string{"", dir, ""}); got != exe {
+		t.Errorf("lookPathIn with empty dirs = %q, want %q", got, exe)
+	}
+}
+
+// TestLookPathInFirstMatchWins returns the earlier-path match when two dirs have the name.
+func TestLookPathInFirstMatchWins(t *testing.T) {
+	d1 := t.TempDir()
+	d2 := t.TempDir()
+	exe1 := filepath.Join(d1, "mytool")
+	exe2 := filepath.Join(d2, "mytool")
+	writeExec(t, exe1)
+	writeExec(t, exe2)
+	if got := lookPathIn("mytool", []string{d1, d2}); got != exe1 {
+		t.Errorf("lookPathIn = %q, want %q (first-match)", got, exe1)
 	}
 }
