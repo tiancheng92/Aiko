@@ -12,7 +12,6 @@ build:
 		--entitlements build/darwin/Aiko.entitlements $(APP)
 	@test -f "$(BINARY)" || (echo "❌ Binary missing, aborting install"; exit 1)
 	rsync -a --delete $(APP)/ /Applications/Aiko.app/
-	xattr -cr /Applications/Aiko.app
 	@echo "✅ Build complete: $(APP)"
 
 ## run: build, install to /Applications, then launch

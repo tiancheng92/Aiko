@@ -2322,6 +2322,15 @@ func (a *App) InstallUpdate(downloadURL string) error {
 			break
 		}
 	}
+	// If the running app is ad-hoc signed (e.g. user installed straight from
+	// the DMG), upgrade to a stable self-signed "Aiko" cert so this update —
+	// and all future updates — produce a stable csreq and TCC grants survive.
+	// Best-effort: on failure we fall through and re-sign ad-hoc as before.
+	if signID == "-" {
+		if err := ensureAikoCert(); err == nil {
+			signID = "Aiko"
+		}
+	}
 
 	// 1. Download DMG.
 	emit(5, "正在下载新版本…")
@@ -2371,19 +2380,21 @@ func (a *App) InstallUpdate(downloadURL string) error {
 	}
 
 	// 5. Re-sign the bundle with the original identity so TCC grants survive.
+	// --preserve-metadata=entitlements keeps the entitlements embedded in the
+	// new binary's signature (signed by CI); without it codesign produces an
+	// empty entitlements blob, which changes the designated requirement hash
+	// and invalidates TCC's stored csreq match — forcing permission re-prompts.
 	// If the certificate is no longer in the keychain, fall back to ad-hoc.
 	emit(88, "重新签名…")
 	if err := run("codesign", "--force", "--sign", signID,
-		"--identifier", "com.xutiancheng.aiko", appBundle); err != nil && signID != "-" {
+		"--identifier", "com.xutiancheng.aiko",
+		"--preserve-metadata=entitlements", appBundle); err != nil && signID != "-" {
 		_ = run("codesign", "--force", "--sign", "-",
-			"--identifier", "com.xutiancheng.aiko", appBundle)
+			"--identifier", "com.xutiancheng.aiko",
+			"--preserve-metadata=entitlements", appBundle)
 	}
 
-	// 6. Clear quarantine flag.
-	emit(93, "清理权限标记…")
-	_ = run("xattr", "-cr", appBundle)
-
-	// 7. Write a tiny restart script and run it detached.
+	// 6. Write a tiny restart script and run it detached.
 	emit(95, "准备重启…")
 	script := fmt.Sprintf("#!/bin/sh\nsleep 1\nopen %q\n", appBundle)
 	scriptPath := filepath.Join(os.TempDir(), "aiko-restart.sh")
@@ -2401,6 +2412,91 @@ func (a *App) InstallUpdate(downloadURL string) error {
 		time.Sleep(300 * time.Millisecond)
 		wailsruntime.Quit(a.ctx)
 	}()
+	return nil
+}
+
+// ensureAikoCert makes sure a self-signed code-signing certificate named
+// "Aiko" exists in the user's login keychain and is trusted for codesign.
+// Idempotent: returns nil immediately if `security find-identity` already
+// lists an "Aiko" identity. Otherwise generates an RSA keypair + X.509 cert
+// with the codeSigning EKU via openssl, imports it, and adds a trust setting
+// that allows codesign to use it without prompting.
+//
+// Everything runs inside the user's keychain — no sudo required. All temp
+// files are created in os.TempDir() and cleaned up on return.
+func ensureAikoCert() error {
+	// Fast path: already present.
+	out, _ := exec.Command("security", "find-identity", "-p", "codesigning", "-v").CombinedOutput()
+	if strings.Contains(string(out), `"Aiko"`) {
+		return nil
+	}
+
+	tmp, err := os.MkdirTemp("", "aiko-cert-*")
+	if err != nil {
+		return fmt.Errorf("创建临时目录失败: %w", err)
+	}
+	defer os.RemoveAll(tmp)
+
+	keyPath := filepath.Join(tmp, "key.pem")
+	cfgPath := filepath.Join(tmp, "openssl.cnf")
+	crtPath := filepath.Join(tmp, "cert.pem")
+	p12Path := filepath.Join(tmp, "cert.p12")
+
+	// Minimal openssl config: CN=Aiko, codeSigning EKU.
+	cfg := `[req]
+distinguished_name = dn
+prompt = no
+x509_extensions = v3
+
+[dn]
+CN = Aiko
+
+[v3]
+basicConstraints = critical,CA:FALSE
+keyUsage = critical,digitalSignature
+extendedKeyUsage = critical,codeSigning
+`
+	if err := os.WriteFile(cfgPath, []byte(cfg), 0o600); err != nil {
+		return fmt.Errorf("写入 openssl 配置失败: %w", err)
+	}
+
+	if err := run("openssl", "req", "-x509", "-nodes", "-newkey", "rsa:2048",
+		"-keyout", keyPath, "-out", crtPath, "-days", "3650",
+		"-config", cfgPath); err != nil {
+		return fmt.Errorf("生成证书失败: %w", err)
+	}
+
+	// Empty-password PKCS#12 bundle for keychain import.
+	if err := run("openssl", "pkcs12", "-export",
+		"-inkey", keyPath, "-in", crtPath,
+		"-name", "Aiko", "-out", p12Path,
+		"-passout", "pass:", "-legacy"); err != nil {
+		// Older openssl doesn't know -legacy; retry without it.
+		if err2 := run("openssl", "pkcs12", "-export",
+			"-inkey", keyPath, "-in", crtPath,
+			"-name", "Aiko", "-out", p12Path,
+			"-passout", "pass:"); err2 != nil {
+			return fmt.Errorf("打包 PKCS#12 失败: %w", err2)
+		}
+	}
+
+	// Resolve login keychain path (differs by OS version: ...db vs no-extension).
+	loginKC := filepath.Join(os.Getenv("HOME"), "Library", "Keychains", "login.keychain-db")
+	if _, err := os.Stat(loginKC); err != nil {
+		loginKC = filepath.Join(os.Getenv("HOME"), "Library", "Keychains", "login.keychain")
+	}
+
+	// Import; -A allows any app to use the key without per-use prompt.
+	if err := run("security", "import", p12Path, "-k", loginKC,
+		"-P", "", "-T", "/usr/bin/codesign", "-A"); err != nil {
+		return fmt.Errorf("导入证书失败: %w", err)
+	}
+
+	// Verify.
+	out2, _ := exec.Command("security", "find-identity", "-p", "codesigning", "-v").CombinedOutput()
+	if !strings.Contains(string(out2), `"Aiko"`) {
+		return fmt.Errorf("证书导入后未被 codesign 识别")
+	}
 	return nil
 }
 
