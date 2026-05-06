@@ -2428,8 +2428,10 @@ func (a *App) InstallUpdate(downloadURL string) error {
 // Everything runs inside the user's keychain — no sudo required. All temp
 // files are created in os.TempDir() and cleaned up on return.
 func ensureAikoCert() error {
-	// Fast path: already present.
-	out, _ := exec.Command("security", "find-identity", "-p", "codesigning", "-v").CombinedOutput()
+	// Fast path: already present. Use `find-identity` without `-v` — the `-v`
+	// flag drops self-signed certs (no trust chain), but codesign does not
+	// require trust to use an identity, so untrusted identities are fine.
+	out, _ := exec.Command("security", "find-identity", "-p", "codesigning").CombinedOutput()
 	if strings.Contains(string(out), `"Aiko"`) {
 		return nil
 	}
@@ -2469,18 +2471,20 @@ extendedKeyUsage = critical,codeSigning
 		return fmt.Errorf("生成证书失败: %w", err)
 	}
 
-	// Empty-password PKCS#12 bundle for keychain import.
+	// PKCS#12 bundle for keychain import. Forced to SHA1 MAC and legacy PBE
+	// (PBE-SHA1-3DES) for compatibility with macOS `security import` —
+	// modern OpenSSL defaults (SHA256 MAC, PBES2+AES) trigger
+	// "MAC verification failed" on the security tool's parser. Password must
+	// also be non-empty; the security tool mishandles empty-password p12.
+	const p12Pass = "aiko"
 	if err := run("openssl", "pkcs12", "-export",
 		"-inkey", keyPath, "-in", crtPath,
 		"-name", "Aiko", "-out", p12Path,
-		"-passout", "pass:", "-legacy"); err != nil {
-		// Older openssl doesn't know -legacy; retry without it.
-		if err2 := run("openssl", "pkcs12", "-export",
-			"-inkey", keyPath, "-in", crtPath,
-			"-name", "Aiko", "-out", p12Path,
-			"-passout", "pass:"); err2 != nil {
-			return fmt.Errorf("打包 PKCS#12 失败: %w", err2)
-		}
+		"-passout", "pass:"+p12Pass,
+		"-macalg", "SHA1",
+		"-keypbe", "PBE-SHA1-3DES",
+		"-certpbe", "PBE-SHA1-3DES"); err != nil {
+		return fmt.Errorf("打包 PKCS#12 失败: %w", err)
 	}
 
 	// Resolve login keychain path (differs by OS version: ...db vs no-extension).
@@ -2491,12 +2495,12 @@ extendedKeyUsage = critical,codeSigning
 
 	// Import; -A allows any app to use the key without per-use prompt.
 	if err := run("security", "import", p12Path, "-k", loginKC,
-		"-P", "", "-T", "/usr/bin/codesign", "-A"); err != nil {
+		"-P", p12Pass, "-T", "/usr/bin/codesign", "-A"); err != nil {
 		return fmt.Errorf("导入证书失败: %w", err)
 	}
 
-	// Verify.
-	out2, _ := exec.Command("security", "find-identity", "-p", "codesigning", "-v").CombinedOutput()
+	// Verify (without -v for self-signed cert, as above).
+	out2, _ := exec.Command("security", "find-identity", "-p", "codesigning").CombinedOutput()
 	if !strings.Contains(string(out2), `"Aiko"`) {
 		return fmt.Errorf("证书导入后未被 codesign 识别")
 	}
