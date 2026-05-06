@@ -5,10 +5,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
+
+	"aiko/internal/execenv"
 )
 
 // Client wraps lark-cli subprocess calls.
@@ -33,7 +33,7 @@ func NewClient(cliPath string) *Client {
 // message bodies, and other values we don't want in logs or UI toasts.
 func (c *Client) Run(ctx context.Context, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, c.CLIPath, args...)
-	cmd.Env = append(os.Environ(), "PATH="+augmentedPATH())
+	cmd.Env = execenv.AugmentedEnv()
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -57,63 +57,9 @@ func (c *Client) Status(ctx context.Context) (string, error) {
 	return c.Run(ctx, "auth", "status")
 }
 
-// candidateDirs lists directories where npm/node package managers commonly
-// install global binaries on macOS. These are not in the minimal PATH that
-// macOS uses when launching a .app bundle from Finder/Dock.
-var candidateDirs = []string{
-	"/usr/local/bin",
-	"/opt/homebrew/bin",
-	"/opt/homebrew/sbin",
-}
-
-// augmentedPATH returns a PATH value that prepends common Node.js and npm
-// binary directories to the current PATH. This is required because .app
-// bundles launched from Finder/Dock start with a minimal PATH that omits
-// Homebrew, nvm, and npm global bin dirs — causing lark-cli's
-// `#!/usr/bin/env node` shebang to fail with "node: No such file or directory".
-func augmentedPATH() string {
-	home, _ := os.UserHomeDir()
-	extra := append([]string{}, candidateDirs...)
-	if home != "" {
-		extra = append(extra,
-			filepath.Join(home, ".local/share/npm/bin"),
-			filepath.Join(home, ".npm-global/bin"),
-			filepath.Join(home, ".yarn/bin"),
-			filepath.Join(home, "node_modules/.bin"),
-		)
-	}
-	current := os.Getenv("PATH")
-	if current != "" {
-		extra = append(extra, current)
-	}
-	return strings.Join(extra, ":")
-}
-
 // FindCLI returns the absolute path of lark-cli, or an empty string if not
-// found. It first checks $PATH (works when launched from a terminal), then
-// falls back to common npm/node global bin directories and the user's home
-// directory prefixes so that .app bundles launched from Finder can also locate
-// the binary.
+// found. It searches the augmented PATH (login shell + candidate dirs +
+// current PATH) so .app bundles launched from Finder can still locate it.
 func FindCLI() string {
-	if p, err := exec.LookPath("lark-cli"); err == nil {
-		return p
-	}
-	home, _ := os.UserHomeDir()
-	extra := append([]string{}, candidateDirs...)
-	if home != "" {
-		extra = append(extra,
-			filepath.Join(home, ".local/share/npm/bin"),
-			filepath.Join(home, ".npm-global/bin"),
-			filepath.Join(home, ".yarn/bin"),
-			filepath.Join(home, "node_modules/.bin"),
-			filepath.Join(home, ".nvm/versions/node"),
-		)
-	}
-	for _, dir := range extra {
-		p := filepath.Join(dir, "lark-cli")
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
-	}
-	return ""
+	return execenv.LookPath("lark-cli")
 }
