@@ -30,34 +30,57 @@ function onConfirmEvent(req) {
   visible.value = true
 }
 
-/** User approved — send edited content back to the backend. */
+/** approve — send edited content back to the backend. */
 async function approve() {
   visible.value = false
   await ConfirmToolExecution(request.value.id, true, editedContent.value)
 }
 
-/** User rejected — cancel the pending execution. */
+/** reject — cancel the pending execution. */
 async function reject() {
   visible.value = false
   await ConfirmToolExecution(request.value.id, false, '')
+}
+
+/** onKeydown closes the modal on Escape (treated as reject). */
+function onKeydown(e) {
+  if (!visible.value) return
+  if (e.key === 'Escape') reject()
 }
 
 // Store the handler returned by EventsOn and invoke it on unmount — passing
 // the event name alone to EventsOff removes all listeners for that event,
 // which would break other components subscribing to the same name later.
 let offConfirm = null
-onMounted(() => { offConfirm = EventsOn('tool:confirm', onConfirmEvent) })
-onUnmounted(() => { offConfirm?.() })
+onMounted(() => {
+  offConfirm = EventsOn('tool:confirm', onConfirmEvent)
+  window.addEventListener('keydown', onKeydown)
+})
+onUnmounted(() => {
+  offConfirm?.()
+  window.removeEventListener('keydown', onKeydown)
+})
 </script>
 
 <template>
   <Transition name="tool-confirm-pop">
-  <div v-if="visible" class="tool-confirm-modal">
+  <div v-if="visible" class="tool-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="tc-title">
     <div class="modal-backdrop" @click.self="reject" />
     <div class="modal-box">
       <div class="modal-header">
-        <span class="badge">{{ languageLabel }}</span>
-        <span class="title">⚠️ Agent 请求执行{{ request?.tool_type === 'shell' ? ' Shell 命令' : '代码' }}</span>
+        <div class="modal-header-icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+        <div class="modal-header-text">
+          <h2 id="tc-title" class="modal-title">
+            Agent 请求执行{{ request?.tool_type === 'shell' ? ' Shell 命令' : '代码' }}
+          </h2>
+          <span class="badge">{{ languageLabel }}</span>
+        </div>
       </div>
 
       <div class="modal-field">
@@ -66,16 +89,25 @@ onUnmounted(() => { offConfirm?.() })
       </div>
 
       <div class="modal-field">
-        <label>{{ request?.tool_type === 'shell' ? '命令' : '代码' }}（可编辑）</label>
+        <label>{{ request?.tool_type === 'shell' ? '命令' : '代码' }}<span class="editable-hint">（可编辑）</span></label>
         <textarea
           v-model="editedContent"
           class="content-editor"
           :rows="request?.tool_type === 'code' ? 8 : 3"
           spellcheck="false"
+          autocomplete="off"
+          autocorrect="off"
         />
       </div>
 
-      <p class="risk-text">{{ riskText }}</p>
+      <div class="risk-callout" role="note">
+        <svg class="risk-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <span>{{ riskText }}</span>
+      </div>
 
       <div class="modal-actions">
         <button class="btn-reject" @click="reject">拒绝</button>
@@ -88,6 +120,23 @@ onUnmounted(() => { offConfirm?.() })
 
 <style scoped>
 .tool-confirm-modal {
+  /* Design tokens — aligned with SettingsWindow */
+  --accent: #007aff;
+  --accent-hover: #0a84ff;
+  --accent-alpha-20: rgba(0, 122, 255, 0.20);
+  --surface: rgba(42, 42, 48, 0.92);
+  --surface-input: rgba(255, 255, 255, 0.06);
+  --surface-input-hover: rgba(255, 255, 255, 0.09);
+  --text-primary: rgba(255, 255, 255, 0.94);
+  --text-secondary: rgba(255, 255, 255, 0.66);
+  --text-tertiary: rgba(255, 255, 255, 0.44);
+  --border-subtle: rgba(255, 255, 255, 0.09);
+  --border-default: rgba(255, 255, 255, 0.14);
+  --warning: #ff9f0a;
+  --warning-bg: rgba(255, 159, 10, 0.14);
+  --danger: #ff453a;
+  --danger-bg: rgba(255, 69, 58, 0.16);
+
   position: absolute;
   inset: 0;
   z-index: 200;
@@ -95,129 +144,224 @@ onUnmounted(() => { offConfirm?.() })
   align-items: center;
   justify-content: center;
   pointer-events: auto;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
+
 .modal-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
+
 .modal-box {
   position: relative;
-  background: rgb(8, 10, 24);
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 16px;
+  background: var(--surface);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
   padding: 24px;
   width: 480px;
   max-width: 90vw;
   box-shadow:
-    0 16px 48px rgba(0, 0, 0, 0.65),
-    0 1px 0 rgba(255, 255, 255, 0.05) inset;
+    0 24px 64px rgba(0, 0, 0, 0.55),
+    0 0 0 0.5px rgba(0, 0, 0, 0.3),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
-.tool-confirm-pop-enter-active {
-  transition: opacity 0.22s ease;
-}
-.tool-confirm-pop-leave-active {
-  transition: opacity 0.14s ease-in;
-}
-.tool-confirm-pop-enter-from,
-.tool-confirm-pop-leave-to {
-  opacity: 0;
-}
-.tool-confirm-pop-enter-active .modal-box {
-  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.tool-confirm-pop-leave-active .modal-box {
-  transition: transform 0.14s ease-in;
-}
-.tool-confirm-pop-enter-from .modal-box,
-.tool-confirm-pop-leave-to .modal-box {
-  transform: scale(0.90);
-}
+
+/* ── Header ───────────────────────────────────────────────────────────── */
 .modal-header {
   display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.modal-header-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--warning-bg);
+  color: var(--warning);
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
+  justify-content: center;
+}
+.modal-header-icon :deep(svg) { width: 20px; height: 20px; }
+.modal-header-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 2px;
+}
+.modal-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
 }
 .badge {
-  background: rgba(255,180,0,0.2);
-  color: #ffb400;
-  border: 1px solid rgba(255,180,0,0.3);
-  border-radius: 4px;
+  align-self: flex-start;
+  background: var(--surface-input);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
   padding: 2px 8px;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
 }
-.title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #e0e0e0;
-}
+
+/* ── Fields ───────────────────────────────────────────────────────────── */
 .modal-field {
-  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 .modal-field label {
-  display: block;
   font-size: 11px;
-  color: #888;
-  margin-bottom: 4px;
+  color: var(--text-tertiary);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.editable-hint {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  margin-left: 4px;
 }
 .dir-path {
   font-size: 12px;
-  color: #aaa;
-  font-family: monospace;
+  color: var(--text-secondary);
+  font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  word-break: break-all;
+  line-height: 1.5;
 }
+
 .content-editor {
   width: 100%;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
-  color: #e0e0e0;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  color: var(--text-primary);
+  font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
   font-size: 13px;
+  line-height: 1.55;
   padding: 10px 12px;
   resize: vertical;
   box-sizing: border-box;
   outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
+.content-editor:hover:not(:focus) { background: rgba(0, 0, 0, 0.28); }
 .content-editor:focus {
-  border-color: rgba(37, 99, 235, 0.4);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-alpha-20);
 }
-.risk-text {
+
+/* ── Risk callout ─────────────────────────────────────────────────────── */
+.risk-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--warning-bg);
+  border: 1px solid rgba(255, 159, 10, 0.3);
+  border-radius: 8px;
   font-size: 12px;
-  color: #f59e0b;
-  margin: 12px 0 16px;
+  color: var(--warning);
   line-height: 1.5;
 }
+.risk-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* ── Actions ──────────────────────────────────────────────────────────── */
 .modal-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   justify-content: flex-end;
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
 }
-.btn-reject {
-  padding: 8px 20px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(229, 231, 235, 0.8);
-  cursor: pointer;
-  font-size: 13px;
-  transition: background 0.15s;
-}
-.btn-reject:hover { background: rgba(255, 255, 255, 0.1); }
+
+.btn-reject,
 .btn-approve {
-  padding: 8px 20px;
-  border-radius: 6px;
-  border: none;
-  background: #2563eb;
-  color: #fff;
-  cursor: pointer;
+  padding: 7px 18px;
+  border-radius: 7px;
   font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, transform 0.08s;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.btn-reject:active,
+.btn-approve:active { transform: scale(0.97); }
+.btn-reject:focus-visible,
+.btn-approve:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.btn-reject {
+  background: var(--surface-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+}
+.btn-reject:hover { background: var(--surface-input-hover); border-color: var(--border-default); }
+
+.btn-approve {
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid transparent;
   font-weight: 600;
 }
-.btn-approve:hover { background: #4a7cf7; }
+.btn-approve:hover { background: var(--accent-hover); }
+
+/* ── Animations ───────────────────────────────────────────────────────── */
+.tool-confirm-pop-enter-active { transition: opacity 0.22s ease; }
+.tool-confirm-pop-leave-active { transition: opacity 0.14s ease-in; }
+.tool-confirm-pop-enter-from,
+.tool-confirm-pop-leave-to { opacity: 0; }
+
+.tool-confirm-pop-enter-active .modal-box {
+  transition: transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.tool-confirm-pop-leave-active .modal-box {
+  transition: transform 0.14s ease-in;
+}
+.tool-confirm-pop-enter-from .modal-box { transform: scale(0.92); }
+.tool-confirm-pop-leave-to .modal-box { transform: scale(0.96); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tool-confirm-pop-enter-active,
+  .tool-confirm-pop-leave-active { transition: opacity 0.1s; }
+  .tool-confirm-pop-enter-active .modal-box,
+  .tool-confirm-pop-leave-active .modal-box { transition: none; }
+  .tool-confirm-pop-enter-from .modal-box,
+  .tool-confirm-pop-leave-to .modal-box { transform: none; }
+}
 </style>

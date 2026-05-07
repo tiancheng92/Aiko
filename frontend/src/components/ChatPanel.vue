@@ -966,7 +966,7 @@ defineExpose({ focusInput, scrollToBottom })
             :class="{ 'is-collapsed': isCollapsed(m, i) }"
             :data-msg-key="msgKey(m, i)"
           >
-            <div class="bubble-row">
+            <div class="bubble-row" :class="{ 'is-collapsed': isCollapsed(m, i) }">
               <!-- Bubble content -->
               <div v-if="m.role !== 'assistant'" class="bubble markdown" :class="{ 'has-images': (m.images && m.images.length > 0) || (m.files && m.files.length > 0) }">
                 <div v-if="m.images && m.images.length > 0" class="msg-images">
@@ -1010,14 +1010,14 @@ defineExpose({ focusInput, scrollToBottom })
                   <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
                 </button>
               </div>
-            </div>
 
-            <!-- Collapse fade overlay + expand button -->
-            <div v-if="isCollapsed(m, i)" class="collapse-fade" @click.stop="toggleExpand(m, i)">
-              <button class="collapse-btn" @click.stop="toggleExpand(m, i)">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                展开
-              </button>
+              <!-- Collapse fade overlay + expand button (inside bubble-row so width matches bubble) -->
+              <div v-if="isCollapsed(m, i)" class="collapse-fade" :class="m.role" @click.stop="toggleExpand(m, i)">
+                <button class="collapse-btn" @click.stop="toggleExpand(m, i)">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                  展开
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1085,12 +1085,14 @@ defineExpose({ focusInput, scrollToBottom })
       <ExecutionProgress />
 
       <!-- Voice recording status bar -->
-      <div v-if="isRecording" class="voice-hint-bar">
-        <span class="voice-hint-icon">🎙️</span>
+      <div v-if="isRecording" class="voice-hint-bar" role="status" aria-live="polite">
+        <span class="voice-hint-icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </span>
         <span class="voice-hint-text">
           {{ voiceHint ? `"${voiceHint}"` : '正在聆听...' }}
         </span>
-        <span class="voice-hint-dots">
+        <span class="voice-hint-dots" aria-hidden="true">
           <span />
           <span />
           <span />
@@ -1153,7 +1155,34 @@ defineExpose({ focusInput, scrollToBottom })
 </template>
 
 <style scoped>
-.chat-panel { display: flex; flex-direction: column; height: 100%; position: relative; }
+.chat-panel {
+  /* Design tokens — aligned with SettingsWindow/ChatBubble */
+  --accent: #007aff;
+  --accent-hover: #0a84ff;
+  --accent-alpha-20: rgba(0, 122, 255, 0.20);
+  --accent-alpha-12: rgba(0, 122, 255, 0.12);
+  --accent-alpha-08: rgba(0, 122, 255, 0.08);
+  --surface: rgba(28, 28, 32, 0.78);
+  --surface-card: rgba(255, 255, 255, 0.05);
+  --surface-input: rgba(255, 255, 255, 0.06);
+  --surface-input-hover: rgba(255, 255, 255, 0.09);
+  --text-primary: rgba(255, 255, 255, 0.94);
+  --text-secondary: rgba(255, 255, 255, 0.66);
+  --text-tertiary: rgba(255, 255, 255, 0.44);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-default: rgba(255, 255, 255, 0.12);
+  --danger: #ff453a;
+  --danger-bg: rgba(255, 69, 58, 0.14);
+  --success: #30d158;
+  --warning: #ff9f0a;
+
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
 
 /* Messages list */
 .messages {
@@ -1185,7 +1214,8 @@ defineExpose({ focusInput, scrollToBottom })
   display: block;
   width: 5px; height: 5px;
   border-radius: 50%;
-  background: rgba(37,99,235,0.6);
+  background: var(--accent);
+  opacity: 0.7;
   animation: dot-bounce 1.2s ease-in-out infinite;
 }
 .h-dot:nth-child(2) { animation-delay: 0.2s; }
@@ -1204,28 +1234,45 @@ defineExpose({ focusInput, scrollToBottom })
 .bubble-collapse-wrap {
   position: relative;
 }
-.bubble-collapse-wrap.is-collapsed {
+/* Clip collapse on `.bubble-row` (inline-flex → same width as the bubble)
+   so the fade's `bottom: 0` anchors to the visible edge instead of the
+   bubble's full (clipped) height. Inherit bubble radius so the fade never
+   extends past the rounded corners. */
+.bubble-row.is-collapsed {
   max-height: 350px;
   overflow: hidden;
+  border-radius: 16px 16px 16px 4px;
 }
+.msg.user .bubble-row.is-collapsed { border-radius: 16px 16px 4px 16px; }
 
-/* Gradient fade at the bottom of a collapsed bubble */
+/* Gradient fade at the bottom of a collapsed bubble — anchored to
+   `.bubble-row` (inline-flex → same width as the bubble). */
 .collapse-fade {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 80px;
-  background: linear-gradient(to bottom, transparent, rgba(8, 10, 24, 0.96));
+  height: 96px;
+  background: linear-gradient(
+    to bottom,
+    rgba(44, 44, 48, 0)    0%,
+    rgba(44, 44, 48, 0.55) 55%,
+    rgba(44, 44, 48, 0.92) 100%
+  );
   display: flex;
   align-items: flex-end;
   justify-content: center;
   padding-bottom: 10px;
   cursor: pointer;
 }
-/* For user bubbles the gradient should match the bubble background */
-.msg.user .collapse-fade {
-  background: linear-gradient(to bottom, transparent, rgba(8, 10, 24, 0.96));
+/* User bubble fade: blend into the solid accent background. */
+.collapse-fade.user {
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 122, 255, 0)    0%,
+    rgba(0, 122, 255, 0.45) 55%,
+    rgba(0, 122, 255, 0.95) 100%
+  );
 }
 
 .collapse-btn {
@@ -1233,22 +1280,23 @@ defineExpose({ focusInput, scrollToBottom })
   align-items: center;
   gap: 5px;
   padding: 5px 14px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 20px;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-primary);
   font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-  box-shadow: none;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   font-family: inherit;
 }
 .collapse-btn:hover {
-  background: rgba(59, 130, 246, 0.15);
-  border-color: rgba(59, 130, 246, 0.3);
-  color: #93c5fd;
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
 }
 
 /* Re-collapse button */
@@ -1259,15 +1307,15 @@ defineExpose({ focusInput, scrollToBottom })
   padding: 0;
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.28);
+  color: var(--text-tertiary);
   font-size: 11px;
   cursor: pointer;
-  transition: color 0.15s;
+  transition: color 0.12s;
   font-family: inherit;
   box-shadow: none;
   line-height: 1;
 }
-.recollapse-btn:hover { color: rgba(255, 255, 255, 0.6); }
+.recollapse-btn:hover { color: var(--text-secondary); }
 
 /* Bubble row: relative container，按钮绝对定位不占空间 */
 .bubble-row { position: relative; display: inline-flex; }
@@ -1283,12 +1331,12 @@ defineExpose({ focusInput, scrollToBottom })
   word-break: break-word;
 }
 
-/* User bubble */
+/* User bubble — solid accent (macOS iMessage-like) */
 .user .bubble {
-  background: linear-gradient(135deg, #2563eb, #1e3a8a);
+  background: var(--accent);
   color: #fff;
   border-radius: 16px 16px 4px 16px;
-  box-shadow: 0 2px 12px rgba(37, 99, 235, 0.4);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), 0 0 0 0.5px rgba(0, 0, 0, 0.1);
 }
 .user .bubble.has-images {
   display: flex;
@@ -1296,19 +1344,19 @@ defineExpose({ focusInput, scrollToBottom })
   gap: 8px;
 }
 
-/* Assistant bubble */
+/* Assistant bubble — glass surface */
 .assistant .bubble {
-  background: rgba(30, 41, 70, 0.55);
-  color: #e2e8f0;
+  background: var(--surface-card);
+  color: var(--text-primary);
   border-radius: 16px 16px 16px 4px;
-  border: 1px solid rgba(99, 130, 210, 0.15);
+  border: 1px solid var(--border-subtle);
 }
 
 /* System / error bubble */
 .system .bubble {
-  background: rgba(220, 38, 38, 0.15);
-  color: #fca5a5;
-  border: 1px solid rgba(220, 38, 38, 0.3);
+  background: var(--danger-bg);
+  color: #ffb3ad;
+  border: 1px solid rgba(255, 69, 58, 0.28);
   border-radius: 10px;
   font-size: 12px;
   white-space: pre-wrap;
@@ -1328,24 +1376,24 @@ defineExpose({ focusInput, scrollToBottom })
 
 /* Proactive assistant messages: subtle left-border accent */
 .assistant .bubble.proactive {
-  border-left: 3px solid rgba(120, 180, 255, 0.6);
+  border-left: 3px solid var(--accent);
   padding-left: 13px;
 }
 
 /* Stop button */
 .stop-btn {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid rgba(255, 69, 58, 0.3);
+  border-radius: 7px;
   padding: 6px 14px;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.12s, transform 0.08s;
 }
-.stop-btn:hover {
-  background: rgba(239, 68, 68, 0.25);
-}
+.stop-btn:hover { background: rgba(255, 69, 58, 0.22); }
+.stop-btn:active { transform: scale(0.97); }
 
 /* Cursor blink */
 .cursor { animation: blink 1s step-end infinite; }
@@ -1388,7 +1436,8 @@ defineExpose({ focusInput, scrollToBottom })
 /* Timestamp */
 .msg-time {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.28);
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
   user-select: none;
 }
 
@@ -1409,24 +1458,29 @@ defineExpose({ focusInput, scrollToBottom })
 
 .msg-action-btn {
   flex-shrink: 0;
-  background: rgba(15, 20, 38, 0.65);
-  border: 1px solid rgba(255,255,255,0.08);
-  color: rgba(156, 163, 175, 0.8);
+  background: rgba(28, 28, 32, 0.82);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
   border-radius: 6px;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   outline: none;
   padding: 0;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.08s;
 }
 .msg-action-btn:hover {
-  background: rgba(37, 99, 235, 0.2);
-  border-color: rgba(37, 99, 235, 0.4);
-  color: #93c5fd;
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+}
+.msg-action-btn:active { transform: scale(0.94); }
+.msg-action-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 /* Markdown prose */
@@ -1458,15 +1512,20 @@ defineExpose({ focusInput, scrollToBottom })
 }
 .bubble.markdown :deep(.code-copy) {
   font-size: 11px;
-  padding: 2px 10px;
-  background: rgba(3,105,161,0.15);
-  color: #7dd3fc;
-  border: 1px solid rgba(3,105,161,0.25);
-  border-radius: 4px;
+  padding: 3px 10px;
+  background: var(--accent-alpha-12);
+  color: var(--accent);
+  border: 1px solid var(--accent-alpha-20);
+  border-radius: 5px;
   cursor: pointer;
-  transition: background 0.15s;
+  font-weight: 500;
+  transition: background 0.12s, color 0.12s;
 }
-.bubble.markdown :deep(.code-copy:hover) { background: rgba(3,105,161,0.3); }
+.bubble.markdown :deep(.code-copy:hover) {
+  background: var(--accent);
+  color: #fff;
+  border-color: transparent;
+}
 .bubble.markdown :deep(pre) {
   background: rgba(10, 10, 20, 0.6);
   padding: 12px 14px;
@@ -1505,14 +1564,20 @@ defineExpose({ focusInput, scrollToBottom })
 .bubble.markdown :deep(.code-line:hover .line-nr) {
   color: rgba(148, 163, 184, 0.7);
 }
-.bubble.markdown :deep(code) { font-family: 'Fira Code', 'JetBrains Mono', monospace; font-size: 12px; }
+.bubble.markdown :deep(code) { font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', 'Fira Code', Menlo, monospace; font-size: 12px; }
 .bubble.markdown :deep(:not(pre) > code) {
-  background: rgba(37, 99, 235, 0.18);
-  color: #93c5fd;
-  padding: 1px 5px;
+  background: var(--accent-alpha-12);
+  color: var(--accent);
+  padding: 1px 6px;
   border-radius: 4px;
   font-size: 12px;
 }
+/* Inline code inside user bubble (solid accent background) — flip to white */
+.user .bubble.markdown :deep(:not(pre) > code) {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+.user .bubble.markdown :deep(a) { color: #fff; text-decoration: underline; }
 
 /* Lists */
 .bubble.markdown :deep(ul), .bubble.markdown :deep(ol) { padding-left: 20px; margin: 4px 0 8px; }
@@ -1521,11 +1586,11 @@ defineExpose({ focusInput, scrollToBottom })
 
 /* Blockquote */
 .bubble.markdown :deep(blockquote) {
-  border-left: 3px solid #2563eb;
+  border-left: 3px solid var(--accent);
   margin: 8px 0;
-  padding: 6px 10px;
-  color: #94a3b8;
-  background: rgba(37, 99, 235, 0.06);
+  padding: 6px 12px;
+  color: var(--text-secondary);
+  background: var(--accent-alpha-08);
   border-radius: 0 6px 6px 0;
 }
 
@@ -1537,11 +1602,11 @@ defineExpose({ focusInput, scrollToBottom })
 
 /* Links — break long URLs so they don't overflow the bubble */
 .bubble.markdown :deep(a) {
-  color: #60a5fa;
+  color: var(--accent);
   text-decoration: none;
   word-break: break-all;
 }
-.bubble.markdown :deep(a:hover) { text-decoration: underline; color: #93c5fd; }
+.bubble.markdown :deep(a:hover) { text-decoration: underline; }
 
 /* Tables */
 .bubble.markdown :deep(.table-wrapper) {
@@ -1598,15 +1663,15 @@ defineExpose({ focusInput, scrollToBottom })
   background: rgba(255,255,255,0.03);
 }
 .bubble.markdown :deep(tbody tr:hover) {
-  background: rgba(59, 130, 246, 0.12);
+  background: var(--accent-alpha-08);
 }
-.bubble.markdown :deep(.tbl-row) {
-  cursor: pointer;
-}
+.bubble.markdown :deep(.tbl-row) { cursor: pointer; }
+
+/* ── Table filter bar ─────────────────────────────────────── */
 .bubble.markdown :deep(.tbl-filter-bar) {
-  padding: 7px 10px 6px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  background: rgba(255,255,255,0.015);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.02);
   display: flex;
   gap: 6px;
   align-items: center;
@@ -1615,133 +1680,161 @@ defineExpose({ focusInput, scrollToBottom })
   position: relative;
   flex-shrink: 0;
 }
+
+/* Column-select trigger button (macOS pull-down style) */
 .bubble.markdown :deep(.tbl-col-btn) {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.09);
+  gap: 6px;
+  background: var(--surface-input);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
-  color: rgba(255,255,255,0.8);
+  color: var(--text-primary);
   font-size: 12px;
+  font-weight: 500;
   font-family: inherit;
-  padding: 4px 8px 4px 9px;
+  padding: 4px 8px 4px 10px;
   outline: none;
   cursor: pointer;
   white-space: nowrap;
   max-width: 120px;
-  transition: border-color 0.15s;
+  transition: background 0.12s, border-color 0.12s;
+  height: 26px;
+  box-shadow: none;
 }
-.bubble.markdown :deep(.tbl-col-btn:focus) {
-  border-color: rgba(37,99,235,0.4);
+.bubble.markdown :deep(.tbl-col-btn:hover) { background: var(--surface-input-hover); }
+.bubble.markdown :deep(.tbl-col-btn:focus-visible) {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-alpha-20);
 }
 .bubble.markdown :deep(.tbl-col-chevron) {
-  opacity: 0.45;
+  opacity: 0.55;
   flex-shrink: 0;
+  width: 10px;
+  height: 10px;
 }
+
+/* Dropdown popover — macOS menu style */
 .bubble.markdown :deep(.tbl-col-drop) {
   display: none;
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  min-width: 100%;
-  max-width: 220px;
-  max-height: 200px;
+  min-width: 140px;
+  max-width: 240px;
+  max-height: 240px;
   overflow-y: auto;
-  background: rgba(22,22,34,0.97);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 8px;
+  background: rgba(38, 38, 44, 0.82);
+  border: 1px solid var(--border-default);
+  border-radius: 9px;
   padding: 4px;
   z-index: 100;
   list-style: none;
   margin: 0;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.45);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.55),
+    0 0 0 0.5px rgba(0, 0, 0, 0.3),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
 }
-.bubble.markdown :deep(.tbl-col-drop--open) {
-  display: block;
+.bubble.markdown :deep(.tbl-col-drop--open) { display: block; }
+.bubble.markdown :deep(.tbl-col-drop)::-webkit-scrollbar { width: 6px; }
+.bubble.markdown :deep(.tbl-col-drop)::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 3px;
 }
+
 .bubble.markdown :deep(.tbl-col-opt) {
   padding: 5px 10px;
-  color: rgba(255,255,255,0.72);
+  color: var(--text-primary);
   font-size: 12px;
+  font-weight: 400;
   border-radius: 5px;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   list-style: none;
+  transition: background 0.08s, color 0.08s;
 }
 .bubble.markdown :deep(.tbl-col-opt:hover) {
-  background: rgba(255,255,255,0.08);
-  color: rgba(255,255,255,0.95);
+  background: var(--accent);
+  color: #fff;
 }
 .bubble.markdown :deep(.tbl-col-opt--sel) {
-  color: rgba(130,175,255,0.95);
-  background: rgba(37,99,235,0.15);
+  color: #fff;
+  background: var(--accent);
+  font-weight: 500;
 }
+
+/* Filter search input */
 .bubble.markdown :deep(.tbl-filter-input) {
   flex: 1;
   min-width: 0;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.09);
+  background: var(--surface-input);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
-  color: rgba(255,255,255,0.8);
+  color: var(--text-primary);
   font-size: 12px;
   font-family: inherit;
-  padding: 4px 9px;
+  padding: 4px 10px;
   outline: none;
   box-sizing: border-box;
-  transition: border-color 0.15s;
+  height: 26px;
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
 }
-.bubble.markdown :deep(.tbl-filter-input::placeholder) {
-  color: rgba(255,255,255,0.28);
-}
+.bubble.markdown :deep(.tbl-filter-input:hover:not(:focus)) { background: var(--surface-input-hover); }
+.bubble.markdown :deep(.tbl-filter-input::placeholder) { color: var(--text-tertiary); }
 .bubble.markdown :deep(.tbl-filter-input:focus) {
-  border-color: rgba(37,99,235,0.4);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-alpha-20);
 }
+
+/* Pagination */
 .bubble.markdown :deep(.table-pagination) {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  padding: 7px 12px;
-  border-top: 1px solid rgba(255,255,255,0.07);
-  background: rgba(255,255,255,0.02);
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.02);
 }
 .bubble.markdown :deep(.tbl-page-btn) {
-  background: none;
-  border: 1px solid rgba(255,255,255,0.1);
-  color: rgba(255,255,255,0.6);
-  border-radius: 5px;
+  background: var(--surface-input);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  border-radius: 6px;
   width: 28px;
   height: 26px;
   cursor: pointer;
-  font-size: 15px;
+  font-size: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
   padding: 0;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.08s;
 }
 .bubble.markdown :deep(.tbl-page-btn:hover:not(:disabled)) {
-  background: rgba(59, 130, 246, 0.2);
-  border-color: rgba(59, 130, 246, 0.4);
+  background: var(--accent);
+  border-color: transparent;
   color: #fff;
 }
+.bubble.markdown :deep(.tbl-page-btn:active:not(:disabled)) { transform: scale(0.94); }
 .bubble.markdown :deep(.tbl-page-btn:disabled) {
-  opacity: 0.25;
+  opacity: 0.3;
   cursor: not-allowed;
 }
 .bubble.markdown :deep(.tbl-page-info) {
   font-size: 12px;
-  color: rgba(255,255,255,0.45);
+  color: var(--text-secondary);
   user-select: none;
   min-width: 80px;
   text-align: center;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Table row detail modal */
@@ -1758,20 +1851,23 @@ defineExpose({ focusInput, scrollToBottom })
   position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 .tbl-detail-box {
   position: relative;
-  background: rgb(8, 10, 24);
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 16px;
-  width: 420px;
+  background: rgba(42, 42, 48, 0.92);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  width: 460px;
   max-width: 90vw;
   max-height: 70vh;
   box-shadow:
-    0 16px 48px rgba(0, 0, 0, 0.65),
-    0 1px 0 rgba(255, 255, 255, 0.05) inset;
+    0 24px 64px rgba(0, 0, 0, 0.55),
+    0 0 0 0.5px rgba(0, 0, 0, 0.3),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1780,29 +1876,35 @@ defineExpose({ focusInput, scrollToBottom })
   display: flex;
   align-items: center;
   padding: 14px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
 .tbl-detail-title {
   flex: 1;
   font-size: 14px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
 }
 .tbl-detail-close {
-  background: none;
+  background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.3);
-  font-size: 13px;
+  color: var(--text-tertiary);
+  width: 24px;
+  height: 24px;
+  padding: 0;
   cursor: pointer;
-  padding: 4px 6px;
   border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
-  transition: color 0.15s, background 0.15s;
+  font-size: 13px;
+  transition: color 0.12s, background 0.12s;
 }
 .tbl-detail-close:hover {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.12);
+  color: var(--danger);
+  background: rgba(255, 69, 58, 0.14);
 }
 .tbl-detail-body {
   overflow-y: auto;
@@ -1821,29 +1923,27 @@ defineExpose({ focusInput, scrollToBottom })
   display: flex;
   gap: 14px;
   align-items: baseline;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border-radius: 8px;
   transition: background 0.12s;
 }
-.tbl-detail-pair:hover {
-  background: rgba(37, 99, 235, 0.07);
-}
+.tbl-detail-pair:hover { background: var(--accent-alpha-08); }
 .tbl-detail-key {
   flex-shrink: 0;
   width: 120px;
   font-size: 11px;
-  font-weight: 500;
-  color: rgba(99, 160, 246, 0.8);
+  font-weight: 600;
+  color: var(--text-tertiary);
   word-break: break-word;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
 }
 .tbl-detail-value {
   flex: 1;
   font-size: 13px;
-  color: rgba(229, 231, 235, 0.9);
+  color: var(--text-primary);
   word-break: break-word;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 .tbl-detail-value.markdown :deep(p) { margin: 0; }
 .tbl-detail-value.markdown :deep(p + p) { margin-top: 4px; }
@@ -1875,16 +1975,18 @@ defineExpose({ focusInput, scrollToBottom })
 
 /* ── Composer card ─────────────────────────────────────────── */
 .input-area {
-  margin: 12px 10px 10px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
+  margin: 10px 12px;
+  background: var(--surface-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
   flex-shrink: 0;
-  transition: border-color 0.2s;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
   overflow: hidden;
 }
+.input-area:hover:not(:focus-within) { background: var(--surface-input-hover); }
 .input-area:focus-within {
-  border-color: rgba(37, 99, 235, 0.55);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-alpha-20);
 }
 .input-area textarea {
   display: block;
@@ -1893,74 +1995,80 @@ defineExpose({ focusInput, scrollToBottom })
   background: transparent;
   border: none;
   padding: 10px 12px 6px;
-  color: #f9fafb;
+  color: var(--text-primary);
   font-size: 13px;
   outline: none;
   resize: none;
   font-family: inherit;
-  line-height: 1.6;
+  line-height: 1.55;
   min-height: 40px;
   max-height: 120px;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.1) transparent;
+  scrollbar-color: rgba(255,255,255,0.14) transparent;
 }
 .input-area textarea::-webkit-scrollbar { width: 4px; background: transparent; }
-.input-area textarea::-webkit-scrollbar-track { background: transparent; }
-.input-area textarea::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
-.input-area textarea::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
-.input-area textarea::placeholder { color: rgba(156, 163, 175, 0.45); }
+.input-area textarea::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 2px; }
+.input-area textarea::placeholder { color: var(--text-tertiary); }
 .input-toolbar {
   display: flex;
   align-items: center;
   padding: 4px 8px 6px;
-  gap: 6px;
+  gap: 4px;
   border-top: none;
 }
 .toolbar-spacer { flex: 1; }
 .input-hint {
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.2);
+  color: var(--text-tertiary);
   user-select: none;
   text-align: right;
-  padding: 0 12px 6px;
+  padding: 0 14px 8px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
 }
 .send-btn {
-  background: linear-gradient(135deg, #2563eb, #1e3a8a);
+  background: var(--accent);
   color: #fff;
   border: none;
-  border-radius: 8px;
-  width: 32px;
-  height: 32px;
+  border-radius: 7px;
+  width: 30px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: opacity 0.15s, transform 0.1s;
-  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
+  transition: background 0.12s, transform 0.08s;
   flex-shrink: 0;
 }
-.send-btn:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
-.send-btn:active:not(:disabled) { transform: translateY(0); }
-.send-btn:disabled { opacity: 0.3; cursor: not-allowed; box-shadow: none; }
+.send-btn:hover:not(:disabled) { background: var(--accent-hover); }
+.send-btn:active:not(:disabled) { transform: scale(0.94); }
+.send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.send-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ── Voice hint status bar ─────────────────────────────────── */
 .voice-hint-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 8px 12px;
+  gap: 10px;
+  margin: 0 12px 8px;
   padding: 10px 14px;
   border-radius: 10px;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(139, 92, 246, 0.15));
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  font-size: 13px;
-  color: rgba(200, 210, 255, 0.9);
+  background: var(--accent-alpha-12);
+  border: 1px solid var(--accent-alpha-20);
+  font-size: 12px;
+  color: var(--accent);
 }
 
 .voice-hint-icon {
-  font-size: 16px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
 }
 
 .voice-hint-text {
@@ -1968,6 +2076,8 @@ defineExpose({ focusInput, scrollToBottom })
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
 .voice-hint-dots {
@@ -1981,7 +2091,7 @@ defineExpose({ focusInput, scrollToBottom })
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #0369a1;
+  background: var(--accent);
   animation: dot-bounce 1.2s ease-in-out infinite;
 }
 
@@ -2015,22 +2125,24 @@ defineExpose({ focusInput, scrollToBottom })
   position: absolute;
   top: -6px;
   right: -6px;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  background: rgba(0,0,0,0.7);
+  background: rgba(28, 28, 32, 0.95);
   color: #fff;
-  border: none;
-  font-size: 12px;
+  border: 1px solid var(--border-default);
+  font-size: 13px;
   line-height: 1;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  box-shadow: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: background 0.12s, transform 0.08s;
 }
-.pending-img-remove:hover { background: rgba(220,50,50,0.8); }
+.pending-img-remove:hover { background: var(--danger); border-color: transparent; }
+.pending-img-remove:active { transform: scale(0.92); }
 
 /* Images inside sent user messages */
 .msg-images {
@@ -2074,19 +2186,20 @@ defineExpose({ focusInput, scrollToBottom })
   flex-shrink: 0;
   background: transparent;
   border: none;
-  border-radius: 8px;
-  width: 32px;
-  height: 32px;
+  border-radius: 6px;
+  width: 30px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(156,163,175,0.6);
+  color: var(--text-tertiary);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.12s, color 0.12s;
   padding: 0;
 }
-.attach-btn:hover:not(:disabled) { background: rgba(255,255,255,0.08); color: #f9fafb; }
+.attach-btn:hover:not(:disabled) { background: rgba(255,255,255,0.08); color: var(--text-primary); }
 .attach-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.attach-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* Pending file chips above input */
 .pending-files {
@@ -2098,13 +2211,13 @@ defineExpose({ focusInput, scrollToBottom })
 .pending-file-chip {
   display: flex;
   align-items: center;
-  gap: 5px;
-  background: rgba(3,105,161,0.15);
-  border: 1px solid rgba(3,105,161,0.3);
-  border-radius: 8px;
-  padding: 4px 8px;
+  gap: 6px;
+  background: var(--accent-alpha-12);
+  border: 1px solid var(--accent-alpha-20);
+  border-radius: 7px;
+  padding: 4px 10px;
   font-size: 12px;
-  color: #7dd3fc;
+  color: var(--accent);
   max-width: 220px;
 }
 .pending-file-name {
@@ -2116,15 +2229,17 @@ defineExpose({ focusInput, scrollToBottom })
 .pending-file-remove {
   background: none;
   border: none;
-  color: rgba(125,211,252,0.7);
+  color: var(--accent);
+  opacity: 0.7;
   cursor: pointer;
   font-size: 14px;
   line-height: 1;
   padding: 0;
   flex-shrink: 0;
   box-shadow: none;
+  transition: opacity 0.12s;
 }
-.pending-file-remove:hover { color: #f9fafb; }
+.pending-file-remove:hover { opacity: 1; }
 
 /* File chips inside sent user messages */
 .msg-files {
@@ -2167,82 +2282,85 @@ defineExpose({ focusInput, scrollToBottom })
 .clear-confirm-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 .clear-confirm-box {
   position: relative;
-  background: rgb(8, 10, 24);
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 16px;
+  background: rgba(42, 42, 48, 0.92);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
   padding: 24px;
   width: 380px;
   max-width: 90vw;
   box-shadow:
-    0 16px 48px rgba(0, 0, 0, 0.65),
-    0 1px 0 rgba(255, 255, 255, 0.05) inset;
+    0 24px 64px rgba(0, 0, 0, 0.55),
+    0 0 0 0.5px rgba(0, 0, 0, 0.3),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', sans-serif;
 }
-.confirm-pop-enter-active {
-  transition: opacity 0.22s ease;
-}
-.confirm-pop-leave-active {
-  transition: opacity 0.14s ease-in;
-}
+.confirm-pop-enter-active { transition: opacity 0.22s ease; }
+.confirm-pop-leave-active { transition: opacity 0.14s ease-in; }
 .confirm-pop-enter-from,
-.confirm-pop-leave-to {
-  opacity: 0;
-}
+.confirm-pop-leave-to { opacity: 0; }
 .confirm-pop-enter-active .clear-confirm-box {
-  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .confirm-pop-leave-active .clear-confirm-box {
   transition: transform 0.14s ease-in;
 }
-.confirm-pop-enter-from .clear-confirm-box,
-.confirm-pop-leave-to .clear-confirm-box {
-  transform: scale(0.90);
-}
+.confirm-pop-enter-from .clear-confirm-box { transform: scale(0.92); }
+.confirm-pop-leave-to .clear-confirm-box { transform: scale(0.96); }
+
 .clear-confirm-title {
   font-size: 15px;
   font-weight: 600;
-  color: #e2e8f0;
-  margin: 0 0 12px;
+  color: rgba(255, 255, 255, 0.94);
+  letter-spacing: -0.01em;
+  margin: 0 0 10px;
 }
 .clear-confirm-text {
   font-size: 13px;
-  color: rgba(255,255,255,0.55);
+  color: rgba(255, 255, 255, 0.66);
   margin: 0 0 20px;
   line-height: 1.6;
 }
 .clear-confirm-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
 }
-.clear-confirm-cancel {
-  padding: 8px 18px;
-  border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.06);
-  color: #e2e8f0;
-  font-size: 13px;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background 0.15s;
-}
-.clear-confirm-cancel:hover { background: rgba(255,255,255,0.1); }
+.clear-confirm-cancel,
 .clear-confirm-ok {
-  padding: 8px 18px;
-  border-radius: 8px;
-  border: none;
-  background: linear-gradient(135deg, #dc2626, #991b1b);
-  color: #fff;
+  padding: 7px 18px;
+  border-radius: 7px;
   font-size: 13px;
   font-weight: 500;
+  letter-spacing: -0.01em;
   cursor: pointer;
   font-family: inherit;
-  transition: opacity 0.15s;
+  transition: background 0.12s, transform 0.08s;
+  -webkit-appearance: none;
+  appearance: none;
 }
-.clear-confirm-ok:hover { opacity: 0.9; }
+.clear-confirm-cancel:active,
+.clear-confirm-ok:active { transform: scale(0.97); }
+
+.clear-confirm-cancel {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.94);
+}
+.clear-confirm-cancel:hover { background: rgba(255, 255, 255, 0.10); }
+
+.clear-confirm-ok {
+  border: 1px solid transparent;
+  background: #ff453a;
+  color: #fff;
+  font-weight: 600;
+}
+.clear-confirm-ok:hover { background: #ff5e55; }
 </style>

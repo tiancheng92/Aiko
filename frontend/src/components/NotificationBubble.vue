@@ -5,8 +5,8 @@ import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { marked } from 'marked'
 
 const props = defineProps({
-  petPos:    { type: Object,  default: () => ({ x: -1, y: -1 }) },
-  petSize:   { type: Number,  default: 160 },
+  petPos:  { type: Object, default: () => ({ x: -1, y: -1 }) },
+  petSize: { type: Number, default: 160 },
 })
 
 const notification = ref(null)
@@ -46,7 +46,8 @@ onMounted(() => {
     nextTick(() => {
       if (bubbleEl.value) bubbleH.value = bubbleEl.value.offsetHeight
     })
-    // 5 分钟后自动消失；太长会让已读通知长期停留在桌面。
+    // Auto-dismiss after 5 minutes; anything longer turns read notifications
+    // into permanent desktop clutter.
     hideTimer = setTimeout(dismiss, 5 * 60 * 1000)
   })
 })
@@ -64,13 +65,22 @@ onUnmounted(() => {
       v-if="notification"
       ref="bubbleEl"
       class="notif-bubble"
+      role="status"
+      aria-live="polite"
       :style="{ left: pos.x + 'px', top: pos.y + 'px', '--tail-left': (props.petSize / 2 + 20) + 'px' }"
       @click="dismiss"
     >
       <div class="notif-header">
-        <span class="notif-icon">🔔</span>
+        <span class="notif-icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
+        </span>
         <span class="notif-title">{{ notification.title }}</span>
-        <button class="notif-close" @click.stop="dismiss">✕</button>
+        <button class="notif-close" aria-label="关闭通知" @click.stop="dismiss">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
       <div class="notif-body markdown" v-html="renderMd(notification.message)" @click.stop />
     </div>
@@ -80,112 +90,185 @@ onUnmounted(() => {
 
 <style scoped>
 .notif-bubble {
+  /* Design tokens */
+  --accent: #007aff;
+  --surface: rgba(28, 28, 32, 0.82);
+  --text-primary: rgba(255, 255, 255, 0.94);
+  --text-secondary: rgba(255, 255, 255, 0.68);
+  --text-tertiary: rgba(255, 255, 255, 0.42);
+  --border-subtle: rgba(255, 255, 255, 0.10);
+  --danger: #ff453a;
+
   position: fixed;
   z-index: 99997;
   width: 320px;
-  background: rgb(5, 6, 12);
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 18px;
+  background: var(--surface);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
   box-shadow:
-    0 16px 48px rgba(0, 0, 0, 0.65),
-    0 1px 0 rgba(255, 255, 255, 0.05) inset;
-  padding: 12px 16px 14px;
-  color: #e5e7eb;
+    0 20px 52px rgba(0, 0, 0, 0.55),
+    0 0 0 0.5px rgba(0, 0, 0, 0.3),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  padding: 12px 14px 14px;
+  color: var(--text-primary);
   cursor: pointer;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
+
+/* Speech-bubble tail pointing down to the pet */
 .notif-bubble::after {
   content: '';
   position: absolute;
-  bottom: -10px;
+  bottom: -9px;
   left: calc(var(--tail-left, 100px) - 8px);
-  width: 0;
-  height: 0;
-  border-left: 8px solid transparent;
-  border-right: 8px solid transparent;
-  border-top: 10px solid rgb(5, 6, 12);
+  width: 16px;
+  height: 10px;
+  background: var(--surface);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  border-left: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--border-subtle);
 }
-/* ── Notification appear / disappear ── */
+
+.notif-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.notif-icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: rgba(0, 122, 255, 0.16);
+  color: var(--accent);
+}
+.notif-icon :deep(svg) { width: 13px; height: 13px; }
+
+.notif-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notif-close {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: background 0.12s, color 0.12s;
+  flex-shrink: 0;
+}
+.notif-close:hover {
+  background: rgba(255, 69, 58, 0.16);
+  color: var(--danger);
+}
+.notif-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.notif-body {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.65;
+  max-height: 300px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+  word-break: break-word;
+  cursor: text;
+}
+.notif-body::-webkit-scrollbar { width: 6px; }
+.notif-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 3px; }
+
+/* ── Animations ───────────────────────────────────────────────────────── */
 .notif-pop-enter-active {
-  transition: opacity 0.26s cubic-bezier(0.34, 1.56, 0.64, 1),
-              transform 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition:
+    opacity 0.24s cubic-bezier(0.34, 1.56, 0.64, 1),
+    transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
   transform-origin: bottom left;
 }
 .notif-pop-leave-active {
-  transition: opacity 0.18s ease-in,
-              transform 0.18s ease-in;
+  transition:
+    opacity 0.16s ease-in,
+    transform 0.16s ease-in;
   transform-origin: bottom left;
 }
 .notif-pop-enter-from,
 .notif-pop-leave-to {
   opacity: 0;
-  transform: scale(0.88) translateY(10px);
+  transform: scale(0.90) translateY(8px);
 }
-.notif-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-.notif-icon { font-size: 15px; flex-shrink: 0; }
-.notif-title {
-  flex: 1;
-  font-size: 13px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.90);
-  letter-spacing: 0.01em;
-}
-.notif-close {
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.30);
-  font-size: 12px;
-  cursor: pointer;
-  padding: 3px 5px;
-  border-radius: 6px;
-  box-shadow: none;
-  line-height: 1;
-  transition: color 0.15s, background 0.15s;
-}
-.notif-close:hover { color: #ef4444; background: rgba(239, 68, 68, 0.12); }
-
-.notif-body {
-  font-size: 13px;
-  color: rgba(209, 213, 219, 0.9);
-  line-height: 1.7;
-  max-height: 300px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
-  word-break: break-word;
-  cursor: text;
+@media (prefers-reduced-motion: reduce) {
+  .notif-pop-enter-active,
+  .notif-pop-leave-active { transition: opacity 0.1s; }
+  .notif-pop-enter-from,
+  .notif-pop-leave-to { transform: none; }
 }
 
-/* Markdown styles */
+/* ── Markdown ─────────────────────────────────────────────────────────── */
 .notif-body :deep(p) { margin: 0 0 6px; }
 .notif-body :deep(p:last-child) { margin-bottom: 0; }
-.notif-body :deep(strong) { color: #fff; font-weight: 600; }
-.notif-body :deep(em) { color: #c4b5fd; }
+.notif-body :deep(strong) { color: var(--text-primary); font-weight: 600; }
+.notif-body :deep(em) { color: var(--text-primary); font-style: italic; }
 .notif-body :deep(code) {
-  background: rgba(255,255,255,0.1);
-  padding: 1px 5px;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 6px;
   border-radius: 4px;
   font-size: 12px;
-  font-family: monospace;
+  font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
 }
 .notif-body :deep(ul), .notif-body :deep(ol) {
   margin: 4px 0 6px;
   padding-left: 18px;
 }
 .notif-body :deep(li) { margin: 2px 0; }
-.notif-body :deep(a) { color: #7dd3fc; text-decoration: underline; }
-.notif-body :deep(hr) { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 8px 0; }
-.notif-body :deep(table) { width: 100%; border-collapse: collapse; font-size: 12px; margin: 6px 0; }
+.notif-body :deep(a) {
+  color: var(--accent);
+  text-decoration: none;
+}
+.notif-body :deep(a:hover) { text-decoration: underline; }
+.notif-body :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  margin: 8px 0;
+}
+.notif-body :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 6px 0;
+}
 .notif-body :deep(th), .notif-body :deep(td) {
   padding: 5px 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.07);
+  border-bottom: 1px solid var(--border-subtle);
   text-align: left;
 }
-.notif-body :deep(thead tr) { background: rgba(255,255,255,0.06); font-weight: 600; }
+.notif-body :deep(thead tr) {
+  background: rgba(255, 255, 255, 0.05);
+  font-weight: 600;
+}
 </style>

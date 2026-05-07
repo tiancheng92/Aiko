@@ -4,9 +4,16 @@ import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 
 /**
  * ContextMenu renders a positioned popup menu.
- * items: Array<{ label: string, icon?: string, action: () => void, divider?: boolean }>
+ * items: Array<{
+ *   label: string,
+ *   icon?: string,          // emoji or text glyph (legacy)
+ *   iconSvg?: string,       // raw SVG markup rendered via v-html (preferred)
+ *   action: () => void,
+ *   divider?: boolean,
+ *   danger?: boolean,       // renders the item in the destructive color
+ * }>
  */
-const props = defineProps({
+defineProps({
   items: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['close'])
@@ -31,17 +38,30 @@ function show(x, y) {
   })
 }
 
+/** hide closes the menu and emits close. */
 function hide() {
   visible.value = false
   emit('close')
 }
 
+/** onOutsideClick dismisses the menu when clicking outside of it. */
 function onOutsideClick(e) {
   if (menuRef.value && !menuRef.value.contains(e.target)) hide()
 }
 
-onMounted(() => window.addEventListener('mousedown', onOutsideClick, true))
-onUnmounted(() => window.removeEventListener('mousedown', onOutsideClick, true))
+/** onKeydown closes the menu on Escape. */
+function onKeydown(e) {
+  if (e.key === 'Escape' && visible.value) hide()
+}
+
+onMounted(() => {
+  window.addEventListener('mousedown', onOutsideClick, true)
+  window.addEventListener('keydown', onKeydown)
+})
+onUnmounted(() => {
+  window.removeEventListener('mousedown', onOutsideClick, true)
+  window.removeEventListener('keydown', onKeydown)
+})
 
 defineExpose({ show, hide })
 </script>
@@ -53,6 +73,7 @@ defineExpose({ show, hide })
       v-if="visible"
       ref="menuRef"
       class="ctx-menu"
+      role="menu"
       :style="{ left: pos.x + 'px', top: pos.y + 'px' }"
       @contextmenu.prevent
     >
@@ -60,11 +81,15 @@ defineExpose({ show, hide })
         <div v-if="item.divider" class="ctx-divider" />
         <button
           v-else
-          class="ctx-item"
+          role="menuitem"
+          :class="['ctx-item', { danger: item.danger }]"
           @click="() => { item.action(); hide() }"
         >
-          <span v-if="item.icon" class="ctx-icon">{{ item.icon }}</span>
-          <span>{{ item.label }}</span>
+          <span class="ctx-icon-wrap">
+            <span v-if="item.iconSvg" class="ctx-icon-svg" v-html="item.iconSvg" />
+            <span v-else-if="item.icon" class="ctx-icon-text">{{ item.icon }}</span>
+          </span>
+          <span class="ctx-label">{{ item.label }}</span>
         </button>
       </template>
     </div>
@@ -74,54 +99,118 @@ defineExpose({ show, hide })
 
 <style scoped>
 .ctx-menu {
+  /* Design tokens — aligned with SettingsWindow */
+  --accent: #007aff;
+  --accent-hover: #0a84ff;
+  --surface: rgba(38, 38, 44, 0.78);
+  --text-primary: rgba(255, 255, 255, 0.92);
+  --text-secondary: rgba(255, 255, 255, 0.62);
+  --border-subtle: rgba(255, 255, 255, 0.10);
+  --danger: #ff453a;
+
   position: fixed;
   z-index: 99999;
-  background: rgba(8, 10, 24, 1);
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 12px;
-  padding: 5px 0;
-  min-width: 172px;
+  background: var(--surface);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 4px;
+  min-width: 180px;
   box-shadow:
-    0 16px 48px rgba(0, 0, 0, 0.65),
-    0 1px 0 rgba(255, 255, 255, 0.05) inset;
+    0 12px 36px rgba(0, 0, 0, 0.55),
+    0 0 0 0.5px rgba(0, 0, 0, 0.3),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
   user-select: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', sans-serif;
 }
+
 .ctx-item {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   width: 100%;
-  background: none;
+  background: transparent;
   border: none;
-  color: rgba(229, 231, 235, 0.9);
-  padding: 7px 14px;
+  color: var(--text-primary);
+  padding: 6px 10px;
   font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  font-family: inherit;
   cursor: pointer;
   text-align: left;
-  border-radius: 0;
+  border-radius: 6px;
   box-shadow: none;
-  transition: background 0.12s;
-  font-weight: 400;
+  transition: background 0.08s, color 0.08s;
+  -webkit-appearance: none;
+  appearance: none;
 }
-.ctx-item:hover { background: rgba(37, 99, 235, 0.22); color: #fff; }
-.ctx-icon { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
-.ctx-divider { height: 1px; background: rgba(255, 255, 255, 0.05); margin: 4px 8px; }
+.ctx-item:hover,
+.ctx-item:focus-visible {
+  background: var(--accent);
+  color: #fff;
+  outline: none;
+}
+.ctx-item:hover .ctx-icon-wrap,
+.ctx-item:focus-visible .ctx-icon-wrap { color: #fff; }
 
+.ctx-item.danger { color: var(--danger); }
+.ctx-item.danger:hover,
+.ctx-item.danger:focus-visible {
+  background: var(--danger);
+  color: #fff;
+}
+
+.ctx-icon-wrap {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+.ctx-icon-svg :deep(svg) { width: 14px; height: 14px; }
+.ctx-icon-text { font-size: 13px; line-height: 1; }
+
+.ctx-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ctx-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 6px;
+}
+
+/* Open / close animation — subtle scale from top-left */
 .ctx-pop-enter-active {
-  transition: opacity 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
-              transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition:
+    opacity 0.16s cubic-bezier(0.34, 1.56, 0.64, 1),
+    transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
   transform-origin: top left;
 }
 .ctx-pop-leave-active {
-  transition: opacity 0.12s ease-in,
-              transform 0.12s ease-in;
+  transition:
+    opacity 0.10s ease-in,
+    transform 0.10s ease-in;
   transform-origin: top left;
 }
 .ctx-pop-enter-from,
 .ctx-pop-leave-to {
   opacity: 0;
-  transform: scale(0.88) translateY(-4px);
+  transform: scale(0.92) translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ctx-pop-enter-active,
+  .ctx-pop-leave-active { transition: opacity 0.1s; }
+  .ctx-pop-enter-from,
+  .ctx-pop-leave-to { transform: none; }
 }
 </style>

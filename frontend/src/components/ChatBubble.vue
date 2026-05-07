@@ -110,11 +110,15 @@ const pos = computed(() => {
 
 const chatMenuRef = ref(null)
 const chatPanelRef = ref(null)
+const ICON_EXPORT  = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
+const ICON_TRASH   = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>'
+const ICON_SETTING = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'
+
 const chatMenuItems = computed(() => [
-  { icon: '💾', label: '导出聊天记录', action: exportHistory },
-  { icon: '🗑️', label: '清空聊天历史', action: clearHistory },
+  { iconSvg: ICON_EXPORT,  label: '导出聊天记录', action: exportHistory },
+  { iconSvg: ICON_TRASH,   label: '清空聊天历史', action: clearHistory, danger: true },
   { divider: true },
-  { icon: '⚙️', label: '打开设置',      action: () => emit('open-settings') },
+  { iconSvg: ICON_SETTING, label: '打开设置',     action: () => emit('open-settings') },
 ])
 
 /** clearHistory broadcasts a clear event to ChatPanel. */
@@ -164,7 +168,12 @@ defineExpose({ focusInput, scrollToBottom })
   >
     <div class="title-bar">
       <span class="title">聊天</span>
-      <div class="latency-badge" :style="{ color: latencyColor(latencyMs) }">
+      <div
+        class="latency-badge"
+        :style="{ color: latencyColor(latencyMs) }"
+        title="LLM 调用延迟"
+        aria-label="LLM 调用延迟"
+      >
         <span class="latency-dot">●</span>
         <span class="latency-value">{{ latencyLabel(latencyMs) }}</span>
       </div>
@@ -173,7 +182,9 @@ defineExpose({ focusInput, scrollToBottom })
         <svg v-if="!isFullscreen" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
         <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>
       </button>
-      <button class="close-btn" @click="$emit('close')">✕</button>
+      <button class="close-btn" aria-label="关闭" @click="$emit('close')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
     <div class="content">
       <ChatPanel ref="chatPanelRef" />
@@ -184,20 +195,32 @@ defineExpose({ focusInput, scrollToBottom })
 
 <style scoped>
 .chat-bubble {
+  /* Design tokens — aligned with SettingsWindow */
+  --accent: #007aff;
+  --surface: rgba(28, 28, 32, 0.78);
+  --text-primary: rgba(255, 255, 255, 0.94);
+  --text-secondary: rgba(255, 255, 255, 0.66);
+  --text-tertiary: rgba(255, 255, 255, 0.44);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --danger: #ff453a;
+
   position: fixed;
-  background: rgba(8, 10, 24, 1);
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 20px;
+  background: var(--surface);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
   box-shadow:
-    0 16px 48px rgba(0, 0, 0, 0.65),
-    0 1px 0 rgba(255, 255, 255, 0.05) inset;
+    0 24px 64px rgba(0, 0, 0, 0.55),
+    0 0 0 0.5px rgba(0, 0, 0, 0.3),
+    0 1px 0 rgba(255, 255, 255, 0.07) inset;
   display: flex;
   flex-direction: column;
   z-index: 9998;
   overflow: hidden;
   will-change: left, top, width, height;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', sans-serif;
+  -webkit-font-smoothing: antialiased;
   transition:
     left          0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94),
     top           0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94),
@@ -205,74 +228,86 @@ defineExpose({ focusInput, scrollToBottom })
     height        0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94),
     border-radius 0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
+
+/* Title bar */
 .title-bar {
   display: flex;
   align-items: center;
-  padding: 0 14px;
-  height: 44px;
+  gap: 6px;
+  padding: 0 10px;
+  height: 42px;
   flex-shrink: 0;
   user-select: none;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--border-subtle);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0));
 }
 .title {
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: -0.01em;
+  margin-left: 4px;
 }
 .title-spacer { flex: 1; }
+
 .latency-badge {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 3px;
-  margin-left: 8px;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
   font-size: 11px;
   font-weight: 500;
-  opacity: 0.85;
-  transition: color 0.4s;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.4s, background 0.15s;
   white-space: nowrap;
   user-select: none;
 }
 .latency-dot {
-  font-size: 8px;
+  font-size: 7px;
   line-height: 1;
 }
 .latency-value {
   line-height: 1;
-  min-width: 28px;
+  min-width: 30px;
+  text-align: right;
 }
+
+.icon-btn,
 .close-btn {
-  background: none;
+  background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.3);
-  padding: 8px;
+  color: var(--text-tertiary);
+  width: 26px;
+  height: 26px;
+  padding: 0;
   cursor: pointer;
-  font-size: 13px;
-  border-radius: 6px;
-  transition: background 0.15s, color 0.15s;
-  line-height: 1;
-}
-.close-btn:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-}
-.icon-btn {
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.3);
-  padding: 8px;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: background 0.15s, color 0.15s;
-  line-height: 1;
-  display: flex;
+  border-radius: 5px;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: background 0.12s, color 0.12s;
+  -webkit-appearance: none;
+  appearance: none;
 }
 .icon-btn:hover {
   background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text-primary);
 }
+.close-btn:hover {
+  background: rgba(255, 69, 58, 0.16);
+  color: var(--danger);
+}
+.icon-btn:focus-visible,
+.close-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Fullscreen mode — flush under macOS menu bar (38px) */
 .chat-bubble.fullscreen {
   position: fixed;
   left: 0 !important;
@@ -282,6 +317,7 @@ defineExpose({ focusInput, scrollToBottom })
   border-radius: 0;
   z-index: 9999;
 }
+
 .content {
   flex: 1;
   overflow: hidden;
