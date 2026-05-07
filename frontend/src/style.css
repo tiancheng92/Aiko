@@ -20,6 +20,23 @@ body { background: transparent; font-family: -apple-system, BlinkMacSystemFont, 
   --success: #30d158;
   --warning: #ff9f0a;
   --warning-bg: rgba(255, 159, 10, 0.14);
+
+  /* Text — semantic tiers. Use `-body-muted` for readable 12–13px body copy
+     (WCAG AA on glass surfaces), `-label-muted` for decorative labels only. */
+  --text-body-muted: rgba(255, 255, 255, 0.72);
+  --text-label-muted: rgba(255, 255, 255, 0.48);
+}
+
+/* Respect prefers-reduced-motion for all decorative indeterminate animations.
+   Component-level transitions still work; only the globally named
+   infinite animations are silenced. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.08s !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Global WebKit scrollbar reset — ALL pseudo-elements must be defined once any one is set,

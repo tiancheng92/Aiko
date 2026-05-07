@@ -17,6 +17,7 @@ import xml from 'highlight.js/lib/languages/xml'
 import 'highlight.js/styles/github-dark.css'
 import { useSounds } from '../composables/useSounds'
 import { useTypingScheduler } from '../composables/useTypingScheduler'
+import { useEscapeKey } from '../composables/useEscapeKey'
 import { GetSoundsEnabled } from '../../wailsjs/go/main/App'
 import ToolConfirmModal from './ToolConfirmModal.vue'
 import ExecutionProgress from './ExecutionProgress.vue'
@@ -317,6 +318,9 @@ const copiedIdx = ref(null)
 const showClearConfirm = ref(false)
 /** tableDetailRow holds the key-value pairs for the row-detail modal; null when hidden. */
 const tableDetailRow = ref(null)
+
+useEscapeKey(() => { showClearConfirm.value = false }, showClearConfirm)
+useEscapeKey(() => { tableDetailRow.value = null }, () => tableDetailRow.value !== null)
 
 /** collapsedIds holds message keys that should render in collapsed state. */
 const collapsedIds = ref(new Set())
@@ -833,6 +837,16 @@ function removeFile(idx) {
   pendingFiles.value.splice(idx, 1)
 }
 
+/** onEnterKey sends the message on Enter, but ignores Enter presses that
+ * commit an IME composition (Chinese / Japanese / Korean input). Without
+ * this guard, the Enter that closes the IME candidate panel would also
+ * send a half-composed message. */
+function onEnterKey(e) {
+  if (e.isComposing || e.keyCode === 229) return
+  e.preventDefault()
+  send()
+}
+
 /** send submits the current input as a user message. */
 async function send() {
   const text = getInput().trim()
@@ -1049,10 +1063,10 @@ defineExpose({ focusInput, scrollToBottom })
 
     <!-- Clear chat confirmation dialog -->
     <Transition name="confirm-pop">
-    <div v-if="showClearConfirm" class="clear-confirm-overlay">
+    <div v-if="showClearConfirm" class="clear-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="clear-confirm-title">
       <div class="clear-confirm-backdrop" @click="showClearConfirm = false" />
       <div class="clear-confirm-box">
-        <p class="clear-confirm-title">清空聊天记录</p>
+        <p id="clear-confirm-title" class="clear-confirm-title">清空聊天记录</p>
         <p class="clear-confirm-text">确定要清空所有聊天记录吗？此操作不可撤销。</p>
         <div class="clear-confirm-actions">
           <button class="clear-confirm-cancel" @click="showClearConfirm = false">取消</button>
@@ -1064,12 +1078,14 @@ defineExpose({ focusInput, scrollToBottom })
 
     <!-- Table row detail modal -->
     <Transition name="tbl-detail-pop">
-      <div v-if="tableDetailRow" class="tbl-detail-overlay">
+      <div v-if="tableDetailRow" class="tbl-detail-overlay" role="dialog" aria-modal="true" aria-labelledby="tbl-detail-title">
         <div class="tbl-detail-backdrop" @click="tableDetailRow = null" />
         <div class="tbl-detail-box">
           <div class="tbl-detail-header">
-            <span class="tbl-detail-title">行详情</span>
-            <button class="tbl-detail-close" @click="tableDetailRow = null">✕</button>
+            <span id="tbl-detail-title" class="tbl-detail-title">行详情</span>
+            <button class="tbl-detail-close" aria-label="关闭" @click="tableDetailRow = null">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </div>
           <div class="tbl-detail-body">
             <div v-for="pair in tableDetailRow" :key="pair.key" class="tbl-detail-pair">
@@ -1101,16 +1117,20 @@ defineExpose({ focusInput, scrollToBottom })
     <!-- Pending image previews shown above the input row -->
     <div v-if="pendingImages.length > 0" class="pending-images">
       <div v-for="(img, idx) in pendingImages" :key="idx" class="pending-img-wrap">
-        <img :src="img" class="pending-img" />
-        <button class="pending-img-remove" @click="removeImage(idx)">×</button>
+        <img :src="img" class="pending-img" :alt="`待发送图片 ${idx + 1}`" />
+        <button class="pending-img-remove" aria-label="移除图片" @click="removeImage(idx)">
+          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
     </div>
     <!-- Pending file chips shown above the input row -->
     <div v-if="pendingFiles.length > 0" class="pending-files">
-      <div v-for="(f, idx) in pendingFiles" :key="idx" class="pending-file-chip">
+      <div v-for="(f, idx) in pendingFiles" :key="idx" class="pending-file-chip" :title="f.name">
         <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
         <span class="pending-file-name">{{ f.name }}</span>
-        <button class="pending-file-remove" @click="removeFile(idx)">×</button>
+        <button class="pending-file-remove" aria-label="移除文件" @click="removeFile(idx)">
+          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
     </div>
     <div class="input-area">
@@ -1129,7 +1149,7 @@ defineExpose({ focusInput, scrollToBottom })
         autocorrect="off"
         autocomplete="off"
         @input="autoResize"
-        @keydown.enter.exact.prevent="send"
+        @keydown.enter.exact="onEnterKey"
         @keydown.meta.enter.prevent="insertNewline"
         @paste="onPaste"
         :disabled="loading"
@@ -1139,13 +1159,14 @@ defineExpose({ focusInput, scrollToBottom })
         <button
           class="attach-btn"
           title="附加文件"
+          aria-label="附加文件"
           :disabled="loading"
           @click="fileInputEl.click()"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
         </button>
-        <button v-if="isStreaming" class="stop-btn" @click="stopGeneration">⏹ 停止</button>
-        <button v-else class="send-btn" @click="send" :disabled="loading || (inputEmpty && pendingImages.length === 0 && pendingFiles.length === 0)">
+        <button v-if="isStreaming" class="stop-btn" aria-label="停止生成" @click="stopGeneration">⏹ 停止</button>
+        <button v-else class="send-btn" title="发送 (Enter)" aria-label="发送" @click="send" :disabled="loading || (inputEmpty && pendingImages.length === 0 && pendingFiles.length === 0)">
           <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
       </div>
@@ -1421,7 +1442,8 @@ defineExpose({ focusInput, scrollToBottom })
 /* Timestamp */
 .msg-time {
   font-size: 11px;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
+  opacity: 0.85;
   font-variant-numeric: tabular-nums;
   user-select: none;
 }
@@ -2005,7 +2027,8 @@ defineExpose({ focusInput, scrollToBottom })
 .toolbar-spacer { flex: 1; }
 .input-hint {
   font-size: 10px;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
+  opacity: 0.72;
   user-select: none;
   text-align: right;
   padding: 0 14px 8px;
@@ -2108,15 +2131,14 @@ defineExpose({ focusInput, scrollToBottom })
 }
 .pending-img-remove {
   position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 20px;
-  height: 20px;
+  top: -7px;
+  right: -7px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: rgba(28, 28, 32, 0.95);
   color: #fff;
   border: 1px solid var(--border-default);
-  font-size: 13px;
   line-height: 1;
   cursor: pointer;
   display: flex;
@@ -2128,6 +2150,7 @@ defineExpose({ focusInput, scrollToBottom })
 }
 .pending-img-remove:hover { background: var(--danger); border-color: transparent; }
 .pending-img-remove:active { transform: scale(0.92); }
+.pending-img-remove:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Images inside sent user messages */
 .msg-images {
@@ -2212,19 +2235,25 @@ defineExpose({ focusInput, scrollToBottom })
   flex: 1;
 }
 .pending-file-remove {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: none;
   color: var(--accent);
   opacity: 0.7;
   cursor: pointer;
-  font-size: 14px;
   line-height: 1;
   padding: 0;
   flex-shrink: 0;
   box-shadow: none;
-  transition: opacity 0.12s;
+  border-radius: 4px;
+  transition: opacity 0.12s, background 0.12s;
 }
-.pending-file-remove:hover { opacity: 1; }
+.pending-file-remove:hover { opacity: 1; background: rgba(255, 255, 255, 0.08); }
+.pending-file-remove:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* File chips inside sent user messages */
 .msg-files {

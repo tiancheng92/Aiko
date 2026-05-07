@@ -43,6 +43,7 @@ import (
 	"aiko/internal/lark"
 	"aiko/internal/mcp"
 	"aiko/internal/memory"
+	"aiko/internal/notify"
 	"aiko/internal/proactive"
 	"aiko/internal/scheduler"
 	"aiko/internal/skill"
@@ -338,6 +339,14 @@ type FileAttachment struct {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
+	// Register the macOS UserNotifications sender and kick off the
+	// authorization prompt *before* the scheduler/proactive engine start —
+	// cron callbacks and proactive polls can fire immediately once Start() is
+	// called, and the system silently drops notifications posted before the
+	// user grants permission. Requesting here closes that race window.
+	notify.SetSender(postSystemNotification)
+	requestNotificationAuthorization()
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		panic(fmt.Errorf("get home dir: %w", err))
@@ -501,13 +510,23 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	onResult := func(job scheduler.Job, result string, err error) {
 		if err != nil {
 			slog.Error("cron job failed", "job", job.Name, "err", err)
+			// Still surface the failure to the user via both channels so a
+			// silently broken cron job becomes visible.
+			failMsg := "任务执行失败: " + err.Error()
+			wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
+				"title":   job.Name,
+				"message": failMsg,
+			})
+			go notify.System("⏰ "+job.Name, failMsg)
 			return
 		}
-		// Emit to the unified notification channel consumed by NotificationBubble.vue.
+		// In-app bubble + macOS system notification. Both run so the user sees
+		// the result whether the app is focused or backgrounded.
 		wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
 			"title":   job.Name,
 			"message": result,
 		})
+		go notify.System("⏰ "+job.Name, result)
 	}
 
 	// NOTE: scheduler.Start is deferred until after a.mu is released below —

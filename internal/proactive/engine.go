@@ -6,6 +6,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"aiko/internal/notify"
+
 	"github.com/robfig/cron/v3"
 )
 
@@ -71,7 +73,9 @@ func (e *ProactiveEngine) Stop() {
 
 // Fire delivers a proactive message directly to the user without LLM processing.
 // If chat is open, it pushes the message to the chat panel.
-// If chat is closed, it shows a notification bubble (truncated to notifMaxRunes).
+// If chat is closed, it shows an in-app notification bubble and also pushes
+// a macOS system notification so the user sees the reminder even when the
+// pet window is not focused.
 func (e *ProactiveEngine) Fire(_ context.Context, prompt string) error {
 	if e.app.IsChatVisible() {
 		e.app.EmitEvent("chat:proactive:message", prompt)
@@ -82,10 +86,12 @@ func (e *ProactiveEngine) Fire(_ context.Context, prompt string) error {
 		runes := []rune(text)
 		text = string(runes[:notifMaxRunes]) + "…"
 	}
+	const title = "✨ (=^･ω･^=)"
 	e.app.EmitEvent("notification:show", map[string]any{
-		"title":   "✨ (=^･ω･^=)",
+		"title":   title,
 		"message": text,
 	})
+	go notify.System(title, text)
 	return nil
 }
 

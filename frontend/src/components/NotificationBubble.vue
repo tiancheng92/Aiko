@@ -16,6 +16,18 @@ let hideTimer = null
 let offShow   = null
 
 const GAP = 12
+const AUTO_DISMISS_MS = 15000  // 15s — long enough to glance, short enough to not clutter
+
+/** scheduleDismiss arms (or re-arms) the auto-dismiss timer. */
+function scheduleDismiss() {
+  if (hideTimer) clearTimeout(hideTimer)
+  hideTimer = setTimeout(dismiss, AUTO_DISMISS_MS)
+}
+
+/** pauseDismiss cancels the pending auto-dismiss (called on hover). */
+function pauseDismiss() {
+  if (hideTimer) { clearTimeout(hideTimer); hideTimer = null }
+}
 
 /** pos places the notification bubble above the pet using measured height. */
 const pos = computed(() => {
@@ -41,14 +53,11 @@ function dismiss() {
 
 onMounted(() => {
   offShow = EventsOn('notification:show', (data) => {
-    if (hideTimer) clearTimeout(hideTimer)
     notification.value = { title: data.title || '通知', message: data.message, ts: new Date() }
     nextTick(() => {
       if (bubbleEl.value) bubbleH.value = bubbleEl.value.offsetHeight
     })
-    // Auto-dismiss after 5 minutes; anything longer turns read notifications
-    // into permanent desktop clutter.
-    hideTimer = setTimeout(dismiss, 5 * 60 * 1000)
+    scheduleDismiss()
   })
 })
 
@@ -69,6 +78,8 @@ onUnmounted(() => {
       aria-live="polite"
       :style="{ left: pos.x + 'px', top: pos.y + 'px', '--tail-left': (props.petSize / 2 + 20) + 'px' }"
       @click="dismiss"
+      @mouseenter="pauseDismiss"
+      @mouseleave="scheduleDismiss"
     >
       <div class="notif-header">
         <span class="notif-icon" aria-hidden="true">
@@ -79,7 +90,7 @@ onUnmounted(() => {
         </span>
         <span class="notif-title">{{ notification.title }}</span>
         <button class="notif-close" aria-label="关闭通知" @click.stop="dismiss">
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
       <div class="notif-body markdown" v-html="renderMd(notification.message)" @click.stop />

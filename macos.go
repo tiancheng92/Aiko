@@ -4,7 +4,7 @@ package main
 
 /*
 #cgo CFLAGS: -x objective-c -mmacosx-version-min=10.15
-#cgo LDFLAGS: -framework Cocoa -framework WebKit -framework ApplicationServices -framework AVFoundation -framework Speech -framework CoreLocation
+#cgo LDFLAGS: -framework Cocoa -framework WebKit -framework ApplicationServices -framework AVFoundation -framework Speech -framework CoreLocation -framework UserNotifications
 
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
@@ -12,6 +12,8 @@ package main
 #import <AVFoundation/AVFoundation.h>
 #import <Speech/Speech.h>
 #import <CoreLocation/CoreLocation.h>
+#import <UserNotifications/UserNotifications.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 static id gGlobalMonitor    = nil;
@@ -663,6 +665,69 @@ static void requestPermissionsEarly() {
         });
     });
 }
+
+// requestNotificationAuthorization asks the system for permission to post
+// notifications as the running app. Must be called from a signed app bundle
+// with a valid CFBundleIdentifier; otherwise UNUserNotificationCenter throws
+// an exception and the call is a no-op.
+static void requestNotificationAuthorization(void) {
+    if (@available(macOS 10.14, *)) {
+        // Guard against unsigned / non-bundle launches (e.g. `go run` from
+        // terminal) where UNUserNotificationCenter raises on currentNotificationCenter.
+        if ([[NSBundle mainBundle] bundleIdentifier] == nil) {
+            NSLog(@"[Aiko] notifications: no bundle identifier, skipping");
+            return;
+        }
+        @try {
+            UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+            UNAuthorizationOptions opts = UNAuthorizationOptionAlert | UNAuthorizationOptionSound | UNAuthorizationOptionBadge;
+            [center requestAuthorizationWithOptions:opts
+                                  completionHandler:^(BOOL granted, NSError * _Nullable error) {
+                if (error) {
+                    NSLog(@"[Aiko] notifications: auth error: %@", error);
+                } else {
+                    NSLog(@"[Aiko] notifications: %@", granted ? @"granted" : @"denied");
+                }
+            }];
+        } @catch (NSException *ex) {
+            aikoLogException(@"requestNotificationAuthorization", ex);
+        }
+    }
+}
+
+// postSystemNotification delivers a notification through the app's own
+// identity (icon, name) instead of via osascript's Script Editor daemon.
+// Runs asynchronously on the main queue; the caller does not wait.
+// Silently drops if authorization was not granted.
+static void postSystemNotification(const char *title, const char *body) {
+    if (!title || !body) return;
+    if (@available(macOS 10.14, *)) {
+        if ([[NSBundle mainBundle] bundleIdentifier] == nil) return;
+        NSString *t = [NSString stringWithUTF8String:title];
+        NSString *b = [NSString stringWithUTF8String:body];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            @try {
+                UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+                UNMutableNotificationContent *content = [[UNMutableNotificationContent alloc] init];
+                content.title = t;
+                content.body = b;
+                content.sound = [UNNotificationSound defaultSound];
+                // Deliver immediately (trigger=nil → fire now).
+                NSString *reqID = [[NSUUID UUID] UUIDString];
+                UNNotificationRequest *req = [UNNotificationRequest
+                    requestWithIdentifier:reqID
+                                  content:content
+                                  trigger:nil];
+                [center addNotificationRequest:req
+                         withCompletionHandler:^(NSError * _Nullable error) {
+                    if (error) NSLog(@"[Aiko] notifications: post failed: %@", error);
+                }];
+            } @catch (NSException *ex) {
+                aikoLogException(@"postSystemNotification", ex);
+            }
+        });
+    }
+}
 */
 import "C"
 import (
@@ -670,6 +735,7 @@ import (
 	"log/slog"
 	"strings"
 	"syscall"
+	"unsafe"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -684,6 +750,23 @@ func enableClickThrough() {
 // still in the foreground.
 func requestPermissionsEarly() {
 	C.requestPermissionsEarly()
+}
+
+// requestNotificationAuthorization asks the system for user notification
+// permission. Call once at startup after the app bundle is initialized.
+func requestNotificationAuthorization() {
+	C.requestNotificationAuthorization()
+}
+
+// postSystemNotification delivers a notification as the Aiko app identity
+// (icon, name) via UNUserNotificationCenter. Non-blocking: the actual post
+// happens on the main queue. Safe to call from any goroutine.
+func postSystemNotification(title, body string) {
+	ct := C.CString(title)
+	cb := C.CString(body)
+	defer C.free(unsafe.Pointer(ct))
+	defer C.free(unsafe.Pointer(cb))
+	C.postSystemNotification(ct, cb)
 }
 
 // hideNativeScrollbars disables the native macOS overlay scrollbar inside

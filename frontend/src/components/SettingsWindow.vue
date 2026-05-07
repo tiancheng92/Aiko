@@ -23,10 +23,14 @@ import {
 import { ListProactiveItems, DeleteProactiveItem } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { useModelPath } from '../composables/useModelPath.js'
+import { useEscapeKey } from '../composables/useEscapeKey.js'
+import { useConfirm } from '../composables/useConfirm.js'
 import {
   ICON_TAB_MODEL, ICON_TAB_AI, ICON_TAB_APPEARANCE, ICON_TAB_TOOLS,
   ICON_TAB_KNOWLEDGE, ICON_TAB_AUTOMATION, ICON_TAB_LARK, ICON_TAB_SMS, ICON_TAB_ABOUT,
 } from '../utils/icons'
+
+const confirm = useConfirm()
 
 const emit = defineEmits(['close'])
 
@@ -82,12 +86,14 @@ const mcpServers = ref([])
 const showMCPForm = ref(false)
 const mcpForm = ref({ id: 0, name: '', transport: 'stdio', command: '', args: '', url: '', headers: '', enabled: true })
 const mcpFormError = ref('')
+const mcpFormSaving = ref(false)
 
 // Cron jobs
 const cronJobs = ref([])
 const showCronForm = ref(false)
 const cronForm = ref({ id: 0, name: '', description: '', schedule: '', prompt: '' })
 const cronFormError = ref('')
+const cronFormSaving = ref(false)
 
 // Lark
 const larkStatus = ref('')
@@ -98,6 +104,16 @@ const larkStatusError = ref('')
 const smsWatcherRunning = ref(false)
 const smsWatcherLoading = ref(false)
 const smsWatcherError = ref('')
+
+// Escape closes each open form dialog (does nothing if closed).
+useEscapeKey(() => { showProfileForm.value = false }, showProfileForm)
+useEscapeKey(() => { showMCPForm.value = false }, showMCPForm)
+useEscapeKey(() => { showCronForm.value = false }, showCronForm)
+useEscapeKey(() => confirm.resolve(false), confirm.visible)
+
+// Reset content scroll when switching tabs so each tab starts at the top.
+const winContentEl = ref(null)
+watch(activeTab, () => { if (winContentEl.value) winContentEl.value.scrollTop = 0 })
 
 // Version / update
 const currentVersion = ref('…')
@@ -375,8 +391,16 @@ async function activateProfile(id) {
   }
 }
 
-/** deleteProfile removes a profile by id. */
+/** deleteProfile removes a profile by id after a confirmation prompt. */
 async function deleteProfile(id) {
+  const p = profiles.value.find(x => x.id === id)
+  const ok = await confirm.ask({
+    title: '删除模型配置',
+    message: `确认删除配置「${p?.name || ''}」？此操作不可撤销。`,
+    confirmText: '删除',
+    variant: 'danger',
+  })
+  if (!ok) return
   try {
     await DeleteModelProfile(id)
     await fetchProfiles()
@@ -497,8 +521,15 @@ async function importFile() {
   }
 }
 
-/** deleteSource removes a knowledge source. */
+/** deleteSource removes a knowledge source after confirmation. */
 async function deleteSource(src) {
+  const ok = await confirm.ask({
+    title: '删除知识源',
+    message: `确认从知识库中移除「${src}」？对应的向量索引会一并删除。`,
+    confirmText: '删除',
+    variant: 'danger',
+  })
+  if (!ok) return
   try {
     await DeleteKnowledgeSource(src)
     sources.value = sources.value.filter(s => s !== src)
@@ -564,7 +595,16 @@ function editMCPServer(srv) {
 
 /** saveMCPServer adds or updates an MCP server. */
 async function saveMCPServer() {
+  if (mcpFormSaving.value) return
   mcpFormError.value = ''
+  if (!mcpForm.value.name.trim()) { mcpFormError.value = '请输入名称'; return }
+  if (mcpForm.value.transport === 'stdio' && !mcpForm.value.command.trim()) {
+    mcpFormError.value = '请输入可执行命令'; return
+  }
+  if (mcpForm.value.transport !== 'stdio' && !mcpForm.value.url.trim()) {
+    mcpFormError.value = '请输入 URL'; return
+  }
+  mcpFormSaving.value = true
   // Parse headers string ("Key: Value\nKey2: Value2") into map
   const headers = {}
   if (mcpForm.value.headers) {
@@ -592,11 +632,21 @@ async function saveMCPServer() {
     await fetchMCPServers()
   } catch (e) {
     mcpFormError.value = String(e)
+  } finally {
+    mcpFormSaving.value = false
   }
 }
 
-/** deleteMCPServer removes an MCP server by ID. */
+/** deleteMCPServer removes an MCP server by ID after confirmation. */
 async function deleteMCPServer(id) {
+  const srv = mcpServers.value.find(s => s.id === id)
+  const ok = await confirm.ask({
+    title: '删除 MCP 服务器',
+    message: `确认删除「${srv?.name || ''}」？Agent 将无法再调用该服务器提供的工具。`,
+    confirmText: '删除',
+    variant: 'danger',
+  })
+  if (!ok) return
   try {
     await DeleteMCPServer(id)
     await fetchMCPServers()
@@ -668,13 +718,29 @@ function editCronJob(job) {
   showCronForm.value = true
 }
 
+/** isValidCron checks whether `expr` is a standard 5- or 6-field cron spec.
+ * Accepts common syntax (@every, @daily, etc.) for the robfig/cron parser too. */
+function isValidCron(expr) {
+  const e = expr.trim()
+  if (!e) return false
+  if (/^@(every\s+\S+|yearly|annually|monthly|weekly|daily|midnight|hourly|reboot)$/.test(e)) return true
+  const fields = e.split(/\s+/)
+  return fields.length === 5 || fields.length === 6
+}
+
 /** saveCronJob creates or updates a job. */
 async function saveCronJob() {
+  if (cronFormSaving.value) return
   const { id, name, description, schedule, prompt } = cronForm.value
   if (!name.trim() || !schedule.trim() || !prompt.trim()) {
     cronFormError.value = '名称、Cron 表达式和触发提示词为必填项'
     return
   }
+  if (!isValidCron(schedule)) {
+    cronFormError.value = 'Cron 表达式格式错误：应为 5 或 6 个字段，或 @every/@daily 等助记符'
+    return
+  }
+  cronFormSaving.value = true
   try {
     if (id) {
       await UpdateCronJob(id, name, description, schedule, prompt)
@@ -685,11 +751,21 @@ async function saveCronJob() {
     await fetchCronJobs()
   } catch (e) {
     cronFormError.value = String(e)
+  } finally {
+    cronFormSaving.value = false
   }
 }
 
 /** deleteCronJob removes a job after confirmation. */
 async function deleteCronJob(id) {
+  const job = cronJobs.value.find(j => j.ID === id)
+  const ok = await confirm.ask({
+    title: '删除定时任务',
+    message: `确认删除任务「${job?.Name || ''}」？`,
+    confirmText: '删除',
+    variant: 'danger',
+  })
+  if (!ok) return
   try {
     await DeleteCronJob(id)
     await fetchCronJobs()
@@ -778,10 +854,19 @@ async function fetchKokoroTTSVoices() {
   } catch { kokoroTTSVoices.value = [] }
 }
 
+const kokoroError = ref('')
+
 /** setupKokoroTTS 触发后台一键安装 Kokoro TTS 环境。 */
 async function setupKokoroTTS() {
   kokoroInstalling.value = true
-  try { await SetupKokoroTTS() } finally { kokoroInstalling.value = false }
+  kokoroError.value = ''
+  try {
+    await SetupKokoroTTS()
+  } catch (e) {
+    kokoroError.value = '安装失败: ' + e
+  } finally {
+    kokoroInstalling.value = false
+  }
 }
 
 /** toggleTTSAutoPlay persists the auto-play TTS setting. */
@@ -807,8 +892,17 @@ async function loadProactiveItems() {
   }
 }
 
-/** deleteProactiveItem removes a reminder optimistically, rolls back on error. */
+/** deleteProactiveItem removes a reminder after confirmation; optimistic
+ * delete with rollback on error. */
 async function deleteProactiveItem(id) {
+  const item = proactiveItems.value.find(i => i.ID === id)
+  const ok = await confirm.ask({
+    title: '删除提醒',
+    message: `确认删除提醒「${item?.Title || item?.Content?.slice(0, 20) || ''}」？`,
+    confirmText: '删除',
+    variant: 'danger',
+  })
+  if (!ok) return
   proactiveItems.value = proactiveItems.value.filter(i => i.ID !== id)
   try {
     await DeleteProactiveItem(id)
@@ -846,12 +940,12 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   >
     <!-- Draggable title bar (macOS style) -->
     <div class="win-titlebar" @mousedown="onHeaderMouseDown">
-      <div class="traffic-lights">
-        <button class="traffic-btn tl-close" @click.stop="$emit('close')" aria-label="关闭">
+      <div class="traffic-lights" @mousedown.stop>
+        <button class="traffic-btn tl-close" aria-label="关闭设置" @click.stop="$emit('close')">
           <svg viewBox="0 0 10 10" width="7" height="7"><path d="M2 2 L8 8 M8 2 L2 8" stroke="#4c0519" stroke-width="1.3" stroke-linecap="round"/></svg>
         </button>
-        <span class="traffic-btn tl-min"></span>
-        <span class="traffic-btn tl-max"></span>
+        <span class="traffic-btn tl-min" aria-hidden="true" />
+        <span class="traffic-btn tl-max" aria-hidden="true" />
       </div>
       <span class="win-title">设置</span>
       <div class="titlebar-search">
@@ -891,7 +985,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
         </div>
       </nav>
 
-      <div class="win-content">
+      <div class="win-content" ref="winContentEl">
         <!-- 模型设置 -->
         <div v-if="activeTab === 'model'" class="tab-pane">
           <div class="profile-header">
@@ -903,8 +997,8 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
           <div v-for="p in profiles" :key="p.id" :class="['profile-card', { active: p.id === activeProfileID }]">
             <div class="profile-card-main">
-              <span class="profile-name">{{ p.name }}</span>
-              <span class="profile-meta">{{ p.provider }} · {{ p.model }}</span>
+              <span class="profile-name" :title="p.name">{{ p.name }}</span>
+              <span class="profile-meta" :title="`${p.provider} · ${p.model}`">{{ p.provider }} · {{ p.model }}</span>
               <span v-if="p.id === activeProfileID" class="profile-badge">使用中</span>
             </div>
             <div class="profile-card-actions">
@@ -915,9 +1009,9 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           </div>
 
           <!-- Profile form dialog -->
-          <div v-if="showProfileForm" class="modal-overlay" @click.self="showProfileForm = false">
+          <div v-if="showProfileForm" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="profile-form-title" @click.self="showProfileForm = false">
             <div class="modal-box">
-              <div class="modal-title">{{ profileForm.id ? '编辑配置' : '新增配置' }}</div>
+              <div id="profile-form-title" class="modal-title">{{ profileForm.id ? '编辑配置' : '新增配置' }}</div>
               <label>名称<input v-model="profileForm.name" placeholder="我的 OpenAI" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
               <label>Provider
                 <select v-model="profileForm.provider">
@@ -981,9 +1075,13 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                   />
                 </div>
                 <div class="form-group" style="margin-top:12px">
-                  <button class="btn-setup" @click="setupKokoroTTS" :disabled="kokoroInstalling">
+                  <button class="btn-setup" :disabled="kokoroInstalling" @click="setupKokoroTTS">
                     {{ kokoroInstalling ? '安装中…' : '🔧 安装 / 检查 TTS 环境' }}
                   </button>
+                  <div v-if="kokoroError" class="form-error" style="margin-top:8px">
+                    {{ kokoroError }}
+                    <button class="btn-retry" style="margin-left:8px" :disabled="kokoroInstalling" @click="setupKokoroTTS">重试</button>
+                  </div>
                 </div>
               </template>
               <div v-if="profileFormError" class="form-error">{{ profileFormError }}</div>
@@ -1100,7 +1198,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
             <div v-for="srv in mcpServers" :key="srv.id" class="mcp-row">
               <div class="mcp-info">
-                <span class="mcp-name">{{ srv.name }}</span>
+                <span class="mcp-name" :title="srv.name">{{ srv.name }}</span>
                 <span class="mcp-transport">{{ srv.transport }}</span>
                 <span class="mcp-endpoint">{{ srv.transport === 'stdio' ? srv.command : srv.url }}</span>
               </div>
@@ -1114,9 +1212,9 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             </div>
 
             <!-- Add/Edit Modal -->
-            <div v-if="showMCPForm" class="modal-overlay" @click.self="showMCPForm = false">
+            <div v-if="showMCPForm" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="mcp-form-title" @click.self="showMCPForm = false">
               <div class="modal-box">
-                <div class="modal-title">{{ mcpForm.id ? '编辑 MCP 服务器' : '新增 MCP 服务器' }}</div>
+                <div id="mcp-form-title" class="modal-title">{{ mcpForm.id ? '编辑 MCP 服务器' : '新增 MCP 服务器' }}</div>
                 <label>名称<input v-model="mcpForm.name" placeholder="my-server" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
                 <label>传输方式
                   <select v-model="mcpForm.transport">
@@ -1136,7 +1234,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 <div v-if="mcpFormError" class="form-error">{{ mcpFormError }}</div>
                 <div class="modal-actions">
                   <button class="btn-cancel" @click="showMCPForm = false">取消</button>
-                  <button class="btn-save" @click="saveMCPServer">保存</button>
+                  <button class="btn-save" :disabled="mcpFormSaving" @click="saveMCPServer">{{ mcpFormSaving ? '保存中…' : '保存' }}</button>
                 </div>
               </div>
             </div>
@@ -1211,13 +1309,14 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             <div class="settings-section" style="margin-top:12px">
               <h3 class="section-title">执行超时</h3>
               <div class="form-row">
-                <label>Shell 超时（秒）</label>
-                <input type="number" v-model.number="cfg.ShellTimeout" min="1" max="3600" class="short-input" />
+                <label for="shell-timeout-input">Shell 超时（秒）</label>
+                <input id="shell-timeout-input" type="number" v-model.number="cfg.ShellTimeout" min="1" max="3600" class="short-input" aria-describedby="timeout-hint" />
               </div>
               <div class="form-row">
-                <label>代码执行超时（秒）</label>
-                <input type="number" v-model.number="cfg.CodeTimeout" min="1" max="3600" class="short-input" />
+                <label for="code-timeout-input">代码执行超时（秒）</label>
+                <input id="code-timeout-input" type="number" v-model.number="cfg.CodeTimeout" min="1" max="3600" class="short-input" aria-describedby="timeout-hint" />
               </div>
+              <p id="timeout-hint" class="section-hint" style="margin-top:8px">范围 1–3600 秒；超过时间后进程会被强制终止</p>
             </div>
           </template>
         </div>
@@ -1256,7 +1355,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             <div v-for="job in cronJobs" :key="job.ID" class="cron-row">
               <div class="cron-info">
                 <div class="cron-name-row">
-                  <span class="cron-name">{{ job.Name }}</span>
+                  <span class="cron-name" :title="job.Name">{{ job.Name }}</span>
                   <span class="cron-schedule">{{ job.Schedule }}</span>
                   <span class="cron-status" :class="job.Enabled ? 'cron-status--on' : 'cron-status--off'">
                     {{ job.Enabled ? '启用中' : '已禁用' }}
@@ -1276,9 +1375,9 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             </div>
 
             <!-- Add/Edit Modal -->
-            <div v-if="showCronForm" class="modal-overlay" @click.self="showCronForm = false">
+            <div v-if="showCronForm" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="cron-form-title" @click.self="showCronForm = false">
               <div class="modal-box">
-                <div class="modal-title">{{ cronForm.id ? '编辑定时任务' : '新建定时任务' }}</div>
+                <div id="cron-form-title" class="modal-title">{{ cronForm.id ? '编辑定时任务' : '新建定时任务' }}</div>
                 <label>名称 *<input v-model="cronForm.name" placeholder="每日早报" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
                 <label>描述<input v-model="cronForm.description" placeholder="可选说明" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
                 <label>Cron 表达式 *<span class="field-hint">标准 5 段格式，如 0 8 * * * 表示每天 8 点</span><input v-model="cronForm.schedule" placeholder="0 8 * * *" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
@@ -1286,7 +1385,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 <div v-if="cronFormError" class="form-error">{{ cronFormError }}</div>
                 <div class="modal-actions">
                   <button class="btn-cancel" @click="showCronForm = false">取消</button>
-                  <button class="btn-save" @click="saveCronJob">保存</button>
+                  <button class="btn-save" :disabled="cronFormSaving" @click="saveCronJob">{{ cronFormSaving ? '保存中…' : '保存' }}</button>
                 </div>
               </div>
             </div>
@@ -1457,7 +1556,10 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               <span class="about-hint">{{ updateProgressMsg || '准备中…' }}（{{ updateProgress }}%）</span>
             </div>
 
-            <div v-if="updateError" class="lark-status lark-status--err" style="margin-top:8px">{{ updateError }}</div>
+            <div v-if="updateError" class="lark-status lark-status--err" style="margin-top:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+              <span>{{ updateError }}</span>
+              <button class="btn-retry" :disabled="updateChecking || updateInstalling" @click="updateInfo ? installUpdate() : checkUpdate()">重试</button>
+            </div>
           </div>
 
           <div class="about-meta">
@@ -1480,6 +1582,29 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
       <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
         <path d="M14 4 4 14M14 9 9 14M14 14l-.01 0"/>
       </svg>
+    </div>
+    <!-- Confirm dialog — reuses modal-overlay/modal-box pattern so it looks
+         identical to the edit/add form modals and stays within .settings-win
+         (no Teleport → no click-through issues on macOS). -->
+    <div
+      v-if="confirm.visible.value"
+      class="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-modal-title"
+      @click.self="confirm.resolve(false)"
+    >
+      <div class="modal-box confirm-modal-box">
+        <div id="confirm-modal-title" class="modal-title">{{ confirm.title.value }}</div>
+        <p class="confirm-modal-text">{{ confirm.message.value }}</p>
+        <div class="modal-actions">
+          <button class="btn-cancel" @click="confirm.resolve(false)">{{ confirm.cancelText.value }}</button>
+          <button
+            :class="confirm.variant.value === 'danger' ? 'btn-danger' : 'btn-save'"
+            @click="confirm.resolve(true)"
+          >{{ confirm.confirmText.value }}</button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -1546,6 +1671,8 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  padding: 6px 4px;
+  margin: -6px -4px;
 }
 .traffic-btn {
   width: 12px;
@@ -1560,13 +1687,18 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   position: relative;
   box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.3);
 }
+.tl-close::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
 .traffic-btn svg { opacity: 0; transition: opacity 0.12s; }
 .traffic-lights:hover .traffic-btn svg { opacity: 1; }
 .tl-close { background: #ff5f57; }
 .tl-close:hover { background: #ff4c44; }
+.tl-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .tl-min { background: #febc2e; cursor: default; opacity: 0.55; }
 .tl-max { background: #28c840; cursor: default; opacity: 0.55; }
-.traffic-btn:focus { outline: none; }
 
 .win-title {
   font-weight: 600;
@@ -1834,6 +1966,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn-edit,
 .btn-small,
 .fetch-btn,
+.btn-retry,
 .btn-reset-size {
   background: var(--surface-input);
   color: var(--text-primary);
@@ -1841,17 +1974,18 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   padding: 5px 12px;
   font-size: 12px;
 }
+.btn-retry { padding: 3px 10px; font-size: 11px; }
 .btn-small { padding: 4px 10px; font-size: 11px; }
 .btn-reset-size { padding: 4px 10px; font-size: 11px; align-self: flex-start; }
 
 .btn-activate {
-  background: var(--success);
-  color: #fff;
-  border: 1px solid transparent;
+  background: rgba(48, 209, 88, 0.14);
+  color: var(--success);
+  border: 1px solid rgba(48, 209, 88, 0.25);
   font-size: 11px;
   padding: 4px 10px;
 }
-.btn-activate:hover { background: #27b24a; border-color: transparent; }
+.btn-activate:hover { background: rgba(48, 209, 88, 0.22); border-color: rgba(48, 209, 88, 0.4); }
 
 .btn-del,
 .btn-danger-small,
@@ -1921,11 +2055,11 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
-.section-hint { font-size: 12px; color: var(--text-tertiary); margin: 0 0 10px; line-height: 1.5; }
+.section-hint { font-size: 12px; color: var(--text-secondary); margin: 0 0 10px; line-height: 1.5; }
 
 /* Model profile cards */
 .profile-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.empty-hint { color: var(--text-tertiary); font-size: 12px; padding: 20px 0; text-align: center; }
+.empty-hint { color: var(--text-secondary); font-size: 12px; padding: 20px 0;text-align: center; }
 .profile-card {
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 14px; margin-bottom: 8px;
@@ -2005,6 +2139,24 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   letter-spacing: -0.01em;
 }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--border-subtle); }
+
+/* Confirm dialog — narrower than form modals; danger button matches btn-save sizing */
+.confirm-modal-box { width: 360px; }
+.confirm-modal-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  margin: 0;
+}
+.modal-actions .btn-danger {
+  background: var(--danger);
+  color: #fff;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 14px;
+}
+.modal-actions .btn-danger:hover { background: #ff6961; border-color: transparent; }
 .form-error {
   color: var(--danger);
   font-size: 12px;
@@ -2235,7 +2387,7 @@ ul { list-style: none; padding: 0; margin: 0; }
   font-variant-numeric: tabular-nums;
   font-weight: 500;
 }
-.size-hint { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; line-height: 1.5; }
+.size-hint { font-size: 11px; color: var(--text-secondary); opacity: 0.88; margin-top: 2px; line-height: 1.5; }
 
 /* Cron jobs */
 .cron-row {
@@ -2263,7 +2415,7 @@ ul { list-style: none; padding: 0; margin: 0; }
   font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
   font-weight: 500;
 }
-.cron-desc { font-size: 11px; color: var(--text-tertiary); }
+.cron-desc { font-size: 11px; color: var(--text-secondary); opacity: 0.88; }
 .cron-prompt {
   font-size: 12px;
   color: var(--text-secondary);
@@ -2559,7 +2711,8 @@ ul { list-style: none; padding: 0; margin: 0; }
 }
 .about-meta {
   font-size: 11px;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
+  opacity: 0.88;
   margin-top: 8px;
   text-align: center;
 }
