@@ -1,6 +1,7 @@
 <!-- frontend/src/components/ContextMenu.vue -->
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { useEscapeKey } from '../composables/useEscapeKey'
 
 /**
  * ContextMenu renders a positioned popup menu.
@@ -49,19 +50,10 @@ function onOutsideClick(e) {
   if (menuRef.value && !menuRef.value.contains(e.target)) hide()
 }
 
-/** onKeydown closes the menu on Escape. */
-function onKeydown(e) {
-  if (e.key === 'Escape' && visible.value) hide()
-}
+useEscapeKey(hide, visible)
 
-onMounted(() => {
-  window.addEventListener('mousedown', onOutsideClick, true)
-  window.addEventListener('keydown', onKeydown)
-})
-onUnmounted(() => {
-  window.removeEventListener('mousedown', onOutsideClick, true)
-  window.removeEventListener('keydown', onKeydown)
-})
+onMounted(() => window.addEventListener('mousedown', onOutsideClick, true))
+onUnmounted(() => window.removeEventListener('mousedown', onOutsideClick, true))
 
 defineExpose({ show, hide })
 </script>
@@ -99,14 +91,10 @@ defineExpose({ show, hide })
 
 <style scoped>
 .ctx-menu {
-  /* Design tokens — aligned with SettingsWindow */
-  --accent: #007aff;
-  --accent-hover: #0a84ff;
   --surface: rgba(38, 38, 44, 0.78);
   --text-primary: rgba(255, 255, 255, 0.92);
   --text-secondary: rgba(255, 255, 255, 0.62);
   --border-subtle: rgba(255, 255, 255, 0.10);
-  --danger: #ff453a;
 
   position: fixed;
   z-index: 99999;

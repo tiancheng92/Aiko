@@ -23,6 +23,10 @@ import {
 import { ListProactiveItems, DeleteProactiveItem } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { useModelPath } from '../composables/useModelPath.js'
+import {
+  ICON_TAB_MODEL, ICON_TAB_AI, ICON_TAB_APPEARANCE, ICON_TAB_TOOLS,
+  ICON_TAB_KNOWLEDGE, ICON_TAB_AUTOMATION, ICON_TAB_LARK, ICON_TAB_SMS, ICON_TAB_ABOUT,
+} from '../utils/icons'
 
 const emit = defineEmits(['close'])
 
@@ -129,35 +133,31 @@ let offUpdateProgress = null
 
 /**
  * tabMeta defines sidebar tabs with SVG icons and search keywords.
- * Keywords power the global search filter.
+ * `_haystack` is pre-lowercased so the search filter doesn't re-normalize
+ * label/keywords on every keystroke.
  */
 const tabMeta = [
-  { id: 'model',      label: '模型配置', keywords: 'model profile openai provider key embedding 模型 配置 接入' },
-  { id: 'ai',         label: 'AI 行为',  keywords: 'prompt system memory nudge skill 提示词 记忆 技能 轮数' },
-  { id: 'appearance', label: '外观与交互', keywords: 'live2d pet size chat voice sounds tts 模型 大小 语音 音效 朗读' },
-  { id: 'tools',      label: '工具',     keywords: 'mcp permission shell code path tool 权限 服务器 执行 白名单' },
-  { id: 'knowledge',  label: '知识库',   keywords: 'knowledge rag document import 文档 导入 向量' },
-  { id: 'automation', label: '自动化',   keywords: 'cron schedule proactive reminder 定时 任务 提醒' },
-  { id: 'lark',       label: '飞书',     keywords: 'lark feishu cli 飞书' },
-  { id: 'sms',        label: '短信监听', keywords: 'sms message verification 短信 验证码' },
-  { id: 'about',      label: '关于',     keywords: 'version update about 版本 更新 关于' },
-]
+  { id: 'model',      label: '模型配置',   iconSvg: ICON_TAB_MODEL,      keywords: 'model profile openai provider key embedding 模型 配置 接入' },
+  { id: 'ai',         label: 'AI 行为',    iconSvg: ICON_TAB_AI,         keywords: 'prompt system memory nudge skill 提示词 记忆 技能 轮数' },
+  { id: 'appearance', label: '外观与交互', iconSvg: ICON_TAB_APPEARANCE, keywords: 'live2d pet size chat voice sounds tts 模型 大小 语音 音效 朗读' },
+  { id: 'tools',      label: '工具',       iconSvg: ICON_TAB_TOOLS,      keywords: 'mcp permission shell code path tool 权限 服务器 执行 白名单' },
+  { id: 'knowledge',  label: '知识库',     iconSvg: ICON_TAB_KNOWLEDGE,  keywords: 'knowledge rag document import 文档 导入 向量' },
+  { id: 'automation', label: '自动化',     iconSvg: ICON_TAB_AUTOMATION, keywords: 'cron schedule proactive reminder 定时 任务 提醒' },
+  { id: 'lark',       label: '飞书',       iconSvg: ICON_TAB_LARK,       keywords: 'lark feishu cli 飞书' },
+  { id: 'sms',        label: '短信监听',   iconSvg: ICON_TAB_SMS,        keywords: 'sms message verification 短信 验证码' },
+  { id: 'about',      label: '关于',       iconSvg: ICON_TAB_ABOUT,      keywords: 'version update about 版本 更新 关于' },
+].map(t => ({ ...t, _haystack: (t.label + ' ' + t.keywords).toLowerCase() }))
 
-/**
- * filteredTabs returns sidebar tabs matching the current search query.
- * Empty query returns all tabs.
- */
+const searchNeedle = computed(() => searchQuery.value.trim().toLowerCase())
 const filteredTabs = computed(() => {
-  const q = searchQuery.value.trim().toLowerCase()
-  if (!q) return tabMeta
-  return tabMeta.filter(t => t.label.toLowerCase().includes(q) || t.keywords.toLowerCase().includes(q))
+  const q = searchNeedle.value
+  return q ? tabMeta.filter(t => t._haystack.includes(q)) : tabMeta
 })
 
-/** highlightMatch returns true when the tab label/keywords contain the query. */
+/** isSearchMatch returns true when the tab's haystack contains the current query. */
 function isSearchMatch(tab) {
-  const q = searchQuery.value.trim().toLowerCase()
-  if (!q) return false
-  return tab.label.toLowerCase().includes(q) || tab.keywords.toLowerCase().includes(q)
+  const q = searchNeedle.value
+  return !!q && tab._haystack.includes(q)
 }
 
 /** onResizeStart begins resizing the window from the bottom-right corner. */
@@ -188,31 +188,32 @@ function onResizeEnd() {
 
 onMounted(async () => {
   loadModels()
-  const loaded = await GetConfig()
+  const [loaded, version] = await Promise.all([
+    GetConfig().catch(() => null),
+    GetVersion().catch(() => '…'),
+  ])
   if (loaded) applyConfig(loaded)
-  try { currentVersion.value = await GetVersion() } catch {}
+  currentVersion.value = version
 
-  sources.value = await ListKnowledgeSources() || []
-  // Override PetSize / ChatWidth / ChatHeight with per-screen saved values so the
-  // settings UI shows the config that is actually active for the current screen.
+  // Per-screen sizes override global config so the UI shows what's active here.
   const { width: sw, height: sh } = props.activeScreen
-  if (sw > 0 && sh > 0) {
-    try {
-      const petSize = await GetPetSize(sw, sh)
-      if (petSize > 0) cfg.value.PetSize = petSize
-    } catch (e) { console.warn('SettingsWindow: GetPetSize failed', e) }
-    try {
-      const [cw, ch] = await GetChatSize(sw, sh)
-      if (cw > 0) cfg.value.ChatWidth = cw
-      if (ch > 0) cfg.value.ChatHeight = ch
-    } catch (e) { console.warn('SettingsWindow: GetChatSize failed', e) }
-  }
-  try { toolPerms.value = await GetToolPermissions() || [] } catch {}
-  await fetchMCPServers()
-  await fetchCronJobs()
+  const [ksrc, perms, pet, chat, sms] = await Promise.all([
+    ListKnowledgeSources().catch(() => []),
+    GetToolPermissions().catch(() => []),
+    sw > 0 && sh > 0 ? GetPetSize(sw, sh).catch(() => 0) : Promise.resolve(0),
+    sw > 0 && sh > 0 ? GetChatSize(sw, sh).catch(() => [0, 0]) : Promise.resolve([0, 0]),
+    IsSMSWatcherRunning().catch(() => false),
+    fetchMCPServers(),
+    fetchCronJobs(),
+    fetchProfiles(),
+  ])
+  sources.value = ksrc || []
+  toolPerms.value = perms || []
+  if (pet > 0) cfg.value.PetSize = pet
+  if (chat?.[0] > 0) cfg.value.ChatWidth = chat[0]
+  if (chat?.[1] > 0) cfg.value.ChatHeight = chat[1]
+  smsWatcherRunning.value = sms
   fetchLarkStatus()
-  await fetchProfiles()
-  smsWatcherRunning.value = await IsSMSWatcherRunning()
   offProgress = EventsOn('knowledge:progress', (p) => { importProgress.value = p })
   // Refresh per-screen sizes when the user moves the mouse to a different screen.
   offScreen = EventsOn('screen:active:changed', async (info) => {
@@ -879,44 +880,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           :class="['nav-item', { active: activeTab === tab.id, match: isSearchMatch(tab) }]"
           @click="activeTab = tab.id"
         >
-          <span class="nav-icon-wrap">
-            <!-- 模型配置 -->
-            <svg v-if="tab.id === 'model'" class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/>
-            </svg>
-            <!-- AI 行为 -->
-            <svg v-else-if="tab.id === 'ai'" class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 3v2M12 19v2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M3 12h2M19 12h2M5.6 18.4 7 17M17 7l1.4-1.4"/><circle cx="12" cy="12" r="4"/>
-            </svg>
-            <!-- 外观 -->
-            <svg v-else-if="tab.id === 'appearance'" class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="13.5" cy="6.5" r="1.5" fill="currentColor"/><circle cx="17.5" cy="10.5" r="1.5" fill="currentColor"/><circle cx="8.5" cy="7.5" r="1.5" fill="currentColor"/><circle cx="6.5" cy="12.5" r="1.5" fill="currentColor"/><path d="M12 2a10 10 0 1 0 0 20 2.5 2.5 0 0 0 1.75-4.25A2.5 2.5 0 0 1 15.5 13H17a5 5 0 0 0 5-5 10 10 0 0 0-10-6Z"/>
-            </svg>
-            <!-- 工具 -->
-            <svg v-else-if="tab.id === 'tools'" class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/>
-            </svg>
-            <!-- 知识库 -->
-            <svg v-else-if="tab.id === 'knowledge'" class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2Z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7Z"/>
-            </svg>
-            <!-- 自动化 -->
-            <svg v-else-if="tab.id === 'automation'" class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-            </svg>
-            <!-- 飞书 -->
-            <svg v-else-if="tab.id === 'lark'" class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>
-            </svg>
-            <!-- 短信 -->
-            <svg v-else-if="tab.id === 'sms'" class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/>
-            </svg>
-            <!-- 关于 -->
-            <svg v-else class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
-            </svg>
-          </span>
+          <span class="nav-icon-wrap" v-html="tab.iconSvg" />
           <span class="nav-label">{{ tab.label }}</span>
         </button>
         <div v-if="filteredTabs.length === 0" class="nav-empty">
@@ -1091,25 +1055,25 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           <div class="settings-section-title" style="margin-top:20px">语音与音效</div>
           <div class="sms-toggle-row" style="margin-top:8px">
             <span class="sms-status-label" style="flex:1">语音消息立刻发送</span>
-            <label class="voice-auto-send-switch">
+            <label class="toggle">
               <input type="checkbox" v-model="cfg.VoiceAutoSend" @change="toggleVoiceAutoSend" />
-              <span class="voice-auto-send-slider"></span>
+              <span class="toggle-track" />
             </label>
           </div>
           <p class="sms-desc" style="margin-top:4px">释放 Option 键后，等待转录完成并自动发送消息</p>
           <div class="sms-toggle-row" style="margin-top:16px">
             <span class="sms-status-label" style="flex:1">聊天音效</span>
-            <label class="voice-auto-send-switch">
+            <label class="toggle">
               <input type="checkbox" v-model="cfg.SoundsEnabled" @change="toggleSoundsEnabled" />
-              <span class="voice-auto-send-slider"></span>
+              <span class="toggle-track" />
             </label>
           </div>
           <p class="sms-desc" style="margin-top:4px">发送、收到消息和出错时播放轻柔提示音</p>
           <div class="sms-toggle-row" style="margin-top:16px">
             <span class="sms-status-label" style="flex:1">自动朗读回复</span>
-            <label class="voice-auto-send-switch">
+            <label class="toggle">
               <input type="checkbox" v-model="cfg.TTSAutoPlay" @change="toggleTTSAutoPlay" />
-              <span class="voice-auto-send-slider"></span>
+              <span class="toggle-track" />
             </label>
           </div>
           <p class="sms-desc" style="margin-top:4px">LLM 回复完成后自动朗读内容（需在 ModelProfile 中配置 TTS Model）</p>
@@ -1521,52 +1485,28 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 </template>
 
 <style scoped>
-/* ═══════════════════════════════════════════════════════════════════════
-   Design tokens — macOS System Settings.app aesthetic
-   ═══════════════════════════════════════════════════════════════════════ */
 .settings-win {
-  /* Accent — macOS default blue; adapts to system accent via accent-color later */
-  --accent: #007aff;
-  --accent-hover: #0a84ff;
-  --accent-alpha-20: rgba(0, 122, 255, 0.20);
-  --accent-alpha-12: rgba(0, 122, 255, 0.12);
-  --accent-alpha-08: rgba(0, 122, 255, 0.08);
-
-  /* Surfaces — layered glass */
+  /* Surface/text tokens specific to Settings window (Chrome ≠ bubble surfaces) */
   --surface-window: rgba(28, 28, 32, 0.78);
   --surface-sidebar: rgba(20, 20, 24, 0.55);
   --surface-card: rgba(255, 255, 255, 0.045);
   --surface-card-hover: rgba(255, 255, 255, 0.065);
   --surface-input: rgba(255, 255, 255, 0.06);
   --surface-input-hover: rgba(255, 255, 255, 0.085);
-
-  /* Borders — hairline */
   --border-subtle: rgba(255, 255, 255, 0.06);
   --border-default: rgba(255, 255, 255, 0.09);
   --border-strong: rgba(255, 255, 255, 0.14);
-
-  /* Text */
   --text-primary: rgba(255, 255, 255, 0.92);
   --text-secondary: rgba(255, 255, 255, 0.62);
   --text-tertiary: rgba(255, 255, 255, 0.42);
   --text-disabled: rgba(255, 255, 255, 0.24);
-
-  /* Semantic */
-  --danger: #ff453a;
-  --danger-bg: rgba(255, 69, 58, 0.14);
-  --success: #30d158;
-  --warning: #ff9f0a;
-
-  /* Radii */
   --r-window: 14px;
   --r-card: 11px;
   --r-input: 7px;
   --r-button: 6px;
-
-  /* Shadows */
   --shadow-window: 0 24px 64px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
 
-  /* Window container */
+
   position: fixed;
   z-index: 99990;
   min-width: 760px;
@@ -1587,9 +1527,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   -webkit-font-smoothing: antialiased;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Titlebar — traffic lights + title + global search
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Titlebar — traffic lights + title + global search */
 .win-titlebar {
   display: flex;
   align-items: center;
@@ -1678,9 +1616,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 .search-input::placeholder { color: var(--text-tertiary); }
 .search-input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Layout — sidebar + content
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Layout — sidebar + content */
 .win-body { flex: 1; display: flex; overflow: hidden; }
 
 /* Sidebar */
@@ -1738,7 +1674,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   justify-content: center;
   flex-shrink: 0;
 }
-.nav-svg { width: 16px; height: 16px; color: currentColor; }
+.nav-icon-wrap :deep(svg) { width: 16px; height: 16px; color: currentColor; }
 .nav-label { font-size: 13px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .nav-empty {
@@ -1751,9 +1687,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   font-size: 11px;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Content area — section-card pattern
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Content area — section-card pattern */
 .win-content {
   flex: 1;
   overflow-y: auto;
@@ -1771,11 +1705,8 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 }
 .win-content::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.22); background-clip: padding-box; }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Tab pane — macOS System Settings "card of rows" pattern
-   Each top-level <label>, <div.settings-section>, <div.sms-toggle-row>
-   inside .tab-pane is styled like a settings row inside a card container.
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Tab pane — macOS "card of rows" pattern: each top-level label / .settings-section
+   / .sms-toggle-row renders as a row inside a card container. */
 .tab-pane { display: flex; flex-direction: column; gap: 18px; max-width: 720px; }
 .tab-pane > label,
 .tab-pane > .settings-section {
@@ -1858,9 +1789,7 @@ input[type="range"]::-webkit-slider-thumb {
 input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.1); }
 input[type="checkbox"] { accent-color: var(--accent); }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Buttons — macOS style (primary, secondary, destructive, small)
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Buttons — macOS style (primary, secondary, destructive, small) */
 button {
   background: var(--surface-input);
   color: var(--text-primary);
@@ -1969,9 +1898,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .select-row { display: flex; }
 .select-row select, .select-row input { flex: 1; }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Section header (used across tabs)
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Section header (used across tabs) */
 .section-header {
   display: flex;
   justify-content: space-between;
@@ -1996,9 +1923,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 }
 .section-hint { font-size: 12px; color: var(--text-tertiary); margin: 0 0 10px; line-height: 1.5; }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Model profile cards
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Model profile cards */
 .profile-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .empty-hint { color: var(--text-tertiary); font-size: 12px; padding: 20px 0; text-align: center; }
 .profile-card {
@@ -2032,9 +1957,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 }
 .profile-card-actions { display: flex; gap: 6px; flex-shrink: 0; }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Modal (profile form dialog)
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Modal (profile form dialog) */
 .modal-overlay {
   position: fixed; inset: 0; z-index: 200;
   background: rgba(0, 0, 0, 0.5);
@@ -2094,9 +2017,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .form-label { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
 .form-input { width: 100%; }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Tool permissions
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Tool permissions */
 .hint { color: var(--text-secondary); font-size: 12px; margin: 0 0 8px; line-height: 1.55; }
 .public-tools-title,
 .protected-tools-title {
@@ -2143,9 +2064,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .perm-level.public { background: rgba(48, 209, 88, 0.14); color: var(--success); }
 .perm-level.protected { background: rgba(255, 159, 10, 0.14); color: var(--warning); }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Toggle switch (iOS/macOS style)
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Toggle switch (iOS/macOS style) */
 .toggle { display: flex; align-items: center; cursor: pointer; }
 .toggle input { display: none; }
 .toggle-track {
@@ -2169,41 +2088,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .toggle input:checked ~ .toggle-track::after { transform: translateX(16px); }
 .toggle input:disabled ~ .toggle-track { opacity: 0.35; cursor: not-allowed; }
 
-/* Voice auto-send switch (alt class) — unify with toggle */
-.voice-auto-send-switch {
-  position: relative;
-  display: inline-block;
-  width: 38px;
-  height: 22px;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.voice-auto-send-switch input { display: none; }
-.voice-auto-send-slider {
-  position: absolute;
-  inset: 0;
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 11px;
-  transition: background 0.2s;
-}
-.voice-auto-send-slider::before {
-  content: '';
-  position: absolute;
-  width: 18px;
-  height: 18px;
-  left: 2px;
-  top: 2px;
-  background: #fff;
-  border-radius: 50%;
-  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25), 0 0 0 0.5px rgba(0, 0, 0, 0.08);
-}
-.voice-auto-send-switch input:checked + .voice-auto-send-slider { background: var(--accent); }
-.voice-auto-send-switch input:checked + .voice-auto-send-slider::before { transform: translateX(16px); }
-
-/* ═══════════════════════════════════════════════════════════════════════
-   Knowledge list
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Knowledge list */
 ul { list-style: none; padding: 0; margin: 0; }
 .tab-pane > ul {
   background: var(--surface-card);
@@ -2235,9 +2120,7 @@ ul { list-style: none; padding: 0; margin: 0; }
   border-radius: var(--r-input);
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Live2D model grid
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Live2D model grid */
 .model-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .model-btn {
   background: var(--surface-input);
@@ -2256,9 +2139,7 @@ ul { list-style: none; padding: 0; margin: 0; }
   color: #fff;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Footer
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Footer */
 .win-footer {
   display: flex;
   justify-content: flex-end;
@@ -2279,9 +2160,7 @@ ul { list-style: none; padding: 0; margin: 0; }
   white-space: nowrap;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   MCP server rows
-   ═══════════════════════════════════════════════════════════════════════ */
+/* MCP server rows */
 .mcp-row {
   display: flex;
   justify-content: space-between;
@@ -2324,9 +2203,7 @@ ul { list-style: none; padding: 0; margin: 0; }
   gap: 12px;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Form rows (shared MCP / cron / etc.)
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Form rows (shared MCP / cron / etc.) */
 .form-row {
   display: flex;
   flex-direction: column;
@@ -2347,9 +2224,7 @@ ul { list-style: none; padding: 0; margin: 0; }
   margin-top: 4px;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Size sliders (pet / chat)
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Size sliders (pet / chat) */
 .size-row { display: flex; align-items: center; gap: 12px; margin-top: 2px; }
 .size-row input[type=range] { flex: 1; cursor: pointer; }
 .size-val {
@@ -2362,9 +2237,7 @@ ul { list-style: none; padding: 0; margin: 0; }
 }
 .size-hint { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; line-height: 1.5; }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Cron jobs
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Cron jobs */
 .cron-row {
   display: flex;
   align-items: flex-start;
@@ -2429,9 +2302,7 @@ ul { list-style: none; padding: 0; margin: 0; }
 }
 .cron-form h4 { margin: 0 0 2px; font-size: 13px; font-weight: 600; color: var(--text-primary); }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Lark tab
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Lark tab */
 .lark-status {
   padding: 10px 14px;
   border-radius: var(--r-input);
@@ -2511,9 +2382,7 @@ ul { list-style: none; padding: 0; margin: 0; }
 
 .screen-label { font-size: 11px; color: var(--text-tertiary); margin-bottom: 6px; }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   SMS watcher tab
-   ═══════════════════════════════════════════════════════════════════════ */
+/* SMS watcher tab */
 .sms-desc {
   font-size: 12px;
   color: var(--text-secondary);
@@ -2555,9 +2424,7 @@ ul { list-style: none; padding: 0; margin: 0; }
   font-weight: 500;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Proactive reminders
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Proactive reminders */
 .proactive-row {
   display: flex;
   align-items: center;
@@ -2584,9 +2451,7 @@ ul { list-style: none; padding: 0; margin: 0; }
   text-overflow: ellipsis;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Sub-tab bar (MCP / permissions / settings; cron / proactive)
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Sub-tab bar (MCP / permissions / settings; cron / proactive) */
 .sub-tab-bar {
   display: inline-flex;
   gap: 2px;
@@ -2615,9 +2480,7 @@ ul { list-style: none; padding: 0; margin: 0; }
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Tools / path white-list
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Tools / path white-list */
 .path-list { display: flex; flex-direction: column; gap: 4px; }
 .path-row {
   display: flex;
@@ -2648,9 +2511,7 @@ ul { list-style: none; padding: 0; margin: 0; }
 }
 .short-input { width: 120px; }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   About tab
-   ═══════════════════════════════════════════════════════════════════════ */
+/* About tab */
 .about-pane { display: flex; flex-direction: column; gap: 14px; }
 .about-version-row {
   display: flex;
@@ -2703,9 +2564,7 @@ ul { list-style: none; padding: 0; margin: 0; }
   text-align: center;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Resize handle
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Resize handle */
 .win-resize-handle {
   position: absolute;
   right: 0;
@@ -2724,9 +2583,7 @@ ul { list-style: none; padding: 0; margin: 0; }
 }
 .win-resize-handle:hover { opacity: 1; color: var(--text-secondary); }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Reduced motion support
-   ═══════════════════════════════════════════════════════════════════════ */
+/* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

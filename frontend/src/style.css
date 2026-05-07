@@ -3,6 +3,25 @@ html, body { height: 100%; }
 body { background: transparent; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; }
 #app { height: 100%; }
 
+/* Shared design tokens — macOS System Settings.app aesthetic.
+   Component `:scope` blocks may override surface/text alpha values where the
+   visual hierarchy calls for a different layer opacity. */
+:root {
+  /* Accent */
+  --accent: #007aff;
+  --accent-hover: #0a84ff;
+  --accent-alpha-20: rgba(0, 122, 255, 0.20);
+  --accent-alpha-12: rgba(0, 122, 255, 0.12);
+  --accent-alpha-08: rgba(0, 122, 255, 0.08);
+
+  /* Semantic */
+  --danger: #ff453a;
+  --danger-bg: rgba(255, 69, 58, 0.14);
+  --success: #30d158;
+  --warning: #ff9f0a;
+  --warning-bg: rgba(255, 159, 10, 0.14);
+}
+
 /* Global WebKit scrollbar reset — ALL pseudo-elements must be defined once any one is set,
    otherwise older WKWebView (macOS 15 / WebKit 18) falls back to native overlay rendering.
    Missing ::-webkit-scrollbar-button is the most common trigger for that fallback. */

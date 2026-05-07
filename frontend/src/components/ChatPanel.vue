@@ -1156,13 +1156,6 @@ defineExpose({ focusInput, scrollToBottom })
 
 <style scoped>
 .chat-panel {
-  /* Design tokens — aligned with SettingsWindow/ChatBubble */
-  --accent: #007aff;
-  --accent-hover: #0a84ff;
-  --accent-alpha-20: rgba(0, 122, 255, 0.20);
-  --accent-alpha-12: rgba(0, 122, 255, 0.12);
-  --accent-alpha-08: rgba(0, 122, 255, 0.08);
-  --surface: rgba(28, 28, 32, 0.78);
   --surface-card: rgba(255, 255, 255, 0.05);
   --surface-input: rgba(255, 255, 255, 0.06);
   --surface-input-hover: rgba(255, 255, 255, 0.09);
@@ -1171,10 +1164,6 @@ defineExpose({ focusInput, scrollToBottom })
   --text-tertiary: rgba(255, 255, 255, 0.44);
   --border-subtle: rgba(255, 255, 255, 0.08);
   --border-default: rgba(255, 255, 255, 0.12);
-  --danger: #ff453a;
-  --danger-bg: rgba(255, 69, 58, 0.14);
-  --success: #30d158;
-  --warning: #ff9f0a;
 
   display: flex;
   flex-direction: column;
@@ -1234,10 +1223,8 @@ defineExpose({ focusInput, scrollToBottom })
 .bubble-collapse-wrap {
   position: relative;
 }
-/* Clip collapse on `.bubble-row` (inline-flex → same width as the bubble)
-   so the fade's `bottom: 0` anchors to the visible edge instead of the
-   bubble's full (clipped) height. Inherit bubble radius so the fade never
-   extends past the rounded corners. */
+/* Clip on `.bubble-row` (inline-flex → bubble width) so the fade anchors
+   to the visible edge and respects the bubble's rounded corners. */
 .bubble-row.is-collapsed {
   max-height: 350px;
   overflow: hidden;
@@ -1245,8 +1232,6 @@ defineExpose({ focusInput, scrollToBottom })
 }
 .msg.user .bubble-row.is-collapsed { border-radius: 16px 16px 4px 16px; }
 
-/* Gradient fade at the bottom of a collapsed bubble — anchored to
-   `.bubble-row` (inline-flex → same width as the bubble). */
 .collapse-fade {
   position: absolute;
   bottom: 0;

@@ -3,6 +3,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { ConfirmToolExecution } from '../../wailsjs/go/main/App'
+import { useEscapeKey } from '../composables/useEscapeKey'
 
 const visible = ref(false)
 const request = ref(null) // ToolConfirmRequest
@@ -42,24 +43,13 @@ async function reject() {
   await ConfirmToolExecution(request.value.id, false, '')
 }
 
-/** onKeydown closes the modal on Escape (treated as reject). */
-function onKeydown(e) {
-  if (!visible.value) return
-  if (e.key === 'Escape') reject()
-}
-
-// Store the handler returned by EventsOn and invoke it on unmount — passing
-// the event name alone to EventsOff removes all listeners for that event,
-// which would break other components subscribing to the same name later.
+// EventsOff(name) removes all listeners for that name, so always invoke the
+// handle returned by EventsOn instead.
 let offConfirm = null
-onMounted(() => {
-  offConfirm = EventsOn('tool:confirm', onConfirmEvent)
-  window.addEventListener('keydown', onKeydown)
-})
-onUnmounted(() => {
-  offConfirm?.()
-  window.removeEventListener('keydown', onKeydown)
-})
+onMounted(() => { offConfirm = EventsOn('tool:confirm', onConfirmEvent) })
+onUnmounted(() => offConfirm?.())
+
+useEscapeKey(reject, visible)
 </script>
 
 <template>
@@ -120,10 +110,6 @@ onUnmounted(() => {
 
 <style scoped>
 .tool-confirm-modal {
-  /* Design tokens — aligned with SettingsWindow */
-  --accent: #007aff;
-  --accent-hover: #0a84ff;
-  --accent-alpha-20: rgba(0, 122, 255, 0.20);
   --surface: rgba(42, 42, 48, 0.92);
   --surface-input: rgba(255, 255, 255, 0.06);
   --surface-input-hover: rgba(255, 255, 255, 0.09);
@@ -132,10 +118,6 @@ onUnmounted(() => {
   --text-tertiary: rgba(255, 255, 255, 0.44);
   --border-subtle: rgba(255, 255, 255, 0.09);
   --border-default: rgba(255, 255, 255, 0.14);
-  --warning: #ff9f0a;
-  --warning-bg: rgba(255, 159, 10, 0.14);
-  --danger: #ff453a;
-  --danger-bg: rgba(255, 69, 58, 0.16);
 
   position: absolute;
   inset: 0;

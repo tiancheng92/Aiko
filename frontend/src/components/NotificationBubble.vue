@@ -90,14 +90,11 @@ onUnmounted(() => {
 
 <style scoped>
 .notif-bubble {
-  /* Design tokens */
-  --accent: #007aff;
   --surface: rgba(28, 28, 32, 0.82);
   --text-primary: rgba(255, 255, 255, 0.94);
   --text-secondary: rgba(255, 255, 255, 0.68);
   --text-tertiary: rgba(255, 255, 255, 0.42);
   --border-subtle: rgba(255, 255, 255, 0.10);
-  --danger: #ff453a;
 
   position: fixed;
   z-index: 99997;
