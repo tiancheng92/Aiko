@@ -1547,7 +1547,7 @@ func (a *App) ListVRMModels() ([]VRMModelInfo, error) {
 			}
 		}
 	}
-	userDir := filepath.Join(os.Getenv("HOME"), ".aiko", "vrm-models")
+	userDir := filepath.Join(os.Getenv("HOME"), ".aiko", "vrm")
 	uentries, err := os.ReadDir(userDir)
 	if err == nil {
 		for _, e := range uentries {
@@ -1574,7 +1574,7 @@ func (a *App) GetVRMPath(name string) (string, error) {
 	if _, err := assets.Open("frontend/dist/vrm/" + name); err == nil {
 		return "/vrm/" + name, nil
 	}
-	userPath := filepath.Join(os.Getenv("HOME"), ".aiko", "vrm-models", name)
+	userPath := filepath.Join(os.Getenv("HOME"), ".aiko", "vrm", name)
 	if _, err := os.Stat(userPath); err == nil {
 		return "/user-vrm/" + name, nil
 	}
@@ -1582,7 +1582,7 @@ func (a *App) GetVRMPath(name string) (string, error) {
 }
 
 // ImportVRMFile decodes a base64-encoded .vrm file and writes it to
-// ~/.aiko/vrm-models/{name}. Validates the glTF magic header before writing.
+// ~/.aiko/vrm/{name}. Validates the glTF magic header before writing.
 func (a *App) ImportVRMFile(name string, base64Data string) error {
 	if !strings.HasSuffix(name, ".vrm") {
 		return fmt.Errorf("filename must end in .vrm")
@@ -1594,17 +1594,17 @@ func (a *App) ImportVRMFile(name string, base64Data string) error {
 	if len(data) < 4 || string(data[:4]) != "glTF" {
 		return fmt.Errorf("not a valid glTF/VRM file")
 	}
-	userDir := filepath.Join(os.Getenv("HOME"), ".aiko", "vrm-models")
+	userDir := filepath.Join(os.Getenv("HOME"), ".aiko", "vrm")
 	if err := os.MkdirAll(userDir, 0o755); err != nil {
-		return fmt.Errorf("create vrm-models dir: %w", err)
+		return fmt.Errorf("create vrm dir: %w", err)
 	}
 	dest := filepath.Join(userDir, filepath.Base(name))
 	return os.WriteFile(dest, data, 0o644)
 }
 
-// DeleteVRMModel removes a user-imported VRM from ~/.aiko/vrm-models/.
+// DeleteVRMModel removes a user-imported VRM from ~/.aiko/vrm/.
 func (a *App) DeleteVRMModel(name string) error {
-	userPath := filepath.Join(os.Getenv("HOME"), ".aiko", "vrm-models", filepath.Base(name))
+	userPath := filepath.Join(os.Getenv("HOME"), ".aiko", "vrm", filepath.Base(name))
 	if _, err := os.Stat(userPath); os.IsNotExist(err) {
 		return fmt.Errorf("user-imported model not found: %s", name)
 	}

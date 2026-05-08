@@ -106,7 +106,7 @@ func main() {
 	}
 }
 
-// userVRMHandler serves .vrm files from ~/.aiko/vrm-models/ at /user-vrm/<name>.
+// userVRMHandler serves .vrm files from ~/.aiko/vrm/ at /user-vrm/<name>.
 type userVRMHandler struct{}
 
 func (h userVRMHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -119,7 +119,7 @@ func (h userVRMHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	p := filepath.Join(os.Getenv("HOME"), ".aiko", "vrm-models", name)
+	p := filepath.Join(os.Getenv("HOME"), ".aiko", "vrm", name)
 	http.ServeFile(w, r, p)
 }
 

@@ -169,7 +169,7 @@ const EMOTION_SPEAKING_ANIMS = {
 const IDLE_VARIETY_POOL = ['/vrm/relaxed.vrma', '/vrm/sleepy.vrma', '/vrm/idle_loop.vrma']
 
 // Occasional one-shot gestures during idle (15–40s interval)
-const IDLE_GESTURES = ['/vrm/nod.vrma', '/vrm/wave_big.vrma', '/vrm/hello.vrma']
+const IDLE_GESTURES = ['/vrm/nod.vrma', '/vrm/wave_big.vrma', '/vrm/celebrate.vrma']
 
 let _speakingEmotion = null   // last emotion received, used on speaking state entry
 let _idleVarietyTimer = null
@@ -223,7 +223,7 @@ async function initAnimationSystem(v) {
   _currentAction = null
   idleMixer = new THREE.AnimationMixer(v.scene)
   // Welcome greeting on first load, then settle into idle.
-  await playAnimation('/vrm/hello.vrma', { loop: false, fadeTime: 0.3 })
+  await playAnimation('/vrm/wave_big.vrma', { loop: false, fadeTime: 0.3 })
   setTimeout(() => { if (mounted) playAnimation(STATE_ANIMS.idle, { fadeTime: 0.8 }) }, 3000)
 }
 
@@ -312,8 +312,11 @@ async function loadVRM(url) {
   const newVrm = gltf.userData.vrm
   VRMUtils.removeUnnecessaryVertices(gltf.scene)
   VRMUtils.removeUnnecessaryJoints(gltf.scene)
-  // VRM default forward is +Z; camera is at +Z side, so no rotation needed.
-  newVrm.scene.rotation.y = 0
+  // VRM 0.x faces +Z (toward camera); VRM 1.0 follows glTF and faces -Z (away).
+  // Rotate 1.0 models 180° so the front always faces the camera.
+  // VRM 0.x faces -Z; VRM 1.0 faces +Z (glTF standard). Camera is at +Z.
+  const isVRM0 = !!gltf.parser.json.extensions?.VRM
+  newVrm.scene.rotation.y = isVRM0 ? Math.PI : 0
 
   if (vrm) {
     scene.remove(vrm.scene)

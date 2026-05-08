@@ -10,7 +10,14 @@ let listenerRegistered = false
 export function useVRMModel() {
   if (!listenerRegistered) {
     listenerRegistered = true
-    EventsOn('config:vrm:model:changed', (name) => {
+    EventsOn('config:vrm:model:changed', async (name) => {
+      // Refresh available list first so vrmModelURL can resolve the new model's URL.
+      try {
+        const models = await ListVRMModels()
+        if (Array.isArray(models) && models.length > 0) availableVRMModels.value = models
+      } catch (e) {
+        console.warn('useVRMModel: failed to refresh model list', e)
+      }
       currentVRMModel.value = name
     })
   }

@@ -19,7 +19,7 @@ import {
   GetSoundsEnabled, SetSoundsEnabled,
   GetKokoroTTSVoices, SetTTSAutoPlay, SetupKokoroTTS,
   GetVersion, CheckUpdate, InstallUpdate,
-  ListVRMModels,
+  ListVRMModels, ImportVRMFile, DeleteVRMModel,
 } from '../../wailsjs/go/main/App'
 import { ListProactiveItems, DeleteProactiveItem } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
@@ -427,6 +427,57 @@ function setRenderBackend(backend) {
 /** onVRMModelChange emits hot-reload event when VRM model is changed in settings. */
 function onVRMModelChange() {
   EventsEmit('config:vrm:model:changed', cfg.value.VRMModel)
+}
+
+/** onLive2DModelChange emits hot-reload event when Live2D model is changed in settings. */
+function onLive2DModelChange() {
+  EventsEmit('config:model:changed', cfg.value.Live2DModel)
+}
+
+const vrmUploading = ref(false)
+const vrmUploadError = ref('')
+
+/** uploadVRMModel reads a .vrm file and sends it to the backend for storage in ~/.aiko/vrm/. */
+async function uploadVRMModel(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  e.target.value = ''
+  vrmUploadError.value = ''
+  vrmUploading.value = true
+  try {
+    const buf = await file.arrayBuffer()
+    const bytes = new Uint8Array(buf)
+    let binary = ''
+    const chunk = 8192
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+    }
+    const b64 = btoa(binary)
+    await ImportVRMFile(file.name, b64)
+    availableVRMModels.value = await ListVRMModels()
+    cfg.value.VRMModel = file.name
+    onVRMModelChange()
+  } catch (err) {
+    vrmUploadError.value = String(err)
+  } finally {
+    vrmUploading.value = false
+  }
+}
+
+/** deleteVRMModel removes a user-imported VRM file from disk. */
+async function deleteVRMModel(name) {
+  const ok = await confirm.ask({ title: '删除模型', message: `确认删除 "${name}"？此操作不可撤销。`, variant: 'danger' })
+  if (!ok) return
+  try {
+    await DeleteVRMModel(name)
+    availableVRMModels.value = await ListVRMModels()
+    if (cfg.value.VRMModel === name) {
+      cfg.value.VRMModel = availableVRMModels.value[0]?.name ?? ''
+      onVRMModelChange()
+    }
+  } catch (err) {
+    vrmUploadError.value = String(err)
+  }
 }
 
 /** previewPetSize emits a real-time size change and persists for the active screen. */
@@ -1139,21 +1190,42 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
           <!-- VRM 模型选择（仅在 VRM 后端下显示） -->
           <label v-if="cfg.RenderBackend === 'vrm'">VRM 模型
-            <select v-model="cfg.VRMModel" @change="onVRMModelChange">
-              <option v-for="m in availableVRMModels" :key="m.name" :value="m.name">
-                {{ m.name }} ({{ m.source === 'user' ? '用户导入' : '内置' }}, {{ m.size_kb }}KB)
-              </option>
-            </select>
+            <div class="vrm-model-row">
+              <select v-model="cfg.VRMModel" @change="onVRMModelChange" class="vrm-select">
+                <option v-for="m in availableVRMModels" :key="m.name" :value="m.name">
+                  {{ m.name }} ({{ m.source === 'user' ? '用户导入' : '内置' }}, {{ m.size_kb }}KB)
+                </option>
+              </select>
+              <button
+                v-if="availableVRMModels.find(m => m.name === cfg.VRMModel)?.source === 'user'"
+                class="btn-vrm-delete"
+                @click="deleteVRMModel(cfg.VRMModel)"
+                title="删除此模型"
+              >删除</button>
+            </div>
+            <div class="vrm-upload-row">
+              <input
+                ref="vrmFileInput"
+                type="file"
+                accept=".vrm"
+                style="display:none"
+                @change="uploadVRMModel"
+              />
+              <button
+                class="btn-vrm-upload"
+                :disabled="vrmUploading"
+                @click="$refs.vrmFileInput.click()"
+              >{{ vrmUploading ? '上传中…' : '+ 导入 .vrm 模型' }}</button>
+            </div>
+            <div v-if="vrmUploadError" class="vrm-upload-error">{{ vrmUploadError }}</div>
           </label>
 
+          <!-- Live2D 模型选择（仅在 Live2D 后端下显示） -->
           <label v-if="cfg.RenderBackend !== 'vrm'">Live2D 模型
-            <div class="model-grid">
-              <button
-                v-for="m in availableModels"
-                :key="m"
-                :class="['model-btn', { selected: cfg.Live2DModel === m }]"
-                @click="cfg.Live2DModel = m"
-              >{{ m }}</button>
+            <div class="vrm-model-row">
+              <select v-model="cfg.Live2DModel" @change="onLive2DModelChange" class="vrm-select">
+                <option v-for="m in availableModels" :key="m" :value="m">{{ m }}</option>
+              </select>
             </div>
           </label>
           <label>桌宠大小
@@ -2359,6 +2431,48 @@ ul { list-style: none; padding: 0; margin: 0; }
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
+}
+
+/* VRM model upload */
+.vrm-model-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+}
+.vrm-select { flex: 1; }
+.btn-vrm-delete {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,80,80,0.4);
+  background: rgba(255,80,80,0.12);
+  color: #ff6b6b;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.btn-vrm-delete:hover { background: rgba(255,80,80,0.25); }
+.vrm-upload-row { margin-top: 6px; }
+.btn-vrm-upload {
+  padding: 5px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px dashed rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.05);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-vrm-upload:hover:not(:disabled) {
+  background: rgba(255,255,255,0.1);
+  color: var(--text-primary);
+}
+.btn-vrm-upload:disabled { opacity: 0.5; cursor: default; }
+.vrm-upload-error {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #ff6b6b;
 }
 
 /* Footer */
