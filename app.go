@@ -1131,6 +1131,7 @@ func (a *App) SendMessage(userInput string) error {
 			a.mu.Unlock()
 		}()
 		ch := ag.Chat(chatCtx, userInput)
+		ep := agent.NewEmotionParser()
 		for result := range ch {
 			if result.Err != nil {
 				// Ignore context cancellation — user triggered StopGeneration; frontend handles UI.
@@ -1141,12 +1142,27 @@ func (a *App) SendMessage(userInput string) error {
 				return
 			}
 			if result.Done {
+				if tail := ep.Flush(); tail != "" {
+					wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
+				}
 				wailsruntime.EventsEmit(a.ctx, "chat:done", "")
 				return
 			}
-			wailsruntime.EventsEmit(a.ctx, "chat:token", result.Token)
+			text, emotion, intensity := ep.Feed(result.Token)
+			if emotion != "" {
+				wailsruntime.EventsEmit(a.ctx, "chat:emotion", map[string]any{
+					"emotion":   emotion,
+					"intensity": intensity,
+				})
+			}
+			if text != "" {
+				wailsruntime.EventsEmit(a.ctx, "chat:token", text)
+			}
 		}
 		// Fallback: ensure frontend unblocks if channel closes without a terminal result.
+		if tail := ep.Flush(); tail != "" {
+			wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
+		}
 		wailsruntime.EventsEmit(a.ctx, "chat:done", "")
 	}()
 	return nil
@@ -1220,6 +1236,7 @@ func (a *App) SendMessageWithImages(userInput string, images []string) error {
 			a.mu.Unlock()
 		}()
 		ch := ag.ChatWithMessage(chatCtx, msg)
+		ep := agent.NewEmotionParser()
 		for result := range ch {
 			if result.Err != nil {
 				if errors.Is(result.Err, context.Canceled) {
@@ -1229,10 +1246,25 @@ func (a *App) SendMessageWithImages(userInput string, images []string) error {
 				return
 			}
 			if result.Done {
+				if tail := ep.Flush(); tail != "" {
+					wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
+				}
 				wailsruntime.EventsEmit(a.ctx, "chat:done", "")
 				return
 			}
-			wailsruntime.EventsEmit(a.ctx, "chat:token", result.Token)
+			text, emotion, intensity := ep.Feed(result.Token)
+			if emotion != "" {
+				wailsruntime.EventsEmit(a.ctx, "chat:emotion", map[string]any{
+					"emotion":   emotion,
+					"intensity": intensity,
+				})
+			}
+			if text != "" {
+				wailsruntime.EventsEmit(a.ctx, "chat:token", text)
+			}
+		}
+		if tail := ep.Flush(); tail != "" {
+			wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
 		}
 		wailsruntime.EventsEmit(a.ctx, "chat:done", "")
 	}()
