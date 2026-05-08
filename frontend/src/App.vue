@@ -1,19 +1,21 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import Live2DPet from './components/Live2DPet.vue'
+import VRMPet from './components/VRMPet.vue'
 import ChatBubble from './components/ChatBubble.vue'
 import SettingsWindow from './components/SettingsWindow.vue'
 import NotificationBubble from './components/NotificationBubble.vue'
-import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize } from '../wailsjs/go/main/App'
+import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize, GetConfig } from '../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../wailsjs/runtime/runtime'
 
 const bubbleOpen = ref(false)
+const renderBackend = ref('live2d')
 const settingsOpen = ref(false)
 const ballPos  = ref({ x: -1, y: -1 })
 const ballSize = ref(160)
 const chatBubbleRef = ref(null)
 const activeScreen = ref({ width: 0, height: 0 })
-let offToggle, offToken, offDone, offError, offSettings, offScreenChanged
+let offToggle, offToken, offDone, offError, offSettings, offScreenChanged, offRenderBackend
 const voiceActive = ref(false)
 const siriMounted = ref(false)   // controls v-if (keeps DOM alive during fade-out)
 const siriVisible = ref(false)   // controls CSS transition class
@@ -322,6 +324,12 @@ onMounted(async () => {
   } catch (e) {
     console.warn('App.vue: GetScreenSize failed', e)
   }
+  try {
+    const cfg = await GetConfig()
+    if (cfg?.RenderBackend) renderBackend.value = cfg.RenderBackend
+  } catch (e) {
+    console.warn('App.vue: GetConfig failed', e)
+  }
   const missing = await MissingRequiredConfig()
   const firstLaunch = await IsFirstLaunch()
   if (firstLaunch) {
@@ -342,6 +350,9 @@ onMounted(async () => {
     }
   })
   offSettings  = EventsOn('settings:open', () => { settingsOpen.value = true })
+  offRenderBackend = EventsOn('config:render:backend:changed', (backend) => {
+    renderBackend.value = backend
+  })
   offVoiceStart = EventsOn('voice:start', () => {
     if (!bubbleOpen.value) {
       bubbleOpen.value = true
@@ -378,7 +389,7 @@ onMounted(async () => {
 onUnmounted(() => {
   offToggle?.(); offToken?.(); offDone?.(); offError?.()
   offSettings?.(); offVoiceStart?.(); offVoiceEnd?.(); offVoiceError?.()
-  offScreenChanged?.()
+  offScreenChanged?.(); offRenderBackend?.()
   stopSiriAnim?.()
   stopRippleAnim?.()
   if (siriHideTimer) clearTimeout(siriHideTimer)
@@ -404,6 +415,15 @@ function openSettings() {
 
 <template>
   <Live2DPet
+    v-if="renderBackend === 'live2d'"
+    :active-screen="activeScreen"
+    @click="toggleBubble"
+    @position="p => ballPos = p"
+    @ball-size="s => ballSize = s"
+    @open-settings="openSettings"
+  />
+  <VRMPet
+    v-else-if="renderBackend === 'vrm'"
     :active-screen="activeScreen"
     @click="toggleBubble"
     @position="p => ballPos = p"
