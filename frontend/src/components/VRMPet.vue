@@ -150,10 +150,10 @@ function updateEmotionBlend(dt) {
 
 // Maps petState → primary VRMA file; fallback clips for variety within a state.
 const STATE_ANIMS = {
-  idle:      { file: '/vrm/idle.vrma',      loop: true  },
-  listening: { file: '/vrm/curious.vrma',   loop: true  },
-  thinking:  { file: '/vrm/thinking.vrma',  loop: true  },
-  speaking:  { file: '/vrm/hand_talk.vrma', loop: true  },
+  idle:      { file: '/vrm/waiting.vrma',     loop: true },
+  listening: { file: '/vrm/curious.vrma',     loop: true },
+  thinking:  { file: '/vrm/thinking.vrma',    loop: true },
+  speaking:  { file: '/vrm/hand_talk.vrma',   loop: true },
   error:     { file: '/vrm/embarrassed.vrma', loop: true },
 }
 // Extra one-shot clips triggered randomly while idle.
