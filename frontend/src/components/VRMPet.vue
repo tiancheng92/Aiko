@@ -81,14 +81,15 @@ function focusGlobal(mx, my) {
   targetHeadY = Math.max(-0.5, Math.min(0.5, (my - cy) / (rect.height * 1.5)))
 }
 
-/** applyEmotion sets blendshape targets for a given emotion + intensity. */
+/** applyEmotion sets blendshape targets and records emotion for speaking animation. */
 function applyEmotion({ emotion, intensity }) {
   const mapped = EMOTION_MAP[emotion]
-  // Clear all current targets.
   Object.keys(targetEmotionWeights).forEach(k => { targetEmotionWeights[k] = 0 })
-  if (mapped) {
-    targetEmotionWeights[mapped] = Math.max(0, Math.min(1, intensity))
-  }
+  if (mapped) targetEmotionWeights[mapped] = Math.max(0, Math.min(1, intensity))
+  // Store for speaking animation override; clear on low intensity.
+  _speakingEmotion = (intensity >= 0.4 && EMOTION_SPEAKING_ANIMS[emotion]) ? emotion : null
+  // If already speaking, switch animation immediately.
+  if (petState.value === 'speaking') applyStateAnimation('speaking')
 }
 
 /** setSize resizes the renderer to n×n pixels. */
@@ -148,16 +149,31 @@ function updateEmotionBlend(dt) {
   }
 }
 
-// Maps petState → primary VRMA file; fallback clips for variety within a state.
+// petState → default animation
 const STATE_ANIMS = {
-  idle:      { file: '/vrm/waiting.vrma',     loop: true },
-  listening: { file: '/vrm/curious.vrma',     loop: true },
-  thinking:  { file: '/vrm/thinking.vrma',    loop: true },
-  speaking:  { file: '/vrm/hand_talk.vrma',   loop: true },
-  error:     { file: '/vrm/embarrassed.vrma', loop: true },
+  idle:      '/vrm/waiting.vrma',
+  listening: '/vrm/curious.vrma',
+  thinking:  '/vrm/thinking.vrma',
+  speaking:  '/vrm/hand_talk.vrma',
+  error:     '/vrm/embarrassed.vrma',
 }
-// Extra one-shot clips triggered randomly while idle.
-const IDLE_VARIETY = ['/vrm/relaxed.vrma', '/vrm/nod.vrma', '/vrm/curious.vrma']
+
+// LLM emotion → speaking animation override (fired via chat:emotion)
+const EMOTION_SPEAKING_ANIMS = {
+  joy:       '/vrm/celebrate.vrma',
+  sad:       '/vrm/sad.vrma',
+  angry:     '/vrm/angry.vrma',
+  surprised: '/vrm/surprised_react.vrma',
+}
+
+// Idle variety pool — randomly shown every 25–50s then returns to waiting
+const IDLE_VARIETY_POOL = ['/vrm/relaxed.vrma', '/vrm/sleepy.vrma', '/vrm/idle_loop.vrma']
+
+// Occasional one-shot gestures during idle (15–40s interval)
+const IDLE_GESTURES = ['/vrm/nod.vrma', '/vrm/wave_big.vrma', '/vrm/hello.vrma']
+
+let _speakingEmotion = null   // last emotion received, used on speaking state entry
+let _idleVarietyTimer = null
 
 // Shared loader + clip cache (module-level singletons).
 const _animLoader = new GLTFLoader()
@@ -202,18 +218,43 @@ async function playAnimation(url, { loop = true, fadeTime = 0.5 } = {}) {
   }
 }
 
-/** initAnimationSystem sets up the AnimationMixer and starts the idle animation. */
+/** initAnimationSystem sets up the mixer and plays the welcome + idle sequence. */
 async function initAnimationSystem(v) {
   if (idleMixer) { idleMixer.stopAllAction(); idleMixer = null }
   _currentAction = null
   idleMixer = new THREE.AnimationMixer(v.scene)
-  await playAnimation(STATE_ANIMS.idle.file, { loop: true })
+  // Welcome greeting on first load, then settle into idle.
+  await playAnimation('/vrm/hello.vrma', { loop: false, fadeTime: 0.3 })
+  setTimeout(() => { if (mounted) playAnimation(STATE_ANIMS.idle, { fadeTime: 0.8 }) }, 3000)
 }
 
-/** applyStateAnimation switches to the animation matching the new petState. */
+/** applyStateAnimation switches to the animation for the given petState. */
 async function applyStateAnimation(state) {
-  const entry = STATE_ANIMS[state]
-  if (entry) await playAnimation(entry.file, { loop: entry.loop })
+  if (state === 'speaking') {
+    const file = (EMOTION_SPEAKING_ANIMS[_speakingEmotion]) ?? STATE_ANIMS.speaking
+    await playAnimation(file, { fadeTime: 0.4 })
+  } else {
+    const file = STATE_ANIMS[state]
+    if (file) await playAnimation(file, { fadeTime: 0.5 })
+  }
+  // Reset emotion override when leaving speaking state.
+  if (state !== 'speaking') _speakingEmotion = null
+}
+
+/** scheduleIdleVariety periodically switches to a variety idle then returns. */
+function scheduleIdleVariety() {
+  _idleVarietyTimer = setTimeout(async () => {
+    if (!mounted) return
+    if (petState.value === 'idle') {
+      const pick = IDLE_VARIETY_POOL[Math.floor(Math.random() * IDLE_VARIETY_POOL.length)]
+      await playAnimation(pick, { fadeTime: 0.6 })
+      // Return to primary idle after 12–18s.
+      setTimeout(() => {
+        if (mounted && petState.value === 'idle') playAnimation(STATE_ANIMS.idle, { fadeTime: 0.8 })
+      }, 12000 + Math.random() * 6000)
+    }
+    scheduleIdleVariety()
+  }, 25000 + Math.random() * 25000)
 }
 
 /** tick is the main render loop called every animation frame. */
@@ -289,20 +330,20 @@ function scheduleBlink() {
   }, 3000 + Math.random() * 3000)
 }
 
-/** scheduleIdleMicro triggers a subtle head tilt every 15–40 seconds when idle. */
-function scheduleIdleMicro() {
-  idleTimer = setTimeout(() => {
+/** scheduleIdleGesture fires a random one-shot gesture every 20–50s while idle. */
+function scheduleIdleGesture() {
+  idleTimer = setTimeout(async () => {
     if (!mounted) return
-    if (petState.value === 'idle' && vrm) {
-      const neck = vrm.humanoid?.getNormalizedBoneNode('neck')
-      if (neck) {
-        const tilt = (Math.random() - 0.5) * (Math.PI / 18)
-        neck.rotation.z = tilt
-        setTimeout(() => { if (mounted && neck) neck.rotation.z = 0 }, 2000)
-      }
+    if (petState.value === 'idle') {
+      const pick = IDLE_GESTURES[Math.floor(Math.random() * IDLE_GESTURES.length)]
+      await playAnimation(pick, { loop: false, fadeTime: 0.4 })
+      // Return to idle after gesture completes (~3s).
+      setTimeout(() => {
+        if (mounted && petState.value === 'idle') playAnimation(STATE_ANIMS.idle, { fadeTime: 0.6 })
+      }, 3000)
     }
-    scheduleIdleMicro()
-  }, 15000 + Math.random() * 25000)
+    scheduleIdleGesture()
+  }, 20000 + Math.random() * 30000)
 }
 
 // ── Context Menu ─────────────────────────────────────────────────────────────
@@ -464,7 +505,8 @@ onMounted(async () => {
     if (vrmModelURL.value) await loadVRM(vrmModelURL.value)
     startGlobalMouseTracking()
     scheduleBlink()
-    scheduleIdleMicro()
+    scheduleIdleGesture()
+    scheduleIdleVariety()
   } catch (err) {
     console.error('VRMPet init failed:', err)
   }
@@ -493,6 +535,7 @@ onUnmounted(() => {
   if (mouseTrackTimer) { clearInterval(mouseTrackTimer); mouseTrackTimer = null }
   clearTimeout(blinkTimer)
   clearTimeout(idleTimer)
+  clearTimeout(_idleVarietyTimer)
   offSizeChange?.()
   offPositionReset?.()
   offScreenChanged?.()
