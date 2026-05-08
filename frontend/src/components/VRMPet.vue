@@ -117,8 +117,6 @@ function updateHeadIK(dt) {
     neck.rotation.y += (targetHeadX * (Math.PI / 10) - neck.rotation.y) * speed // ±18°
     neck.rotation.x += (targetHeadY * (Math.PI / 16) - neck.rotation.x) * speed // ±5.6°
   }
-  // Subtle idle head tilt layered on top of IK (sine wave, no accumulation)
-  if (head) head.rotation.z = Math.sin(clock.elapsedTime * 0.35) * 0.008
 }
 
 /** updateMouthAnim drives the aa blendshape in a sine wave while speaking. */
@@ -159,7 +157,7 @@ async function loadIdleAnimation(v) {
   const loader = new GLTFLoader()
   loader.register((parser) => new VRMAnimationLoaderPlugin(parser))
   try {
-    const gltf = await loader.loadAsync('/vrm/standard_idle.vrma')
+    const gltf = await loader.loadAsync('/vrm/idle_loop.vrma')
     const anim = gltf.userData.vrmAnimations?.[0]
     if (!anim) return
     const clip = createVRMAnimationClip(anim, v)
@@ -174,8 +172,8 @@ async function loadIdleAnimation(v) {
 function tick() {
   if (!mounted) return
   const dt = Math.min(clock.getDelta(), 0.1) // cap dt to avoid huge jumps
-  updateHeadIK(dt)
-  idleMixer?.update(dt)
+  idleMixer?.update(dt)   // VRMA sets all bones first
+  updateHeadIK(dt)        // IK overwrites head/neck on top
   updateMouthAnim(dt)
   updateEmotionBlend(dt)
   if (vrm) vrm.update(dt)
