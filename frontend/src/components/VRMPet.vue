@@ -110,12 +110,12 @@ function updateHeadIK(dt) {
   const neck = vrm.humanoid?.getNormalizedBoneNode('neck')
   const speed = dt * 5
   if (head) {
-    head.rotation.y += (targetHeadX * (Math.PI / 3) - head.rotation.y) * speed
-    head.rotation.x += (targetHeadY * (Math.PI / 6) - head.rotation.x) * speed
+    head.rotation.y += (targetHeadX * (Math.PI / 5) - head.rotation.y) * speed  // ±36°
+    head.rotation.x += (targetHeadY * (Math.PI / 8) - head.rotation.x) * speed  // ±11°
   }
   if (neck) {
-    neck.rotation.y += (targetHeadX * (Math.PI / 6) - neck.rotation.y) * speed
-    neck.rotation.x += (targetHeadY * (Math.PI / 12) - neck.rotation.x) * speed
+    neck.rotation.y += (targetHeadX * (Math.PI / 10) - neck.rotation.y) * speed // ±18°
+    neck.rotation.x += (targetHeadY * (Math.PI / 16) - neck.rotation.x) * speed // ±5.6°
   }
 }
 
