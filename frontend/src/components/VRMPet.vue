@@ -164,9 +164,9 @@ function tick() {
 /** initRenderer creates the THREE.js scene, camera, lights, and WebGL renderer. */
 async function initRenderer() {
   scene = new THREE.Scene()
-  camera = new THREE.PerspectiveCamera(30, 1, 0.1, 20)
-  camera.position.set(0, 0.9, 3.0)
-  camera.lookAt(0, 0.8, 0)
+  camera = new THREE.PerspectiveCamera(32, 1, 0.1, 20)
+  camera.position.set(0, 0.8, 3.0)
+  camera.lookAt(0, 0.7, 0)
 
   renderer = new THREE.WebGLRenderer({ canvas: canvasRef.value, alpha: true, antialias: true })
   renderer.setPixelRatio(window.devicePixelRatio || 1)
@@ -190,10 +190,10 @@ function applyDefaultPose(v) {
   const rightUpperArm = h.getNormalizedBoneNode('rightUpperArm')
   const leftLowerArm = h.getNormalizedBoneNode('leftLowerArm')
   const rightLowerArm = h.getNormalizedBoneNode('rightLowerArm')
-  if (leftUpperArm)  leftUpperArm.rotation.z  = -1.0   // lower left arm
-  if (rightUpperArm) rightUpperArm.rotation.z =  1.0   // lower right arm
-  if (leftLowerArm)  leftLowerArm.rotation.z  = -0.2
-  if (rightLowerArm) rightLowerArm.rotation.z =  0.2
+  if (leftUpperArm)  { leftUpperArm.rotation.z = -1.4; leftUpperArm.rotation.x = 0.15 }
+  if (rightUpperArm) { rightUpperArm.rotation.z = 1.4; rightUpperArm.rotation.x = 0.15 }
+  if (leftLowerArm)  { leftLowerArm.rotation.z = -0.1; leftLowerArm.rotation.x = 0.1 }
+  if (rightLowerArm) { rightLowerArm.rotation.z = 0.1; rightLowerArm.rotation.x = 0.1 }
 }
 
 /** loadVRM loads a .vrm file by URL and replaces the current model in the scene. */
