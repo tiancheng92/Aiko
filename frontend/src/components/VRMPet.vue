@@ -36,6 +36,7 @@ let dragStart = null
 let mouthPhase = 0
 let idleTimer = null
 let blinkTimer = null
+let idleTime = 0
 const MOUSE_POLL_MS = 50
 
 // Head IK targets (-1 to 1 normalized)
@@ -147,11 +148,71 @@ function updateEmotionBlend(dt) {
   }
 }
 
+/**
+ * updateIdleAnimation applies continuous sinusoidal bone animations:
+ * breathing (chest), body sway (hips), and gentle arm swing.
+ * These run every frame and add life to the idle stance.
+ */
+function updateIdleAnimation(dt) {
+  if (!vrm) return
+  idleTime += dt
+  const h = vrm.humanoid
+
+  // Breathing: chest slowly expands and contracts.
+  const chest = h?.getNormalizedBoneNode('chest') ?? h?.getNormalizedBoneNode('upperChest')
+  if (chest) {
+    chest.rotation.x = Math.sin(idleTime * 0.6) * 0.018
+  }
+
+  // Spine sway: gentle figure-8 micro-sway.
+  const spine = h?.getNormalizedBoneNode('spine')
+  if (spine) {
+    spine.rotation.z = Math.sin(idleTime * 0.4) * 0.015
+    spine.rotation.x = Math.sin(idleTime * 0.6 + 0.5) * 0.008
+  }
+
+  // Hips: subtle weight-shift left-right in sync with breathing.
+  const hips = h?.getNormalizedBoneNode('hips')
+  if (hips) {
+    hips.rotation.z = Math.sin(idleTime * 0.4) * 0.012
+    hips.rotation.y = Math.sin(idleTime * 0.25) * 0.008
+  }
+
+  // Arms: gentle pendulum swing (opposite phase for natural feel).
+  const leftUpperArm  = h?.getNormalizedBoneNode('leftUpperArm')
+  const rightUpperArm = h?.getNormalizedBoneNode('rightUpperArm')
+  const leftLowerArm  = h?.getNormalizedBoneNode('leftLowerArm')
+  const rightLowerArm = h?.getNormalizedBoneNode('rightLowerArm')
+  if (leftUpperArm) {
+    leftUpperArm.rotation.z = -1.4 + Math.sin(idleTime * 0.5) * 0.04
+    leftUpperArm.rotation.x = 0.15 + Math.sin(idleTime * 0.4) * 0.03
+  }
+  if (rightUpperArm) {
+    rightUpperArm.rotation.z = 1.4 + Math.sin(idleTime * 0.5 + Math.PI) * 0.04
+    rightUpperArm.rotation.x = 0.15 + Math.sin(idleTime * 0.4 + Math.PI) * 0.03
+  }
+  if (leftLowerArm) {
+    leftLowerArm.rotation.z = -0.1
+    leftLowerArm.rotation.x = 0.1 + Math.sin(idleTime * 0.5) * 0.02
+  }
+  if (rightLowerArm) {
+    rightLowerArm.rotation.z = 0.1
+    rightLowerArm.rotation.x = 0.1 + Math.sin(idleTime * 0.5 + Math.PI) * 0.02
+  }
+
+  // Head micro-movement: subtle idle nod/tilt layered on top of IK.
+  const head = h?.getNormalizedBoneNode('head')
+  if (head) {
+    head.rotation.z += Math.sin(idleTime * 0.35) * 0.008
+  }
+}
+
 /** tick is the main render loop called every animation frame. */
 function tick() {
   if (!mounted) return
   const dt = Math.min(clock.getDelta(), 0.1) // cap dt to avoid huge jumps
   updateHeadIK(dt)
+  updateIdleAnimation(dt)
   updateMouthAnim(dt)
   updateEmotionBlend(dt)
   if (vrm) vrm.update(dt)
@@ -164,9 +225,9 @@ function tick() {
 /** initRenderer creates the THREE.js scene, camera, lights, and WebGL renderer. */
 async function initRenderer() {
   scene = new THREE.Scene()
-  camera = new THREE.PerspectiveCamera(32, 1, 0.1, 20)
-  camera.position.set(0, 0.8, 3.0)
-  camera.lookAt(0, 0.7, 0)
+  camera = new THREE.PerspectiveCamera(40, 1, 0.1, 20)
+  camera.position.set(0, 0.75, 3.5)
+  camera.lookAt(0, 0.75, 0)
 
   renderer = new THREE.WebGLRenderer({ canvas: canvasRef.value, alpha: true, antialias: true })
   renderer.setPixelRatio(window.devicePixelRatio || 1)
