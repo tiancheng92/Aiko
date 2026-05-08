@@ -3,6 +3,7 @@ import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm'
+import { VRMAnimationLoaderPlugin, createVRMAnimationClip } from '@pixiv/three-vrm-animation'
 import {
   GetBallPosition, SaveBallPosition, GetScreenSize, GetConfig,
   SaveConfig, GetMousePosition, GetPetSize, ListVRMModels, ImportVRMFile
@@ -28,7 +29,7 @@ const petMenuRef = ref(null)
 const { petState } = usePetState()
 const { currentVRMModel, availableVRMModels, vrmModelURL, loadVRMModels } = useVRMModel()
 
-let scene, camera, renderer, vrm, clock, rafId
+let scene, camera, renderer, vrm, clock, rafId, idleMixer
 let mounted = true
 let mouseTrackTimer = null
 let isDragging = false
@@ -150,38 +151,23 @@ function updateEmotionBlend(dt) {
 }
 
 /**
- * updateIdleAnimation directly sets normalized bone rotations every frame.
- * Uses clock.elapsedTime so no separate accumulator is needed.
- * Amplitudes are intentionally visible: arms ±0.15 rad (~9°), spine ±0.04 rad.
+ * loadIdleAnimation loads a .vrma file and plays it on loop via AnimationMixer.
+ * createVRMAnimationClip handles bone-name retargeting from VRMA spec to VRM skeleton.
  */
-function updateIdleAnimation() {
-  if (!vrm) return
-  const t = clock.elapsedTime
-  const h = vrm.humanoid
-
-  const chest = h?.getNormalizedBoneNode('chest') ?? h?.getNormalizedBoneNode('upperChest')
-  if (chest) chest.rotation.x = Math.sin(t * 0.6) * 0.04
-
-  const spine = h?.getNormalizedBoneNode('spine')
-  if (spine) {
-    spine.rotation.z = Math.sin(t * 0.4) * 0.04
-    spine.rotation.x = Math.sin(t * 0.6 + 0.5) * 0.015
+async function loadIdleAnimation(v) {
+  if (idleMixer) { idleMixer.stopAllAction(); idleMixer = null }
+  const loader = new GLTFLoader()
+  loader.register((parser) => new VRMAnimationLoaderPlugin(parser))
+  try {
+    const gltf = await loader.loadAsync('/vrm/idle_loop.vrma')
+    const anim = gltf.userData.vrmAnimations?.[0]
+    if (!anim) return
+    const clip = createVRMAnimationClip(anim, v)
+    idleMixer = new THREE.AnimationMixer(v.scene)
+    idleMixer.clipAction(clip).setLoop(THREE.LoopRepeat, Infinity).play()
+  } catch (e) {
+    console.warn('idle animation load failed:', e)
   }
-
-  const hips = h?.getNormalizedBoneNode('hips')
-  if (hips) {
-    hips.rotation.z = Math.sin(t * 0.4) * 0.03
-    hips.rotation.y = Math.sin(t * 0.25) * 0.015
-  }
-
-  const lUA = h?.getNormalizedBoneNode('leftUpperArm')
-  const rUA = h?.getNormalizedBoneNode('rightUpperArm')
-  const lLA = h?.getNormalizedBoneNode('leftLowerArm')
-  const rLA = h?.getNormalizedBoneNode('rightLowerArm')
-  if (lUA) { lUA.rotation.z = -1.4 + Math.sin(t * 0.6) * 0.15;       lUA.rotation.x = 0.15 + Math.sin(t * 0.4) * 0.1 }
-  if (rUA) { rUA.rotation.z =  1.4 + Math.sin(t * 0.6 + Math.PI) * 0.15; rUA.rotation.x = 0.15 + Math.sin(t * 0.4 + Math.PI) * 0.1 }
-  if (lLA) { lLA.rotation.z = -0.1; lLA.rotation.x = 0.1 }
-  if (rLA) { rLA.rotation.z =  0.1; rLA.rotation.x = 0.1 }
 }
 
 /** tick is the main render loop called every animation frame. */
@@ -189,7 +175,7 @@ function tick() {
   if (!mounted) return
   const dt = Math.min(clock.getDelta(), 0.1) // cap dt to avoid huge jumps
   updateHeadIK(dt)
-  updateIdleAnimation()
+  idleMixer?.update(dt)
   updateMouthAnim(dt)
   updateEmotionBlend(dt)
   if (vrm) vrm.update(dt)
@@ -238,6 +224,7 @@ async function loadVRM(url) {
   }
   vrm = newVrm
   scene.add(vrm.scene)
+  loadIdleAnimation(vrm)
 }
 
 // ── Idle Animations ──────────────────────────────────────────────────────────
@@ -464,6 +451,7 @@ onUnmounted(() => {
   window.removeEventListener('mouseup', onMouseUp)
   window.removeEventListener('blur', onMouseUp)
   if (rafId) { cancelAnimationFrame(rafId); rafId = null }
+  if (idleMixer) { idleMixer.stopAllAction(); idleMixer = null }
   if (vrm) { VRMUtils.deepDispose(vrm.scene); vrm = null }
   if (renderer) { renderer.dispose(); renderer = null }
   scene = null

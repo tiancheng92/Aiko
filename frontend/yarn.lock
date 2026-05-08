@@ -232,6 +232,15 @@
     eventemitter3 "^3.1.0"
     url "^0.11.0"
 
+"@pixiv/three-vrm-animation@^3.5.2":
+  version "3.5.2"
+  resolved "https://registry.yarnpkg.com/@pixiv/three-vrm-animation/-/three-vrm-animation-3.5.2.tgz#15445bea35f3afe4f22bb99be87223dd2110bbb6"
+  integrity sha512-40MT8Q6A7LHdFARqHPa7g5+8/kYzsqURLe8OhUHO0Q82CqYfkkRuyqlKzaRROu1c47M73BngDBy0NrSUWn6KHg==
+  dependencies:
+    "@pixiv/three-vrm-core" "3.5.2"
+    "@pixiv/types-vrmc-vrm-1.0" "3.5.2"
+    "@pixiv/types-vrmc-vrm-animation-1.0" "3.5.2"
+
 "@pixiv/three-vrm-core@3.5.2":
   version "3.5.2"
   resolved "https://registry.yarnpkg.com/@pixiv/three-vrm-core/-/three-vrm-core-3.5.2.tgz#e4a1610e6db53996f40958b5cde1bd3768c68d43"
@@ -325,6 +334,13 @@
   version "3.5.2"
   resolved "https://registry.yarnpkg.com/@pixiv/types-vrmc-vrm-1.0/-/types-vrmc-vrm-1.0-3.5.2.tgz#f84a2bb88d539a5e3ee296e5398275b72a77fa92"
   integrity sha512-kgvRCJc9J0ruaVIxC5R9x4ZYNpM1bxs7vSMcl4SYPi2+baolHvXQiH0kFaN61+rFleld+sOOjDHtE98egY2dxQ==
+
+"@pixiv/types-vrmc-vrm-animation-1.0@3.5.2":
+  version "3.5.2"
+  resolved "https://registry.yarnpkg.com/@pixiv/types-vrmc-vrm-animation-1.0/-/types-vrmc-vrm-animation-1.0-3.5.2.tgz#d736778bf14d65e7ce2a80136eeebda2524f0c23"
+  integrity sha512-p1EEUJ7DX+027ZBL4viJhETUzixaseicwmZMtyqQw7WypKM34l0PcxKLoGv0Dn999kBOgovpnur9YvCkoClXFg==
+  dependencies:
+    "@pixiv/types-vrmc-vrm-1.0" "3.5.2"
 
 "@types/earcut@^2.1.0":
   version "2.1.4"
