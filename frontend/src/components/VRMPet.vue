@@ -28,7 +28,7 @@ const petMenuRef = ref(null)
 const { petState } = usePetState()
 const { currentVRMModel, availableVRMModels, vrmModelURL, loadVRMModels } = useVRMModel()
 
-let scene, camera, renderer, vrm, clock, rafId, idleMixer
+let scene, camera, renderer, vrm, clock, rafId
 let mounted = true
 let mouseTrackTimer = null
 let isDragging = false
@@ -150,73 +150,38 @@ function updateEmotionBlend(dt) {
 }
 
 /**
- * initIdleAnimation sets up THREE.AnimationMixer with three looping clips:
- * breathing (4s), body sway (8s), arm pendulum (6s).
- * Different durations create organic de-phasing over time.
+ * updateIdleAnimation directly sets normalized bone rotations every frame.
+ * Uses clock.elapsedTime so no separate accumulator is needed.
+ * Amplitudes are intentionally visible: arms ±0.15 rad (~9°), spine ±0.04 rad.
  */
-function initIdleAnimation(v) {
-  if (idleMixer) { idleMixer.stopAllAction(); idleMixer = null }
-  const h = v.humanoid
-  const bname = (n) => h.getNormalizedBoneNode(n)?.name
-  const qe = (x, y, z) => new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z)).toArray()
+function updateIdleAnimation() {
+  if (!vrm) return
+  const t = clock.elapsedTime
+  const h = vrm.humanoid
 
-  idleMixer = new THREE.AnimationMixer(v.scene)
+  const chest = h?.getNormalizedBoneNode('chest') ?? h?.getNormalizedBoneNode('upperChest')
+  if (chest) chest.rotation.x = Math.sin(t * 0.6) * 0.04
 
-  // --- Breathing (4s): chest rises and falls ---
-  const chestBone = bname('chest') ?? bname('upperChest')
-  if (chestBone) {
-    const clip = new THREE.AnimationClip('breathing', 4, [
-      new THREE.QuaternionKeyframeTrack(
-        chestBone + '.quaternion', [0, 2, 4],
-        [...qe(0, 0, 0), ...qe(0.022, 0, 0), ...qe(0, 0, 0)]
-      ),
-    ])
-    idleMixer.clipAction(clip).setLoop(THREE.LoopRepeat, Infinity).play()
+  const spine = h?.getNormalizedBoneNode('spine')
+  if (spine) {
+    spine.rotation.z = Math.sin(t * 0.4) * 0.04
+    spine.rotation.x = Math.sin(t * 0.6 + 0.5) * 0.015
   }
 
-  // --- Body sway (8s): spine tilts side-to-side, hips counter-balance ---
-  const swayTracks = []
-  const spineBone = bname('spine')
-  if (spineBone) {
-    swayTracks.push(new THREE.QuaternionKeyframeTrack(
-      spineBone + '.quaternion', [0, 2, 4, 6, 8],
-      [...qe(0.008, 0, 0), ...qe(0.008, 0, 0.015), ...qe(0.008, 0, 0), ...qe(0.008, 0, -0.015), ...qe(0.008, 0, 0)]
-    ))
-  }
-  const hipsBone = bname('hips')
-  if (hipsBone) {
-    swayTracks.push(new THREE.QuaternionKeyframeTrack(
-      hipsBone + '.quaternion', [0, 2, 4, 6, 8],
-      [...qe(0, 0, 0), ...qe(0, 0, -0.012), ...qe(0, 0, 0), ...qe(0, 0, 0.012), ...qe(0, 0, 0)]
-    ))
-  }
-  if (swayTracks.length) {
-    const clip = new THREE.AnimationClip('sway', 8, swayTracks)
-    idleMixer.clipAction(clip).setLoop(THREE.LoopRepeat, Infinity).play()
+  const hips = h?.getNormalizedBoneNode('hips')
+  if (hips) {
+    hips.rotation.z = Math.sin(t * 0.4) * 0.03
+    hips.rotation.y = Math.sin(t * 0.25) * 0.015
   }
 
-  // --- Arm pendulum (6s): arms swing front/back in opposite phase ---
-  const armTracks = []
-  const lUA = bname('leftUpperArm');  const rUA = bname('rightUpperArm')
-  const lLA = bname('leftLowerArm');  const rLA = bname('rightLowerArm')
-  if (lUA) armTracks.push(new THREE.QuaternionKeyframeTrack(
-    lUA + '.quaternion', [0, 1.5, 3, 4.5, 6],
-    [...qe(0.15, 0, -1.4), ...qe(0.18, 0, -1.36), ...qe(0.15, 0, -1.4), ...qe(0.12, 0, -1.44), ...qe(0.15, 0, -1.4)]
-  ))
-  if (rUA) armTracks.push(new THREE.QuaternionKeyframeTrack(
-    rUA + '.quaternion', [0, 1.5, 3, 4.5, 6],
-    [...qe(0.15, 0, 1.4), ...qe(0.12, 0, 1.44), ...qe(0.15, 0, 1.4), ...qe(0.18, 0, 1.36), ...qe(0.15, 0, 1.4)]
-  ))
-  if (lLA) armTracks.push(new THREE.QuaternionKeyframeTrack(
-    lLA + '.quaternion', [0, 6], [...qe(0.1, 0, -0.1), ...qe(0.1, 0, -0.1)]
-  ))
-  if (rLA) armTracks.push(new THREE.QuaternionKeyframeTrack(
-    rLA + '.quaternion', [0, 6], [...qe(0.1, 0, 0.1), ...qe(0.1, 0, 0.1)]
-  ))
-  if (armTracks.length) {
-    const clip = new THREE.AnimationClip('arms', 6, armTracks)
-    idleMixer.clipAction(clip).setLoop(THREE.LoopRepeat, Infinity).play()
-  }
+  const lUA = h?.getNormalizedBoneNode('leftUpperArm')
+  const rUA = h?.getNormalizedBoneNode('rightUpperArm')
+  const lLA = h?.getNormalizedBoneNode('leftLowerArm')
+  const rLA = h?.getNormalizedBoneNode('rightLowerArm')
+  if (lUA) { lUA.rotation.z = -1.4 + Math.sin(t * 0.6) * 0.15;       lUA.rotation.x = 0.15 + Math.sin(t * 0.4) * 0.1 }
+  if (rUA) { rUA.rotation.z =  1.4 + Math.sin(t * 0.6 + Math.PI) * 0.15; rUA.rotation.x = 0.15 + Math.sin(t * 0.4 + Math.PI) * 0.1 }
+  if (lLA) { lLA.rotation.z = -0.1; lLA.rotation.x = 0.1 }
+  if (rLA) { rLA.rotation.z =  0.1; rLA.rotation.x = 0.1 }
 }
 
 /** tick is the main render loop called every animation frame. */
@@ -224,7 +189,7 @@ function tick() {
   if (!mounted) return
   const dt = Math.min(clock.getDelta(), 0.1) // cap dt to avoid huge jumps
   updateHeadIK(dt)
-  idleMixer?.update(dt)
+  updateIdleAnimation()
   updateMouthAnim(dt)
   updateEmotionBlend(dt)
   if (vrm) vrm.update(dt)
@@ -273,7 +238,6 @@ async function loadVRM(url) {
   }
   vrm = newVrm
   scene.add(vrm.scene)
-  initIdleAnimation(vrm)
 }
 
 // ── Idle Animations ──────────────────────────────────────────────────────────
@@ -500,7 +464,6 @@ onUnmounted(() => {
   window.removeEventListener('mouseup', onMouseUp)
   window.removeEventListener('blur', onMouseUp)
   if (rafId) { cancelAnimationFrame(rafId); rafId = null }
-  if (idleMixer) { idleMixer.stopAllAction(); idleMixer = null }
   if (vrm) { VRMUtils.deepDispose(vrm.scene); vrm = null }
   if (renderer) { renderer.dispose(); renderer = null }
   scene = null
