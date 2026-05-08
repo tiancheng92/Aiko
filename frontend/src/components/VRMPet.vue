@@ -35,7 +35,6 @@ let mouseTrackTimer = null
 let isDragging = false
 let dragStart = null
 let mouthPhase = 0
-let idleTimer = null
 let blinkTimer = null
 const MOUSE_POLL_MS = 50
 
@@ -241,20 +240,31 @@ async function applyStateAnimation(state) {
   if (state !== 'speaking') _speakingEmotion = null
 }
 
-/** scheduleIdleVariety periodically switches to a variety idle then returns. */
+/**
+ * scheduleIdleEvent fires a random idle event every 60–120s:
+ * 40% chance → variety idle (relaxed/sleepy/idle_loop) for 15–20s
+ * 60% chance → one-shot gesture (nod/wave/hello)
+ */
 function scheduleIdleVariety() {
   _idleVarietyTimer = setTimeout(async () => {
     if (!mounted) return
     if (petState.value === 'idle') {
-      const pick = IDLE_VARIETY_POOL[Math.floor(Math.random() * IDLE_VARIETY_POOL.length)]
-      await playAnimation(pick, { fadeTime: 0.6 })
-      // Return to primary idle after 12–18s.
-      setTimeout(() => {
-        if (mounted && petState.value === 'idle') playAnimation(STATE_ANIMS.idle, { fadeTime: 0.8 })
-      }, 12000 + Math.random() * 6000)
+      if (Math.random() < 0.4) {
+        const pick = IDLE_VARIETY_POOL[Math.floor(Math.random() * IDLE_VARIETY_POOL.length)]
+        await playAnimation(pick, { fadeTime: 0.8 })
+        setTimeout(() => {
+          if (mounted && petState.value === 'idle') playAnimation(STATE_ANIMS.idle, { fadeTime: 1.0 })
+        }, 15000 + Math.random() * 5000)
+      } else {
+        const pick = IDLE_GESTURES[Math.floor(Math.random() * IDLE_GESTURES.length)]
+        await playAnimation(pick, { loop: false, fadeTime: 0.5 })
+        setTimeout(() => {
+          if (mounted && petState.value === 'idle') playAnimation(STATE_ANIMS.idle, { fadeTime: 0.8 })
+        }, 3500)
+      }
     }
     scheduleIdleVariety()
-  }, 25000 + Math.random() * 25000)
+  }, 60000 + Math.random() * 60000)
 }
 
 /** tick is the main render loop called every animation frame. */
@@ -330,21 +340,6 @@ function scheduleBlink() {
   }, 3000 + Math.random() * 3000)
 }
 
-/** scheduleIdleGesture fires a random one-shot gesture every 20–50s while idle. */
-function scheduleIdleGesture() {
-  idleTimer = setTimeout(async () => {
-    if (!mounted) return
-    if (petState.value === 'idle') {
-      const pick = IDLE_GESTURES[Math.floor(Math.random() * IDLE_GESTURES.length)]
-      await playAnimation(pick, { loop: false, fadeTime: 0.4 })
-      // Return to idle after gesture completes (~3s).
-      setTimeout(() => {
-        if (mounted && petState.value === 'idle') playAnimation(STATE_ANIMS.idle, { fadeTime: 0.6 })
-      }, 3000)
-    }
-    scheduleIdleGesture()
-  }, 20000 + Math.random() * 30000)
-}
 
 // ── Context Menu ─────────────────────────────────────────────────────────────
 
@@ -505,7 +500,6 @@ onMounted(async () => {
     if (vrmModelURL.value) await loadVRM(vrmModelURL.value)
     startGlobalMouseTracking()
     scheduleBlink()
-    scheduleIdleGesture()
     scheduleIdleVariety()
   } catch (err) {
     console.error('VRMPet init failed:', err)
@@ -534,7 +528,6 @@ onUnmounted(() => {
   mounted = false
   if (mouseTrackTimer) { clearInterval(mouseTrackTimer); mouseTrackTimer = null }
   clearTimeout(blinkTimer)
-  clearTimeout(idleTimer)
   clearTimeout(_idleVarietyTimer)
   offSizeChange?.()
   offPositionReset?.()
