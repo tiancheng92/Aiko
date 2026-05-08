@@ -164,9 +164,9 @@ function tick() {
 /** initRenderer creates the THREE.js scene, camera, lights, and WebGL renderer. */
 async function initRenderer() {
   scene = new THREE.Scene()
-  camera = new THREE.PerspectiveCamera(30, 1, 0.1, 20)
-  camera.position.set(0, 1.3, 2.0)
-  camera.lookAt(0, 1.0, 0)
+  camera = new THREE.PerspectiveCamera(25, 1, 0.1, 20)
+  camera.position.set(0, 1.2, 2.2)
+  camera.lookAt(0, 0.9, 0)
 
   renderer = new THREE.WebGLRenderer({ canvas: canvasRef.value, alpha: true, antialias: true })
   renderer.setPixelRatio(window.devicePixelRatio || 1)
@@ -182,6 +182,20 @@ async function initRenderer() {
   tick()
 }
 
+/** applyDefaultPose sets a natural resting pose (arms slightly lowered from T-pose). */
+function applyDefaultPose(v) {
+  const h = v.humanoid
+  if (!h) return
+  const leftUpperArm = h.getNormalizedBoneNode('leftUpperArm')
+  const rightUpperArm = h.getNormalizedBoneNode('rightUpperArm')
+  const leftLowerArm = h.getNormalizedBoneNode('leftLowerArm')
+  const rightLowerArm = h.getNormalizedBoneNode('rightLowerArm')
+  if (leftUpperArm)  leftUpperArm.rotation.z  =  1.2   // lower left arm ~70°
+  if (rightUpperArm) rightUpperArm.rotation.z = -1.2   // lower right arm ~70°
+  if (leftLowerArm)  leftLowerArm.rotation.z  =  0.3
+  if (rightLowerArm) rightLowerArm.rotation.z = -0.3
+}
+
 /** loadVRM loads a .vrm file by URL and replaces the current model in the scene. */
 async function loadVRM(url) {
   if (!url) return
@@ -191,7 +205,9 @@ async function loadVRM(url) {
   const newVrm = gltf.userData.vrm
   VRMUtils.removeUnnecessaryVertices(gltf.scene)
   VRMUtils.removeUnnecessaryJoints(gltf.scene)
-  newVrm.scene.rotation.y = Math.PI
+  // VRM default forward is +Z; camera is at +Z side, so no rotation needed.
+  newVrm.scene.rotation.y = 0
+  applyDefaultPose(newVrm)
 
   if (vrm) {
     scene.remove(vrm.scene)
@@ -280,7 +296,7 @@ function onMouseMove(e) {
   isDragging = true
   pos.value = { x: e.clientX - dragStart.x, y: e.clientY - dragStart.y }
   // Tilt VRM body toward drag direction.
-  if (vrm) vrm.scene.rotation.y = Math.PI + Math.max(-0.35, Math.min(0.35, dx / 200))
+  if (vrm) vrm.scene.rotation.y = Math.max(-0.35, Math.min(0.35, dx / 200))
 }
 
 async function onMouseUp(e) {
@@ -288,7 +304,7 @@ async function onMouseUp(e) {
   window.removeEventListener('mouseup', onMouseUp)
   window.removeEventListener('blur', onMouseUp)
   if (isDragging) {
-    if (vrm) vrm.scene.rotation.y = Math.PI
+    if (vrm) vrm.scene.rotation.y = 0
     try { await SaveBallPosition(Math.round(pos.value.x), Math.round(pos.value.y), sw.value, sh.value) }
     catch (err) { console.error('SaveBallPosition:', err) }
   } else if (e && typeof e.clientX === 'number') {
