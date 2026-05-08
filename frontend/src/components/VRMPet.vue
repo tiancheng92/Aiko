@@ -148,24 +148,63 @@ function updateEmotionBlend(dt) {
   }
 }
 
-/**
- * loadIdleAnimation loads a .vrma file and plays it on loop via AnimationMixer.
- * createVRMAnimationClip handles bone-name retargeting from VRMA spec to VRM skeleton.
- */
-async function loadIdleAnimation(v) {
-  if (idleMixer) { idleMixer.stopAllAction(); idleMixer = null }
-  const loader = new GLTFLoader()
-  loader.register((parser) => new VRMAnimationLoaderPlugin(parser))
+// Maps petState → primary VRMA file; fallback clips for variety within a state.
+const STATE_ANIMS = {
+  idle:      { file: '/vrm/idle.vrma',      loop: true  },
+  listening: { file: '/vrm/curious.vrma',   loop: true  },
+  thinking:  { file: '/vrm/thinking.vrma',  loop: true  },
+  speaking:  { file: '/vrm/hand_talk.vrma', loop: true  },
+  error:     { file: '/vrm/embarrassed.vrma', loop: true },
+}
+// Extra one-shot clips triggered randomly while idle.
+const IDLE_VARIETY = ['/vrm/relaxed.vrma', '/vrm/nod.vrma', '/vrm/curious.vrma']
+
+// Shared loader instance (reused across calls).
+const _animLoader = new GLTFLoader()
+_animLoader.register((parser) => new VRMAnimationLoaderPlugin(parser))
+const _clipCache = {}
+
+/** loadClip fetches and caches a VRMA AnimationClip for the given VRM. */
+async function loadClip(url, v) {
+  const key = url + '|' + (v?.scene?.uuid ?? '')
+  if (_clipCache[key]) return _clipCache[key]
+  const gltf = await _animLoader.loadAsync(url)
+  const anim = gltf.userData.vrmAnimations?.[0]
+  if (!anim) return null
+  const clip = createVRMAnimationClip(anim, v)
+  _clipCache[key] = clip
+  return clip
+}
+
+/** playAnimation crossfades the mixer to the given VRMA clip. */
+async function playAnimation(url, { loop = true, fadeIn = 0.3 } = {}) {
+  if (!vrm || !idleMixer) return
   try {
-    const gltf = await loader.loadAsync('/vrm/idle_loop.vrma')
-    const anim = gltf.userData.vrmAnimations?.[0]
-    if (!anim) return
-    const clip = createVRMAnimationClip(anim, v)
-    idleMixer = new THREE.AnimationMixer(v.scene)
-    idleMixer.clipAction(clip).setLoop(THREE.LoopRepeat, Infinity).play()
+    const clip = await loadClip(url, vrm)
+    if (!clip) return
+    const loopMode = loop ? THREE.LoopRepeat : THREE.LoopOnce
+    const newAction = idleMixer.clipAction(clip)
+    newAction.setLoop(loopMode, Infinity)
+    newAction.clampWhenFinished = !loop
+    // Fade out all currently active actions.
+    idleMixer.stopAllAction()
+    newAction.reset().fadeIn(fadeIn).play()
   } catch (e) {
-    console.warn('idle animation load failed:', e)
+    console.warn('playAnimation failed:', url, e)
   }
+}
+
+/** initAnimationSystem sets up the AnimationMixer and starts the idle animation. */
+async function initAnimationSystem(v) {
+  if (idleMixer) { idleMixer.stopAllAction(); idleMixer = null }
+  idleMixer = new THREE.AnimationMixer(v.scene)
+  await playAnimation(STATE_ANIMS.idle.file, { loop: true })
+}
+
+/** applyStateAnimation switches to the animation matching the new petState. */
+async function applyStateAnimation(state) {
+  const entry = STATE_ANIMS[state]
+  if (entry) await playAnimation(entry.file, { loop: entry.loop })
 }
 
 /** tick is the main render loop called every animation frame. */
@@ -222,7 +261,7 @@ async function loadVRM(url) {
   }
   vrm = newVrm
   scene.add(vrm.scene)
-  loadIdleAnimation(vrm)
+  initAnimationSystem(vrm)
 }
 
 // ── Idle Animations ──────────────────────────────────────────────────────────
@@ -376,8 +415,11 @@ watch(vrmModelURL, async (url) => {
   try { await loadVRM(url) } catch (err) { console.error('VRM reload failed:', err) }
 })
 
-// Drive pet state.
-watch(petState, (state) => setState(state))
+// Drive pet state: expressions + animation.
+watch(petState, (state) => {
+  setState(state)
+  applyStateAnimation(state)
+})
 
 let offSizeChange, offPositionReset, offScreenChanged
 
