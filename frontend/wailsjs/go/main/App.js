@@ -54,6 +54,10 @@ export function DeleteProactiveItem(arg1) {
   return window['go']['main']['App']['DeleteProactiveItem'](arg1);
 }
 
+export function DeleteVRMModel(arg1) {
+  return window['go']['main']['App']['DeleteVRMModel'](arg1);
+}
+
 export function EmitEvent(arg1, arg2) {
   return window['go']['main']['App']['EmitEvent'](arg1, arg2);
 }
@@ -122,6 +126,10 @@ export function GetToolPermissions() {
   return window['go']['main']['App']['GetToolPermissions']();
 }
 
+export function GetVRMPath(arg1) {
+  return window['go']['main']['App']['GetVRMPath'](arg1);
+}
+
 export function GetVersion() {
   return window['go']['main']['App']['GetVersion']();
 }
@@ -132,6 +140,10 @@ export function GetVoiceAutoSend() {
 
 export function ImportKnowledge(arg1) {
   return window['go']['main']['App']['ImportKnowledge'](arg1);
+}
+
+export function ImportVRMFile(arg1, arg2) {
+  return window['go']['main']['App']['ImportVRMFile'](arg1, arg2);
 }
 
 export function InstallUpdate(arg1) {
@@ -188,6 +200,10 @@ export function ListOpenRouterModels(arg1, arg2) {
 
 export function ListProactiveItems() {
   return window['go']['main']['App']['ListProactiveItems']();
+}
+
+export function ListVRMModels() {
+  return window['go']['main']['App']['ListVRMModels']();
 }
 
 export function MarkWelcomeShown() {

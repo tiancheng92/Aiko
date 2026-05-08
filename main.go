@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -86,7 +87,7 @@ func main() {
 		AlwaysOnTop:      true,
 		BackgroundColour: &options.RGBA{R: 0, G: 0, B: 0, A: 0},
 		Menu:             appMenu,
-		AssetServer:      &assetserver.Options{Assets: assets},
+		AssetServer:      &assetserver.Options{Assets: assets, Handler: userVRMHandler{}},
 		OnStartup:        app.startup,
 		OnDomReady:       app.domReady,
 		OnShutdown:       app.shutdown,
@@ -103,6 +104,23 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+// userVRMHandler serves .vrm files from ~/.aiko/vrm-models/ at /user-vrm/<name>.
+type userVRMHandler struct{}
+
+func (h userVRMHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if !strings.HasPrefix(r.URL.Path, "/user-vrm/") {
+		http.NotFound(w, r)
+		return
+	}
+	name := filepath.Base(r.URL.Path)
+	if !strings.HasSuffix(name, ".vrm") {
+		http.NotFound(w, r)
+		return
+	}
+	p := filepath.Join(os.Getenv("HOME"), ".aiko", "vrm-models", name)
+	http.ServeFile(w, r, p)
 }
 
 // needsSigUpgrade reports whether the running bundle should be re-signed with

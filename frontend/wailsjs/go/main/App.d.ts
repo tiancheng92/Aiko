@@ -36,6 +36,8 @@ export function DeleteModelProfile(arg1:number):Promise<void>;
 
 export function DeleteProactiveItem(arg1:number):Promise<void>;
 
+export function DeleteVRMModel(arg1:string):Promise<void>;
+
 export function EmitEvent(arg1:string,arg2:any):Promise<void>;
 
 export function ExportChatHistory():Promise<void>;
@@ -70,11 +72,15 @@ export function GetTTSAutoPlay():Promise<boolean>;
 
 export function GetToolPermissions():Promise<Array<tools.PermissionRow>>;
 
+export function GetVRMPath(arg1:string):Promise<string>;
+
 export function GetVersion():Promise<string>;
 
 export function GetVoiceAutoSend():Promise<boolean>;
 
 export function ImportKnowledge(arg1:string):Promise<void>;
+
+export function ImportVRMFile(arg1:string,arg2:string):Promise<void>;
 
 export function InstallUpdate(arg1:string):Promise<void>;
 
@@ -103,6 +109,8 @@ export function ListModelProfiles():Promise<Array<config.ModelProfile>>;
 export function ListOpenRouterModels(arg1:string,arg2:string):Promise<Array<string>>;
 
 export function ListProactiveItems():Promise<Array<proactive.Item>>;
+
+export function ListVRMModels():Promise<Array<main.VRMModelInfo>>;
 
 export function MarkWelcomeShown():Promise<void>;
 

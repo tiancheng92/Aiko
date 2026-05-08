@@ -7,6 +7,8 @@ export namespace config {
 	    LLMProvider: string;
 	    EmbeddingModel: string;
 	    Live2DModel: string;
+	    RenderBackend: string;
+	    VRMModel: string;
 	    EmbeddingDim: number;
 	    SystemPrompt: string;
 	    ShortTermLimit: number;
@@ -42,6 +44,8 @@ export namespace config {
 	        this.LLMProvider = source["LLMProvider"];
 	        this.EmbeddingModel = source["EmbeddingModel"];
 	        this.Live2DModel = source["Live2DModel"];
+	        this.RenderBackend = source["RenderBackend"];
+	        this.VRMModel = source["VRMModel"];
 	        this.EmbeddingDim = source["EmbeddingDim"];
 	        this.SystemPrompt = source["SystemPrompt"];
 	        this.ShortTermLimit = source["ShortTermLimit"];
@@ -204,6 +208,24 @@ export namespace main {
 	        this.latest_version = source["latest_version"];
 	        this.download_url = source["download_url"];
 	        this.has_update = source["has_update"];
+	    }
+	}
+	export class VRMModelInfo {
+	    name: string;
+	    url: string;
+	    source: string;
+	    size_kb: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new VRMModelInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.url = source["url"];
+	        this.source = source["source"];
+	        this.size_kb = source["size_kb"];
 	    }
 	}
 
