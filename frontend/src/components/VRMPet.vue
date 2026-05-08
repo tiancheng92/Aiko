@@ -728,7 +728,7 @@ onUnmounted(() => {
 <style scoped>
 .vrm-pet {
   position: fixed;
-  z-index: 9999;
+  z-index: 1000;
   cursor: pointer;
   user-select: none;
 }

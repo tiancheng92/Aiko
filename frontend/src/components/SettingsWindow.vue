@@ -1748,7 +1748,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
 
   position: fixed;
-  z-index: 99990;
+  z-index: 3000;
   min-width: 760px;
   min-height: 560px;
   background: var(--surface-window);

@@ -210,7 +210,7 @@ defineExpose({ focusInput, scrollToBottom })
     0 1px 0 rgba(255, 255, 255, 0.07) inset;
   display: flex;
   flex-direction: column;
-  z-index: 9998;
+  z-index: 2000;
   overflow: hidden;
   will-change: left, top, width, height;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', sans-serif;
@@ -309,7 +309,7 @@ defineExpose({ focusInput, scrollToBottom })
   width: 100vw !important;
   height: calc(100vh - 38px) !important;
   border-radius: 0;
-  z-index: 9999;
+  z-index: 2001;
 }
 
 .content {
