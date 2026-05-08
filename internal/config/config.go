@@ -15,6 +15,8 @@ type Config struct {
 	LLMProvider    string // "openai" or "openrouter"
 	EmbeddingModel string
 	Live2DModel    string // 模型目录名，默认 "hiyori"
+	RenderBackend  string // "live2d" | "vrm"; default "live2d"
+	VRMModel       string // selected .vrm filename
 	EmbeddingDim   int
 	SystemPrompt   string
 	ShortTermLimit int
@@ -71,6 +73,8 @@ func (s *Store) Load() (*Config, error) {
 		LLMProvider:     m["llm_provider"],
 		EmbeddingModel:  m["embedding_model"],
 		Live2DModel:     orDefault(m["live2d_model"], "mianyin"),
+		RenderBackend:   orDefault(m["render_backend"], "live2d"),
+		VRMModel:        m["vrm_model"],
 		SystemPrompt:    m["system_prompt"],
 		SkillsDirs:      splitLines(m["skills_dirs"]),
 	}
@@ -120,6 +124,8 @@ func (s *Store) Save(cfg *Config) error {
 		"nudge_interval":    strconv.Itoa(cfg.NudgeInterval),
 		"skills_dirs":       joinLines(cfg.SkillsDirs),
 		"live2d_model":      cfg.Live2DModel,
+		"render_backend":    cfg.RenderBackend,
+		"vrm_model":         cfg.VRMModel,
 		"pet_size":          strconv.Itoa(cfg.PetSize),
 		"chat_width":        strconv.Itoa(cfg.ChatWidth),
 		"chat_height":       strconv.Itoa(cfg.ChatHeight),
