@@ -211,8 +211,8 @@ async function applyStateAnimation(state) {
 function tick() {
   if (!mounted) return
   const dt = Math.min(clock.getDelta(), 0.1) // cap dt to avoid huge jumps
-  idleMixer?.update(dt)   // VRMA sets all bones first
-  updateHeadIK(dt)        // IK overwrites head/neck on top
+  idleMixer?.update(dt)
+  if (!idleMixer) updateHeadIK(dt)
   updateMouthAnim(dt)
   updateEmotionBlend(dt)
   if (vrm) vrm.update(dt)
