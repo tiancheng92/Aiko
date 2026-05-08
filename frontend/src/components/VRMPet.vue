@@ -200,10 +200,10 @@ function updateIdleAnimation(dt) {
     rightLowerArm.rotation.x = 0.1 + Math.sin(idleTime * 0.5 + Math.PI) * 0.02
   }
 
-  // Head micro-movement: subtle idle nod/tilt layered on top of IK.
+  // Head micro-movement: subtle idle tilt layered on top of IK.
   const head = h?.getNormalizedBoneNode('head')
   if (head) {
-    head.rotation.z += Math.sin(idleTime * 0.35) * 0.008
+    head.rotation.z = Math.sin(idleTime * 0.35) * 0.008
   }
 }
 
