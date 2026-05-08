@@ -66,10 +66,11 @@ const EMOTION_MAP = {
 
 // VRM canvas is square but the model head sits ~35% down from the top.
 // Shift the reported Y down so ChatBubble attaches near the actual head, not the canvas top.
-const VRM_HEAD_CANVAS_OFFSET = 0.35
+const VRM_HEAD_CANVAS_OFFSET = 0.35;
 
 watch(pos, (p) => {
-  if (p) emit("position", { ...p, y: p.y + petSize.value * VRM_HEAD_CANVAS_OFFSET });
+  if (p)
+    emit("position", { ...p, y: p.y + petSize.value * VRM_HEAD_CANVAS_OFFSET });
 });
 
 // ── Imperative API (exposed to App.vue) ─────────────────────────────────────
@@ -135,6 +136,7 @@ defineExpose({ setState, focusGlobal, applyEmotion, setSize });
 
 // ── Render Loop Sub-Systems ──────────────────────────────────────────────────
 
+
 /** updateHeadIK smoothly rotates head and neck bones toward the cursor. */
 function updateHeadIK(dt) {
   if (!vrm) return;
@@ -193,7 +195,7 @@ function updateEmotionBlend(dt) {
 const STATE_ANIMS = {
   idle: "/vrm/waiting.vrma",
   listening: "/vrm/curious.vrma",
-  thinking: "/vrm/thinking.vrma",
+  thinking: "/vrm/waiting.vrma",
   speaking: "/vrm/hand_talk.vrma",
   error: "/vrm/embarrassed.vrma",
 };
@@ -206,18 +208,16 @@ const EMOTION_SPEAKING_ANIMS = {
   surprised: "/vrm/surprised_react.vrma",
 };
 
-// Idle variety pool — randomly shown every 25–50s then returns to waiting
+// Idle variety pool — randomly shown every 60–120s then returns to waiting
 const IDLE_VARIETY_POOL = [
-  "/vrm/relaxed.vrma",
   "/vrm/sleepy.vrma",
-  "/vrm/idle_loop.vrma",
+  "/vrm/relaxed.vrma",
 ];
 
-// Occasional one-shot gestures during idle (15–40s interval)
+// Occasional one-shot gestures during idle
 const IDLE_GESTURES = [
   "/vrm/nod.vrma",
   "/vrm/wave_big.vrma",
-  "/vrm/celebrate.vrma",
 ];
 
 let _speakingEmotion = null; // last emotion received, used on speaking state entry
@@ -275,7 +275,7 @@ async function initAnimationSystem(v) {
   _currentAction = null;
   idleMixer = new THREE.AnimationMixer(v.scene);
   // Welcome greeting on first load, then settle into idle.
-  await playAnimation("/vrm/wave_big.vrma", { loop: false, fadeTime: 0.3 });
+  await playAnimation("/vrm/appearing.vrma", { loop: false, fadeTime: 0.3 });
   setTimeout(() => {
     if (mounted) playAnimation(STATE_ANIMS.idle, { fadeTime: 0.8 });
   }, 3000);
@@ -592,7 +592,7 @@ watch(petState, (state) => {
   applyStateAnimation(state);
 });
 
-let offSizeChange, offPositionReset, offScreenChanged;
+let offSizeChange, offPositionReset, offScreenChanged, offPreviewAnim;
 
 onMounted(async () => {
   loadVRMModels();
@@ -644,6 +644,22 @@ onMounted(async () => {
     console.error("VRMPet init failed:", err);
   }
 
+  offPreviewAnim = EventsOn("vrm:preview:anim", async (url) => {
+    if (!idleMixer || !vrm) return;
+    const returnAnim = STATE_ANIMS[petState.value] ?? STATE_ANIMS.idle;
+    await playAnimation(url, { loop: false, fadeTime: 0.3 });
+    // Return to current state animation after one-shot finishes or after 15s max.
+    let returned = false;
+    const doReturn = () => {
+      if (returned) return;
+      returned = true;
+      idleMixer?.removeEventListener("finished", onFinished);
+      if (mounted) playAnimation(returnAnim, { fadeTime: 0.8 });
+    };
+    const onFinished = (e) => { if (e.action === _currentAction) doReturn(); };
+    idleMixer.addEventListener("finished", onFinished);
+    setTimeout(doReturn, 15000);
+  });
   offSizeChange = EventsOn("config:pet:size:changed", (size) => setSize(size));
   offPositionReset = EventsOn("ball:position:reset", () => {
     pos.value = {
@@ -679,6 +695,7 @@ onUnmounted(() => {
   }
   clearTimeout(blinkTimer);
   clearTimeout(_idleVarietyTimer);
+  offPreviewAnim?.();
   offSizeChange?.();
   offPositionReset?.();
   offScreenChanged?.();

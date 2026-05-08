@@ -424,6 +424,26 @@ function setRenderBackend(backend) {
   EventsEmit('config:render:backend:changed', backend)
 }
 
+const VRM_PREVIEW_ANIMS = [
+  { file: 'waiting.vrma',        label: '待机' },
+  { file: 'wave_big.vrma',       label: '挥手' },
+  { file: 'nod.vrma',            label: '点头' },
+  { file: 'curious.vrma',        label: '好奇' },
+  { file: 'relaxed.vrma',        label: '伸懒腰' },
+  { file: 'sleepy.vrma',         label: '困倦' },
+  { file: 'hand_talk.vrma',      label: '说话' },
+  { file: 'embarrassed.vrma',    label: '尴尬' },
+  { file: 'sad.vrma',            label: '悲伤' },
+  { file: 'angry.vrma',          label: '傲娇' },
+  { file: 'surprised_react.vrma',label: '惊讶' },
+  { file: 'appearing.vrma',      label: '登场' },
+]
+
+/** previewVRMAnim sends a preview event to VRMPet to play the animation once. */
+function previewVRMAnim(file) {
+  EventsEmit('vrm:preview:anim', `/vrm/${file}`)
+}
+
 /** onVRMModelChange emits hot-reload event when VRM model is changed in settings. */
 function onVRMModelChange() {
   EventsEmit('config:vrm:model:changed', cfg.value.VRMModel)
@@ -1218,6 +1238,18 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               >{{ vrmUploading ? '上传中…' : '+ 导入 .vrm 模型' }}</button>
             </div>
             <div v-if="vrmUploadError" class="vrm-upload-error">{{ vrmUploadError }}</div>
+          </label>
+
+          <!-- VRM 动画预览 -->
+          <label v-if="cfg.RenderBackend === 'vrm'">动画预览
+            <div class="vrm-anim-grid">
+              <button
+                v-for="a in VRM_PREVIEW_ANIMS"
+                :key="a.file"
+                class="vrm-anim-btn"
+                @click="previewVRMAnim(a.file)"
+              >{{ a.label }}</button>
+            </div>
           </label>
 
           <!-- Live2D 模型选择（仅在 Live2D 后端下显示） -->
@@ -2473,6 +2505,26 @@ ul { list-style: none; padding: 0; margin: 0; }
   margin-top: 4px;
   font-size: 12px;
   color: #ff6b6b;
+}
+.vrm-anim-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.vrm-anim-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.06);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.vrm-anim-btn:hover {
+  background: rgba(255,255,255,0.14);
+  color: var(--text-primary);
 }
 
 /* Footer */
