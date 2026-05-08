@@ -159,10 +159,11 @@ const STATE_ANIMS = {
 // Extra one-shot clips triggered randomly while idle.
 const IDLE_VARIETY = ['/vrm/relaxed.vrma', '/vrm/nod.vrma', '/vrm/curious.vrma']
 
-// Shared loader instance (reused across calls).
+// Shared loader + clip cache (module-level singletons).
 const _animLoader = new GLTFLoader()
 _animLoader.register((parser) => new VRMAnimationLoaderPlugin(parser))
 const _clipCache = {}
+let _currentAction = null
 
 /** loadClip fetches and caches a VRMA AnimationClip for the given VRM. */
 async function loadClip(url, v) {
@@ -176,19 +177,26 @@ async function loadClip(url, v) {
   return clip
 }
 
-/** playAnimation crossfades the mixer to the given VRMA clip. */
-async function playAnimation(url, { loop = true, fadeIn = 0.3 } = {}) {
+/**
+ * playAnimation crossfades to a new VRMA clip.
+ * Uses crossFadeTo() for smooth transitions and LoopPingPong to
+ * eliminate the hard jump at loop boundaries.
+ */
+async function playAnimation(url, { loop = true, fadeTime = 0.5 } = {}) {
   if (!vrm || !idleMixer) return
   try {
     const clip = await loadClip(url, vrm)
     if (!clip) return
-    const loopMode = loop ? THREE.LoopRepeat : THREE.LoopOnce
     const newAction = idleMixer.clipAction(clip)
-    newAction.setLoop(loopMode, Infinity)
+    newAction.setLoop(loop ? THREE.LoopPingPong : THREE.LoopOnce, Infinity)
     newAction.clampWhenFinished = !loop
-    // Fade out all currently active actions.
-    idleMixer.stopAllAction()
-    newAction.reset().fadeIn(fadeIn).play()
+    if (_currentAction && _currentAction !== newAction) {
+      newAction.reset().play()
+      _currentAction.crossFadeTo(newAction, fadeTime, true)
+    } else if (!_currentAction) {
+      newAction.reset().play()
+    }
+    _currentAction = newAction
   } catch (e) {
     console.warn('playAnimation failed:', url, e)
   }
@@ -197,6 +205,7 @@ async function playAnimation(url, { loop = true, fadeIn = 0.3 } = {}) {
 /** initAnimationSystem sets up the AnimationMixer and starts the idle animation. */
 async function initAnimationSystem(v) {
   if (idleMixer) { idleMixer.stopAllAction(); idleMixer = null }
+  _currentAction = null
   idleMixer = new THREE.AnimationMixer(v.scene)
   await playAnimation(STATE_ANIMS.idle.file, { loop: true })
 }
