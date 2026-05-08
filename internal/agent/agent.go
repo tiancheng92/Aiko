@@ -27,6 +27,12 @@ import (
 	internaltools "aiko/internal/tools"
 )
 
+// emotionPromptSuffix is appended to the system prompt to instruct the LLM
+// to prefix every reply with an emotion tag for VRM blendshape driving.
+const emotionPromptSuffix = "\n\n在每条回复的第一行必须输出情绪标签，格式严格为 `[情绪:emotion/intensity]`，" +
+	"其中 emotion ∈ {joy, sad, surprised, angry, neutral}，intensity ∈ [0.0, 1.0]，然后换行写正文。" +
+	"示例：[情绪:joy/0.7]\n你好！"
+
 // StreamResult is a single streamed token or a terminal signal.
 type StreamResult struct {
 	Token string
@@ -141,10 +147,12 @@ func New(
 		handlers = append(handlers, skillMW)
 	}
 
+	systemPrompt := cfg.SystemPrompt + emotionPromptSuffix
+
 	deepCfg := &deep.Config{
 		Name:                   "aiko",
 		Description:            "A desktop pet AI assistant",
-		Instruction:            cfg.SystemPrompt,
+		Instruction:            systemPrompt,
 		ChatModel:              chatModel,
 		MaxIteration:           30,
 		Handlers:               handlers,
