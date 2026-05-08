@@ -19,6 +19,7 @@ import {
   GetSoundsEnabled, SetSoundsEnabled,
   GetKokoroTTSVoices, SetTTSAutoPlay, SetupKokoroTTS,
   GetVersion, CheckUpdate, InstallUpdate,
+  ListVRMModels,
 } from '../../wailsjs/go/main/App'
 import { ListProactiveItems, DeleteProactiveItem } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
@@ -53,7 +54,10 @@ const cfg = ref({
   ShellTrustedCommands: [],
   ShellTimeout: 30,
   CodeTimeout: 60,
+  RenderBackend: 'live2d',
+  VRMModel: '',
 })
+const availableVRMModels = ref([])
 const { availableModels, loadModels } = useModelPath()
 const toolPerms = ref([])   // [{ ToolName, Level, Granted }]
 const sources = ref([])
@@ -229,6 +233,11 @@ onMounted(async () => {
   if (chat?.[0] > 0) cfg.value.ChatWidth = chat[0]
   if (chat?.[1] > 0) cfg.value.ChatHeight = chat[1]
   smsWatcherRunning.value = sms
+  try {
+    availableVRMModels.value = await ListVRMModels()
+  } catch (e) {
+    console.warn('SettingsWindow: failed to load VRM models', e)
+  }
   fetchLarkStatus()
   offProgress = EventsOn('knowledge:progress', (p) => { importProgress.value = p })
   // Refresh per-screen sizes when the user moves the mouse to a different screen.
@@ -407,6 +416,17 @@ async function deleteProfile(id) {
   } catch (e) {
     statusMsg.value = '删除失败: ' + e
   }
+}
+
+/** setRenderBackend updates config and emits backend change event. */
+function setRenderBackend(backend) {
+  cfg.value.RenderBackend = backend
+  EventsEmit('config:render:backend:changed', backend)
+}
+
+/** onVRMModelChange emits hot-reload event when VRM model is changed in settings. */
+function onVRMModelChange() {
+  EventsEmit('config:vrm:model:changed', cfg.value.VRMModel)
 }
 
 /** previewPetSize emits a real-time size change and persists for the active screen. */
@@ -1103,6 +1123,29 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
         <!-- 外观与交互 -->
         <div v-if="activeTab === 'appearance'" class="tab-pane">
+          <!-- 渲染后端 -->
+          <label>渲染后端
+            <div class="backend-toggle">
+              <button
+                :class="['backend-btn', cfg.RenderBackend !== 'vrm' ? 'active' : '']"
+                @click="setRenderBackend('live2d')"
+              >Live2D (2D)</button>
+              <button
+                :class="['backend-btn', cfg.RenderBackend === 'vrm' ? 'active' : '']"
+                @click="setRenderBackend('vrm')"
+              >VRM (3D)</button>
+            </div>
+          </label>
+
+          <!-- VRM 模型选择（仅在 VRM 后端下显示） -->
+          <label v-if="cfg.RenderBackend === 'vrm'">VRM 模型
+            <select v-model="cfg.VRMModel" @change="onVRMModelChange">
+              <option v-for="m in availableVRMModels" :key="m.name" :value="m.name">
+                {{ m.name }} ({{ m.source === 'user' ? '用户导入' : '内置' }}, {{ m.size_kb }}KB)
+              </option>
+            </select>
+          </label>
+
           <label>Live2D 模型
             <div class="model-grid">
               <button
@@ -2270,6 +2313,33 @@ ul { list-style: none; padding: 0; margin: 0; }
   background: var(--accent-alpha-08);
   border: 1px solid var(--accent-alpha-20);
   border-radius: var(--r-input);
+}
+
+/* Render backend toggle */
+.backend-toggle {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+.backend-btn {
+  padding: 4px 12px;
+  border-radius: var(--r-button);
+  border: 1px solid var(--border-default);
+  background: var(--surface-input);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.backend-btn:hover {
+  background: var(--surface-input-hover);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+.backend-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
 }
 
 /* Live2D model grid */
