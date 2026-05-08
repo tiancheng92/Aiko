@@ -78,7 +78,7 @@ function focusGlobal(mx, my) {
   const cx = rect.left + rect.width / 2
   const cy = rect.top + rect.height / 2
   targetHeadX = Math.max(-1, Math.min(1, (mx - cx) / (rect.width * 1.5)))
-  targetHeadY = Math.max(-0.5, Math.min(0.5, (cy - my) / (rect.height * 1.5)))
+  targetHeadY = Math.max(-0.5, Math.min(0.5, (my - cy) / (rect.height * 1.5)))
 }
 
 /** applyEmotion sets blendshape targets for a given emotion + intensity. */
