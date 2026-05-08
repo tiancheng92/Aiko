@@ -34,6 +34,7 @@ let mounted = true
 let mouseTrackTimer = null
 let isDragging = false
 let dragStart = null
+let vrmBaseRotationY = 0 // base rotation set at load time; drag tilts relative to this
 let mouthPhase = 0
 let blinkTimer = null
 const MOUSE_POLL_MS = 50
@@ -316,7 +317,8 @@ async function loadVRM(url) {
   // Rotate 1.0 models 180° so the front always faces the camera.
   // VRM 0.x faces -Z; VRM 1.0 faces +Z (glTF standard). Camera is at +Z.
   const isVRM0 = !!gltf.parser.json.extensions?.VRM
-  newVrm.scene.rotation.y = isVRM0 ? Math.PI : 0
+  vrmBaseRotationY = isVRM0 ? Math.PI : 0
+  newVrm.scene.rotation.y = vrmBaseRotationY
 
   if (vrm) {
     scene.remove(vrm.scene)
@@ -391,7 +393,7 @@ function onMouseMove(e) {
   isDragging = true
   pos.value = { x: e.clientX - dragStart.x, y: e.clientY - dragStart.y }
   // Tilt VRM body toward drag direction.
-  if (vrm) vrm.scene.rotation.y = Math.max(-0.35, Math.min(0.35, dx / 200))
+  if (vrm) vrm.scene.rotation.y = vrmBaseRotationY + Math.max(-0.35, Math.min(0.35, dx / 200))
 }
 
 async function onMouseUp(e) {
@@ -399,7 +401,7 @@ async function onMouseUp(e) {
   window.removeEventListener('mouseup', onMouseUp)
   window.removeEventListener('blur', onMouseUp)
   if (isDragging) {
-    if (vrm) vrm.scene.rotation.y = 0
+    if (vrm) vrm.scene.rotation.y = vrmBaseRotationY
     try { await SaveBallPosition(Math.round(pos.value.x), Math.round(pos.value.y), sw.value, sh.value) }
     catch (err) { console.error('SaveBallPosition:', err) }
   } else if (e && typeof e.clientX === 'number') {
