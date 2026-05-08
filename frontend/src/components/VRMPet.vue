@@ -28,7 +28,7 @@ const petMenuRef = ref(null)
 const { petState } = usePetState()
 const { currentVRMModel, availableVRMModels, vrmModelURL, loadVRMModels } = useVRMModel()
 
-let scene, camera, renderer, vrm, clock, rafId
+let scene, camera, renderer, vrm, clock, rafId, idleMixer
 let mounted = true
 let mouseTrackTimer = null
 let isDragging = false
@@ -36,7 +36,6 @@ let dragStart = null
 let mouthPhase = 0
 let idleTimer = null
 let blinkTimer = null
-let idleTime = 0
 const MOUSE_POLL_MS = 50
 
 // Head IK targets (-1 to 1 normalized)
@@ -117,6 +116,8 @@ function updateHeadIK(dt) {
     neck.rotation.y += (targetHeadX * (Math.PI / 10) - neck.rotation.y) * speed // ±18°
     neck.rotation.x += (targetHeadY * (Math.PI / 16) - neck.rotation.x) * speed // ±5.6°
   }
+  // Subtle idle head tilt layered on top of IK (sine wave, no accumulation)
+  if (head) head.rotation.z = Math.sin(clock.elapsedTime * 0.35) * 0.008
 }
 
 /** updateMouthAnim drives the aa blendshape in a sine wave while speaking. */
@@ -149,61 +150,72 @@ function updateEmotionBlend(dt) {
 }
 
 /**
- * updateIdleAnimation applies continuous sinusoidal bone animations:
- * breathing (chest), body sway (hips), and gentle arm swing.
- * These run every frame and add life to the idle stance.
+ * initIdleAnimation sets up THREE.AnimationMixer with three looping clips:
+ * breathing (4s), body sway (8s), arm pendulum (6s).
+ * Different durations create organic de-phasing over time.
  */
-function updateIdleAnimation(dt) {
-  if (!vrm) return
-  idleTime += dt
-  const h = vrm.humanoid
+function initIdleAnimation(v) {
+  if (idleMixer) { idleMixer.stopAllAction(); idleMixer = null }
+  const h = v.humanoid
+  const bname = (n) => h.getNormalizedBoneNode(n)?.name
+  const qe = (x, y, z) => new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z)).toArray()
 
-  // Breathing: chest slowly expands and contracts.
-  const chest = h?.getNormalizedBoneNode('chest') ?? h?.getNormalizedBoneNode('upperChest')
-  if (chest) {
-    chest.rotation.x = Math.sin(idleTime * 0.6) * 0.018
-  }
+  idleMixer = new THREE.AnimationMixer(v.scene)
 
-  // Spine sway: gentle figure-8 micro-sway.
-  const spine = h?.getNormalizedBoneNode('spine')
-  if (spine) {
-    spine.rotation.z = Math.sin(idleTime * 0.4) * 0.015
-    spine.rotation.x = Math.sin(idleTime * 0.6 + 0.5) * 0.008
-  }
-
-  // Hips: subtle weight-shift left-right in sync with breathing.
-  const hips = h?.getNormalizedBoneNode('hips')
-  if (hips) {
-    hips.rotation.z = Math.sin(idleTime * 0.4) * 0.012
-    hips.rotation.y = Math.sin(idleTime * 0.25) * 0.008
+  // --- Breathing (4s): chest rises and falls ---
+  const chestBone = bname('chest') ?? bname('upperChest')
+  if (chestBone) {
+    const clip = new THREE.AnimationClip('breathing', 4, [
+      new THREE.QuaternionKeyframeTrack(
+        chestBone + '.quaternion', [0, 2, 4],
+        [...qe(0, 0, 0), ...qe(0.022, 0, 0), ...qe(0, 0, 0)]
+      ),
+    ])
+    idleMixer.clipAction(clip).setLoop(THREE.LoopRepeat, Infinity).play()
   }
 
-  // Arms: gentle pendulum swing (opposite phase for natural feel).
-  const leftUpperArm  = h?.getNormalizedBoneNode('leftUpperArm')
-  const rightUpperArm = h?.getNormalizedBoneNode('rightUpperArm')
-  const leftLowerArm  = h?.getNormalizedBoneNode('leftLowerArm')
-  const rightLowerArm = h?.getNormalizedBoneNode('rightLowerArm')
-  if (leftUpperArm) {
-    leftUpperArm.rotation.z = -1.4 + Math.sin(idleTime * 0.5) * 0.04
-    leftUpperArm.rotation.x = 0.15 + Math.sin(idleTime * 0.4) * 0.03
+  // --- Body sway (8s): spine tilts side-to-side, hips counter-balance ---
+  const swayTracks = []
+  const spineBone = bname('spine')
+  if (spineBone) {
+    swayTracks.push(new THREE.QuaternionKeyframeTrack(
+      spineBone + '.quaternion', [0, 2, 4, 6, 8],
+      [...qe(0.008, 0, 0), ...qe(0.008, 0, 0.015), ...qe(0.008, 0, 0), ...qe(0.008, 0, -0.015), ...qe(0.008, 0, 0)]
+    ))
   }
-  if (rightUpperArm) {
-    rightUpperArm.rotation.z = 1.4 + Math.sin(idleTime * 0.5 + Math.PI) * 0.04
-    rightUpperArm.rotation.x = 0.15 + Math.sin(idleTime * 0.4 + Math.PI) * 0.03
+  const hipsBone = bname('hips')
+  if (hipsBone) {
+    swayTracks.push(new THREE.QuaternionKeyframeTrack(
+      hipsBone + '.quaternion', [0, 2, 4, 6, 8],
+      [...qe(0, 0, 0), ...qe(0, 0, -0.012), ...qe(0, 0, 0), ...qe(0, 0, 0.012), ...qe(0, 0, 0)]
+    ))
   }
-  if (leftLowerArm) {
-    leftLowerArm.rotation.z = -0.1
-    leftLowerArm.rotation.x = 0.1 + Math.sin(idleTime * 0.5) * 0.02
-  }
-  if (rightLowerArm) {
-    rightLowerArm.rotation.z = 0.1
-    rightLowerArm.rotation.x = 0.1 + Math.sin(idleTime * 0.5 + Math.PI) * 0.02
+  if (swayTracks.length) {
+    const clip = new THREE.AnimationClip('sway', 8, swayTracks)
+    idleMixer.clipAction(clip).setLoop(THREE.LoopRepeat, Infinity).play()
   }
 
-  // Head micro-movement: subtle idle tilt layered on top of IK.
-  const head = h?.getNormalizedBoneNode('head')
-  if (head) {
-    head.rotation.z = Math.sin(idleTime * 0.35) * 0.008
+  // --- Arm pendulum (6s): arms swing front/back in opposite phase ---
+  const armTracks = []
+  const lUA = bname('leftUpperArm');  const rUA = bname('rightUpperArm')
+  const lLA = bname('leftLowerArm');  const rLA = bname('rightLowerArm')
+  if (lUA) armTracks.push(new THREE.QuaternionKeyframeTrack(
+    lUA + '.quaternion', [0, 1.5, 3, 4.5, 6],
+    [...qe(0.15, 0, -1.4), ...qe(0.18, 0, -1.36), ...qe(0.15, 0, -1.4), ...qe(0.12, 0, -1.44), ...qe(0.15, 0, -1.4)]
+  ))
+  if (rUA) armTracks.push(new THREE.QuaternionKeyframeTrack(
+    rUA + '.quaternion', [0, 1.5, 3, 4.5, 6],
+    [...qe(0.15, 0, 1.4), ...qe(0.12, 0, 1.44), ...qe(0.15, 0, 1.4), ...qe(0.18, 0, 1.36), ...qe(0.15, 0, 1.4)]
+  ))
+  if (lLA) armTracks.push(new THREE.QuaternionKeyframeTrack(
+    lLA + '.quaternion', [0, 6], [...qe(0.1, 0, -0.1), ...qe(0.1, 0, -0.1)]
+  ))
+  if (rLA) armTracks.push(new THREE.QuaternionKeyframeTrack(
+    rLA + '.quaternion', [0, 6], [...qe(0.1, 0, 0.1), ...qe(0.1, 0, 0.1)]
+  ))
+  if (armTracks.length) {
+    const clip = new THREE.AnimationClip('arms', 6, armTracks)
+    idleMixer.clipAction(clip).setLoop(THREE.LoopRepeat, Infinity).play()
   }
 }
 
@@ -212,7 +224,7 @@ function tick() {
   if (!mounted) return
   const dt = Math.min(clock.getDelta(), 0.1) // cap dt to avoid huge jumps
   updateHeadIK(dt)
-  updateIdleAnimation(dt)
+  idleMixer?.update(dt)
   updateMouthAnim(dt)
   updateEmotionBlend(dt)
   if (vrm) vrm.update(dt)
@@ -243,20 +255,6 @@ async function initRenderer() {
   tick()
 }
 
-/** applyDefaultPose sets a natural resting pose (arms slightly lowered from T-pose). */
-function applyDefaultPose(v) {
-  const h = v.humanoid
-  if (!h) return
-  const leftUpperArm = h.getNormalizedBoneNode('leftUpperArm')
-  const rightUpperArm = h.getNormalizedBoneNode('rightUpperArm')
-  const leftLowerArm = h.getNormalizedBoneNode('leftLowerArm')
-  const rightLowerArm = h.getNormalizedBoneNode('rightLowerArm')
-  if (leftUpperArm)  { leftUpperArm.rotation.z = -1.4; leftUpperArm.rotation.x = 0.15 }
-  if (rightUpperArm) { rightUpperArm.rotation.z = 1.4; rightUpperArm.rotation.x = 0.15 }
-  if (leftLowerArm)  { leftLowerArm.rotation.z = -0.1; leftLowerArm.rotation.x = 0.1 }
-  if (rightLowerArm) { rightLowerArm.rotation.z = 0.1; rightLowerArm.rotation.x = 0.1 }
-}
-
 /** loadVRM loads a .vrm file by URL and replaces the current model in the scene. */
 async function loadVRM(url) {
   if (!url) return
@@ -268,7 +266,6 @@ async function loadVRM(url) {
   VRMUtils.removeUnnecessaryJoints(gltf.scene)
   // VRM default forward is +Z; camera is at +Z side, so no rotation needed.
   newVrm.scene.rotation.y = 0
-  applyDefaultPose(newVrm)
 
   if (vrm) {
     scene.remove(vrm.scene)
@@ -276,6 +273,7 @@ async function loadVRM(url) {
   }
   vrm = newVrm
   scene.add(vrm.scene)
+  initIdleAnimation(vrm)
 }
 
 // ── Idle Animations ──────────────────────────────────────────────────────────
@@ -502,6 +500,7 @@ onUnmounted(() => {
   window.removeEventListener('mouseup', onMouseUp)
   window.removeEventListener('blur', onMouseUp)
   if (rafId) { cancelAnimationFrame(rafId); rafId = null }
+  if (idleMixer) { idleMixer.stopAllAction(); idleMixer = null }
   if (vrm) { VRMUtils.deepDispose(vrm.scene); vrm = null }
   if (renderer) { renderer.dispose(); renderer = null }
   scene = null
