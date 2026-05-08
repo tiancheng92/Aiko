@@ -159,7 +159,7 @@ async function loadIdleAnimation(v) {
   const loader = new GLTFLoader()
   loader.register((parser) => new VRMAnimationLoaderPlugin(parser))
   try {
-    const gltf = await loader.loadAsync('/vrm/idle_loop.vrma')
+    const gltf = await loader.loadAsync('/vrm/standard_idle.vrma')
     const anim = gltf.userData.vrmAnimations?.[0]
     if (!anim) return
     const clip = createVRMAnimationClip(anim, v)
