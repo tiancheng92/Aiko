@@ -1146,7 +1146,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             </select>
           </label>
 
-          <label>Live2D 模型
+          <label v-if="cfg.RenderBackend !== 'vrm'">Live2D 模型
             <div class="model-grid">
               <button
                 v-for="m in availableModels"
