@@ -405,7 +405,7 @@ function applyToken(token) {
   const idx = messages.value.length - 1
   const last = messages.value[idx]
   if (last && last.role === 'assistant' && last.streaming) {
-    messages.value[idx] = { ...last, content: last.content + token }
+    last.content += token  // direct mutation — Vue Proxy tracks this, no object copy needed
   } else {
     messages.value.push({ role: 'assistant', content: token, streaming: true, isProactive: proactiveStarted })
     EventsEmit('pet:state:change', 'speaking')
@@ -985,8 +985,13 @@ function onMessagesClick(e) {
   const href = a.getAttribute('href')
   if (href) BrowserOpenURL(href)
 }
+let _scrollRafPending = false
+/** scrollToBottom scrolls to the latest message; coalesced via rAF to avoid redundant layout reads. */
 function scrollToBottom() {
-  nextTick(() => {
+  if (_scrollRafPending) return
+  _scrollRafPending = true
+  requestAnimationFrame(() => {
+    _scrollRafPending = false
     if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
   })
 }

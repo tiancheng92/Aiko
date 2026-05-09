@@ -650,6 +650,32 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 	return ch
 }
 
+// userProfileCache holds a recently-read USER.md to avoid redundant disk reads on every turn.
+var userProfileCache struct {
+	sync.Mutex
+	content   string
+	expiresAt time.Time
+}
+
+// readUserProfile returns the cached USER.md content, refreshing from disk every 30 seconds.
+func readUserProfile(dataDir string) string {
+	if dataDir == "" {
+		return ""
+	}
+	userProfileCache.Lock()
+	defer userProfileCache.Unlock()
+	if time.Now().Before(userProfileCache.expiresAt) {
+		return userProfileCache.content
+	}
+	data, err := os.ReadFile(filepath.Join(dataDir, "USER.md"))
+	if err != nil && !os.IsNotExist(err) {
+		slog.Warn("read USER.md failed", "err", err)
+	}
+	userProfileCache.content = string(data)
+	userProfileCache.expiresAt = time.Now().Add(30 * time.Second)
+	return userProfileCache.content
+}
+
 // buildContext fetches user profile, long-term memories (summaries and raws separately),
 // and recent short-term history concurrently, then returns a message list ready for
 // runner.Run. Errors from individual sources are logged and skipped — a partial context
@@ -663,15 +689,7 @@ func (a *Agent) buildContext(ctx context.Context, userInput string) ([]adk.Messa
 	g, gctx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
-		if a.dataDir == "" {
-			return nil
-		}
-		data, err := os.ReadFile(filepath.Join(a.dataDir, "USER.md"))
-		if err == nil {
-			profile = string(data)
-		} else if !os.IsNotExist(err) {
-			slog.Warn("read USER.md failed", "err", err)
-		}
+		profile = readUserProfile(a.dataDir)
 		return nil
 	})
 

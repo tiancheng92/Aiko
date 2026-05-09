@@ -275,6 +275,8 @@ defineExpose({ focusInput, scrollToBottom })
     @contextmenu="onBubbleContextMenu"
     @keydown="onUserActivity"
     @mousedown="onUserActivity"
+    @mouseenter="clearTimeout(idleTimer)"
+    @mouseleave="resetIdleTimer()"
   >
     <div class="title-bar">
       <span class="title">聊天</span>

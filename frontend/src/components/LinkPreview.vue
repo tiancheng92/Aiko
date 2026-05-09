@@ -32,6 +32,9 @@ const props = defineProps({
   url: { type: String, required: true },
 })
 
+// Module-level cache so the same URL is never fetched twice across all message bubbles.
+const _previewCache = new Map()
+
 const preview = ref(null)
 
 /** stripHtml removes HTML tags from a string, returning plain text. */
@@ -50,10 +53,17 @@ const faviconUrl = computed(() => {
 })
 
 onMounted(async () => {
+  if (_previewCache.has(props.url)) {
+    preview.value = _previewCache.get(props.url)
+    return
+  }
   try {
     const data = await FetchLinkPreview(props.url)
     if (data && (data.title || data.description)) {
+      _previewCache.set(props.url, data)
       preview.value = data
+    } else {
+      _previewCache.set(props.url, null)
     }
   } catch {
     // Silently ignore — network errors, blocked sites, etc.
