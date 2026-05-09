@@ -1168,6 +1168,29 @@ func (a *App) SendMessage(userInput string) error {
 	return nil
 }
 
+// RegenerateLastReply deletes the last assistant message from history and
+// re-runs the agent with the last user message. The response is streamed
+// through the usual chat:token / chat:done / chat:error events.
+func (a *App) RegenerateLastReply() error {
+	if a.shortMem == nil {
+		return fmt.Errorf("memory not initialized")
+	}
+	// Delete the stale assistant message.
+	if _, err := a.shortMem.DeleteLastAssistantMessage(); err != nil {
+		return fmt.Errorf("delete last assistant: %w", err)
+	}
+	// Find the last user message to re-send.
+	userMsg, err := a.shortMem.LastUserMessage()
+	if err != nil {
+		return fmt.Errorf("find last user message: %w", err)
+	}
+	// Delete the user message from DB too — SendMessage will re-persist it.
+	if err := a.shortMem.DeleteByIDs([]int64{userMsg.ID}); err != nil {
+		return fmt.Errorf("delete last user message: %w", err)
+	}
+	return a.SendMessage(userMsg.Content)
+}
+
 // SendMessageWithImages streams an AI response for a user message that includes
 // one or more inline images encoded as data URLs ("data:image/png;base64,...").
 // Falls back to a plain text message if no valid images are provided.

@@ -124,6 +124,8 @@ export function OpenFileDialog(arg1:string,arg2:Array<frontend.FileFilter>):Prom
 
 export function PingLLM():Promise<number>;
 
+export function RegenerateLastReply():Promise<void>;
+
 export function ResetBallPosition(arg1:number,arg2:number):Promise<void>;
 
 export function RunCronJobNow(arg1:number):Promise<void>;

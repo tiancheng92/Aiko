@@ -230,6 +230,10 @@ export function PingLLM() {
   return window['go']['main']['App']['PingLLM']();
 }
 
+export function RegenerateLastReply() {
+  return window['go']['main']['App']['RegenerateLastReply']();
+}
+
 export function ResetBallPosition(arg1, arg2) {
   return window['go']['main']['App']['ResetBallPosition'](arg1, arg2);
 }

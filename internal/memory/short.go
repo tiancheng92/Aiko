@@ -222,6 +222,46 @@ func (s *ShortStore) DeleteByIDs(ids []int64) error {
 	return nil
 }
 
+// DeleteLastAssistantMessage removes the most recent assistant message from
+// the store and returns it so the caller can re-use its preceding user message.
+// Returns sql.ErrNoRows if no assistant message exists.
+func (s *ShortStore) DeleteLastAssistantMessage() (Message, error) {
+	var m Message
+	err := s.db.QueryRow(`
+		SELECT id, role, content, images, files, created_at
+		FROM messages
+		WHERE role = 'assistant'
+		ORDER BY id DESC
+		LIMIT 1`).Scan(
+		&m.ID, &m.Role, &m.Content,
+		new(string), new(string), &m.CreatedAt,
+	)
+	if err != nil {
+		return m, err
+	}
+	_, err = s.db.Exec(`DELETE FROM messages WHERE id = ?`, m.ID)
+	return m, err
+}
+
+// LastUserMessage returns the most recent user message.
+// Returns sql.ErrNoRows if none exists.
+func (s *ShortStore) LastUserMessage() (Message, error) {
+	rows, err := s.db.Query(`
+		SELECT id, role, content, images, files, created_at
+		FROM messages
+		WHERE role = 'user'
+		ORDER BY id DESC
+		LIMIT 1`)
+	if err != nil {
+		return Message{}, err
+	}
+	defer rows.Close()
+	if rows.Next() {
+		return scanMessage(rows.Scan)
+	}
+	return Message{}, sql.ErrNoRows
+}
+
 // FormatBlock formats a slice of messages into a single text block for storage.
 func FormatBlock(msgs []Message) string {
 	var sb strings.Builder
