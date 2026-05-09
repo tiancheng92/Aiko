@@ -20,6 +20,7 @@ import {
   GetKokoroTTSVoices, SetTTSAutoPlay, SetupKokoroTTS,
   GetVersion, CheckUpdate, InstallUpdate,
   ListVRMModels, ImportVRMFile, DeleteVRMModel,
+  GetAutoLaunch, SetAutoLaunch,
 } from '../../wailsjs/go/main/App'
 import { ListProactiveItems, DeleteProactiveItem } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
@@ -103,6 +104,9 @@ const cronFormSaving = ref(false)
 const larkStatus = ref('')
 const larkStatusLoading = ref(false)
 const larkStatusError = ref('')
+
+// Launch at login
+const autoLaunch = ref(false)
 
 // SMS watcher
 const smsWatcherRunning = ref(false)
@@ -237,6 +241,9 @@ onMounted(async () => {
     availableVRMModels.value = await ListVRMModels()
   } catch (e) {
     console.warn('SettingsWindow: failed to load VRM models', e)
+  }
+  try { autoLaunch.value = await GetAutoLaunch() } catch (e) {
+    console.warn('GetAutoLaunch failed:', e)
   }
   fetchLarkStatus()
   offProgress = EventsOn('knowledge:progress', (p) => { importProgress.value = p })
@@ -969,6 +976,16 @@ async function toggleTTSAutoPlay() {
   }
 }
 
+/** toggleAutoLaunch enables or disables launch-at-login immediately. */
+async function toggleAutoLaunch(val) {
+  try {
+    await SetAutoLaunch(val)
+    autoLaunch.value = val
+  } catch (e) {
+    console.warn('SetAutoLaunch failed:', e)
+  }
+}
+
 // ── 提醒事项 ──────────────────────────────────────────────
 const proactiveItems = ref([])
 const proactiveError = ref('')
@@ -1194,6 +1211,16 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
         <!-- 外观与交互 -->
         <div v-if="activeTab === 'appearance'" class="tab-pane">
+          <!-- 开机自启 -->
+          <div class="sms-toggle-row">
+            <span class="sms-status-label" style="flex:1">开机自启</span>
+            <label class="toggle">
+              <input type="checkbox" :checked="autoLaunch" @change="toggleAutoLaunch($event.target.checked)" />
+              <span class="toggle-track" />
+            </label>
+          </div>
+          <p class="sms-desc" style="margin-top:4px;margin-bottom:16px">登录 macOS 时自动启动 Aiko</p>
+
           <!-- 渲染后端 -->
           <label>渲染后端
             <div class="backend-toggle">

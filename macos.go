@@ -816,6 +816,7 @@ static int getAutoLaunchEnabled(void) {
     return [[NSFileManager defaultManager]
         fileExistsAtPath:autoLaunchPlistPath()] ? 1 : 0;
 }
+
 */
 import "C"
 import (
