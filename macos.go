@@ -292,6 +292,9 @@ static void hitTestPoint(CGFloat cssX, CGFloat cssY) {
 
     NSString *js = [NSString stringWithFormat:
         @"(function(x,y){"
+         // While any context menu is open, capture all clicks so the
+         // existing mousedown-outside handler can dismiss it.
+         "if(document.querySelector('.ctx-menu'))return true;"
          "var e=document.elementFromPoint(x,y);"
          "if(!e)return false;"
          // For canvas-based pets (.vrm-pet, .live2d-pet): only treat as
@@ -617,6 +620,20 @@ static void enableClickThrough() {
                 class_addMethod(cls, sel, alwaysYes, @encode(BOOL));
             }
         });
+
+        // Join all Spaces so the pet is visible regardless of which virtual
+        // desktop is active. Transient + IgnoresCycle keeps it out of Mission
+        // Control / Exposé tile views. FullScreenAuxiliary lets it float above
+        // full-screen apps (e.g. a full-screen browser or terminal).
+        NSWindowCollectionBehavior behavior =
+            NSWindowCollectionBehaviorCanJoinAllSpaces |
+            NSWindowCollectionBehaviorTransient        |
+            NSWindowCollectionBehaviorIgnoresCycle;
+        [gWindow setCollectionBehavior:behavior];
+
+        // Remove from Dock and Cmd+Tab switcher — the pet is a system-level
+        // widget, not a regular app the user switches to explicitly.
+        [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
 
         doHideNativeScrollbars();
 
