@@ -6,9 +6,10 @@
 
 **你的 AI 伙伴，就在桌面上**
 
-[![Go Version](https://img.shields.io/badge/Go-1.25+-blue.svg)](https://golang.org/)
+[![Go Version](https://img.shields.io/badge/Go-1.22+-blue.svg)](https://golang.org/)
 [![Wails](https://img.shields.io/badge/Wails-v2-green.svg)](https://wails.io/)
 [![Vue](https://img.shields.io/badge/Vue-3-brightgreen.svg)](https://vuejs.org/)
+[![Platform](https://img.shields.io/badge/Platform-macOS%2011%2B-lightgrey.svg)](https://www.apple.com/macos/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 </div>
@@ -16,20 +17,22 @@
 ## ✨ 特性
 
 - 🤖 **智能对话**：基于 eino ReAct Agent，支持多轮对话和工具调用
-- 🎭 **Live2D 宠物**：可爱的动画角色，支持多种模型和表情状态
+- 🎭 **Live2D / VRM 宠物**：可爱的 2D 或 3D 角色，支持多种模型、表情和情绪联动
 - 🎙️ **语音输入**：长按 Option 键触发，macOS 原生 SFSpeechRecognizer 实时语音转文字；支持「立刻发送」模式
 - 🔊 **语音输出 (TTS)**：支持 OpenAI TTS、Kokoro 本地离线、macOS 系统 TTS，可按模型 profile 独立配置
-- 🖼️ **图片粘贴**：聊天框支持直接粘贴截图/图片，发送给多模态模型；消息气泡内展示缩略图，点击可全屏预览
+- 🖼️ **图片粘贴**：聊天框支持直接粘贴截图/图片，发送给多模态模型；消息气泡展示缩略图，点击可全屏预览
+- 📎 **文本文件附件**：拖入或选择文本文件，内联为消息内容发送给 Agent
+- 🔔 **主动消息**：Agent 可安排定时 follow-up 提醒，聊天框打开时推入对话，关闭时发系统通知
 - 🧠 **自我成长**：跨会话积累用户画像、记忆事实、自动沉淀可复用技能
 - 🛠️ **内置工具**：系统信息、网络状态、天气、位置、网页抓取等实用工具
 - 📁 **文件系统工具**：Agent 可在白名单路径内读写文件、列目录、创建/删除/移动，支持通配符配置
 - 🖥️ **Shell 执行**：Agent 可执行 Shell 命令，执行前弹窗请求用户确认，支持编辑命令后再执行
-- 💻 **代码执行沙盒**：Agent 可运行 Python/Node/Ruby/Bash 代码片段，同样需用户确认后执行
+- 💻 **代码执行**：Agent 可运行 Python/Node/Ruby/Bash 代码片段，同样需用户确认后执行
 - 📋 **剪贴板工具**：Agent 可读取和写入系统剪贴板
 - 📸 **截图工具**：Agent 可截取全屏并以图片形式返回多模态结果
 - 📱 **应用控制**：Agent 可列出运行中 App、激活或退出指定应用
 - 🌐 **浏览器感知**：通过 osascript 读取当前浏览器 URL 并抓取页面内容
-- 📅 **系统集成**：读取 macOS 提醒事项、标记完成；读取 Mail.app 邮件列表与正文
+- 📅 **系统集成**：读取 macOS 提醒事项、标记完成；读取 Mail.app 邮件；读写 macOS 日历
 - 📱 **短信监听**：监听 macOS 信息 App，自动识别验证码并复制到剪贴板
 - 📚 **知识库**：RAG 支持，可导入文档进行问答
 - ⏰ **定时任务**：支持 Cron 表达式的计划任务
@@ -37,7 +40,19 @@
 - 🪶 **飞书集成**：通过 lark-cli 操作飞书（消息、日历、文档等）
 - 🎨 **毛玻璃 UI**：现代化深色主题界面，录音时呈现 Apple Intelligence 风格彩虹光边框
 - 🖱️ **点击穿透**：宠物不遮挡桌面操作，智能响应交互
+- 🖥️ **多屏感知**：连接/断开显示器时自动重定位宠物和聊天框
+- 🔄 **自动更新**：检查 GitHub Releases 并在后台下载安装，带进度反馈
 - 💾 **数据持久化**：SQLite 存储聊天记录，chromem-go 向量数据库
+
+## 📋 兼容性
+
+| 平台 | 状态 |
+|------|------|
+| **macOS 11.0+** | ✅ 完整支持 |
+| **Windows** | ❌ 短期内不计划支持 |
+| **Linux** | ❌ 短期内不计划支持 |
+
+> Aiko 深度依赖 macOS 专属 API（Objective-C CGO 点击穿透、AVAudioEngine 语音识别、SFSpeechRecognizer、osascript 系统集成等），跨平台移植工作量巨大，**不在近期路线图内**。
 
 ## 🏗️ 技术架构
 
@@ -75,8 +90,9 @@
 - [KaTeX](https://katex.org/) - 数学公式渲染
 - CSS3 backdrop-filter - 毛玻璃视觉效果
 
-**Live2D 集成**
+**角色渲染**
 - Live2D Cubism SDK - 2D 角色动画渲染
+- VRM / Three.js - 3D 角色渲染
 - WebGL Canvas - 硬件加速渲染
 
 ### 平台特定
@@ -86,31 +102,16 @@
 - Cocoa NSView - 原生窗口控制
 - Core Graphics - 像素级鼠标事件处理
 - AVAudioEngine + SFSpeechRecognizer - 实时语音识别
-- osascript - 浏览器 URL 读取、提醒事项读写、邮件读取、截图等系统集成
-
-## 📋 兼容性
-
-- ✅ **macOS 11.0+** - 完整功能支持，包括点击穿透
-- ❌ **Windows** - 暂不支持（开发中）
-- ❌ **Linux** - 暂不支持（计划中）
-
-## 🗺️ 下阶段计划
-
-### 语音唤醒 (v2.1)
-- 📱 **语音唤醒** - 支持"Hey Aiko"等唤醒指令
-
-### 跨平台支持 (v2.2)
-- 🖥️ **Windows 版本** - 完整功能移植
-- 🐧 **Linux 版本** - 社区驱动支持
+- osascript - 浏览器 URL 读取、提醒事项读写、邮件读取、日历读写、截图等系统集成
 
 ## 🚀 快速开始
 
 ### 环境要求
 
 - **Go 1.22+**
-- **Node.js 16+** (推荐使用 yarn)
-- **macOS 11.0+** (当前仅支持 macOS)
-- **Wails CLI**: `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
+- **Node.js 18+**（推荐使用 yarn）
+- **macOS 11.0+**（仅支持 macOS）
+- **Wails CLI**：`go install github.com/wailsapp/wails/v2/cmd/wails@latest`
 
 ### 安装依赖
 
@@ -132,22 +133,27 @@ cd frontend && yarn build   # 仅构建前端
 ### 生产构建
 
 ```bash
-wails build   # 输出: build/bin/Aiko.app
+make build   # 构建 + ad-hoc 签名，输出: build/bin/Aiko.app
+make run     # 构建 + 签名 + 启动（推荐，TCC 权限持久化）
 ```
+
+> **为什么用 `make run` 而不是 `wails dev`？**  
+> `make run` 会执行 ad-hoc 签名（`codesign --sign -`），配合固定的 Bundle ID `com.xutiancheng.aiko`，macOS TCC 权限（麦克风、语音识别等）授权后跨重新编译持久有效，无需每次重新授权。
 
 ## ⚙️ 配置
 
 首次启动需要在设置界面配置：
 
-1. **模型配置**：API Key、Base URL、模型名称
-2. **系统配置**：Live2D 模型、宠物大小、聊天框尺寸
-3. **工具权限**：启用/禁用内置工具；在「工具 → 设置」中配置文件系统白名单路径（支持通配符）和执行超时
+1. **模型配置**：API Key、Base URL、模型名称（支持多 Profile 切换）
+2. **系统配置**：Live2D/VRM 模型选择、宠物大小、聊天框尺寸
+3. **工具权限**：启用/禁用内置工具；在「工具 → 设置」中配置文件系统白名单路径和执行超时
 4. **知识库**：导入文档建立 RAG 知识库
 5. **定时任务**：创建 Cron 计划任务
 6. **MCP 服务器**：接入外部 MCP 工具（添加/编辑/删除后热重载）
 7. **飞书集成**：配置 lark-cli 路径和认证
-8. **短信监听**：启用/禁用验证码自动识别，配置语音消息立刻发送
-9. **自我成长**：配置 Nudge 间隔（每隔 N 轮提示 Agent 沉淀知识）
+8. **短信监听**：启用/禁用验证码自动识别
+9. **语音设置**：TTS 后端选择、语音消息立刻发送开关
+10. **自我成长**：配置 Nudge 间隔（每隔 N 轮提示 Agent 沉淀知识）
 
 ### 语音输入
 
@@ -177,37 +183,50 @@ wails build   # 输出: build/bin/Aiko.app
 
 ```
 ├── main.go                 # 应用入口
-├── app.go                  # Wails 绑定方法
-├── macos.go               # macOS 平台特定代码（点击穿透、语音识别）
+├── app.go                  # Wails 绑定方法（全部前端可调用 API）
+├── macos.go               # macOS 平台特定代码（点击穿透、语音识别、全局热键）
 ├── internal/
-│   ├── agent/             # eino ReAct Agent
+│   ├── agent/             # eino ReAct Agent 核心 + 中间件
 │   ├── tools/             # 内置工具实现
-│   │   ├── filesystem.go       # 文件系统读写（路径白名单）
-│   │   ├── shell_tools.go      # Shell 命令执行（用户确认）
-│   │   ├── code_tools.go       # 代码执行沙盒（用户确认）
-│   │   ├── clipboard_*.go      # 剪贴板读写
-│   │   ├── screenshot_*.go     # 截图（EnhancedInvokableTool）
-│   │   ├── app_control_*.go    # 应用列举与控制
-│   │   ├── browser_*.go        # 浏览器 URL 感知
-│   │   ├── reminders_*.go      # 提醒事项
-│   │   ├── mail_*.go           # 邮件读取
-│   │   ├── system_tools.go     # 系统信息、网络、天气等
-│   │   ├── registry.go         # 工具注册 & 权限门控
-│   │   └── permission.go       # 权限持久化 (SQLite)
+│   │   ├── filesystem.go           # 文件系统读写（路径白名单）
+│   │   ├── shell_tools.go          # Shell 命令执行（用户确认）
+│   │   ├── code_tools.go           # 代码执行（用户确认）
+│   │   ├── clipboard_*.go          # 剪贴板读写
+│   │   ├── screenshot_*.go         # 截图（EnhancedInvokableTool）
+│   │   ├── app_control_*.go        # 应用列举与控制
+│   │   ├── browser_*.go            # 浏览器 URL 感知
+│   │   ├── reminders_*.go          # 提醒事项
+│   │   ├── mail_*.go               # 邮件读取
+│   │   ├── calendar_*.go           # 日历读写
+│   │   ├── location_*.go           # 位置信息
+│   │   ├── growth_tools.go         # 自我成长（记忆/技能/用户画像）
+│   │   ├── scheduler_tools.go      # 定时任务管理
+│   │   ├── system_tools.go         # 系统信息、网络、天气等
+│   │   ├── time_tools.go           # 时间工具
+│   │   ├── web_tools.go            # 网页抓取
+│   │   ├── weather_tools.go        # 天气查询
+│   │   ├── context_tools.go        # 上下文工具
+│   │   ├── registry.go             # 工具注册 & 权限门控
+│   │   └── permission.go           # 权限持久化 (SQLite)
+│   ├── proactive/         # 主动消息引擎（定时提醒、follow-up 推送）
+│   ├── notify/            # macOS 系统通知发送
+│   ├── execenv/           # 代码执行环境（Python/Node/Ruby/Bash）
+│   ├── lark/              # 飞书 lark-cli 客户端封装
+│   ├── tts/               # TTS 后端（OpenAI / Kokoro / macOS 系统）
 │   ├── skill/             # YAML 自定义技能
 │   ├── memory/            # 短期(SQLite) / 长期(chromem-go) 记忆
 │   ├── knowledge/         # RAG 知识库
 │   ├── config/            # 配置管理
-│   ├── db/                # SQLite Schema 迁移
 │   ├── llm/               # LLM / Embedder 抽象层
 │   ├── scheduler/         # Cron 任务调度
 │   ├── mcp/               # MCP 协议实现
-│   └── sms/               # 短信监听（验证码识别）
+│   ├── sms/               # 短信监听（验证码识别）
+│   └── db/                # SQLite Schema 迁移
 ├── frontend/
 │   ├── src/
-│   │   ├── components/    # Vue 组件
+│   │   ├── components/    # Vue 组件（ChatPanel、ChatBubble、Live2DPet、VRMPet 等）
 │   │   ├── composables/   # 组合式 API
-│   │   └── wailsjs/       # Wails 生成的绑定
+│   │   └── wailsjs/       # Wails 生成的绑定（勿手动修改）
 │   └── dist/              # 构建输出
 └── build/                 # 构建资源和输出
 ```
@@ -233,13 +252,13 @@ wails build   # 输出: build/bin/Aiko.app
 ## ❓ 常见问题
 
 **Q: 为什么只支持 macOS？**  
-A: 点击穿透功能依赖 macOS 特定的 Objective-C API。Windows/Linux 版本开发中。
+A: 点击穿透功能依赖 Objective-C CGO；语音识别依赖 AVAudioEngine + SFSpeechRecognizer；大量系统集成功能依赖 osascript。这些都是 macOS 专属 API，**短期内不计划移植到 Windows 或 Linux**。
 
 **Q: 提示"开发者无法验证"怎么办？**  
 A: 在系统偏好设置 → 安全性与隐私中允许运行，或执行 `xattr -cr Aiko.app`。
 
 **Q: 图片发送后 AI 回复"不支持图片"？**  
-A: 请确认使用的模型支持多模态输入（如 GPT-4o、Claude 3、Qwen-VL）。本地 llama.cpp 需加载 mmproj 多模态投影器。
+A: 请确认使用的模型支持多模态输入（如 GPT-4o、Claude 3、Qwen-VL）。
 
 **Q: 工具执行为什么要弹窗确认？**  
 A: Shell 命令和代码执行是高风险操作，设计上要求用户确认后才真正执行，确认弹窗内还可以编辑命令内容。
@@ -247,12 +266,21 @@ A: Shell 命令和代码执行是高风险操作，设计上要求用户确认�
 **Q: 工具权限在哪里管理？**  
 A: 设置 → 工具 → 权限，可逐个开启/关闭内置工具。截图、剪贴板、应用控制等敏感工具默认关闭。文件系统工具还需在「工具 → 设置」中配置允许访问的路径白名单。
 
+**Q: 如何导入自定义 VRM 模型？**  
+A: 设置 → 宠物 → 导入 VRM，选择 `.vrm` 文件后模型会保存到 `~/.aiko/vrm/`，可在模型列表中切换。
+
 ## 🔒 隐私与安全
 
 - **本地数据存储**：所有聊天记录和配置均保存在本地 `~/.aiko/` 目录
 - **工具权限管控**：敏感工具（截图、剪贴板、应用控制）默认关闭，需用户手动授权
+- **执行确认机制**：Shell 命令和代码执行均需用户点击确认，不会静默执行
 - **网络连接**：仅在 AI 对话和工具调用时连接外部 API
 - **开源透明**：所有代码公开，可审计安全性
+
+## 🗺️ 下阶段计划
+
+### 语音唤醒 (v2.1)
+- 🎙️ **语音唤醒** - 支持"Hey Aiko"等唤醒指令，无需按键即可触发对话
 
 ## 📄 开源协议
 

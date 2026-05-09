@@ -6,11 +6,13 @@ AI 编码助手指引，供 Claude Code 在此项目中使用。
 
 **Aiko** 是一个 macOS 原生 AI 桌面宠物应用，采用 Wails v2 架构。Go 后端通过 `app.go` 暴露绑定方法给 Vue 3 前端；前端资源 embed 进 Go 二进制。核心特色是点击穿透（通过 `macos.go` 的 Objective-C cgo 实现）和基于 eino ReAct Agent 的智能对话系统。
 
+> **平台支持**：当前仅支持 macOS，**短期内不计划支持 Windows 或 Linux**。macOS 专属 API（Objective-C CGO、AVAudioEngine、SFSpeechRecognizer、osascript 等）是核心功能的基础，跨平台移植工作量巨大且不在近期路线图内。
+
 ### 核心依赖
 
 **后端技术栈：**
 - [Wails v2](https://wails.io/) - 跨平台桌面应用框架
-- [eino](https://github.com/cloudwego/eino) - 字节跳动 Agent Development Kit  
+- [eino](https://github.com/cloudwego/eino) - 字节跳动 Agent Development Kit
 - [chromem-go](https://github.com/philippgille/chromem-go) - 纯 Go 向量数据库
 - [robfig/cron/v3](https://pkg.go.dev/github.com/robfig/cron/v3) - Cron 任务调度器
 - [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) - 纯 Go SQLite 驱动
@@ -18,7 +20,7 @@ AI 编码助手指引，供 Claude Code 在此项目中使用。
 **前端技术栈：**
 - [Vue 3](https://vuejs.org/) + Composition API - 响应式前端框架
 - [Vite](https://vitejs.dev/) - 现代构建工具
-- [marked](https://marked.js.org/) - Markdown 解析渲染 
+- [marked](https://marked.js.org/) - Markdown 解析渲染
 - [highlight.js](https://highlightjs.org/) - 代码语法高亮
 - [KaTeX](https://katex.org/) - 数学公式渲染
 
@@ -39,18 +41,34 @@ main.go → app.go (Wails bindings)
     internal/memory/               # 短期(SQLite) + 长期(chromem-go) 记忆
     internal/knowledge/            # RAG 知识库
     internal/llm/                  # ChatModel / Embedder 抽象层
+    internal/tts/                  # TTS 后端（OpenAI / Kokoro / macOS 系统）
     internal/config/               # 配置持久化(SQLite)
     internal/scheduler/            # Cron 定时任务
     internal/mcp/                  # MCP 协议实现
     internal/sms/                  # 短信监听（fsnotify + 验证码识别）
+    internal/proactive/            # 主动消息引擎（定时提醒、follow-up）
+    internal/notify/               # macOS 系统通知发送
+    internal/execenv/              # 代码执行环境（Python/Node/Ruby/Bash）
+    internal/lark/                 # 飞书 lark-cli 客户端封装
     internal/db/                   # Schema 迁移管理
 ```
 
 **前端架构：**
 ```
 frontend/src/
-├── components/        # Vue 组件 (ChatPanel, ChatBubble, SettingsWindow, etc.)
-├── composables/       # 可复用逻辑 (useModelPath.js)
+├── components/        # Vue 组件
+│   ├── ChatPanel.vue       # 聊天面板（消息列表、输入框、图片/文件粘贴）
+│   ├── ChatBubble.vue      # 可拖拽/折叠聊天气泡容器
+│   ├── Live2DPet.vue       # Live2D 宠物渲染
+│   ├── VRMPet.vue          # VRM 3D 宠物渲染
+│   ├── FloatingBall.vue    # 悬浮球（折叠态快捷入口）
+│   ├── SettingsWindow.vue  # 设置窗口
+│   ├── NotificationBubble.vue  # 应用内通知气泡
+│   ├── ToolConfirmModal.vue    # 工具执行确认弹窗
+│   ├── ExecutionProgress.vue   # 工具执行进度条
+│   ├── ContextMenu.vue         # 右键上下文菜单
+│   └── LinkPreview.vue         # 链接预览卡片
+├── composables/       # 可复用逻辑 (useModelPath.js 等)
 └── wailsjs/          # Wails 自动生成的 Go 绑定
 ```
 
@@ -85,24 +103,33 @@ frontend/src/
 | `chat:token` | backend→frontend | 流式 token 传输 |
 | `chat:done` | backend→frontend | AI 响应结束 |
 | `chat:error` | backend→frontend | 错误信息传递 |
+| `chat:emotion` | backend→frontend | AI 返回情绪标签（驱动 Live2D/VRM 表情）|
 | `chat:clear` | frontend→frontend | 清空聊天历史 |
+| `chat:proactive:message` | backend→frontend | 主动消息推送（聊天框打开时直接推入）|
 | `bubble:toggle` | any | 切换聊天气泡显示/隐藏 |
 | `pet:state:change` | any | 宠物状态变更 (idle/thinking/speaking/error) |
 | `knowledge:progress` | backend→frontend | 知识库导入进度更新 |
-| `config:model:changed` | frontend→frontend | Live2D 模型切换通知 |
+| `config:model:changed` | frontend→frontend | Live2D/VRM 模型切换通知 |
 | `config:chat:size:changed` | frontend→frontend | 聊天框尺寸变更 |
-| `notification:show` | backend→frontend | 显示通知气泡 |
+| `notification:show` | backend→frontend | 显示应用内通知气泡 |
 | `settings:open` | any | 打开设置界面 |
+| `screen:changed` | backend→frontend | 屏幕列表变更（连接/断开显示器）|
+| `mcp:ready` | backend→frontend | MCP 工具加载完成，携带工具数量 |
 | `voice:start` | backend→frontend | 开始录音（Option 长按触发）|
 | `voice:transcript` | backend→frontend | 实时 partial STT 结果 |
 | `voice:final` | backend→frontend | isFinal STT 结果（可触发自动发送）|
 | `voice:end` | backend→frontend | 录音结束（Option 释放时立即触发）|
 | `voice:error` | backend→frontend | 语音识别错误 |
+| `tts:start` | backend→frontend | TTS 开始播放 |
+| `tts:audio` | backend→frontend | TTS 音频数据（base64 PCM/MP3，供前端播放）|
+| `tts:done` | backend→frontend | TTS 播放结束 |
+| `tts:error` | backend→frontend | TTS 错误 |
 | `sms:verification_code` | backend→frontend | 检测到验证码短信 |
 | `config:voice:auto-send:changed` | frontend→frontend | 语音自动发送开关状态变更 |
-| `tool:confirm` | backend→frontend | 工具执行需用户确认（shell/code） |
-| `tool:executing` | backend→frontend | 工具开始执行（显示进度条） |
-| `tool:executed` | backend→frontend | 工具执行结束（隐藏进度条） |
+| `tool:confirm` | backend→frontend | 工具执行需用户确认（shell/code）|
+| `tool:executing` | backend→frontend | 工具开始执行（显示进度条）|
+| `tool:executed` | backend→frontend | 工具执行结束（隐藏进度条）|
+| `update:progress` | backend→frontend | 应用更新下载进度（pct/msg）|
 
 ## 开发命令
 
@@ -120,8 +147,9 @@ wails generate module  # 重新生成 Wails bindings
 ## 数据目录结构
 
 `~/.aiko/`
-- `pet.db` — SQLite 数据库（settings、messages、knowledge_sources、cron_jobs、model_profiles、tool_permissions）
+- `pet.db` — SQLite 数据库（settings、messages、knowledge_sources、cron_jobs、model_profiles、tool_permissions、proactive_items）
 - `vectors/` — chromem-go 持久化向量数据存储
+- `vrm/` — 用户自定义 VRM 模型文件（`.vrm`）
 - `USER.md` — 用户画像文档（由 `update_user_profile` 工具自动维护）
 - `auto-skills/` — Agent 自动沉淀的可复用技能（YAML 格式，由 `save_skill` 工具写入）
 
@@ -139,7 +167,7 @@ wails generate module  # 重新生成 Wails bindings
 ### 工具系统
 - 普通工具实现 `Tool` 接口（`InvokableRun(ctx, string) (string, error)`），在 `All()` 中注册，`AllEino()` 自动用 `ToEino()` 包装
 - **有运行时依赖**（知识库、调度器、长期记忆、config 等）的工具在 `AllContextual()` 中注册
-- **多模态工具**（返回图片等）实现 `EnhancedTool` 接口，在 `AllEino()` 中用 `ToEinoEnhanced()` 单独注册，**不**放入 `All()`；同时在 `app.go` 启动时手动调用 `permStore.EnsureRow()` 注册权限行
+- **多模态工具**（返回图片等）实现 `EnhancedTool` 接口，在 `AllEino()` 中用 `ToEinoEnhanced()` 单独注册（**不**放入 `All()`）；同时在 `app.go` 启动时手动调用 `permStore.EnsureRow()` 注册权限行
 - **需要 eino interrupt/resume 的工具**（如 execute_shell / execute_code）：调用 `tool.Interrupt(ctx, info)` 触发中断，info 类型必须用 `gob.Register` 提前注册；`ErrorRecovery` 中间件会放行 `compose.IsInterruptRerunError` 的 error
 - macOS 专属工具用 `//go:build darwin` / `//go:build !darwin` 分平台实现（non-darwin 提供 stub）
 - **新工具需在 `app.go` 启动时调用 `permStore.EnsureRow()`**，否则不会出现在工具权限列表
@@ -155,6 +183,7 @@ wails generate module  # 重新生成 Wails bindings
 
 ### 多模态对话
 - `app.go` 的 `SendMessageWithImages(userInput string, images []string)` 接收前端传来的 data URL 数组，解析后构造含图片 part 的 `*schema.Message`，调用 `agent.ChatWithMessage()`
+- `SendMessageWithFiles(userInput string, images []string, files []FileAttachment)` 同时支持图片和文本文件附件（`FileAttachment{Name, Content string}`），文本文件内联为消息文本块
 - eino acl/openai 会将 `Base64Data` 序列化为 `data:<mime>;base64,<data>` 格式的 image_url，与 OpenAI 多模态 API 规范一致
 
 ### 图片预览灯箱
@@ -165,6 +194,27 @@ wails generate module  # 重新生成 Wails bindings
 - `ChatBubble.vue` 标题栏有全屏切换按钮（`isFullscreen` ref）
 - 全屏时 `.chat-bubble.fullscreen` CSS 覆盖位置/尺寸：`top: 38px`（避让 macOS 菜单栏），`width/height: 100vw/calc(100vh-38px)`
 - `.chat-bubble` 已在 hitTest 选择器中，全屏状态下鼠标不会穿透
+
+### VRM 模型
+- 内置 VRM 模型 embed 在 `frontend/dist/vrm/`，通过 `assets.ReadDir` 枚举
+- 用户自定义 VRM 存放在 `~/.aiko/vrm/`，通过 `ImportVRMFile(name, base64Data)` 上传
+- `VRMPet.vue` 负责 3D VRM 渲染，通过 `/user-vrm/<name>` 路径访问用户模型
+- 切换 Live2D/VRM 模型后 emit `config:model:changed` 事件触发前端重载
+
+### 主动消息 (Proactive Engine)
+- `internal/proactive/engine.go` 每分钟 poll SQLite `proactive_items` 表，触发到期项
+- 若聊天框打开：emit `chat:proactive:message` 直接推送到聊天面板
+- 若聊天框关闭：emit `notification:show` 显示应用内气泡，同时调用 `notify.System()` 发送 macOS 系统通知
+- 过期超过 5 分钟（`fireDeadline`）的项静默丢弃，避免用户离开后积压的提醒轰炸
+- Agent 通过 `schedule_followup` 工具写入 `proactive_items` 表安排后续提醒
+
+### 应用更新
+- `CheckUpdate()` 请求 GitHub Releases API 判断是否有新版本
+- `InstallUpdate(downloadURL)` 下载 dmg/zip，emit `update:progress` 实时报告进度，完成后替换当前二进制并重启
+
+### 屏幕感知
+- `startScreenWatcher()` 定期轮询屏幕列表，发现变更时 emit `screen:changed` 事件
+- `GetScreenList()` 返回所有连接显示器的分辨率和位置信息，前端据此重新定位宠物和聊天框
 
 ### MCP 热重载
 - `app.go` 的 `AddMCPServer`、`UpdateMCPServer`、`DeleteMCPServer` 在 DB 操作完成后会立即调用 `initLLMComponents` 重建 Agent，使新配置立即生效，无需重启应用
@@ -190,7 +240,7 @@ wails generate module  # 重新生成 Wails bindings
 4. **Apple Intelligence 视觉特效** - 录音期间 4 层 Canvas conic-gradient 彩虹光边框 + 水波纹扩散动画
 5. **eino Agent 集成** - 基于字节跳动 ADK 的工具调用和中间件系统
 6. **毛玻璃 UI 设计** - 现代化深色主题 + CSS backdrop-filter 效果
-7. **多模态内容渲染** - 支持 Markdown、LaTeX、代码高亮、表格等；聊天框支持粘贴图片并发送给多模态模型
+7. **多模态内容渲染** - 支持 Markdown、LaTeX、代码高亮、表格等；聊天框支持粘贴图片/拖入文本文件发送给多模态模型
 8. **RAG 知识库** - chromem-go 向量数据库 + 文档导入系统
 9. **MCP 协议支持** - 可扩展第三方工具生态，支持热重载
 10. **osascript 系统集成** - 无 CGO 的 macOS 系统集成模式（浏览器 URL、提醒事项、邮件、截图等）
@@ -198,19 +248,17 @@ wails generate module  # 重新生成 Wails bindings
 12. **剪贴板 & 截图工具** - Agent 可读写剪贴板、截图并以图片形式返回多模态结果
 13. **应用控制工具** - Agent 可列出运行中 App、激活或退出指定应用
 14. **文件系统 & 执行工具** - 路径白名单访问控制，shell/代码执行通过 eino interrupt/resume 做用户二次确认
-
-### 借鉴的优秀项目
-- **架构设计** 借鉴了 [Wails Community Examples](https://github.com/wailsapp/awesome-wails)
-- **Agent 系统** 基于 [eino](https://github.com/cloudwego/eino) 的设计思路
-- **向量数据库** 使用 [chromem-go](https://github.com/philippgille/chromem-go) 的纯 Go 实现
-- **UI 交互** 参考了 [Claude Desktop](https://claude.ai/download) 的用户体验
-- **Live2D 渲染** 基于 [Live2D Cubism SDK](https://www.live2d.com/en/sdk/download/web/) Web 版本
+15. **VRM 3D 宠物** - 支持导入自定义 `.vrm` 模型，与 Live2D 并存可切换
+16. **主动消息引擎** - Agent 可安排定时 follow-up 提醒，聊天框打开时推入对话，关闭时发系统通知
+17. **应用内自动更新** - 检查 GitHub Releases 并在后台下载安装，带进度反馈
 
 ## 当前状态
 
 - ✅ 核心 AI 对话功能完备
 - ✅ Live2D 宠物渲染和状态管理
+- ✅ VRM 3D 宠物渲染（内置 + 用户自定义导入）
 - ✅ 点击穿透和窗口管理
+- ✅ 多屏感知（连接/断开显示器自动重定位）
 - ✅ 毛玻璃 UI 和深色主题
 - ✅ RAG 知识库和文档导入
 - ✅ 定时任务和工具权限系统
@@ -221,36 +269,35 @@ wails generate module  # 重新生成 Wails bindings
 - ✅ 浏览器感知（osascript 获取当前 URL + 页面内容）
 - ✅ macOS 提醒事项读取与标记完成
 - ✅ macOS 邮件读取（osascript 读取 Mail.app 邮件列表与正文）
+- ✅ macOS 日历读写（`get_calendar_events` / `create_calendar_event`）
 - ✅ 短信监听（fsnotify 监听 chat.db，自动识别验证码并复制到剪贴板）
 - ✅ 自我成长（用户画像、长期记忆、技能沉淀）
 - ✅ 剪贴板读写（`read_clipboard` / `write_clipboard` 工具）
 - ✅ 截图工具（`take_screenshot`，EnhancedInvokableTool，返回 PNG base64 图片）
 - ✅ 应用控制（`list_running_apps` / `control_app`，osascript 激活/退出 App）
-- ✅ macOS 日历读写（`get_calendar_events` / `create_calendar_event`，osascript 读取事件、创建新事件）
 - ✅ 聊天框图片粘贴（粘贴或拖入图片，发送给多模态模型；消息气泡内展示缩略图；点击灯箱全屏预览）
-- ✅ 文件系统工具（`list_directory` / `read_file` / `write_file` / `delete_file` / `make_directory` / `move_file`，路径白名单 + glob 支持）
+- ✅ 文本文件附件（拖入或选择文本文件，内联为消息内容发送给 Agent）
+- ✅ 文件系统工具（`list_directory` / `read_file` / `write_file` / `delete_file` / `make_directory` / `move_file`）
 - ✅ Shell 执行工具（`execute_shell`，eino interrupt/resume 用户二次确认，可编辑命令，超时可配置）
 - ✅ 代码执行工具（`execute_code`，支持 python/node/ruby/bash，eino interrupt/resume 用户二次确认）
 - ✅ 聊天框全屏模式（标题栏全屏按钮，避让 macOS 菜单栏 38px）
+- ✅ 主动消息引擎（Agent 可安排定时提醒，聊天框开/关分别推入对话或发系统通知）
+- ✅ 应用内自动更新（CheckUpdate + InstallUpdate，带下载进度）
+- ✅ 首次启动欢迎引导（`IsFirstLaunch` / `MarkWelcomeShown`）
 - ✅ ad-hoc 代码签名（`make run` 自动签名，TCC 权限跨重编译持久化）
 - ✅ Bundle ID 固定（`com.xutiancheng.aiko`，解决每次弹权限问题）
-- ⚠️ 仅支持 macOS（使用私有 API，不兼容 App Store）
-- ❌ Windows/Linux 支持（开发中）
+- ⚠️ **仅支持 macOS**（使用私有 API，不兼容 App Store）
+- ❌ **Windows/Linux — 短期内不计划支持**
 
 ## 下阶段计划
 
 ### 语音唤醒 (v2.1)
 - 📱 **语音唤醒** - 支持"Hey Aiko"等唤醒指令
 
-### 跨平台支持 (v2.2)
-- 🖥️ Windows 版本 - 重写点击穿透逻辑，使用 Win32 API
-- 🐧 Linux 版本 - X11/Wayland 窗口管理适配
-
 ---
 
-*最后更新：2026-04-28（code review 修复：并发加锁、MCP/SMS/调度器资源回收、前端 EventsOn 清理规范、exec 工具 workingDir 白名单）*
+*最后更新：2026-05-10*
 
-<!-- code-review-graph MCP tools -->
 ## MCP Tools: code-review-graph
 
 **IMPORTANT: This project has a knowledge graph. ALWAYS use the
