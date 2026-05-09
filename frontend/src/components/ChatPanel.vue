@@ -1412,6 +1412,8 @@ defineExpose({ focusInput, scrollToBottom })
   font-size: 13.5px;
   line-height: 1.65;
   word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* User bubble — solid accent (macOS iMessage-like) */
@@ -2090,6 +2092,8 @@ defineExpose({ focusInput, scrollToBottom })
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.14) transparent;
+  user-select: text;
+  -webkit-user-select: text;
 }
 .input-area textarea::-webkit-scrollbar { width: 4px; background: transparent; }
 .input-area textarea::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 2px; }

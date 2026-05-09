@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import ChatPanel from './ChatPanel.vue'
 import ContextMenu from './ContextMenu.vue'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
@@ -10,6 +10,7 @@ const props = defineProps({
   ballPos:  { type: Object, default: () => ({ x: -1, y: -1 }) },
   ballSize: { type: Number, default: 64 },
   activeScreen: { type: Object, default: () => ({ width: 0, height: 0 }) },
+  visible:  { type: Boolean, default: false },
 })
 const emit = defineEmits(['close', 'open-settings'])
 
@@ -56,6 +57,28 @@ let offScreenChanged = null
 let latencyTimer = null
 let offModelChangedLatency = null
 
+// ─── Idle auto-close ──────────────────────────────────────────────────────────
+
+const IDLE_MS = 60_000
+const isLLMActive = ref(false)
+let idleTimer = null
+let offToken = null
+let offDone = null
+let offChatError = null
+
+/** resetIdleTimer restarts the 60s countdown; skips if LLM is actively streaming. */
+function resetIdleTimer() {
+  clearTimeout(idleTimer)
+  if (!isLLMActive.value) {
+    idleTimer = setTimeout(() => emit('close'), IDLE_MS)
+  }
+}
+
+/** onUserActivity resets the idle timer on any user interaction inside the bubble. */
+function onUserActivity() {
+  resetIdleTimer()
+}
+
 let mounted = false
 
 onMounted(async () => {
@@ -78,13 +101,39 @@ onMounted(async () => {
       console.warn('screen:active:changed: GetChatSize failed', e)
     }
   })
+
+  offToken = EventsOn('chat:token', () => {
+    isLLMActive.value = true
+    clearTimeout(idleTimer)
+  })
+  offDone = EventsOn('chat:done', () => {
+    isLLMActive.value = false
+    resetIdleTimer()
+  })
+  offChatError = EventsOn('chat:error', () => {
+    isLLMActive.value = false
+    resetIdleTimer()
+  })
+
+  watch(() => props.visible, (v) => {
+    if (v) {
+      resetIdleTimer()
+    } else {
+      clearTimeout(idleTimer)
+    }
+  }, { immediate: true })
+
   mounted = true
 })
 
 onUnmounted(() => {
   offSizeChange?.()
   offScreenChanged?.()
+  offToken?.()
+  offDone?.()
+  offChatError?.()
   clearInterval(latencyTimer)
+  clearTimeout(idleTimer)
   offModelChangedLatency?.()
   window.removeEventListener('mousemove', onResizeMove)
   window.removeEventListener('mouseup', onResizeUp)
@@ -101,11 +150,14 @@ function toggleFullscreen() {
 const MIN_W = 300
 const MIN_H = 320
 
+const isResizing = ref(false)
 let resizeDrag = null
 
 /** startResize begins a drag-resize operation. */
 function startResize(e, edge) {
   if (isFullscreen.value) return
+  isResizing.value = true
+  document.body.classList.add('no-select')
   resizeDrag = {
     edge,
     startX: e.clientX,
@@ -140,6 +192,8 @@ function onResizeUp() {
   window.removeEventListener('mousemove', onResizeMove)
   window.removeEventListener('mouseup', onResizeUp)
   window.removeEventListener('blur', onResizeUp)
+  isResizing.value = false
+  document.body.classList.remove('no-select')
   if (!resizeDrag) return
   resizeDrag = null
   const sw = props.activeScreen.width
@@ -211,7 +265,7 @@ defineExpose({ focusInput, scrollToBottom })
 <template>
   <div
     class="chat-bubble"
-    :class="{ fullscreen: isFullscreen }"
+    :class="{ fullscreen: isFullscreen, 'no-transition': isResizing }"
     :style="isFullscreen ? {} : {
       left:   pos.x + 'px',
       top:    pos.y + 'px',
@@ -219,6 +273,8 @@ defineExpose({ focusInput, scrollToBottom })
       height: bubbleH + 'px',
     }"
     @contextmenu="onBubbleContextMenu"
+    @keydown="onUserActivity"
+    @mousedown="onUserActivity"
   >
     <div class="title-bar">
       <span class="title">聊天</span>
@@ -278,12 +334,18 @@ defineExpose({ focusInput, scrollToBottom })
   will-change: left, top, width, height;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', sans-serif;
   -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
   transition:
     left          0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94),
     top           0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94),
     width         0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94),
     height        0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94),
     border-radius 0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.chat-bubble.no-transition {
+  transition: none !important;
 }
 
 /* Title bar */

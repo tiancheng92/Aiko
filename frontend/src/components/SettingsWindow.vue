@@ -1824,6 +1824,8 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   color: var(--text-primary);
   accent-color: var(--accent);
   -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* Titlebar — traffic lights + title + global search */
@@ -2048,6 +2050,8 @@ input, textarea, select {
   outline: none;
   font-family: inherit;
   transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  user-select: text;
+  -webkit-user-select: text;
 }
 input:hover:not(:focus):not(:disabled),
 textarea:hover:not(:focus):not(:disabled),

@@ -50,3 +50,8 @@ body { background: transparent; font-family: -apple-system, BlinkMacSystemFont, 
 ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.22); }
 ::-webkit-scrollbar-corner { background: transparent; }
 ::-webkit-resizer { display: none; }
+
+body.no-select, body.no-select * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}

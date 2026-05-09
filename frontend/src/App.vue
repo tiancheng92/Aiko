@@ -434,6 +434,7 @@ function openSettings() {
     <ChatBubble
       ref="chatBubbleRef"
       v-show="bubbleOpen"
+      :visible="bubbleOpen"
       :ball-pos="ballPos"
       :ball-size="ballSize"
       :active-screen="activeScreen"
