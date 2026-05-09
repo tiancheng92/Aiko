@@ -67,3 +67,36 @@ func TestConfigRenderBackend_Defaults(t *testing.T) {
 		t.Errorf("VRMModel default: got %q, want %q", loaded.VRMModel, "")
 	}
 }
+
+// TestConfigThemeStyle_RoundTrip tests that ThemeStyle round-trips through Save/Load.
+func TestConfigThemeStyle_RoundTrip(t *testing.T) {
+	db := newTestDB(t)
+	store := config.NewStore(db)
+
+	cfg := &config.Config{ThemeStyle: "frosted"}
+	if err := store.Save(cfg); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	loaded, err := store.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if loaded.ThemeStyle != "frosted" {
+		t.Errorf("ThemeStyle: got %q, want %q", loaded.ThemeStyle, "frosted")
+	}
+}
+
+// TestConfigThemeStyle_Default tests that ThemeStyle defaults to "liquid-glass".
+func TestConfigThemeStyle_Default(t *testing.T) {
+	db := newTestDB(t)
+	store := config.NewStore(db)
+
+	loaded, err := store.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if loaded.ThemeStyle != "liquid-glass" {
+		t.Errorf("ThemeStyle default: got %q, want %q", loaded.ThemeStyle, "liquid-glass")
+	}
+}

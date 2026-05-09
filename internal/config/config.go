@@ -39,6 +39,8 @@ type Config struct {
 	TTSAutoPlay           bool    // 外观与交互：chat:done 后自动朗读
 	TTSSummarizeThreshold int     // 摘要字数阈值，默认 200，0 表示禁用摘要
 	TTSBackend            string  // "kokoro" | ""（系统 say）
+	// ThemeStyle controls the UI visual style. Values: "liquid-glass" | "frosted".
+	ThemeStyle string
 }
 
 type Store struct{ db *sql.DB }
@@ -103,6 +105,7 @@ func (s *Store) Load() (*Config, error) {
 	cfg.SoundsEnabled = m["sounds_enabled"] == "true"
 	cfg.TTSAutoPlay = m["tts_auto_play"] == "true"
 	cfg.TTSSummarizeThreshold = parseInt(m["tts_summarize_threshold"], 200)
+	cfg.ThemeStyle = orDefault(m["theme_style"], "liquid-glass")
 	return cfg, nil
 }
 
@@ -139,6 +142,7 @@ func (s *Store) Save(cfg *Config) error {
 		"shell_timeout":            strconv.Itoa(cfg.ShellTimeout),
 		"shell_trusted_commands":   joinLines(cfg.ShellTrustedCommands),
 		"code_timeout":             strconv.Itoa(cfg.CodeTimeout),
+		"theme_style":              cfg.ThemeStyle,
 	}
 	tx, err := s.db.Begin()
 	if err != nil {
