@@ -315,7 +315,7 @@ static void hitTestPoint(CGFloat cssX, CGFloat cssY) {
          "}"
          "if(e.closest('.vrm-pet')&&!canvasAlphaCheck('.vrm-pet'))return false;"
          "if(e.closest('.live2d-pet')&&!canvasAlphaCheck('.live2d-pet'))return false;"
-         "return !!(e.closest('.live2d-pet,.vrm-pet,.chat-bubble,.settings-win,.ctx-menu,.notif-bubble,.execution-progress'));"
+         "return !!(e.closest('.live2d-pet,.vrm-pet,.chat-bubble,.settings-win,.ctx-menu,.notif-bubble,.execution-progress,.resize-handle'));"
          "}(%g,%g))",
         cssX, cssY];
     [gWebView evaluateJavaScript:js completionHandler:^(id result, NSError *err) {

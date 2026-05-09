@@ -86,6 +86,9 @@ onUnmounted(() => {
   offScreenChanged?.()
   clearInterval(latencyTimer)
   offModelChangedLatency?.()
+  window.removeEventListener('mousemove', onResizeMove)
+  window.removeEventListener('mouseup', onResizeUp)
+  window.removeEventListener('blur', onResizeUp)
 })
 
 const isFullscreen = ref(false)
@@ -93,6 +96,59 @@ const isFullscreen = ref(false)
 /** toggleFullscreen switches between normal and fullscreen chat mode. */
 function toggleFullscreen() {
   isFullscreen.value = !isFullscreen.value
+}
+
+const MIN_W = 300
+const MIN_H = 320
+
+let resizeDrag = null
+
+/** startResize begins a drag-resize operation. */
+function startResize(e, edge) {
+  if (isFullscreen.value) return
+  resizeDrag = {
+    edge,
+    startX: e.clientX,
+    startY: e.clientY,
+    startW: bubbleW.value,
+    startH: bubbleH.value,
+  }
+  window.addEventListener('mousemove', onResizeMove)
+  window.addEventListener('mouseup', onResizeUp)
+  window.addEventListener('blur', onResizeUp)
+}
+
+/** onResizeMove updates bubble dimensions during drag. */
+function onResizeMove(e) {
+  if (!resizeDrag) return
+  const dx = e.clientX - resizeDrag.startX
+  const dy = e.clientY - resizeDrag.startY
+  const { edge } = resizeDrag
+  if (edge === 'e' || edge === 'se') {
+    bubbleW.value = Math.max(MIN_W, resizeDrag.startW + dx)
+  }
+  if (edge === 'w') {
+    bubbleW.value = Math.max(MIN_W, resizeDrag.startW - dx)
+  }
+  if (edge === 's' || edge === 'se') {
+    bubbleH.value = Math.max(MIN_H, resizeDrag.startH + dy)
+  }
+}
+
+/** onResizeUp finalizes resize and persists via SaveChatSize. */
+function onResizeUp() {
+  window.removeEventListener('mousemove', onResizeMove)
+  window.removeEventListener('mouseup', onResizeUp)
+  window.removeEventListener('blur', onResizeUp)
+  if (!resizeDrag) return
+  resizeDrag = null
+  const sw = props.activeScreen.width
+  const sh = props.activeScreen.height
+  if (sw > 0 && sh > 0) {
+    SaveChatSize(bubbleW.value, bubbleH.value, sw, sh).catch(e =>
+      console.warn('SaveChatSize on resize failed', e)
+    )
+  }
 }
 
 
@@ -188,6 +244,13 @@ defineExpose({ focusInput, scrollToBottom })
       <ChatPanel ref="chatPanelRef" />
     </div>
     <ContextMenu ref="chatMenuRef" :items="chatMenuItems" />
+    <!-- Resize handles — invisible drag strips, hidden in fullscreen -->
+    <template v-if="!isFullscreen">
+      <div class="resize-handle resize-e"  @mousedown.stop="startResize($event, 'e')" />
+      <div class="resize-handle resize-s"  @mousedown.stop="startResize($event, 's')" />
+      <div class="resize-handle resize-w"  @mousedown.stop="startResize($event, 'w')" />
+      <div class="resize-handle resize-se" @mousedown.stop="startResize($event, 'se')" />
+    </template>
   </div>
 </template>
 
@@ -318,4 +381,14 @@ defineExpose({ focusInput, scrollToBottom })
   display: flex;
   flex-direction: column;
 }
+
+.resize-handle {
+  position: absolute;
+  z-index: 10;
+  user-select: none;
+}
+.resize-e  { right: 0;  top: 6px; bottom: 6px; width: 6px; cursor: ew-resize; }
+.resize-w  { left: 0;   top: 6px; bottom: 6px; width: 6px; cursor: ew-resize; }
+.resize-s  { bottom: 0; left: 6px; right: 6px; height: 6px; cursor: ns-resize; }
+.resize-se { right: 0;  bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; }
 </style>
