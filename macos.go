@@ -13,6 +13,7 @@ package main
 #import <Speech/Speech.h>
 #import <CoreLocation/CoreLocation.h>
 #import <UserNotifications/UserNotifications.h>
+#import <objc/runtime.h>
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -598,6 +599,24 @@ static void enableClickThrough() {
             break;
         }
         if (!gWindow || !gWebView) return;
+
+        // Swizzle WKWebView's acceptsFirstMouse: to always return YES so that
+        // clicks on the pet are processed immediately even when Aiko is not the
+        // key window, avoiding the two-click activation behaviour.
+        static dispatch_once_t onceToken;
+        dispatch_once(&onceToken, ^{
+            Class cls = [gWebView class];
+            SEL sel = @selector(acceptsFirstMouse:);
+            Method m = class_getInstanceMethod(cls, sel);
+            IMP alwaysYes = imp_implementationWithBlock(^BOOL(id _self, NSEvent *_evt) {
+                return YES;
+            });
+            if (m) {
+                method_setImplementation(m, alwaysYes);
+            } else {
+                class_addMethod(cls, sel, alwaysYes, @encode(BOOL));
+            }
+        });
 
         doHideNativeScrollbars();
 
