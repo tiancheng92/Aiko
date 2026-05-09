@@ -292,7 +292,26 @@ static void hitTestPoint(CGFloat cssX, CGFloat cssY) {
     NSString *js = [NSString stringWithFormat:
         @"(function(x,y){"
          "var e=document.elementFromPoint(x,y);"
-         "return !!(e&&e.closest('.live2d-pet,.vrm-pet,.chat-bubble,.settings-win,.ctx-menu,.notif-bubble,.execution-progress'));"
+         "if(!e)return false;"
+         // For canvas-based pets (.vrm-pet, .live2d-pet): only treat as
+         // interactive when the WebGL pixel under the cursor is opaque.
+         "function canvasAlphaCheck(sel){"
+         "  var wp=e.closest(sel);"
+         "  if(!wp)return true;"
+         "  var cv=wp.querySelector('canvas');"
+         "  if(!cv)return true;"
+         "  var gl=cv.getContext('webgl')||cv.getContext('webgl2');"
+         "  if(!gl)return true;"
+         "  var r=cv.getBoundingClientRect();"
+         "  var px=Math.round((x-r.left)*(cv.width/r.width));"
+         "  var py=Math.round((y-r.top)*(cv.height/r.height));"
+         "  var buf=new Uint8Array(4);"
+         "  gl.readPixels(px,cv.height-py-1,1,1,gl.RGBA,gl.UNSIGNED_BYTE,buf);"
+         "  return buf[3]>=10;"
+         "}"
+         "if(e.closest('.vrm-pet')&&!canvasAlphaCheck('.vrm-pet'))return false;"
+         "if(e.closest('.live2d-pet')&&!canvasAlphaCheck('.live2d-pet'))return false;"
+         "return !!(e.closest('.live2d-pet,.vrm-pet,.chat-bubble,.settings-win,.ctx-menu,.notif-bubble,.execution-progress'));"
          "}(%g,%g))",
         cssX, cssY];
     [gWebView evaluateJavaScript:js completionHandler:^(id result, NSError *err) {

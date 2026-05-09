@@ -154,6 +154,7 @@ async function initPixi() {
     antialias: true,
     autoDensity: true,
     resolution: window.devicePixelRatio || 1,
+    preserveDrawingBuffer: true,
   })
   await attachModel(modelPath.value)
 }

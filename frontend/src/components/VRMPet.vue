@@ -360,6 +360,7 @@ async function initRenderer() {
     canvas: canvasRef.value,
     alpha: true,
     antialias: true,
+    preserveDrawingBuffer: true,
   });
   renderer.setPixelRatio(window.devicePixelRatio || 1);
   renderer.setSize(petSize.value, petSize.value);
@@ -448,6 +449,7 @@ async function switchToNextVRMModel() {
 }
 
 function onContextMenu(e) {
+  if (isTransparentAt(e.clientX, e.clientY)) return;
   e.preventDefault();
   petMenuRef.value?.show(e.clientX, e.clientY);
 }
@@ -471,8 +473,29 @@ const petMenuItems = [
 
 // ── Drag Handling ────────────────────────────────────────────────────────────
 
+/**
+ * isTransparentAt returns true when the WebGL canvas pixel under the given
+ * client coordinates has alpha < 10 (i.e. fully transparent background).
+ * Used to implement per-pixel click-through so only the visible character
+ * region captures mouse events.
+ */
+function isTransparentAt(clientX, clientY) {
+  if (!canvasRef.value || !renderer) return false;
+  const rect = canvasRef.value.getBoundingClientRect();
+  const scaleX = canvasRef.value.width / rect.width;
+  const scaleY = canvasRef.value.height / rect.height;
+  const px = Math.round((clientX - rect.left) * scaleX);
+  const py = Math.round((clientY - rect.top) * scaleY);
+  const glY = canvasRef.value.height - py - 1; // WebGL Y is bottom-up
+  const gl = renderer.getContext();
+  const buf = new Uint8Array(4);
+  gl.readPixels(px, glY, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+  return buf[3] < 10;
+}
+
 function onMouseDown(e) {
   if (e.button !== 0) return;
+  if (isTransparentAt(e.clientX, e.clientY)) return;
   dragStart = {
     x: e.clientX - pos.value.x,
     y: e.clientY - pos.value.y,
