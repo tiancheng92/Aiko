@@ -5,7 +5,6 @@ export default defineConfig({
   plugins: [vue()],
   build: {
     rollupOptions: {
-      external: ['./wailsjs/go/main/App'],
       output: {
         manualChunks: {
           'vendor-vue':    ['vue'],
