@@ -314,21 +314,13 @@ defineExpose({ focusInput, scrollToBottom })
 
 <style scoped>
 .chat-bubble {
-  --surface: rgba(28, 28, 32, 0.78);
-  --text-primary: rgba(255, 255, 255, 0.94);
-  --text-tertiary: rgba(255, 255, 255, 0.44);
-  --border-subtle: rgba(255, 255, 255, 0.08);
-
   position: fixed;
-  background: var(--surface);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
-  border: 1px solid var(--border-subtle);
+  background: var(--lg-surface);
+  backdrop-filter: var(--lg-blur);
+  -webkit-backdrop-filter: var(--lg-blur);
+  border: 1px solid var(--lg-border-subtle);
   border-radius: 14px;
-  box-shadow:
-    0 24px 64px rgba(0, 0, 0, 0.55),
-    0 0 0 0.5px rgba(0, 0, 0, 0.3),
-    0 1px 0 rgba(255, 255, 255, 0.07) inset;
+  box-shadow: var(--lg-shadow);
   display: flex;
   flex-direction: column;
   z-index: 2000;
@@ -359,7 +351,7 @@ defineExpose({ focusInput, scrollToBottom })
   height: 42px;
   flex-shrink: 0;
   user-select: none;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--lg-border-subtle);
   background: linear-gradient(to bottom, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0));
 }
 .title {
@@ -378,7 +370,7 @@ defineExpose({ focusInput, scrollToBottom })
   padding: 3px 8px;
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--lg-border-subtle);
   font-size: 11px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
@@ -415,7 +407,7 @@ defineExpose({ focusInput, scrollToBottom })
   appearance: none;
 }
 .icon-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--lg-surface-input);
   color: var(--text-primary);
 }
 .close-btn:hover {
