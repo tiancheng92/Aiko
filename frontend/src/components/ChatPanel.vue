@@ -329,6 +329,8 @@ useEscapeKey(() => { tableDetailRow.value = null }, () => tableDetailRow.value !
 const collapsedIds = ref(new Set())
 /** expandedIds holds message keys the user has manually expanded. */
 const expandedIds = ref(new Set())
+/** suppressAnimation disables enter transitions when prepending history messages. */
+const suppressAnimation = ref(false)
 
 /** msgKey returns a stable key for a message — prefers persisted id, falls back to index. */
 function msgKey(m, i) { return m.id != null ? `id:${m.id}` : `i:${i}` }
@@ -460,7 +462,10 @@ async function loadOlderMessages() {
     // Record which index the current first message will land at after prepend.
     const firstOldIdx = older.length
     const olderMapped = older.map(mapMsg)
+    suppressAnimation.value = true
     messages.value = olderMapped.concat(messages.value)
+    await nextTick()
+    suppressAnimation.value = false
     oldestLoadedID = older[0].ID
     olderMapped.forEach((m, i) => checkBubbleCollapse(m, i, true))
     // Wait for Vue to flush the DOM, then one rAF so the browser finishes layout.
@@ -470,7 +475,7 @@ async function loadOlderMessages() {
       // Anchor to the first "old" message element: scroll it to the top of the
       // viewport. getBoundingClientRect() forces a synchronous layout so the
       // measurement is always accurate, unlike scrollHeight which may be stale.
-      const msgEls = el.querySelectorAll(':scope > .msg')
+      const msgEls = el.querySelectorAll('.messages-inner > .msg')
       const anchor = msgEls[firstOldIdx]
       if (anchor) {
         el.scrollTop += anchor.getBoundingClientRect().top - el.getBoundingClientRect().top
@@ -1022,7 +1027,8 @@ defineExpose({ focusInput, scrollToBottom })
         </div>
         <span v-else-if="!allLoaded" class="load-sentinel-dot" />
       </div>
-      <div v-for="(m, i) in messages" :key="i" :class="['msg', m.role]">
+      <TransitionGroup name="msg-slide" tag="div" class="messages-inner" :class="{ 'suppress-anim': suppressAnimation }">
+      <div v-for="(m, i) in messages" :key="msgKey(m, i)" :class="['msg', m.role]">
         <div class="bubble-wrap" :class="{ ghost: m.ghost }">
           <!-- Collapsible wrapper -->
           <div
@@ -1103,6 +1109,7 @@ defineExpose({ focusInput, scrollToBottom })
           </div>
         </div>
       </div>
+      </TransitionGroup>
     </div>
     <!-- Image lightbox -->
     <div v-if="lightboxSrc" class="lightbox" @click="lightboxSrc = null">
@@ -1253,12 +1260,28 @@ defineExpose({ focusInput, scrollToBottom })
   flex: 1;
   overflow-y: auto;
   padding: 16px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.1) transparent;
 }
+
+.messages-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Slide-up + fade-in for newly appended messages */
+.msg-slide-enter-active {
+  transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.msg-slide-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+/* Disable move transitions (repositioning during prepend) */
+.msg-slide-move { transition: none; }
+/* Suppress animation when loading older history */
+.suppress-anim .msg-slide-enter-active { transition: none; }
 .messages::-webkit-scrollbar { width: 4px; background: transparent; }
 .messages::-webkit-scrollbar-track { background: transparent; }
 .messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
