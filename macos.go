@@ -783,6 +783,39 @@ static void postSystemNotification(const char *title, const char *body) {
         });
     }
 }
+
+// autoLaunchPlistPath returns the full path for Aiko's LaunchAgent plist.
+static NSString *autoLaunchPlistPath(void) {
+    NSString *home = NSHomeDirectory();
+    return [home stringByAppendingPathComponent:
+        @"Library/LaunchAgents/com.xutiancheng.aiko.plist"];
+}
+
+// setAutoLaunchEnabled installs or removes the LaunchAgent plist.
+static void setAutoLaunchEnabled(int enabled) {
+    NSString *path = autoLaunchPlistPath();
+    if (!enabled) {
+        [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
+        return;
+    }
+    NSString *execPath = [[NSBundle mainBundle] executablePath];
+    if (!execPath) {
+        execPath = [[[NSProcessInfo processInfo] arguments] firstObject];
+    }
+    NSDictionary *plist = @{
+        @"Label":            @"com.xutiancheng.aiko",
+        @"ProgramArguments": @[execPath],
+        @"RunAtLoad":        @YES,
+        @"KeepAlive":        @NO,
+    };
+    [plist writeToFile:path atomically:YES];
+}
+
+// getAutoLaunchEnabled returns 1 when the LaunchAgent plist exists.
+static int getAutoLaunchEnabled(void) {
+    return [[NSFileManager defaultManager]
+        fileExistsAtPath:autoLaunchPlistPath()] ? 1 : 0;
+}
 */
 import "C"
 import (
@@ -794,6 +827,21 @@ import (
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+// SetAutoLaunchEnabled installs or removes the Aiko LaunchAgent plist so
+// the app starts automatically at login. macOS-only.
+func SetAutoLaunchEnabled(enabled bool) {
+	if enabled {
+		C.setAutoLaunchEnabled(C.int(1))
+	} else {
+		C.setAutoLaunchEnabled(C.int(0))
+	}
+}
+
+// GetAutoLaunchEnabled reports whether the Aiko LaunchAgent plist exists.
+func GetAutoLaunchEnabled() bool {
+	return C.getAutoLaunchEnabled() != C.int(0)
+}
 
 // enableClickThrough installs per-pixel click-through for the main window.
 func enableClickThrough() {

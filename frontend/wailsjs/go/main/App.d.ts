@@ -44,6 +44,8 @@ export function ExportChatHistory():Promise<void>;
 
 export function FetchLinkPreview(arg1:string):Promise<main.LinkPreview>;
 
+export function GetAutoLaunch():Promise<boolean>;
+
 export function GetAvailableModels():Promise<Array<string>>;
 
 export function GetBallPosition(arg1:number,arg2:number):Promise<Array<number>>;
@@ -141,6 +143,8 @@ export function SendMessage(arg1:string):Promise<void>;
 export function SendMessageWithFiles(arg1:string,arg2:Array<string>,arg3:Array<main.FileAttachment>):Promise<void>;
 
 export function SendMessageWithImages(arg1:string,arg2:Array<string>):Promise<void>;
+
+export function SetAutoLaunch(arg1:boolean):Promise<void>;
 
 export function SetChatVisible(arg1:boolean):Promise<void>;
 

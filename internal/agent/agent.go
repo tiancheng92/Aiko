@@ -775,6 +775,11 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userIma
 		slog.Error("save user message failed", "err", err)
 		return
 	}
+	// Strip the leading emotion tag before persisting so it never appears in
+	// chat history or long-term memory.
+	if _, _, stripped, ok := parseEmotionTag(assistantReply); ok {
+		assistantReply = stripped
+	}
 	if _, err := a.shortMem.Add("assistant", assistantReply); err != nil {
 		slog.Error("save assistant message failed", "err", err)
 		return

@@ -8,8 +8,8 @@
 
     <!-- Content area -->
     <div class="lp-body">
-      <div class="lp-title">{{ preview.title || preview.url }}</div>
-      <div v-if="preview.description" class="lp-desc">{{ preview.description }}</div>
+      <div class="lp-title">{{ stripHtml(preview.title) || preview.url }}</div>
+      <div v-if="preview.description" class="lp-desc">{{ stripHtml(preview.description) }}</div>
 
       <div class="lp-footer">
         <img v-if="faviconUrl" class="lp-favicon" :src="faviconUrl" @error="hideFavicon" />
@@ -33,6 +33,12 @@ const props = defineProps({
 })
 
 const preview = ref(null)
+
+/** stripHtml removes HTML tags from a string, returning plain text. */
+function stripHtml(str) {
+  if (!str) return ''
+  return str.replace(/<[^>]*>/g, '').trim()
+}
 
 const hostname = computed(() => {
   try { return new URL(props.url).hostname } catch { return props.url }

@@ -1913,6 +1913,16 @@ func (a *App) StopGeneration() {
 	}
 }
 
+// GetAutoLaunch reports whether Aiko is configured to launch at login.
+func (a *App) GetAutoLaunch() bool {
+	return GetAutoLaunchEnabled()
+}
+
+// SetAutoLaunch enables or disables launch-at-login for Aiko.
+func (a *App) SetAutoLaunch(enabled bool) {
+	SetAutoLaunchEnabled(enabled)
+}
+
 // GetVoiceAutoSend returns whether voice messages are sent automatically
 // after the final STT result arrives.
 func (a *App) GetVoiceAutoSend() bool {

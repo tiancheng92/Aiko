@@ -70,6 +70,10 @@ export function FetchLinkPreview(arg1) {
   return window['go']['main']['App']['FetchLinkPreview'](arg1);
 }
 
+export function GetAutoLaunch() {
+  return window['go']['main']['App']['GetAutoLaunch']();
+}
+
 export function GetAvailableModels() {
   return window['go']['main']['App']['GetAvailableModels']();
 }
@@ -264,6 +268,10 @@ export function SendMessageWithFiles(arg1, arg2, arg3) {
 
 export function SendMessageWithImages(arg1, arg2) {
   return window['go']['main']['App']['SendMessageWithImages'](arg1, arg2);
+}
+
+export function SetAutoLaunch(arg1) {
+  return window['go']['main']['App']['SetAutoLaunch'](arg1);
 }
 
 export function SetChatVisible(arg1) {
