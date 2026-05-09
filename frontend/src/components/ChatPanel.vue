@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { SendMessage, SendMessageWithImages, SendMessageWithFiles, GetMessages, GetMessagesBeforeID, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig } from '../../wailsjs/go/main/App'
+import { SendMessage, SendMessageWithImages, SendMessageWithFiles, GetMessages, GetMessagesBeforeID, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig, RegenerateLastReply } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 import { marked, Renderer } from 'marked'
 import markedKatex from 'marked-katex-extension'
@@ -22,6 +22,7 @@ import { GetSoundsEnabled } from '../../wailsjs/go/main/App'
 import ToolConfirmModal from './ToolConfirmModal.vue'
 import ExecutionProgress from './ExecutionProgress.vue'
 import LinkPreview from './LinkPreview.vue'
+import ContextMenu from './ContextMenu.vue'
 
 hljs.registerLanguage('javascript', javascript)
 hljs.registerLanguage('typescript', typescript)
@@ -316,6 +317,8 @@ const messagesEl = ref(null)
 const codeMaxWidth = ref(0)
 const copiedIdx = ref(null)
 const showClearConfirm = ref(false)
+const msgMenuRef = ref(null)
+const msgMenuItems = ref([])
 /** tableDetailRow holds the key-value pairs for the row-detail modal; null when hidden. */
 const tableDetailRow = ref(null)
 
@@ -731,6 +734,53 @@ async function copyMessage(idx) {
   } catch {}
 }
 
+/** onAssistantBubbleContextMenu shows the per-message right-click menu. */
+function onAssistantBubbleContextMenu(e, i) {
+  const m = messages.value[i]
+  if (!m || m.role !== 'assistant' || m.streaming || m.thinking) return
+  // Only allow regen on the last assistant message.
+  const lastAssistantIdx = messages.value.reduce((last, msg, idx) =>
+    msg.role === 'assistant' && !msg.streaming && !msg.thinking ? idx : last, -1)
+  if (i !== lastAssistantIdx) return
+  e.preventDefault()
+  msgMenuItems.value = [
+    {
+      iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>',
+      label: '重新生成',
+      action: () => regenLastReply(i),
+    },
+  ]
+  msgMenuRef.value?.show(e.clientX, e.clientY)
+}
+
+/** regenLastReply removes the last assistant + user bubble and re-requests. */
+async function regenLastReply(assistantIdx) {
+  if (loading.value) return
+  // Remove the assistant bubble at assistantIdx.
+  messages.value.splice(assistantIdx, 1)
+  // Remove the preceding user bubble (last user before assistantIdx).
+  const userIdx = messages.value.slice(0, assistantIdx).reduce(
+    (last, m, idx) => m.role === 'user' ? idx : last, -1)
+  if (userIdx >= 0) messages.value.splice(userIdx, 1)
+
+  loading.value = true
+  isStreaming.value = true
+  firstTokenThisTurn = true
+  messages.value.push({ role: 'assistant', content: '', streaming: true, thinking: true })
+  scrollToBottom()
+  EventsEmit('pet:state:change', 'thinking')
+  try {
+    await RegenerateLastReply()
+  } catch (e) {
+    const thinkIdx = messages.value.findLastIndex(m => m.thinking)
+    if (thinkIdx >= 0) messages.value.splice(thinkIdx, 1)
+    messages.value.push({ role: 'system', content: '重新生成失败: ' + e })
+    loading.value = false
+    isStreaming.value = false
+    EventsEmit('pet:state:change', 'error')
+  }
+}
+
 /** speakMessage triggers TTS for a specific message; toggles stop if already speaking. */
 async function speakMessage(idx) {
   if (activeTTSMsgId.value === idx) {
@@ -980,7 +1030,8 @@ defineExpose({ focusInput, scrollToBottom })
             :class="{ 'is-collapsed': isCollapsed(m, i) }"
             :data-msg-key="msgKey(m, i)"
           >
-            <div class="bubble-row" :class="{ 'is-collapsed': isCollapsed(m, i) }">
+            <div class="bubble-row" :class="{ 'is-collapsed': isCollapsed(m, i) }"
+              @contextmenu="m.role === 'assistant' ? onAssistantBubbleContextMenu($event, i) : undefined">
               <!-- Bubble content -->
               <div v-if="m.role !== 'assistant'" class="bubble markdown" :class="{ 'has-images': (m.images && m.images.length > 0) || (m.files && m.files.length > 0) }">
                 <div v-if="m.images && m.images.length > 0" class="msg-images">
@@ -1060,6 +1111,9 @@ defineExpose({ focusInput, scrollToBottom })
 
     <!-- Tool execution confirmation modal -->
     <ToolConfirmModal />
+
+    <!-- Per-message right-click context menu -->
+    <ContextMenu ref="msgMenuRef" :items="msgMenuItems" />
 
     <!-- Clear chat confirmation dialog -->
     <Transition name="confirm-pop">
