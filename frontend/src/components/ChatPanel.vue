@@ -1258,14 +1258,9 @@ defineExpose({ focusInput, scrollToBottom })
 
 <style scoped>
 .chat-panel {
-  --surface-card: rgba(255, 255, 255, 0.05);
-  --surface-input: rgba(255, 255, 255, 0.06);
-  --surface-input-hover: rgba(255, 255, 255, 0.09);
   --text-primary: rgba(255, 255, 255, 0.94);
   --text-secondary: rgba(255, 255, 255, 0.66);
   --text-tertiary: rgba(255, 255, 255, 0.44);
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-default: rgba(255, 255, 255, 0.12);
 
   display: flex;
   flex-direction: column;
@@ -1358,9 +1353,9 @@ defineExpose({ focusInput, scrollToBottom })
   height: 96px;
   background: linear-gradient(
     to bottom,
-    rgba(44, 44, 48, 0)    0%,
-    rgba(44, 44, 48, 0.55) 55%,
-    rgba(44, 44, 48, 0.92) 100%
+    rgba(0, 0, 0, 0)    0%,
+    rgba(0, 0, 0, 0.38) 55%,
+    rgba(0, 0, 0, 0.72) 100%
   );
   display: flex;
   align-items: flex-end;
@@ -1451,10 +1446,10 @@ defineExpose({ focusInput, scrollToBottom })
 
 /* Assistant bubble — glass surface */
 .assistant .bubble {
-  background: var(--surface-card);
+  background: var(--lg-surface);
   color: var(--text-primary);
   border-radius: 16px 16px 16px 4px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--lg-border-subtle);
 }
 
 /* System / error bubble */
@@ -1565,7 +1560,7 @@ defineExpose({ focusInput, scrollToBottom })
 .msg-action-btn {
   flex-shrink: 0;
   background: rgba(28, 28, 32, 0.82);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--lg-border-subtle);
   color: var(--text-secondary);
   border-radius: 6px;
   width: 26px;
@@ -1776,7 +1771,7 @@ defineExpose({ focusInput, scrollToBottom })
 /* ── Table filter bar ─────────────────────────────────────── */
 .bubble.markdown :deep(.tbl-filter-bar) {
   padding: 8px 10px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--lg-border-subtle);
   background: rgba(255, 255, 255, 0.02);
   display: flex;
   gap: 6px;
@@ -1792,8 +1787,8 @@ defineExpose({ focusInput, scrollToBottom })
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: var(--surface-input);
-  border: 1px solid var(--border-default);
+  background: var(--lg-surface-input);
+  border: 1px solid var(--lg-border);
   border-radius: 6px;
   color: var(--text-primary);
   font-size: 12px;
@@ -1808,7 +1803,7 @@ defineExpose({ focusInput, scrollToBottom })
   height: 26px;
   box-shadow: none;
 }
-.bubble.markdown :deep(.tbl-col-btn:hover) { background: var(--surface-input-hover); }
+.bubble.markdown :deep(.tbl-col-btn:hover) { background: var(--lg-surface-input-h); }
 .bubble.markdown :deep(.tbl-col-btn:focus-visible) {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-alpha-20);
@@ -1831,18 +1826,15 @@ defineExpose({ focusInput, scrollToBottom })
   max-height: 240px;
   overflow-y: auto;
   background: rgba(38, 38, 44, 0.82);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--lg-border);
   border-radius: 9px;
   padding: 4px;
   z-index: 100;
   list-style: none;
   margin: 0;
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
-  box-shadow:
-    0 12px 36px rgba(0, 0, 0, 0.55),
-    0 0 0 0.5px rgba(0, 0, 0, 0.3),
-    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  backdrop-filter: var(--lg-blur-sm);
+  -webkit-backdrop-filter: var(--lg-blur-sm);
+  box-shadow: var(--lg-shadow-sm);
 }
 .bubble.markdown :deep(.tbl-col-drop--open) { display: block; }
 .bubble.markdown :deep(.tbl-col-drop)::-webkit-scrollbar { width: 6px; }
@@ -1878,8 +1870,8 @@ defineExpose({ focusInput, scrollToBottom })
 .bubble.markdown :deep(.tbl-filter-input) {
   flex: 1;
   min-width: 0;
-  background: var(--surface-input);
-  border: 1px solid var(--border-default);
+  background: var(--lg-surface-input);
+  border: 1px solid var(--lg-border);
   border-radius: 6px;
   color: var(--text-primary);
   font-size: 12px;
@@ -1890,7 +1882,7 @@ defineExpose({ focusInput, scrollToBottom })
   height: 26px;
   transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
 }
-.bubble.markdown :deep(.tbl-filter-input:hover:not(:focus)) { background: var(--surface-input-hover); }
+.bubble.markdown :deep(.tbl-filter-input:hover:not(:focus)) { background: var(--lg-surface-input-h); }
 .bubble.markdown :deep(.tbl-filter-input::placeholder) { color: var(--text-tertiary); }
 .bubble.markdown :deep(.tbl-filter-input:focus) {
   border-color: var(--accent);
@@ -1904,12 +1896,12 @@ defineExpose({ focusInput, scrollToBottom })
   justify-content: center;
   gap: 10px;
   padding: 8px 12px;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--lg-border-subtle);
   background: rgba(255, 255, 255, 0.02);
 }
 .bubble.markdown :deep(.tbl-page-btn) {
-  background: var(--surface-input);
-  border: 1px solid var(--border-default);
+  background: var(--lg-surface-input);
+  border: 1px solid var(--lg-border);
   color: var(--text-secondary);
   border-radius: 6px;
   width: 28px;
@@ -1982,7 +1974,7 @@ defineExpose({ focusInput, scrollToBottom })
   display: flex;
   align-items: center;
   padding: 14px 16px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--lg-border-subtle);
   flex-shrink: 0;
 }
 .tbl-detail-title {
@@ -2082,14 +2074,14 @@ defineExpose({ focusInput, scrollToBottom })
 /* ── Composer card ─────────────────────────────────────────── */
 .input-area {
   margin: 10px 12px;
-  background: var(--surface-input);
-  border: 1px solid var(--border-subtle);
+  background: var(--lg-surface-input);
+  border: 1px solid var(--lg-border-subtle);
   border-radius: 12px;
   flex-shrink: 0;
   transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
   overflow: hidden;
 }
-.input-area:hover:not(:focus-within) { background: var(--surface-input-hover); }
+.input-area:hover:not(:focus-within) { background: var(--lg-surface-input-h); }
 .input-area:focus-within {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-alpha-20);
@@ -2239,7 +2231,7 @@ defineExpose({ focusInput, scrollToBottom })
   border-radius: 50%;
   background: rgba(28, 28, 32, 0.95);
   color: #fff;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--lg-border);
   line-height: 1;
   cursor: pointer;
   display: flex;
