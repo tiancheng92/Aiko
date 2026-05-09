@@ -290,7 +290,7 @@ watch(petState, (state) => {
 
 // Global mouse tracking via polling — works even when the app is not focused.
 let mouseTrackTimer = null
-const MOUSE_POLL_INTERVAL_MS = 50
+const MOUSE_POLL_INTERVAL_MS = 100
 
 /** startGlobalMouseTracking polls the Go backend for the cursor position every 50 ms
  *  and drives the Live2D eye/body focus, enabling tracking even when the window is unfocused. */

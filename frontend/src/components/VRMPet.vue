@@ -47,7 +47,7 @@ let dragStart = null;
 let vrmBaseRotationY = 0; // base rotation set at load time; drag tilts relative to this
 let mouthPhase = 0;
 let blinkTimer = null;
-const MOUSE_POLL_MS = 50;
+const MOUSE_POLL_MS = 100;
 
 // Head IK targets (-1 to 1 normalized)
 let targetHeadX = 0;

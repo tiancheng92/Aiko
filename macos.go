@@ -328,11 +328,19 @@ static void hitTestPoint(CGFloat cssX, CGFloat cssY) {
 
 // handleScreenPoint converts a macOS screen point (Y-up) to CSS coordinates
 // (Y-down from window top-left) and calls hitTestPoint.
+// Skips evaluation when the cursor has moved less than 2px to avoid saturating
+// the JS engine with readPixels calls during slow or jittery mouse movement.
 static void handleScreenPoint(NSPoint screen) {
     if (!gWindow || ![gWindow isVisible]) return;
     NSRect frame = gWindow.frame;
     CGFloat cssX = screen.x - frame.origin.x;
     CGFloat cssY = frame.size.height - (screen.y - frame.origin.y);
+
+    static CGFloat lastCssX = -9999, lastCssY = -9999;
+    if (fabs(cssX - lastCssX) < 2.0 && fabs(cssY - lastCssY) < 2.0) return;
+    lastCssX = cssX;
+    lastCssY = cssY;
+
     hitTestPoint(cssX, cssY);
 }
 

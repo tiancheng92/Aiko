@@ -697,12 +697,17 @@ const BOLD_CLOSE_FIX = new RegExp('([　-鿿＀-￯])\\*\\*(?=[^\\s\\p{P}])', 'g
 // punctuation — insert ZWJ after the opening **.
 const BOLD_OPEN_FIX = /(\p{Lo})\*\*(?=[　-〿＀-￯'-‟])/gu
 
-/** renderMarkdown converts markdown text to sanitized HTML. */
+const _mdCache = new Map()
+const _MD_CACHE_MAX = 200
+
+/** renderMarkdown converts markdown text to sanitized HTML, caching results to avoid re-parsing. */
 function renderMarkdown(text) {
   if (!text) return ''
+  const cached = _mdCache.get(text)
+  if (cached !== undefined) return cached
   // Strip LLM thinking blocks before rendering.
   const stripped = text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim()
-  if (!stripped) return ''
+  if (!stripped) { _mdCache.set(text, ''); return '' }
   // Replace bare DDG redirect URLs with the real destination so marked's
   // autolink / link renderer can display them cleanly.
   const ddgFixed = stripped.replace(
@@ -715,7 +720,11 @@ function renderMarkdown(text) {
   const processed = ddgFixed
     .replace(BOLD_CLOSE_FIX, `$1${ZWJ}**`)
     .replace(BOLD_OPEN_FIX, `$1**${ZWJ}`)
-  return marked(processed).replace(/‍/g, '')
+  const html = marked(processed).replace(/‍/g, '')
+  // Evict oldest entry when cache exceeds limit to bound memory usage.
+  if (_mdCache.size >= _MD_CACHE_MAX) _mdCache.delete(_mdCache.keys().next().value)
+  _mdCache.set(text, html)
+  return html
 }
 
 /** extractUrls returns deduplicated http(s) URLs found in plain text, skipping markdown image syntax. */
@@ -998,14 +1007,20 @@ function insertNewline() {
   autoResize()
 }
 
-/** autoResize adjusts the textarea height to fit its content; syncs inputEmpty on transitions only. */
+let _autoResizePending = false
+/** autoResize adjusts the textarea height to fit its content; batched via rAF to avoid per-keystroke reflow. */
 function autoResize() {
-  const el = textareaEl.value
-  if (!el) return
-  el.style.height = 'auto'
-  el.style.height = el.scrollHeight + 'px'
-  const empty = !el.value.trim()
-  if (inputEmpty.value !== empty) inputEmpty.value = empty
+  if (_autoResizePending) return
+  _autoResizePending = true
+  requestAnimationFrame(() => {
+    _autoResizePending = false
+    const el = textareaEl.value
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = el.scrollHeight + 'px'
+    const empty = !el.value.trim()
+    if (inputEmpty.value !== empty) inputEmpty.value = empty
+  })
 }
 
 /** resetTextareaHeight resets the textarea to single-line height after send. */
