@@ -87,7 +87,7 @@ func TestConfigThemeStyle_RoundTrip(t *testing.T) {
 	}
 }
 
-// TestConfigThemeStyle_Default tests that ThemeStyle defaults to "liquid-glass".
+// TestConfigThemeStyle_Default tests that ThemeStyle defaults to "frosted".
 func TestConfigThemeStyle_Default(t *testing.T) {
 	db := newTestDB(t)
 	store := config.NewStore(db)
@@ -96,7 +96,7 @@ func TestConfigThemeStyle_Default(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if loaded.ThemeStyle != "liquid-glass" {
-		t.Errorf("ThemeStyle default: got %q, want %q", loaded.ThemeStyle, "liquid-glass")
+	if loaded.ThemeStyle != "frosted" {
+		t.Errorf("ThemeStyle default: got %q, want %q", loaded.ThemeStyle, "frosted")
 	}
 }
