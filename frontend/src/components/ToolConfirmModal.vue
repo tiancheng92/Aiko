@@ -110,15 +110,6 @@ useEscapeKey(reject, visible)
 
 <style scoped>
 .tool-confirm-modal {
-  --surface: rgba(42, 42, 48, 0.92);
-  --surface-input: rgba(255, 255, 255, 0.06);
-  --surface-input-hover: rgba(255, 255, 255, 0.09);
-  --text-primary: rgba(255, 255, 255, 0.94);
-  --text-secondary: rgba(255, 255, 255, 0.66);
-  --text-tertiary: rgba(255, 255, 255, 0.44);
-  --border-subtle: rgba(255, 255, 255, 0.09);
-  --border-default: rgba(255, 255, 255, 0.14);
-
   position: absolute;
   inset: 0;
   z-index: 200;
@@ -140,18 +131,15 @@ useEscapeKey(reject, visible)
 
 .modal-box {
   position: relative;
-  background: var(--surface);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
-  border: 1px solid var(--border-default);
+  background: var(--lg-surface-modal);
+  backdrop-filter: var(--lg-blur);
+  -webkit-backdrop-filter: var(--lg-blur);
+  border: 1px solid var(--lg-border);
   border-radius: 14px;
   padding: 24px;
   width: 480px;
   max-width: 90vw;
-  box-shadow:
-    0 24px 64px rgba(0, 0, 0, 0.55),
-    0 0 0 0.5px rgba(0, 0, 0, 0.3),
-    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  box-shadow: var(--lg-shadow);
   color: var(--text-primary);
   display: flex;
   flex-direction: column;
@@ -194,9 +182,9 @@ useEscapeKey(reject, visible)
 }
 .badge {
   align-self: flex-start;
-  background: var(--surface-input);
+  background: var(--lg-surface-input);
   color: var(--text-secondary);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--lg-border-subtle);
   border-radius: 5px;
   padding: 2px 8px;
   font-size: 10px;
@@ -233,7 +221,7 @@ useEscapeKey(reject, visible)
   font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
   padding: 8px 12px;
   background: rgba(0, 0, 0, 0.22);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--lg-border-subtle);
   border-radius: 7px;
   word-break: break-all;
   line-height: 1.5;
@@ -242,7 +230,7 @@ useEscapeKey(reject, visible)
 .content-editor {
   width: 100%;
   background: rgba(0, 0, 0, 0.22);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--lg-border);
   border-radius: 8px;
   color: var(--text-primary);
   font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
@@ -287,7 +275,7 @@ useEscapeKey(reject, visible)
   justify-content: flex-end;
   margin-top: 4px;
   padding-top: 14px;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--lg-border-subtle);
 }
 
 .btn-reject,
@@ -309,11 +297,11 @@ useEscapeKey(reject, visible)
 .btn-approve:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .btn-reject {
-  background: var(--surface-input);
+  background: var(--lg-surface-input);
   color: var(--text-primary);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--lg-border);
 }
-.btn-reject:hover { background: var(--surface-input-hover); border-color: var(--border-default); }
+.btn-reject:hover { background: var(--lg-surface-input-h); border-color: var(--lg-border); }
 
 .btn-approve {
   background: var(--accent);

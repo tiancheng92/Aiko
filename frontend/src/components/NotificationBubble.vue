@@ -101,24 +101,15 @@ onUnmounted(() => {
 
 <style scoped>
 .notif-bubble {
-  --surface: rgba(28, 28, 32, 0.82);
-  --text-primary: rgba(255, 255, 255, 0.94);
-  --text-secondary: rgba(255, 255, 255, 0.68);
-  --text-tertiary: rgba(255, 255, 255, 0.42);
-  --border-subtle: rgba(255, 255, 255, 0.10);
-
   position: fixed;
   z-index: 99997;
   width: 320px;
-  background: var(--surface);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
-  border: 1px solid var(--border-subtle);
+  background: var(--lg-surface);
+  backdrop-filter: var(--lg-blur);
+  -webkit-backdrop-filter: var(--lg-blur);
+  border: 1px solid var(--lg-border-subtle);
   border-radius: 14px;
-  box-shadow:
-    0 20px 52px rgba(0, 0, 0, 0.55),
-    0 0 0 0.5px rgba(0, 0, 0, 0.3),
-    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  box-shadow: var(--lg-shadow-sm);
   padding: 12px 14px 14px;
   color: var(--text-primary);
   cursor: pointer;
@@ -134,12 +125,12 @@ onUnmounted(() => {
   left: calc(var(--tail-left, 100px) - 8px);
   width: 16px;
   height: 10px;
-  background: var(--surface);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  background: var(--lg-surface);
+  backdrop-filter: var(--lg-blur);
+  -webkit-backdrop-filter: var(--lg-blur);
   clip-path: polygon(0 0, 100% 0, 50% 100%);
-  border-left: 1px solid var(--border-subtle);
-  border-right: 1px solid var(--border-subtle);
+  border-left: 1px solid var(--lg-border-subtle);
+  border-right: 1px solid var(--lg-border-subtle);
 }
 
 .notif-header {
@@ -261,7 +252,7 @@ onUnmounted(() => {
 .notif-body :deep(a:hover) { text-decoration: underline; }
 .notif-body :deep(hr) {
   border: none;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--lg-border-subtle);
   margin: 8px 0;
 }
 .notif-body :deep(table) {
@@ -272,7 +263,7 @@ onUnmounted(() => {
 }
 .notif-body :deep(th), .notif-body :deep(td) {
   padding: 5px 10px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--lg-border-subtle);
   text-align: left;
 }
 .notif-body :deep(thead tr) {
