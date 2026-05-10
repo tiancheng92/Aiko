@@ -7,8 +7,8 @@ html:not([data-theme]) {
   --lg-surface-input:    rgba(255, 255, 255, 0.18);
   --lg-surface-input-h:  rgba(255, 255, 255, 0.26);
 
-  --lg-blur:    none;
-  --lg-blur-sm: none;
+  --lg-blur:    blur(40px) saturate(140%) brightness(1.04);
+  --lg-blur-sm: blur(24px) saturate(130%) brightness(1.03);
 
   --lg-border:        rgba(255, 255, 255, 0.36);
   --lg-border-subtle: rgba(255, 255, 255, 0.22);
