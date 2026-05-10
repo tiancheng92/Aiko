@@ -544,12 +544,10 @@ static void startVoiceRecognition_SpeechAnalyzer(void) API_AVAILABLE(macos(26.0)
 #pragma clang diagnostic pop
 
 // startVoiceRecognition requests permissions and starts streaming STT.
-// On macOS 26+, delegates to startVoiceRecognition_SpeechAnalyzer for better accuracy.
-// On older systems, falls back to SFSpeechRecognizer.
+// Uses SFSpeechRecognizer on all macOS versions; SpeechAnalyzer migration
+// is deferred until Apple ships the public API (not yet available in macOS 26 beta).
 static void startVoiceRecognition() {
-    if (@available(macOS 26.0, *)) {
-        startVoiceRecognition_SpeechAnalyzer();
-    } else {
+    {
         dispatch_async(dispatch_get_main_queue(), ^{
             @try {
             // Check microphone permission (AVCaptureDevice works on all supported macOS versions)
@@ -640,33 +638,9 @@ static void startVoiceRecognition() {
 }
 
 // stopVoiceRecognition ends the STT task and tears down the audio engine.
-// Branches on the same @available check used in startVoiceRecognition.
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wobjc-method-access"
+// Correct order: stop tap → stop engine → endAudio → finish task → nil globals.
 static void stopVoiceRecognition() {
-    if (@available(macOS 26.0, *)) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            @try {
-                if (gAudioEngine26 && [gAudioEngine26 isRunning]) {
-                    [[gAudioEngine26 inputNode] removeTapOnBus:0];
-                    [gAudioEngine26 stop];
-                }
-                if (gSpeechAnalyzer26) {
-                    [gSpeechAnalyzer26 stopAnalysis];
-                }
-            } @catch (NSException *ex) {
-                NSLog(@"[Aiko] stopVoiceRecognition_SA exception: %@: %@", ex.name, ex.reason);
-            } @catch (...) {}
-            gSpeechAnalyzer26       = nil;
-            gDictationTranscriber26 = nil;
-            gAudioEngine26          = nil;
-            // Notify Go that the engine is fully stopped; Go will emit voice:end.
-            if (gHotkeyPipeFd >= 0) {
-                char b = 4;
-                write(gHotkeyPipeFd, &b, 1);
-            }
-        });
-    } else {
+    {
         dispatch_async(dispatch_get_main_queue(), ^{
             @try {
                 // 1. Stop the audio tap first to prevent new buffers from being appended.
@@ -693,7 +667,6 @@ static void stopVoiceRecognition() {
         });
     }
 }
-#pragma clang diagnostic pop
 
 // enableClickThrough sets the window to ignore mouse events by default,
 // findScrollViewInView performs a bounded-depth BFS search in |root|'s view
