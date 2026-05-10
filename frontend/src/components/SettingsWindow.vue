@@ -57,6 +57,7 @@ const cfg = ref({
   CodeTimeout: 60,
   RenderBackend: 'live2d',
   VRMModel: '',
+  ThemeStyle: 'liquid-glass',
 })
 const availableVRMModels = ref([])
 const { availableModels, loadModels } = useModelPath()
