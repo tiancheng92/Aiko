@@ -1,26 +1,26 @@
 /* ── Liquid Glass（默认主题）── */
 html[data-theme="liquid-glass"],
 html:not([data-theme]) {
-  --lg-surface:          rgba(255, 255, 255, 0.08);
-  --lg-surface-elevated: rgba(255, 255, 255, 0.11);
-  --lg-surface-modal:    rgba(255, 255, 255, 0.10);
-  --lg-surface-input:    rgba(255, 255, 255, 0.07);
-  --lg-surface-input-h:  rgba(255, 255, 255, 0.10);
+  --lg-surface:          rgba(255, 255, 255, 0.15);
+  --lg-surface-elevated: rgba(255, 255, 255, 0.20);
+  --lg-surface-modal:    rgba(255, 255, 255, 0.18);
+  --lg-surface-input:    rgba(255, 255, 255, 0.12);
+  --lg-surface-input-h:  rgba(255, 255, 255, 0.18);
 
-  --lg-blur:    blur(72px) saturate(220%) brightness(1.08);
-  --lg-blur-sm: blur(48px) saturate(200%) brightness(1.06);
+  --lg-blur:    blur(64px) saturate(160%) brightness(1.05);
+  --lg-blur-sm: blur(40px) saturate(150%) brightness(1.04);
 
-  --lg-border:        rgba(255, 255, 255, 0.18);
-  --lg-border-subtle: rgba(255, 255, 255, 0.10);
+  --lg-border:        rgba(255, 255, 255, 0.28);
+  --lg-border-subtle: rgba(255, 255, 255, 0.16);
 
   --lg-shadow:
     0 32px 80px rgba(0, 0, 0, 0.45),
     0 0 0 0.5px rgba(0, 0, 0, 0.25),
-    0 1px 0 rgba(255, 255, 255, 0.16) inset;
+    0 1px 0 rgba(255, 255, 255, 0.22) inset;
   --lg-shadow-sm:
     0 20px 52px rgba(0, 0, 0, 0.40),
     0 0 0 0.5px rgba(0, 0, 0, 0.22),
-    0 1px 0 rgba(255, 255, 255, 0.14) inset;
+    0 1px 0 rgba(255, 255, 255, 0.18) inset;
 }
 
 /* ── Frosted Glass（经典毛玻璃）── */
