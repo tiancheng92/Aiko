@@ -23,7 +23,7 @@ import {
   GetAutoLaunch, SetAutoLaunch,
 } from '../../wailsjs/go/main/App'
 import { ListProactiveItems, DeleteProactiveItem } from '../../wailsjs/go/main/App'
-import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
+import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 import { useModelPath } from '../composables/useModelPath.js'
 import { useEscapeKey } from '../composables/useEscapeKey.js'
 import { useConfirm } from '../composables/useConfirm.js'
@@ -1777,12 +1777,10 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             <!-- Has update -->
             <div v-if="updateInfo && updateInfo.has_update && !updateInstalling" class="about-update-available">
               <span>发现新版本 <strong>v{{ updateInfo.latest_version }}</strong></span>
-              <a
+              <button
                 class="about-changelog-link"
-                :href="`https://github.com/tiancheng92/Aiko/releases/tag/v${updateInfo.latest_version}`"
-                target="_blank"
-                rel="noopener noreferrer"
-              >更新内容</a>
+                @click="BrowserOpenURL(`https://github.com/tiancheng92/Aiko/releases/tag/v${updateInfo.latest_version}`)"
+              >更新内容</button>
               <button class="fetch-btn fetch-btn--primary" @click="installUpdate"
                 :disabled="!updateInfo.download_url">
                 {{ updateInfo.download_url ? '立即更新' : '无可用下载' }}
@@ -3032,12 +3030,14 @@ ul { list-style: none; padding: 0; margin: 0; }
 .about-changelog-link {
   font-size: 12px;
   color: var(--accent);
-  text-decoration: none;
+  background: transparent;
   padding: 4px 10px;
   border-radius: var(--r-button);
   border: 1px solid var(--accent-alpha-20);
+  cursor: pointer;
   transition: background 0.12s;
   white-space: nowrap;
+  font-family: inherit;
 }
 .about-changelog-link:hover { background: var(--accent-alpha-08); }
 .about-hint { font-size: 12px; color: var(--text-secondary); }
