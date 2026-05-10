@@ -472,8 +472,20 @@ static void startVoiceRecognition_SpeechAnalyzer(void) API_AVAILABLE(macos(26.0)
             // 2. Create SpeechAnalyzer with a DictationTranscriber module.
             // Use 'id' to stay compile-compatible with older SDK targets;
             // actual types are only available inside @available(macOS 26.0, *).
-            id analyzer   = [[NSClassFromString(@"SpeechAnalyzer") alloc] init];
-            id transcriber = [[NSClassFromString(@"DictationTranscriber") alloc] init];
+            Class analyzerClass    = NSClassFromString(@"SpeechAnalyzer");
+            Class transcriberClass = NSClassFromString(@"DictationTranscriber");
+            if (!analyzerClass || !transcriberClass) {
+                // API not available (wrong class name or framework not linked) — fallback.
+                NSLog(@"[Aiko] SpeechAnalyzer/DictationTranscriber not found, falling back to SFSpeechRecognizer");
+                sendVoiceText("ERROR:speechanalyzer_unavailable");
+                return;
+            }
+            id analyzer   = [[analyzerClass alloc] init];
+            id transcriber = [[transcriberClass alloc] init];
+            if (!analyzer || !transcriber) {
+                sendVoiceText("ERROR:speechanalyzer_init_failed");
+                return;
+            }
             [analyzer addModule:transcriber];
 
             gSpeechAnalyzer26       = analyzer;
