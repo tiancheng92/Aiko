@@ -105,7 +105,7 @@ func (s *Store) Load() (*Config, error) {
 	cfg.SoundsEnabled = m["sounds_enabled"] == "true"
 	cfg.TTSAutoPlay = m["tts_auto_play"] == "true"
 	cfg.TTSSummarizeThreshold = parseInt(m["tts_summarize_threshold"], 200)
-	cfg.ThemeStyle = orDefault(m["theme_style"], "liquid-glass")
+	cfg.ThemeStyle = orDefault(m["theme_style"], "frosted")
 	return cfg, nil
 }
 

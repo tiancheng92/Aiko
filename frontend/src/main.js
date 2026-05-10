@@ -5,9 +5,9 @@ import './style.css'
 import { GetConfig } from '../wailsjs/go/main/App'
 
 GetConfig().then(cfg => {
-  document.documentElement.dataset.theme = cfg.ThemeStyle || 'liquid-glass'
+  document.documentElement.dataset.theme = cfg.ThemeStyle || 'frosted'
 }).catch(() => {
-  document.documentElement.dataset.theme = 'liquid-glass'
+  document.documentElement.dataset.theme = 'frosted'
 })
 
 createApp(App).mount('#app')
