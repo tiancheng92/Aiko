@@ -442,6 +442,95 @@ static void moveWindowToScreen(int n) {
 // hasWindow returns 1 if gWindow is initialized.
 static int hasWindow() { return gWindow != nil ? 1 : 0; }
 
+// startVoiceRecognition_SpeechAnalyzer starts STT using the macOS 26+ SpeechAnalyzer API.
+// Results are written to gVoicePipeFd in the same format as the SFSpeechRecognizer path:
+//   plain text  → partial transcript
+//   "FINAL:..."  → final transcript
+//   "ERROR:..."  → error description
+// Must only be called inside an @available(macOS 26.0, *) block.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wobjc-method-access"
+static void startVoiceRecognition_SpeechAnalyzer(void) API_AVAILABLE(macos(26.0)) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @try {
+            // 1. Mic permission — same check as the SFSpeechRecognizer path.
+            AVAuthorizationStatus micStatus = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
+            if (micStatus == AVAuthorizationStatusNotDetermined) {
+                [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted) {
+                    if (granted) {
+                        startVoiceRecognition_SpeechAnalyzer();
+                    } else {
+                        sendVoiceText("ERROR:mic_denied");
+                    }
+                }];
+                return;
+            } else if (micStatus == AVAuthorizationStatusDenied || micStatus == AVAuthorizationStatusRestricted) {
+                sendVoiceText("ERROR:mic_denied");
+                return;
+            }
+
+            // 2. Create SpeechAnalyzer with a DictationTranscriber module.
+            // Use 'id' to stay compile-compatible with older SDK targets;
+            // actual types are only available inside @available(macOS 26.0, *).
+            id analyzer   = [[NSClassFromString(@"SpeechAnalyzer") alloc] init];
+            id transcriber = [[NSClassFromString(@"DictationTranscriber") alloc] init];
+            [analyzer addModule:transcriber];
+
+            gSpeechAnalyzer26       = analyzer;
+            gDictationTranscriber26 = transcriber;
+
+            // 3. Start AVAudioEngine and feed PCM buffers to the analyzer.
+            gAudioEngine26 = [AVAudioEngine new];
+            AVAudioInputNode *inputNode = gAudioEngine26.inputNode;
+            AVAudioFormat *fmt = [inputNode outputFormatForBus:0];
+
+            [inputNode installTapOnBus:0 bufferSize:1024 format:fmt block:^(AVAudioPCMBuffer *buf, AVAudioTime *when) {
+                @try { [analyzer appendAudioPCMBuffer:buf]; } @catch (...) {}
+            }];
+
+            NSError *startErr = nil;
+            [gAudioEngine26 startAndReturnError:&startErr];
+            if (startErr) {
+                NSString *msg = [NSString stringWithFormat:@"ERROR:audio_engine:%@", startErr.localizedDescription];
+                sendVoiceText([msg UTF8String]);
+                return;
+            }
+
+            // 4. Set result handler — same pipe format as the SFSpeechRecognizer path.
+            // 'id result' keeps compile compatibility; actual type is DictationTranscriberResult*.
+            [transcriber setResultHandler:^(id result, NSError *err) {
+                @try {
+                    if (err) {
+                        NSString *msg = [NSString stringWithFormat:@"ERROR:recognition:%@", err.localizedDescription];
+                        sendVoiceText([msg UTF8String]);
+                        return;
+                    }
+                    if (!result) return;
+                    BOOL isFinal = [[result valueForKey:@"isFinal"] boolValue];
+                    NSString *text = [result valueForKey:@"text"];
+                    if (isFinal) {
+                        NSString *msg = [NSString stringWithFormat:@"FINAL:%@", text];
+                        sendVoiceText([msg UTF8String]);
+                    } else {
+                        sendVoiceText([text UTF8String]);
+                    }
+                } @catch (NSException *ex) {
+                    NSString *msg = [NSString stringWithFormat:@"ERROR:result_handler:%@: %@", ex.name, ex.reason];
+                    sendVoiceText([msg UTF8String]);
+                } @catch (...) {}
+            }];
+
+            // 5. Start analysis.
+            [analyzer startAnalysis];
+
+        } @catch (NSException *ex) {
+            NSString *msg = [NSString stringWithFormat:@"ERROR:exception:%@: %@", ex.name, ex.reason];
+            sendVoiceText([msg UTF8String]);
+        }
+    });
+}
+#pragma clang diagnostic pop
+
 // startVoiceRecognition requests permissions and starts streaming STT.
 // Results are written to the voice pipe via sendVoiceText().
 // All ObjC exceptions are caught and forwarded as ERROR: messages.
