@@ -114,7 +114,9 @@ async function onMouseUp(e) {
 .floating-ball {
   position: fixed;
   border-radius: 50%;
-  background: rgba(79, 70, 229, 0.9);
+  background: rgba(79, 70, 229, 0.35);
+  backdrop-filter: var(--lg-blur-sm);
+  -webkit-backdrop-filter: var(--lg-blur-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -123,5 +125,5 @@ async function onMouseUp(e) {
   z-index: 9999;
   box-shadow: 0 4px 16px rgba(0,0,0,0.3);
 }
-.floating-ball:hover { background: rgba(99, 90, 255, 0.95); }
+.floating-ball:hover { background: rgba(99, 90, 255, 0.45); }
 </style>
