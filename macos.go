@@ -28,6 +28,12 @@ static SFSpeechRecognizer        *gSpeechRecognizer  = nil;
 static SFSpeechAudioBufferRecognitionRequest *gRecogRequest = nil;
 static SFSpeechRecognitionTask   *gRecogTask         = nil;
 static AVAudioEngine             *gAudioEngine       = nil;
+// --- SpeechAnalyzer globals (macOS 26+) ---
+// Declared as 'id' to avoid compile errors on older SDK targets.
+// Actual types are used only inside @available(macOS 26.0, *) blocks.
+static id gSpeechAnalyzer26       = nil;
+static id gDictationTranscriber26 = nil;
+static AVAudioEngine *gAudioEngine26 = nil;
 
 // gHotkeyPipeFd is the write end of a pipe; Go reads from the read end.
 static int gHotkeyPipeFd = -1;
