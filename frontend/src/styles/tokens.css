@@ -1,17 +1,17 @@
 /* ── Liquid Glass（默认主题）── */
 html[data-theme="liquid-glass"],
 html:not([data-theme]) {
-  --lg-surface:          rgba(255, 255, 255, 0.15);
-  --lg-surface-elevated: rgba(255, 255, 255, 0.20);
-  --lg-surface-modal:    rgba(255, 255, 255, 0.18);
-  --lg-surface-input:    rgba(255, 255, 255, 0.12);
-  --lg-surface-input-h:  rgba(255, 255, 255, 0.18);
+  --lg-surface:          rgba(255, 255, 255, 0.25);
+  --lg-surface-elevated: rgba(255, 255, 255, 0.32);
+  --lg-surface-modal:    rgba(255, 255, 255, 0.28);
+  --lg-surface-input:    rgba(255, 255, 255, 0.18);
+  --lg-surface-input-h:  rgba(255, 255, 255, 0.26);
 
-  --lg-blur:    blur(64px) saturate(160%) brightness(1.05);
-  --lg-blur-sm: blur(40px) saturate(150%) brightness(1.04);
+  --lg-blur:    blur(60px) saturate(140%) brightness(1.04);
+  --lg-blur-sm: blur(36px) saturate(130%) brightness(1.03);
 
-  --lg-border:        rgba(255, 255, 255, 0.28);
-  --lg-border-subtle: rgba(255, 255, 255, 0.16);
+  --lg-border:        rgba(255, 255, 255, 0.36);
+  --lg-border-subtle: rgba(255, 255, 255, 0.22);
 
   --lg-shadow:
     0 32px 80px rgba(0, 0, 0, 0.45),
