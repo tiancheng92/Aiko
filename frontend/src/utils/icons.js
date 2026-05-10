@@ -29,3 +29,4 @@ export const ICON_TAB_AUTOMATION = SVG('<circle cx="12" cy="12" r="10"/><polylin
 export const ICON_TAB_LARK       = SVG('<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>', 1.5)
 export const ICON_TAB_SMS        = SVG('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/>', 1.5)
 export const ICON_TAB_ABOUT      = SVG('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>', 1.5)
+export const ICON_TAB_GENERAL    = SVG('<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="8" cy="6" r="2" fill="currentColor" stroke="none"/><circle cx="16" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="10" cy="18" r="2" fill="currentColor" stroke="none"/>', 1.5)

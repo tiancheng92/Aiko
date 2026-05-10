@@ -103,10 +103,19 @@ async function onMouseUp(e) {
   <div
     v-if="pos"
     class="floating-ball"
-    :style="{ left: pos.x + 'px', top: pos.y + 'px', width: ballSize + 'px', height: ballSize + 'px', fontSize: Math.round(ballSize * 0.44) + 'px' }"
+    :style="{ left: pos.x + 'px', top: pos.y + 'px', width: ballSize + 'px', height: ballSize + 'px' }"
     @mousedown="onMouseDown"
+    aria-label="Aiko"
+    role="button"
   >
-    🐾
+    <svg :width="Math.round(ballSize * 0.44)" :height="Math.round(ballSize * 0.44)" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <!-- Aiko paw icon -->
+      <circle cx="9" cy="6" r="2.2" fill="currentColor" opacity="0.85"/>
+      <circle cx="15" cy="6" r="2.2" fill="currentColor" opacity="0.85"/>
+      <circle cx="5.5" cy="10" r="1.6" fill="currentColor" opacity="0.7"/>
+      <circle cx="18.5" cy="10" r="1.6" fill="currentColor" opacity="0.7"/>
+      <path d="M12 10.5c-3.5 0-6 2.2-5.5 5.2.4 2.2 2.6 3.8 5.5 3.8s5.1-1.6 5.5-3.8c.5-3-2-5.2-5.5-5.2z" fill="currentColor"/>
+    </svg>
   </div>
 </template>
 
@@ -123,7 +132,21 @@ async function onMouseUp(e) {
   cursor: pointer;
   user-select: none;
   z-index: 9999;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  color: rgba(255, 255, 255, 0.92);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+  transition: background 0.18s, box-shadow 0.18s, transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.floating-ball:hover { background: rgba(99, 90, 255, 0.45); }
+.floating-ball:hover {
+  background: rgba(99, 90, 255, 0.5);
+  box-shadow:
+    0 6px 22px rgba(79, 70, 229, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.18) inset;
+  transform: scale(1.06);
+}
+.floating-ball:active {
+  transform: scale(0.95);
+  transition-duration: 0.08s;
+}
 </style>

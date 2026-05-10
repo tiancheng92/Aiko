@@ -1278,7 +1278,7 @@ defineExpose({ focusInput, scrollToBottom })
 .messages-inner {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 /* Slide-up + fade-in for newly appended messages */
@@ -1446,6 +1446,9 @@ defineExpose({ focusInput, scrollToBottom })
   color: var(--text-primary);
   border-radius: 16px 16px 16px 4px;
   border: 1px solid var(--lg-border-subtle);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.08) inset,
+    0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
 /* System / error bubble */
@@ -1486,10 +1489,15 @@ defineExpose({ focusInput, scrollToBottom })
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.12s, transform 0.08s;
+  font-family: inherit;
+  transition: background 0.15s, transform 0.1s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s;
 }
-.stop-btn:hover { background: rgba(255, 69, 58, 0.22); }
-.stop-btn:active { transform: scale(0.97); }
+.stop-btn:hover {
+  background: rgba(255, 69, 58, 0.22);
+  box-shadow: 0 0 0 3px rgba(255, 69, 58, 0.14);
+}
+.stop-btn:active { transform: scale(0.95); }
+.stop-btn:focus-visible { outline: 2px solid var(--danger); outline-offset: 2px; }
 
 /* Cursor blink */
 .cursor { animation: blink 1s step-end infinite; }
@@ -1532,8 +1540,7 @@ defineExpose({ focusInput, scrollToBottom })
 /* Timestamp */
 .msg-time {
   font-size: 11px;
-  color: var(--text-secondary);
-  opacity: 0.85;
+  color: var(--text-label-muted);
   font-variant-numeric: tabular-nums;
   user-select: none;
 }
@@ -2112,9 +2119,8 @@ defineExpose({ focusInput, scrollToBottom })
 }
 .toolbar-spacer { flex: 1; }
 .input-hint {
-  font-size: 10px;
-  color: var(--text-secondary);
-  opacity: 0.72;
+  font-size: 11px;
+  color: var(--text-label-muted);
   user-select: none;
   text-align: right;
   padding: 0 14px 8px;
@@ -2132,12 +2138,20 @@ defineExpose({ focusInput, scrollToBottom })
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.12s, transform 0.08s;
+  transition: background 0.15s, transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s;
   flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 122, 255, 0.35);
 }
-.send-btn:hover:not(:disabled) { background: var(--accent-hover); }
-.send-btn:active:not(:disabled) { transform: scale(0.94); }
-.send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.send-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+  box-shadow: 0 3px 10px rgba(0, 122, 255, 0.5);
+  transform: scale(1.04);
+}
+.send-btn:active:not(:disabled) {
+  transform: scale(0.93);
+  transition-duration: 0.08s;
+}
+.send-btn:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
 .send-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ── Voice hint status bar ─────────────────────────────────── */
@@ -2291,7 +2305,7 @@ defineExpose({ focusInput, scrollToBottom })
   transition: background 0.12s, color 0.12s;
   padding: 0;
 }
-.attach-btn:hover:not(:disabled) { background: rgba(255,255,255,0.08); color: var(--text-primary); }
+.attach-btn:hover:not(:disabled) { background: var(--lg-surface-hover); color: var(--text-primary); }
 .attach-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .attach-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
@@ -2338,7 +2352,7 @@ defineExpose({ focusInput, scrollToBottom })
   border-radius: 4px;
   transition: opacity 0.12s, background 0.12s;
 }
-.pending-file-remove:hover { opacity: 1; background: rgba(255, 255, 255, 0.08); }
+.pending-file-remove:hover { opacity: 1; background: var(--lg-surface-hover); }
 .pending-file-remove:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* File chips inside sent user messages */

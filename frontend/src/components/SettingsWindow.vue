@@ -30,6 +30,7 @@ import { useConfirm } from '../composables/useConfirm.js'
 import {
   ICON_TAB_MODEL, ICON_TAB_AI, ICON_TAB_APPEARANCE, ICON_TAB_TOOLS,
   ICON_TAB_KNOWLEDGE, ICON_TAB_AUTOMATION, ICON_TAB_LARK, ICON_TAB_SMS, ICON_TAB_ABOUT,
+  ICON_TAB_GENERAL,
 } from '../utils/icons'
 
 const confirm = useConfirm()
@@ -64,8 +65,10 @@ const { availableModels, loadModels } = useModelPath()
 const toolPerms = ref([])   // [{ ToolName, Level, Granted }]
 const sources = ref([])
 const importProgress = ref(null)
-const saving = ref(false)
-const statusMsg = ref('')
+const saving = ref(false)   // true while a debounced save is in-flight
+const statusMsg = ref('')   // operation-level feedback (profile switch, trigger, etc.)
+const mountedReady = ref(false)  // gate to suppress watcher fires during initial load
+let saveTimer = null
 const activeTab = ref('model')  // 'model' | 'ai' | 'appearance' | 'tools' | 'knowledge' | 'automation' | 'lark' | 'sms'
 const toolsSubTab = ref('mcp')         // 'mcp' | 'permissions' | 'settings'
 const automationSubTab = ref('cron')   // 'cron' | 'proactive'
@@ -162,14 +165,15 @@ let offUpdateProgress = null
  * label/keywords on every keystroke.
  */
 const tabMeta = [
-  { id: 'model',      label: '模型配置',   iconSvg: ICON_TAB_MODEL,      keywords: 'model profile openai provider key embedding 模型 配置 接入' },
-  { id: 'ai',         label: 'AI 行为',    iconSvg: ICON_TAB_AI,         keywords: 'prompt system memory nudge skill 提示词 记忆 技能 轮数' },
-  { id: 'appearance', label: '外观与交互', iconSvg: ICON_TAB_APPEARANCE, keywords: 'live2d pet size chat voice sounds tts 模型 大小 语音 音效 朗读' },
-  { id: 'tools',      label: '工具',       iconSvg: ICON_TAB_TOOLS,      keywords: 'mcp permission shell code path tool 权限 服务器 执行 白名单' },
+  { id: 'model',      label: '模型',       iconSvg: ICON_TAB_MODEL,      keywords: 'model profile openai provider key embedding tts 模型 配置 接入 语音合成' },
+  { id: 'ai',         label: '对话',       iconSvg: ICON_TAB_AI,         keywords: 'prompt system memory skill 提示词 记忆 技能 上下文 自我成长' },
   { id: 'knowledge',  label: '知识库',     iconSvg: ICON_TAB_KNOWLEDGE,  keywords: 'knowledge rag document import 文档 导入 向量' },
+  { id: 'tools',      label: '工具',       iconSvg: ICON_TAB_TOOLS,      keywords: 'mcp permission shell code path tool 权限 服务器 执行 白名单' },
   { id: 'automation', label: '自动化',     iconSvg: ICON_TAB_AUTOMATION, keywords: 'cron schedule proactive reminder 定时 任务 提醒' },
+  { id: 'appearance', label: '外观',       iconSvg: ICON_TAB_APPEARANCE, keywords: 'live2d vrm pet size chat 模型 大小 语音 音效 朗读 桌宠' },
+  { id: 'general',    label: '通用',       iconSvg: ICON_TAB_GENERAL,    keywords: 'theme launch autostart 主题 启动 风格 自启 液态玻璃 毛玻璃' },
   { id: 'lark',       label: '飞书',       iconSvg: ICON_TAB_LARK,       keywords: 'lark feishu cli 飞书' },
-  { id: 'sms',        label: '短信监听',   iconSvg: ICON_TAB_SMS,        keywords: 'sms message verification 短信 验证码' },
+  { id: 'sms',        label: '短信',       iconSvg: ICON_TAB_SMS,        keywords: 'sms message verification 短信 验证码 监听' },
   { id: 'about',      label: '关于',       iconSvg: ICON_TAB_ABOUT,      keywords: 'version update about 版本 更新 关于' },
 ].map(t => ({ ...t, _haystack: (t.label + ' ' + t.keywords).toLowerCase() }))
 
@@ -267,12 +271,16 @@ onMounted(async () => {
     updateProgress.value = data.pct
     updateProgressMsg.value = data.msg
   })
+
+  // Enable auto-save watcher only after all initial data has been loaded.
+  mountedReady.value = true
 })
 
 onUnmounted(() => {
   offProgress?.()
   offScreen?.()
   offUpdateProgress?.()
+  clearTimeout(saveTimer)
   // Safety net — ensure no drag listeners linger if the component unmounts mid-drag.
   window.removeEventListener('mousemove', onMouseMove)
   window.removeEventListener('mouseup', onMouseUp)
@@ -557,34 +565,10 @@ function resetChatSize() {
   }
 }
 
-const reloading = ref(false)
-
-/** reload re-fetches all config and data from the backend, discarding unsaved changes. */
-async function reload() {
-  reloading.value = true
-  statusMsg.value = ''
-  try {
-    const loaded = await GetConfig()
-    if (loaded) applyConfig(loaded)
-    sources.value = await ListKnowledgeSources() || []
-    try { toolPerms.value = await GetToolPermissions() || [] } catch {}
-    await fetchMCPServers()
-    await fetchCronJobs()
-    await fetchProfiles()
-    statusMsg.value = '已刷新'
-  } catch (e) {
-    statusMsg.value = '刷新失败: ' + e
-  } finally {
-    reloading.value = false
-  }
-}
-
-/** save persists configuration to the backend. */
+/** save persists the current cfg to the backend (called by the debounced watcher). */
 async function save() {
   saving.value = true
-  statusMsg.value = ''
   try {
-    // Convert SkillsDirs textarea string back to []string for Go.
     const payload = {
       ...cfg.value,
       SkillsDirs: cfg.value.SkillsDirs
@@ -593,13 +577,23 @@ async function save() {
       ActiveProfileID: activeProfileID.value,
     }
     await SaveConfig(payload)
-    statusMsg.value = '已保存'
   } catch (e) {
-    statusMsg.value = '保存失败: ' + e
+    console.error('auto-save failed:', e)
   } finally {
     saving.value = false
   }
 }
+
+/** debouncedSave queues a save 600ms after the last cfg mutation. */
+function debouncedSave() {
+  if (!mountedReady.value) return
+  clearTimeout(saveTimer)
+  saving.value = true
+  saveTimer = setTimeout(save, 600)
+}
+
+// Watch cfg deeply; fires whenever any field changes after initial load.
+watch(cfg, debouncedSave, { deep: true })
 
 /** togglePerm toggles a tool permission on/off. */
 async function togglePerm(perm) {
@@ -1104,11 +1098,11 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
         <!-- 模型设置 -->
         <div v-if="activeTab === 'model'" class="tab-pane">
           <div class="profile-header">
-            <span class="section-title">模型配置</span>
+            <span class="section-title">模型配置方案</span>
             <button class="btn-add" @click="openProfileForm">+ 新增</button>
           </div>
 
-          <div v-if="profiles.length === 0" class="empty-hint">暂无配置，点击「新增」添加第一个模型配置</div>
+          <div v-if="profiles.length === 0" class="empty-hint">暂无配置方案，点击「新增」接入第一个 AI 模型</div>
 
           <div v-for="p in profiles" :key="p.id" :class="['profile-card', { active: p.id === activeProfileID }]">
             <div class="profile-card-main">
@@ -1128,9 +1122,9 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             <div class="modal-box">
               <div id="profile-form-title" class="modal-title">{{ profileForm.id ? '编辑配置' : '新增配置' }}</div>
               <label>名称<input v-model="profileForm.name" placeholder="我的 OpenAI" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
-              <label>Provider
+              <label>接入方式
                 <select v-model="profileForm.provider">
-                  <option value="openai">OpenAI 兼容</option>
+                  <option value="openai">OpenAI 兼容接口</option>
                   <option value="openrouter">OpenRouter</option>
                 </select>
               </label>
@@ -1155,25 +1149,25 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                   <input v-else v-model="profileForm.model" placeholder="gpt-4o" spellcheck="false" autocorrect="off" autocomplete="off" />
                 </div>
               </label>
-              <label>Embedding Model
+              <label>向量模型（Embedding）
                 <div class="select-row">
                   <select v-if="profileModels.length" v-model="profileForm.embedding_model">
-                    <option value="">-- 不使用 Embedding --</option>
+                    <option value="">-- 不启用（关闭知识库检索）--</option>
                     <option v-for="m in profileModels" :key="m" :value="m">{{ m }}</option>
                   </select>
                   <input v-else v-model="profileForm.embedding_model" placeholder="text-embedding-3-small（可选）" spellcheck="false" autocorrect="off" autocomplete="off" />
                 </div>
               </label>
-              <label>Embedding 维度<input type="number" v-model.number="profileForm.embedding_dim" min="256" max="4096" /></label>
+              <label>向量维度<span class="field-hint">与所选向量模型保持一致，默认 1536</span><input type="number" v-model.number="profileForm.embedding_dim" min="256" max="4096" /></label>
               <div class="form-group" style="margin-top:12px">
-                <label class="form-label">TTS 后端</label>
+                <label class="form-label">语音合成引擎（TTS）</label>
                 <select v-model="profileForm.tts_backend" class="form-input">
-                  <option value="">系统（macOS say）</option>
-                  <option value="kokoro">Kokoro-82M（动漫风中文）</option>
+                  <option value="">系统语音（macOS 内置）</option>
+                  <option value="kokoro">Kokoro-82M（本地离线，动漫中文风格）</option>
                 </select>
               </div>
 
-              <!-- Kokoro 后端专属字段 -->
+              <!-- Kokoro 专属选项 -->
               <template v-if="profileForm.tts_backend === 'kokoro'">
                 <div class="form-group" style="margin-top:8px">
                   <label class="form-label">声线</label>
@@ -1182,7 +1176,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                   </select>
                 </div>
                 <div class="form-group" style="margin-top:8px">
-                  <label class="form-label">语速</label>
+                  <label class="form-label">语速（0.5–2.0）</label>
                   <input
                     v-model.number="profileForm.tts_speed"
                     type="number" min="0.5" max="2.0" step="0.1"
@@ -1191,7 +1185,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 </div>
                 <div class="form-group" style="margin-top:12px">
                   <button class="btn-setup" :disabled="kokoroInstalling" @click="setupKokoroTTS">
-                    {{ kokoroInstalling ? '安装中…' : '🔧 安装 / 检查 TTS 环境' }}
+                    {{ kokoroInstalling ? '安装中…' : '安装 / 检查 Kokoro 环境' }}
                   </button>
                   <div v-if="kokoroError" class="form-error" style="margin-top:8px">
                     {{ kokoroError }}
@@ -1208,42 +1202,28 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           </div>
         </div>
 
-        <!-- AI 设置 -->
+        <!-- 对话设置 -->
         <div v-if="activeTab === 'ai'" class="tab-pane">
-          <label>System Prompt<textarea v-model="cfg.SystemPrompt" rows="5" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
-          <label>短期记忆轮数（1-100）<input type="number" v-model.number="cfg.ShortTermLimit" min="1" max="100" /></label>
-          <label>自我成长 Nudge 间隔（轮）<input type="number" v-model.number="cfg.NudgeInterval" min="1" max="100" /></label>
-          <label>Skills 目录<span class="field-hint">每行一个路径</span><textarea v-model="cfg.SkillsDirs" rows="3" placeholder="~/.aiko/skills" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
+          <label>系统提示词<textarea v-model="cfg.SystemPrompt" rows="5" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
+          <label>上下文记忆轮数（1–100）<span class="field-hint">保留最近 N 轮对话作为上下文，越大记得越多但消耗 token 也越多</span><input type="number" v-model.number="cfg.ShortTermLimit" min="1" max="100" /></label>
+          <label>自我成长触发间隔（轮）<span class="field-hint">每隔 N 轮对话，AI 自动整理用户画像与记忆；设为 0 可关闭</span><input type="number" v-model.number="cfg.NudgeInterval" min="1" max="100" /></label>
+          <label>技能目录<span class="field-hint">每行一个路径，AI 可调用目录内的 YAML 自定义技能</span><textarea v-model="cfg.SkillsDirs" rows="3" placeholder="~/.aiko/auto-skills" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
         </div>
 
-        <!-- 外观与交互 -->
-        <div v-if="activeTab === 'appearance'" class="tab-pane">
-          <!-- 开机自启 -->
-          <div class="sms-toggle-row">
-            <span class="sms-status-label" style="flex:1">开机自启</span>
+        <!-- 通用 -->
+        <div v-if="activeTab === 'general'" class="tab-pane">
+          <div class="settings-section-title">系统</div>
+          <div class="sms-toggle-row" style="margin-top:8px">
+            <span class="sms-status-label" style="flex:1">登录时自动启动</span>
             <label class="toggle">
               <input type="checkbox" :checked="autoLaunch" @change="toggleAutoLaunch($event.target.checked)" />
               <span class="toggle-track" />
             </label>
           </div>
-          <p class="sms-desc" style="margin-top:4px;margin-bottom:16px">登录 macOS 时自动启动 Aiko</p>
+          <p class="sms-desc" style="margin-top:4px;margin-bottom:20px">开机登录 macOS 后自动运行 Aiko</p>
 
-          <!-- 渲染后端 -->
-          <label>渲染后端
-            <div class="backend-toggle">
-              <button
-                :class="['backend-btn', cfg.RenderBackend !== 'vrm' ? 'active' : '']"
-                @click="setRenderBackend('live2d')"
-              >Live2D (2D)</button>
-              <button
-                :class="['backend-btn', cfg.RenderBackend === 'vrm' ? 'active' : '']"
-                @click="setRenderBackend('vrm')"
-              >VRM (3D)</button>
-            </div>
-          </label>
-
-          <!-- 界面风格 -->
-          <label>界面风格
+          <div class="settings-section-title">界面主题</div>
+          <label style="margin-top:8px">风格
             <div class="backend-toggle">
               <button
                 :class="['backend-btn', cfg.ThemeStyle !== 'frosted' ? 'active' : '']"
@@ -1255,7 +1235,61 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               >毛玻璃</button>
             </div>
           </label>
-          <p class="sms-desc" style="margin-top:4px;margin-bottom:16px">液态玻璃为近透明折射风格；毛玻璃为经典深色风格。切换后点击「保存」持久化。</p>
+          <p class="sms-desc" style="margin-top:4px">液态玻璃：近透明折射光影；毛玻璃：经典深色质感。切换后点击「保存」持久化。</p>
+
+          <div class="settings-section-title" style="margin-top:24px">快捷键</div>
+          <div class="shortcut-list">
+            <div class="shortcut-row">
+              <div class="shortcut-keys"><kbd>⌥</kbd><kbd>⌥</kbd></div>
+              <span class="shortcut-desc">双击 Option — 显示 / 隐藏聊天框</span>
+            </div>
+            <div class="shortcut-row">
+              <div class="shortcut-keys"><kbd>⌥</kbd><span class="shortcut-hold">长按 1s</span></div>
+              <span class="shortcut-desc">按住 Option 1 秒 — 开始语音输入</span>
+            </div>
+            <div class="shortcut-row">
+              <div class="shortcut-keys"><span class="shortcut-release">松开 ⌥</span></div>
+              <span class="shortcut-desc">松开 Option — 停止录音，等待识别</span>
+            </div>
+            <div class="shortcut-row">
+              <div class="shortcut-keys"><kbd>↵</kbd></div>
+              <span class="shortcut-desc">发送消息</span>
+            </div>
+            <div class="shortcut-row">
+              <div class="shortcut-keys"><kbd>⌘</kbd><kbd>↵</kbd></div>
+              <span class="shortcut-desc">消息框内换行</span>
+            </div>
+            <div class="shortcut-row">
+              <div class="shortcut-keys"><kbd>⌘</kbd><kbd>V</kbd></div>
+              <span class="shortcut-desc">粘贴图片到消息框（支持截图直接粘贴）</span>
+            </div>
+            <div class="shortcut-row">
+              <div class="shortcut-keys"><span class="shortcut-drag">拖拽</span></div>
+              <span class="shortcut-desc">拖动悬浮球 — 重新定位桌宠</span>
+            </div>
+            <div class="shortcut-row">
+              <div class="shortcut-keys"><span class="shortcut-rc">右键</span></div>
+              <span class="shortcut-desc">右键聊天框 — 导出记录、清空历史、打开设置</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 外观 -->
+        <div v-if="activeTab === 'appearance'" class="tab-pane">
+          <div class="settings-section-title">桌宠模型</div>
+          <!-- 渲染后端 -->
+          <label style="margin-top:8px">渲染模式
+            <div class="backend-toggle">
+              <button
+                :class="['backend-btn', cfg.RenderBackend !== 'vrm' ? 'active' : '']"
+                @click="setRenderBackend('live2d')"
+              >Live2D（2D）</button>
+              <button
+                :class="['backend-btn', cfg.RenderBackend === 'vrm' ? 'active' : '']"
+                @click="setRenderBackend('vrm')"
+              >VRM（3D）</button>
+            </div>
+          </label>
 
           <!-- VRM 模型选择（仅在 VRM 后端下显示） -->
           <label v-if="cfg.RenderBackend === 'vrm'">VRM 模型
@@ -1309,7 +1343,11 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               </select>
             </div>
           </label>
-          <label>桌宠大小
+          <div class="settings-section-title" style="margin-top:16px">大小与位置</div>
+          <label style="margin-top:8px">桌宠大小
+            <div class="screen-label" v-if="props.activeScreen.width > 0">
+              当前屏幕：{{ props.activeScreen.width }}×{{ props.activeScreen.height }}
+            </div>
             <div class="size-row">
               <input
                 type="range" min="100" max="600" step="10"
@@ -1318,14 +1356,11 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               />
               <span class="size-val">{{ cfg.PetSize || '自动' }}{{ cfg.PetSize ? 'px' : '' }}</span>
             </div>
-            <div class="size-hint">0 = 自动根据屏幕高度计算；拖动滑块实时预览，保存后生效</div>
+            <div class="size-hint">设为 0 时自动根据屏幕高度缩放；拖动滑块可实时预览</div>
             <button class="btn-reset-size" @click="cfg.PetSize = 0; EventsEmit('config:pet:size:changed', 0)">重置为自动</button>
             <button class="btn-reset-size" @click="resetBallPosition" style="margin-top:6px">重置桌宠位置</button>
           </label>
           <label>聊天框宽度
-            <div class="screen-label" v-if="props.activeScreen.width > 0">
-              当前屏幕：{{ props.activeScreen.width }}×{{ props.activeScreen.height }}
-            </div>
             <div class="size-row">
               <input
                 type="range" min="300" max="800" step="10"
@@ -1348,48 +1383,48 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           </label>
           <div class="settings-section-title" style="margin-top:20px">语音与音效</div>
           <div class="sms-toggle-row" style="margin-top:8px">
-            <span class="sms-status-label" style="flex:1">语音消息立刻发送</span>
+            <span class="sms-status-label" style="flex:1">语音识别后自动发送</span>
             <label class="toggle">
               <input type="checkbox" v-model="cfg.VoiceAutoSend" @change="toggleVoiceAutoSend" />
               <span class="toggle-track" />
             </label>
           </div>
-          <p class="sms-desc" style="margin-top:4px">释放 Option 键后，等待转录完成并自动发送消息</p>
+          <p class="sms-desc" style="margin-top:4px">松开 Option 键后，识别完成时自动发送消息，无需手动确认</p>
           <div class="sms-toggle-row" style="margin-top:16px">
-            <span class="sms-status-label" style="flex:1">聊天音效</span>
+            <span class="sms-status-label" style="flex:1">界面提示音</span>
             <label class="toggle">
               <input type="checkbox" v-model="cfg.SoundsEnabled" @change="toggleSoundsEnabled" />
               <span class="toggle-track" />
             </label>
           </div>
-          <p class="sms-desc" style="margin-top:4px">发送、收到消息和出错时播放轻柔提示音</p>
+          <p class="sms-desc" style="margin-top:4px">发送、收到消息或出错时播放轻柔提示音</p>
           <div class="sms-toggle-row" style="margin-top:16px">
-            <span class="sms-status-label" style="flex:1">自动朗读回复</span>
+            <span class="sms-status-label" style="flex:1">AI 回复自动朗读</span>
             <label class="toggle">
               <input type="checkbox" v-model="cfg.TTSAutoPlay" @change="toggleTTSAutoPlay" />
               <span class="toggle-track" />
             </label>
           </div>
-          <p class="sms-desc" style="margin-top:4px">LLM 回复完成后自动朗读内容（需在 ModelProfile 中配置 TTS Model）</p>
+          <p class="sms-desc" style="margin-top:4px">收到 AI 回复后自动语音播放（需在模型配置中选择语音合成引擎）</p>
         </div>
 
         <!-- 工具 -->
         <div v-if="activeTab === 'tools'" class="tab-pane">
           <div class="sub-tab-bar">
-            <button :class="{ active: toolsSubTab === 'mcp' }" @click="toolsSubTab = 'mcp'">MCP 服务器</button>
-            <button :class="{ active: toolsSubTab === 'permissions' }" @click="toolsSubTab = 'permissions'">工具权限</button>
-            <button :class="{ active: toolsSubTab === 'settings' }" @click="toolsSubTab = 'settings'">执行设置</button>
+            <button :class="{ active: toolsSubTab === 'permissions' }" @click="toolsSubTab = 'permissions'">内置工具</button>
+            <button :class="{ active: toolsSubTab === 'mcp' }" @click="toolsSubTab = 'mcp'">MCP 扩展</button>
+            <button :class="{ active: toolsSubTab === 'settings' }" @click="toolsSubTab = 'settings'">执行安全</button>
           </div>
 
           <!-- MCP 子 tab -->
           <template v-if="toolsSubTab === 'mcp'">
             <div class="section-header">
-              <h3>MCP 服务器</h3>
+              <h3>MCP 扩展工具</h3>
               <button class="btn-small" @click="openMCPForm">+ 添加</button>
             </div>
 
             <div v-if="mcpServers.length === 0" class="empty-hint">
-              暂无 MCP 服务器，点击"添加"接入外部工具
+              暂无 MCP 服务器。点击"添加"接入外部工具（如浏览器控制、数据库查询等）
             </div>
 
             <div v-for="srv in mcpServers" :key="srv.id" class="mcp-row">
@@ -1440,9 +1475,9 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           <template v-if="toolsSubTab === 'permissions'">
             <div v-if="toolPerms.length === 0" class="empty">暂无工具信息</div>
             <template v-else>
-              <div class="public-tools-title">内置工具（无需授权）</div>
+              <div class="public-tools-title">始终开启（无需授权）</div>
               <div class="public-tools">{{ publicToolNames }}</div>
-              <div class="protected-tools-title">需授权工具</div>
+              <div class="protected-tools-title">敏感工具（可单独开关）</div>
               <div v-for="perm in protectedToolPerms" :key="perm.ToolName" class="perm-row">
                 <div class="perm-info">
                   <span class="perm-name">{{ perm.ToolName }}</span>
@@ -1456,17 +1491,17 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             </template>
           </template>
 
-          <!-- 执行设置子 tab -->
+          <!-- 执行安全子 tab -->
           <template v-if="toolsSubTab === 'settings'">
             <div class="settings-section" style="margin-top:8px">
-              <h3 class="section-title">文件系统访问白名单</h3>
-              <p class="section-hint">留空则禁止所有文件操作，支持通配符（如 /Users/me/projects/*）</p>
+              <h3 class="section-title">文件访问目录</h3>
+              <p class="section-hint">AI 只能读写列表内的路径。留空则禁止所有文件操作；支持通配符（如 /Users/me/projects/*）</p>
               <div class="path-list">
                 <div v-for="(p, i) in cfg.AllowedPaths" :key="i" class="path-row">
                   <span class="path-text">{{ p }}</span>
                   <button class="btn-danger-small" @click="removePath(i)">删除</button>
                 </div>
-                <p v-if="!cfg.AllowedPaths || cfg.AllowedPaths.length === 0" class="empty-hint">暂无允许路径，文件操作已禁用</p>
+                <p v-if="!cfg.AllowedPaths || cfg.AllowedPaths.length === 0" class="empty-hint">暂无允许路径，文件读写已禁用</p>
               </div>
               <div class="path-add-row" style="margin-top:8px">
                 <input
@@ -1481,14 +1516,14 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             </div>
 
             <div class="settings-section" style="margin-top:12px">
-              <h3 class="section-title">免确认命令白名单</h3>
-              <p class="section-hint">以这些命令名开头的 Shell 命令将直接执行，无需二次确认（如 git、ls）</p>
+              <h3 class="section-title">免确认命令</h3>
+              <p class="section-hint">以下列命令名开头的 Shell 命令将跳过确认直接执行（建议填写低风险命令，如 git、ls）</p>
               <div class="path-list">
                 <div v-for="(cmd, i) in cfg.ShellTrustedCommands" :key="i" class="path-row">
                   <span class="path-text">{{ cmd }}</span>
                   <button class="btn-danger-small" @click="removeTrustedCommand(i)">删除</button>
                 </div>
-                <p v-if="!cfg.ShellTrustedCommands || cfg.ShellTrustedCommands.length === 0" class="empty-hint">暂无白名单命令，所有 Shell 命令均需确认</p>
+                <p v-if="!cfg.ShellTrustedCommands || cfg.ShellTrustedCommands.length === 0" class="empty-hint">暂无免确认命令，所有 Shell 命令均需二次确认</p>
               </div>
               <div class="path-add-row" style="margin-top:8px">
                 <input
@@ -1503,23 +1538,27 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             </div>
 
             <div class="settings-section" style="margin-top:12px">
-              <h3 class="section-title">执行超时</h3>
+              <h3 class="section-title">超时限制</h3>
               <div class="form-row">
-                <label for="shell-timeout-input">Shell 超时（秒）</label>
+                <label for="shell-timeout-input">Shell 命令超时（秒）</label>
                 <input id="shell-timeout-input" type="number" v-model.number="cfg.ShellTimeout" min="1" max="3600" class="short-input" aria-describedby="timeout-hint" />
               </div>
               <div class="form-row">
                 <label for="code-timeout-input">代码执行超时（秒）</label>
                 <input id="code-timeout-input" type="number" v-model.number="cfg.CodeTimeout" min="1" max="3600" class="short-input" aria-describedby="timeout-hint" />
               </div>
-              <p id="timeout-hint" class="section-hint" style="margin-top:8px">范围 1–3600 秒；超过时间后进程会被强制终止</p>
+              <p id="timeout-hint" class="section-hint" style="margin-top:8px">超时后进程强制终止，范围 1–3600 秒</p>
             </div>
           </template>
         </div>
         <div v-if="activeTab === 'knowledge'" class="tab-pane">
-          <button @click="importFile" :disabled="!!importProgress">导入文件</button>
+          <div class="section-header">
+            <h3>知识库文件</h3>
+            <button @click="importFile" :disabled="!!importProgress" class="btn-small">+ 导入文档</button>
+          </div>
+          <p class="section-hint">支持 .txt、.md、.pdf、.epub；导入后 AI 可通过语义检索引用文档内容</p>
           <div v-if="importProgress" class="progress">
-            {{ importProgress.Source }}: {{ importProgress.Processed }}/{{ importProgress.Total }}
+            正在处理 {{ importProgress.Source }}：{{ importProgress.Processed }}/{{ importProgress.Total }} 段
           </div>
           <ul v-if="sources.length">
             <li v-for="src in sources" :key="src">
@@ -1527,14 +1566,14 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               <button @click="deleteSource(src)">删除</button>
             </li>
           </ul>
-          <p v-else class="empty">暂无知识库文件</p>
+          <p v-else class="empty">暂无知识库文件，点击「导入文档」开始添加</p>
         </div>
 
         <!-- 自动化 -->
         <div v-if="activeTab === 'automation'" class="tab-pane">
           <div class="sub-tab-bar">
             <button :class="{ active: automationSubTab === 'cron' }" @click="automationSubTab = 'cron'">定时任务</button>
-            <button :class="{ active: automationSubTab === 'proactive' }" @click="automationSubTab = 'proactive'">提醒事项</button>
+            <button :class="{ active: automationSubTab === 'proactive' }" @click="automationSubTab = 'proactive'">待触发提醒</button>
           </div>
 
           <!-- 定时任务子 tab -->
@@ -1576,8 +1615,8 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 <div id="cron-form-title" class="modal-title">{{ cronForm.id ? '编辑定时任务' : '新建定时任务' }}</div>
                 <label>名称 *<input v-model="cronForm.name" placeholder="每日早报" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
                 <label>描述<input v-model="cronForm.description" placeholder="可选说明" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
-                <label>Cron 表达式 *<span class="field-hint">标准 5 段格式，如 0 8 * * * 表示每天 8 点</span><input v-model="cronForm.schedule" placeholder="0 8 * * *" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
-                <label>触发提示词 *<textarea v-model="cronForm.prompt" rows="4" placeholder="触发时发送给 AI 的消息内容" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
+                <label>执行时间（Cron）*<span class="field-hint">5 段 cron 格式（分 时 日 月 周），如 0 8 * * * = 每天 8 点；也支持 @daily、@hourly 等</span><input v-model="cronForm.schedule" placeholder="0 8 * * *" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
+                <label>触发指令 *<textarea v-model="cronForm.prompt" rows="4" placeholder="到达时间时发给 AI 的指令，如：帮我总结今日新闻" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
                 <div v-if="cronFormError" class="form-error">{{ cronFormError }}</div>
                 <div class="modal-actions">
                   <button class="btn-cancel" @click="showCronForm = false">取消</button>
@@ -1666,18 +1705,18 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
           <p class="lark-hint">
             配置完成后，AI 可通过 lark-cli 操作飞书，例如：发消息、查日历、读文档等。<br>
-            <strong>注意：</strong>需在"模型"标签页的 Skills 目录中添加飞书 Skills 路径（通常为 <code>~/.agents/skills</code>）。
+            <strong>注意：</strong>需在「对话」标签页的「技能目录」中添加飞书 Skills 路径（通常为 <code>~/.agents/skills</code>）。
           </p>
         </div>
 
         <!-- 短信监听 -->
         <div v-if="activeTab === 'sms'" class="tab-pane">
           <div class="section-header">
-            <h3>短信验证码监听</h3>
+            <h3>短信验证码自动识别</h3>
           </div>
           <p class="sms-desc">
-            监听 macOS 信息 App 的 SMS 短信，自动识别验证码并复制到剪贴板，同时弹出通知气泡。<br>
-            <strong>需要权限：</strong>系统设置 → 隐私与安全性 → <strong>完全磁盘访问权限</strong> → 授权 Aiko。
+            监听 macOS「信息」App 收到的短信，自动提取验证码并复制到剪贴板，同时推送通知气泡。<br>
+            <strong>所需权限：</strong>系统设置 → 隐私与安全性 → <strong>完全磁盘访问权限</strong> → 添加 Aiko。
           </p>
 
           <div class="sms-toggle-row">
@@ -1697,14 +1736,14 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               <span class="lark-step-num">1</span>
               <div class="lark-step-body">
                 <div class="lark-step-title">授予完全磁盘访问权限</div>
-                <p class="lark-step-desc">系统设置 → 隐私与安全性 → 完全磁盘访问权限 → 点击 + 添加 Aiko</p>
+                <p class="lark-step-desc">系统设置 → 隐私与安全性 → 完全磁盘访问权限 → 点击「+」添加 Aiko</p>
               </div>
             </div>
             <div class="sms-guide-step">
               <span class="lark-step-num">2</span>
               <div class="lark-step-body">
                 <div class="lark-step-title">点击「开启监听」</div>
-                <p class="lark-step-desc">收到含验证码的短信后，验证码自动写入剪贴板并弹出通知。</p>
+                <p class="lark-step-desc">收到含验证码的短信后，验证码自动写入剪贴板并弹出通知气泡，无需手动复制。</p>
               </div>
             </div>
           </div>
@@ -1738,6 +1777,12 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             <!-- Has update -->
             <div v-if="updateInfo && updateInfo.has_update && !updateInstalling" class="about-update-available">
               <span>发现新版本 <strong>v{{ updateInfo.latest_version }}</strong></span>
+              <a
+                class="about-changelog-link"
+                :href="`https://github.com/tiancheng92/Aiko/releases/tag/v${updateInfo.latest_version}`"
+                target="_blank"
+                rel="noopener noreferrer"
+              >更新内容</a>
               <button class="fetch-btn fetch-btn--primary" @click="installUpdate"
                 :disabled="!updateInfo.download_url">
                 {{ updateInfo.download_url ? '立即更新' : '无可用下载' }}
@@ -1768,9 +1813,11 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
     <!-- Footer -->
     <div class="win-footer">
-      <span class="status-msg">{{ statusMsg }}</span>
-      <button class="btn-reload" @click="reload" :disabled="reloading">{{ reloading ? '刷新中...' : '刷新' }}</button>
-      <button class="btn-save-primary" @click="save" :disabled="saving">{{ saving ? '保存中...' : '保存' }}</button>
+      <span class="status-msg">
+        <template v-if="statusMsg">{{ statusMsg }}</template>
+        <template v-else-if="saving">保存中…</template>
+      </span>
+      <button class="btn-done" @click="$emit('close')">完成</button>
     </div>
 
     <!-- Resize handle (bottom-right corner) -->
@@ -2137,7 +2184,6 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .btn-primary,
 .btn-save,
-.btn-save-primary,
 .btn-setup,
 .btn-add {
   background: var(--accent);
@@ -2148,13 +2194,20 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 }
 .btn-primary:hover:not(:disabled),
 .btn-save:hover:not(:disabled),
-.btn-save-primary:hover:not(:disabled),
 .btn-setup:hover:not(:disabled),
 .btn-add:hover:not(:disabled) { background: var(--accent-hover); border-color: transparent; }
 
+.btn-done {
+  background: var(--lg-surface-input);
+  color: var(--text-primary);
+  border: 1px solid var(--lg-border);
+  padding: 5px 20px;
+  font-weight: 500;
+}
+.btn-done:hover { background: var(--lg-surface-input-h); }
+
 .btn-secondary,
 .btn-cancel,
-.btn-reload,
 .btn-edit,
 .btn-small,
 .fetch-btn,
@@ -2976,6 +3029,17 @@ ul { list-style: none; padding: 0; margin: 0; }
   border-radius: var(--r-card);
 }
 .about-update-available > span { flex: 1; }
+.about-changelog-link {
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 4px 10px;
+  border-radius: var(--r-button);
+  border: 1px solid var(--accent-alpha-20);
+  transition: background 0.12s;
+  white-space: nowrap;
+}
+.about-changelog-link:hover { background: var(--accent-alpha-08); }
 .about-hint { font-size: 12px; color: var(--text-secondary); }
 .about-installing { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; background: var(--surface-card); border: 1px solid var(--lg-border-subtle); border-radius: var(--r-card); }
 .about-progress-bar {
@@ -3023,5 +3087,72 @@ ul { list-style: none; padding: 0; margin: 0; }
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ── Keyboard shortcuts reference ──────────────────────── */
+.shortcut-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 10px;
+}
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 10px;
+  border-radius: var(--r-card);
+  transition: background 0.12s;
+}
+.shortcut-row:hover {
+  background: var(--surface-card);
+}
+.shortcut-keys {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 96px;
+  flex-shrink: 0;
+}
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 6px;
+  font-family: -apple-system, 'SF Pro Text', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--lg-surface-elevated);
+  border: 1px solid var(--lg-border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+  user-select: none;
+  line-height: 1;
+}
+.shortcut-hold,
+.shortcut-release,
+.shortcut-drag,
+.shortcut-rc {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--lg-surface-input);
+  border: 1px solid var(--lg-border-subtle);
+  border-radius: 5px;
+  white-space: nowrap;
+  user-select: none;
+}
+.shortcut-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
 }
 </style>

@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import ChatPanel from './ChatPanel.vue'
 import ContextMenu from './ContextMenu.vue'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
-import { ExportChatHistory, GetChatSize, PingLLM, SaveChatSize } from '../../wailsjs/go/main/App'
+import { ExportChatHistory, GetChatSize, PingLLM, SaveChatSize, GetConfig, ListModelProfiles } from '../../wailsjs/go/main/App'
 import { ICON_EXPORT, ICON_TRASH, ICON_SETTING } from '../utils/icons'
 
 const props = defineProps({
@@ -14,7 +14,9 @@ const props = defineProps({
 })
 const emit = defineEmits(['close', 'open-settings'])
 
-const latencyMs = ref(null)  // null = not yet measured, -1 = error, ≥0 = ms
+const latencyMs = ref(null)        // null = not yet measured, -1 = error, ≥0 = ms
+const activeProfileName = ref('') // name of the currently active model profile
+const activeModel = ref('')        // model id of the currently active profile
 
 /** latencyColor returns the dot/text color for the current latency value. */
 function latencyColor(ms) {
@@ -89,10 +91,23 @@ onMounted(async () => {
     console.error('load chat size failed:', e)
   }
   offSizeChange = EventsOn('config:chat:size:changed', applySize)
+  /** refreshProfileInfo fetches the active profile name and model id for the title bar tags. */
+  async function refreshProfileInfo() {
+    try {
+      const [cfg, profiles] = await Promise.all([GetConfig(), ListModelProfiles()])
+      const active = profiles?.find(p => p.id === cfg.ActiveProfileID)
+      if (active) {
+        activeProfileName.value = active.name
+        activeModel.value = active.model
+      }
+    } catch { /* non-critical */ }
+  }
+
   const pingOnce = () => PingLLM().then(ms => { latencyMs.value = ms }).catch(() => { latencyMs.value = -1 })
   pingOnce()
+  refreshProfileInfo()
   latencyTimer = setInterval(pingOnce, 5000)
-  offModelChangedLatency = EventsOn('config:model:changed', pingOnce)
+  offModelChangedLatency = EventsOn('config:model:changed', () => { pingOnce(); refreshProfileInfo() })
   offScreenChanged = EventsOn('screen:active:changed', async (info) => {
     try {
       const [w, h] = await GetChatSize(info.width, info.height)
@@ -208,13 +223,25 @@ function onResizeUp() {
 
 const pos = computed(() => {
   const { x, y } = props.ballPos
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  const MARGIN = 8
+  const MENU_BAR = 38  // macOS menu bar height
+
+  let bx, by
   if (x < 0 || y < 0) {
-    return { x: window.innerWidth - bubbleW.value - 24, y: window.innerHeight - bubbleH.value - 100 }
+    bx = vw - bubbleW.value - 24
+    by = vh - bubbleH.value - 100
+  } else {
+    bx = x + props.ballSize - bubbleW.value
+    by = y - bubbleH.value - 8
   }
-  return {
-    x: x + props.ballSize - bubbleW.value,
-    y: y - bubbleH.value - 8,
-  }
+
+  // Clamp to visible viewport — keep clear of menu bar at top.
+  bx = Math.max(MARGIN, Math.min(bx, vw - bubbleW.value - MARGIN))
+  by = Math.max(MENU_BAR + MARGIN, Math.min(by, vh - bubbleH.value - MARGIN))
+
+  return { x: bx, y: by }
 })
 
 // ─── Context menu ────────────────────────────────────────────────────────────
@@ -280,16 +307,15 @@ defineExpose({ focusInput, scrollToBottom })
   >
     <div class="title-bar">
       <span class="title">聊天</span>
-      <div
-        class="latency-badge"
-        :style="{ color: latencyColor(latencyMs) }"
-        title="LLM 调用延迟"
-        aria-label="LLM 调用延迟"
-      >
-        <span class="latency-dot">●</span>
-        <span class="latency-value">{{ latencyLabel(latencyMs) }}</span>
-      </div>
       <div class="title-spacer"></div>
+      <div class="title-tags">
+        <div class="title-tag latency-tag" :style="{ color: latencyColor(latencyMs) }" aria-label="LLM 延迟">
+          <span class="latency-dot">●</span>
+          <span class="latency-value">{{ latencyLabel(latencyMs) }}</span>
+        </div>
+        <div v-if="activeModel" class="title-tag model-tag" :title="activeModel">{{ activeModel }}</div>
+        <div v-if="activeProfileName" class="title-tag profile-tag">{{ activeProfileName }}</div>
+      </div>
       <button class="icon-btn" :title="isFullscreen ? '退出全屏' : '全屏'" :aria-label="isFullscreen ? '退出全屏' : '全屏'" @click="toggleFullscreen">
         <svg v-if="!isFullscreen" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
         <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>
@@ -352,7 +378,7 @@ defineExpose({ focusInput, scrollToBottom })
   flex-shrink: 0;
   user-select: none;
   border-bottom: 1px solid var(--lg-border-subtle);
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0));
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0));
 }
 .title {
   color: var(--text-primary);
@@ -363,24 +389,39 @@ defineExpose({ focusInput, scrollToBottom })
 }
 .title-spacer { flex: 1; }
 
-.latency-badge {
+.title-tags {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.title-tag {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px;
   border-radius: 5px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--lg-surface-input);
   border: 1px solid var(--lg-border-subtle);
   font-size: 11px;
   font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  transition: color 0.4s, background 0.15s;
   white-space: nowrap;
   user-select: none;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+.latency-tag {
+  font-variant-numeric: tabular-nums;
+  transition: color 0.4s;
+  max-width: none;
+}
+.model-tag   { color: var(--text-secondary); max-width: 200px; }
+.profile-tag { color: var(--text-tertiary); }
 .latency-dot {
   font-size: 7px;
   line-height: 1;
+  flex-shrink: 0;
 }
 .latency-value {
   line-height: 1;
