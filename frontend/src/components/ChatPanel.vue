@@ -2222,7 +2222,7 @@ defineExpose({ focusInput, scrollToBottom })
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: rgba(28, 28, 32, 0.95);
+  background: var(--lg-surface-elevated);
   color: #fff;
   border: 1px solid var(--lg-border);
   line-height: 1;
@@ -2396,10 +2396,7 @@ defineExpose({ focusInput, scrollToBottom })
   padding: 24px;
   width: 380px;
   max-width: 90vw;
-  box-shadow:
-    0 24px 64px rgba(0, 0, 0, 0.55),
-    0 0 0 0.5px rgba(0, 0, 0, 0.3),
-    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  box-shadow: var(--lg-shadow);
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', sans-serif;
 }
 .confirm-pop-enter-active { transition: opacity 0.22s ease; }
