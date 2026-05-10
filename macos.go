@@ -532,127 +532,152 @@ static void startVoiceRecognition_SpeechAnalyzer(void) API_AVAILABLE(macos(26.0)
 #pragma clang diagnostic pop
 
 // startVoiceRecognition requests permissions and starts streaming STT.
-// Results are written to the voice pipe via sendVoiceText().
-// All ObjC exceptions are caught and forwarded as ERROR: messages.
+// On macOS 26+, delegates to startVoiceRecognition_SpeechAnalyzer for better accuracy.
+// On older systems, falls back to SFSpeechRecognizer.
 static void startVoiceRecognition() {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        @try {
-        // Check microphone permission (AVCaptureDevice works on all supported macOS versions)
-        AVAuthorizationStatus micStatus = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
-        if (micStatus == AVAuthorizationStatusNotDetermined) {
-            [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted) {
-                if (granted) {
-                    startVoiceRecognition();
-                } else {
-                    sendVoiceText("ERROR:mic_denied");
-                }
-            }];
-            return;
-        } else if (micStatus == AVAuthorizationStatusDenied || micStatus == AVAuthorizationStatusRestricted) {
-            sendVoiceText("ERROR:mic_denied");
-            return;
-        }
-
-        // Check speech recognition permission.
-        // We only block on Denied/Restricted. If NotDetermined, the system will
-        // auto-prompt when the recognition task starts. Calling requestAuthorization:
-        // explicitly causes a C-level abort() when the dev bundle lacks the plist key.
-        SFSpeechRecognizerAuthorizationStatus speechStatus = [SFSpeechRecognizer authorizationStatus];
-        if (speechStatus == SFSpeechRecognizerAuthorizationStatusDenied ||
-            speechStatus == SFSpeechRecognizerAuthorizationStatusRestricted) {
-            sendVoiceText("ERROR:speech_denied");
-            return;
-        }
-
-        // Initialize recognizer (prefer zh-CN, fallback to device locale)
-        gSpeechRecognizer = [[SFSpeechRecognizer alloc] initWithLocale:[NSLocale localeWithLocaleIdentifier:@"zh-CN"]];
-        if (!gSpeechRecognizer || !gSpeechRecognizer.available) {
-            gSpeechRecognizer = [SFSpeechRecognizer new];
-        }
-        gSpeechRecognizer.defaultTaskHint = SFSpeechRecognitionTaskHintDictation;
-
-        gAudioEngine = [AVAudioEngine new];
-        gRecogRequest = [SFSpeechAudioBufferRecognitionRequest new];
-        gRecogRequest.shouldReportPartialResults = YES;
-
-        AVAudioInputNode *inputNode = gAudioEngine.inputNode;
-        AVAudioFormat *fmt = [inputNode outputFormatForBus:0];
-
-        [inputNode installTapOnBus:0 bufferSize:1024 format:fmt block:^(AVAudioPCMBuffer *buf, AVAudioTime *when) {
-            @try { [gRecogRequest appendAudioPCMBuffer:buf]; } @catch (...) {}
-        }];
-
-        NSError *startErr = nil;
-        [gAudioEngine startAndReturnError:&startErr];
-        if (startErr) {
-            NSString *msg = [NSString stringWithFormat:@"ERROR:audio_engine:%@", startErr.localizedDescription];
-            sendVoiceText([msg UTF8String]);
-            return;
-        }
-
-        // resultHandler runs on a Speech framework background thread — must catch all exceptions.
-        gRecogTask = [gSpeechRecognizer recognitionTaskWithRequest:gRecogRequest
-            resultHandler:^(SFSpeechRecognitionResult *result, NSError *err) {
-                @try {
-                    if (err) {
-                        // Ignore cancellation errors (code 301) — they fire on normal stop
-                        if (err.code != 301) {
-                            NSString *msg = [NSString stringWithFormat:@"ERROR:recognition:%@", err.localizedDescription];
-                            sendVoiceText([msg UTF8String]);
-                        }
-                        return;
+    if (@available(macOS 26.0, *)) {
+        startVoiceRecognition_SpeechAnalyzer();
+    } else {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            @try {
+            // Check microphone permission (AVCaptureDevice works on all supported macOS versions)
+            AVAuthorizationStatus micStatus = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
+            if (micStatus == AVAuthorizationStatusNotDetermined) {
+                [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted) {
+                    if (granted) {
+                        startVoiceRecognition();
+                    } else {
+                        sendVoiceText("ERROR:mic_denied");
                     }
-                    if (result) {
-                        NSString *text = result.bestTranscription.formattedString;
-                        if (result.isFinal) {
-                            NSString *msg = [NSString stringWithFormat:@"FINAL:%@", text];
-                            sendVoiceText([msg UTF8String]);
-                        } else {
-                            sendVoiceText([text UTF8String]);
-                        }
-                    }
-                } @catch (NSException *ex) {
-                    NSString *msg = [NSString stringWithFormat:@"ERROR:result_handler:%@: %@", ex.name, ex.reason];
-                    sendVoiceText([msg UTF8String]);
-                } @catch (...) {}
+                }];
+                return;
+            } else if (micStatus == AVAuthorizationStatusDenied || micStatus == AVAuthorizationStatusRestricted) {
+                sendVoiceText("ERROR:mic_denied");
+                return;
+            }
+
+            // Check speech recognition permission.
+            // We only block on Denied/Restricted. If NotDetermined, the system will
+            // auto-prompt when the recognition task starts. Calling requestAuthorization:
+            // explicitly causes a C-level abort() when the dev bundle lacks the plist key.
+            SFSpeechRecognizerAuthorizationStatus speechStatus = [SFSpeechRecognizer authorizationStatus];
+            if (speechStatus == SFSpeechRecognizerAuthorizationStatusDenied ||
+                speechStatus == SFSpeechRecognizerAuthorizationStatusRestricted) {
+                sendVoiceText("ERROR:speech_denied");
+                return;
+            }
+
+            // Initialize recognizer (prefer zh-CN, fallback to device locale)
+            gSpeechRecognizer = [[SFSpeechRecognizer alloc] initWithLocale:[NSLocale localeWithLocaleIdentifier:@"zh-CN"]];
+            if (!gSpeechRecognizer || !gSpeechRecognizer.available) {
+                gSpeechRecognizer = [SFSpeechRecognizer new];
+            }
+            gSpeechRecognizer.defaultTaskHint = SFSpeechRecognitionTaskHintDictation;
+
+            gAudioEngine = [AVAudioEngine new];
+            gRecogRequest = [SFSpeechAudioBufferRecognitionRequest new];
+            gRecogRequest.shouldReportPartialResults = YES;
+
+            AVAudioInputNode *inputNode = gAudioEngine.inputNode;
+            AVAudioFormat *fmt = [inputNode outputFormatForBus:0];
+
+            [inputNode installTapOnBus:0 bufferSize:1024 format:fmt block:^(AVAudioPCMBuffer *buf, AVAudioTime *when) {
+                @try { [gRecogRequest appendAudioPCMBuffer:buf]; } @catch (...) {}
             }];
-        } @catch (NSException *ex) {
-            NSString *msg = [NSString stringWithFormat:@"ERROR:exception:%@: %@", ex.name, ex.reason];
-            sendVoiceText([msg UTF8String]);
-        }
-    });
+
+            NSError *startErr = nil;
+            [gAudioEngine startAndReturnError:&startErr];
+            if (startErr) {
+                NSString *msg = [NSString stringWithFormat:@"ERROR:audio_engine:%@", startErr.localizedDescription];
+                sendVoiceText([msg UTF8String]);
+                return;
+            }
+
+            // resultHandler runs on a Speech framework background thread — must catch all exceptions.
+            gRecogTask = [gSpeechRecognizer recognitionTaskWithRequest:gRecogRequest
+                resultHandler:^(SFSpeechRecognitionResult *result, NSError *err) {
+                    @try {
+                        if (err) {
+                            // Ignore cancellation errors (code 301) — they fire on normal stop
+                            if (err.code != 301) {
+                                NSString *msg = [NSString stringWithFormat:@"ERROR:recognition:%@", err.localizedDescription];
+                                sendVoiceText([msg UTF8String]);
+                            }
+                            return;
+                        }
+                        if (result) {
+                            NSString *text = result.bestTranscription.formattedString;
+                            if (result.isFinal) {
+                                NSString *msg = [NSString stringWithFormat:@"FINAL:%@", text];
+                                sendVoiceText([msg UTF8String]);
+                            } else {
+                                sendVoiceText([text UTF8String]);
+                            }
+                        }
+                    } @catch (NSException *ex) {
+                        NSString *msg = [NSString stringWithFormat:@"ERROR:result_handler:%@: %@", ex.name, ex.reason];
+                        sendVoiceText([msg UTF8String]);
+                    } @catch (...) {}
+                }];
+            } @catch (NSException *ex) {
+                NSString *msg = [NSString stringWithFormat:@"ERROR:exception:%@: %@", ex.name, ex.reason];
+                sendVoiceText([msg UTF8String]);
+            }
+        });
+    }
 }
 
 // stopVoiceRecognition ends the STT task and tears down the audio engine.
-// Correct order: stop tap → stop engine → endAudio → finish task → nil globals.
-// After the engine is fully stopped, byte 4 is written to gHotkeyPipeFd so
-// Go emits voice:end only after AVAudioEngine is no longer running — this
-// prevents macOS from showing the "Aiko is recording" indicator after stop.
+// Branches on the same @available check used in startVoiceRecognition.
 static void stopVoiceRecognition() {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        @try {
-            // 1. Stop the audio tap first to prevent new buffers from being appended.
-            if (gAudioEngine && gAudioEngine.running) {
-                [gAudioEngine.inputNode removeTapOnBus:0];
-                [gAudioEngine stop];
+    if (@available(macOS 26.0, *)) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            @try {
+                if (gAudioEngine26 && [gAudioEngine26 isRunning]) {
+                    [[gAudioEngine26 inputNode] removeTapOnBus:0];
+                    [gAudioEngine26 stop];
+                }
+                if (gSpeechAnalyzer26) {
+                    [gSpeechAnalyzer26 stopAnalysis];
+                }
+            } @catch (NSException *ex) {
+                NSLog(@"[Aiko] stopVoiceRecognition_SA exception: %@: %@", ex.name, ex.reason);
+            } @catch (...) {}
+            gSpeechAnalyzer26       = nil;
+            gDictationTranscriber26 = nil;
+            gAudioEngine26          = nil;
+            // Notify Go that the engine is fully stopped; Go will emit voice:end.
+            if (gHotkeyPipeFd >= 0) {
+                char b = 4;
+                write(gHotkeyPipeFd, &b, 1);
             }
-            // 2. Signal end of audio stream to the recognizer.
-            [gRecogRequest endAudio];
-            // 3. Ask the task to finalize with what it has received.
-            [gRecogTask finish];
-        } @catch (NSException *ex) {
-            NSLog(@"[Aiko] stopVoiceRecognition exception: %@: %@", ex.name, ex.reason);
-        } @catch (...) {}
-        gRecogTask = nil;
-        gRecogRequest = nil;
-        gAudioEngine = nil;
-        gSpeechRecognizer = nil;
-        // Notify Go that the engine is fully stopped; Go will emit voice:end.
-        if (gHotkeyPipeFd >= 0) {
-            char b = 4;
-            write(gHotkeyPipeFd, &b, 1);
-        }
-    });
+        });
+    } else {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            @try {
+                // 1. Stop the audio tap first to prevent new buffers from being appended.
+                if (gAudioEngine && gAudioEngine.running) {
+                    [gAudioEngine.inputNode removeTapOnBus:0];
+                    [gAudioEngine stop];
+                }
+                // 2. Signal end of audio stream to the recognizer.
+                [gRecogRequest endAudio];
+                // 3. Ask the task to finalize with what it has received.
+                [gRecogTask finish];
+            } @catch (NSException *ex) {
+                NSLog(@"[Aiko] stopVoiceRecognition exception: %@: %@", ex.name, ex.reason);
+            } @catch (...) {}
+            gRecogTask        = nil;
+            gRecogRequest     = nil;
+            gAudioEngine      = nil;
+            gSpeechRecognizer = nil;
+            // Notify Go that the engine is fully stopped; Go will emit voice:end.
+            if (gHotkeyPipeFd >= 0) {
+                char b = 4;
+                write(gHotkeyPipeFd, &b, 1);
+            }
+        });
+    }
 }
 
 // enableClickThrough sets the window to ignore mouse events by default,

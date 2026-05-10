@@ -31,6 +31,7 @@ export namespace config {
 	    TTSAutoPlay: boolean;
 	    TTSSummarizeThreshold: number;
 	    TTSBackend: string;
+	    ThemeStyle: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -68,6 +69,7 @@ export namespace config {
 	        this.TTSAutoPlay = source["TTSAutoPlay"];
 	        this.TTSSummarizeThreshold = source["TTSSummarizeThreshold"];
 	        this.TTSBackend = source["TTSBackend"];
+	        this.ThemeStyle = source["ThemeStyle"];
 	    }
 	}
 	export class ModelProfile {
