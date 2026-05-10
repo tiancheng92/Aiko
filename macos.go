@@ -629,6 +629,8 @@ static void startVoiceRecognition() {
 
 // stopVoiceRecognition ends the STT task and tears down the audio engine.
 // Branches on the same @available check used in startVoiceRecognition.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wobjc-method-access"
 static void stopVoiceRecognition() {
     if (@available(macOS 26.0, *)) {
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -679,6 +681,7 @@ static void stopVoiceRecognition() {
         });
     }
 }
+#pragma clang diagnostic pop
 
 // enableClickThrough sets the window to ignore mouse events by default,
 // findScrollViewInView performs a bounded-depth BFS search in |root|'s view
