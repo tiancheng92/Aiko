@@ -1258,10 +1258,6 @@ defineExpose({ focusInput, scrollToBottom })
 
 <style scoped>
 .chat-panel {
-  --text-primary: rgba(255, 255, 255, 0.94);
-  --text-secondary: rgba(255, 255, 255, 0.66);
-  --text-tertiary: rgba(255, 255, 255, 0.44);
-
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -1385,8 +1381,8 @@ defineExpose({ focusInput, scrollToBottom })
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: var(--lg-blur-sm);
+  -webkit-backdrop-filter: var(--lg-blur-sm);
   transition: background 0.12s, color 0.12s, border-color 0.12s;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   font-family: inherit;
@@ -1559,7 +1555,7 @@ defineExpose({ focusInput, scrollToBottom })
 
 .msg-action-btn {
   flex-shrink: 0;
-  background: rgba(28, 28, 32, 0.82);
+  background: var(--lg-surface-elevated);
   border: 1px solid var(--lg-border-subtle);
   color: var(--text-secondary);
   border-radius: 6px;
@@ -1569,8 +1565,8 @@ defineExpose({ focusInput, scrollToBottom })
   display: flex; align-items: center; justify-content: center;
   outline: none;
   padding: 0;
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: var(--lg-blur-sm);
+  -webkit-backdrop-filter: var(--lg-blur-sm);
   transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.08s;
 }
 .msg-action-btn:hover {
@@ -1825,7 +1821,7 @@ defineExpose({ focusInput, scrollToBottom })
   max-width: 240px;
   max-height: 240px;
   overflow-y: auto;
-  background: rgba(38, 38, 44, 0.82);
+  background: var(--lg-surface-elevated);
   border: 1px solid var(--lg-border);
   border-radius: 9px;
   padding: 4px;
@@ -1954,7 +1950,7 @@ defineExpose({ focusInput, scrollToBottom })
 }
 .tbl-detail-box {
   position: relative;
-  background: rgba(42, 42, 48, 0.92);
+  background: var(--lg-surface-modal);
   backdrop-filter: blur(40px) saturate(180%);
   -webkit-backdrop-filter: blur(40px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -1962,10 +1958,7 @@ defineExpose({ focusInput, scrollToBottom })
   width: 460px;
   max-width: 90vw;
   max-height: 70vh;
-  box-shadow:
-    0 24px 64px rgba(0, 0, 0, 0.55),
-    0 0 0 0.5px rgba(0, 0, 0, 0.3),
-    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  box-shadow: var(--lg-shadow);
   display: flex;
   flex-direction: column;
   overflow: hidden;
