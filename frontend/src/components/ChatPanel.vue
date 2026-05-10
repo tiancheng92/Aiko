@@ -1951,8 +1951,8 @@ defineExpose({ focusInput, scrollToBottom })
 .tbl-detail-box {
   position: relative;
   background: var(--lg-surface-modal);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: var(--lg-blur);
+  -webkit-backdrop-filter: var(--lg-blur);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 14px;
   width: 460px;
@@ -2388,9 +2388,9 @@ defineExpose({ focusInput, scrollToBottom })
 }
 .clear-confirm-box {
   position: relative;
-  background: rgba(42, 42, 48, 0.92);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  background: var(--lg-surface-modal);
+  backdrop-filter: var(--lg-blur);
+  -webkit-backdrop-filter: var(--lg-blur);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 14px;
   padding: 24px;
