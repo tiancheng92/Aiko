@@ -131,6 +131,19 @@ func All() []Tool {
 		&ControlAppTool{},
 		&GetCalendarEventsTool{},
 		&CreateCalendarEventTool{},
+		// Developer utility tools
+		&FormatJSONTool{},
+		&JSONToStructTool{},
+		&YAMLJSONConvertTool{},
+		&EncodeDecodeTool{},
+		&HashTextTool{},
+		&GenerateUUIDTool{},
+		&ConvertTimestampTool{},
+		&RegexTestTool{},
+		&NumberBaseConvertTool{},
+		&ConvertUnitsTool{},
+		&GetExchangeRateTool{},
+		&ConvertColorTool{},
 	}
 }
 
