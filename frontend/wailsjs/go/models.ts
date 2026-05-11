@@ -325,6 +325,8 @@ export namespace scheduler {
 	    Schedule: string;
 	    Prompt: string;
 	    Enabled: boolean;
+	    SaveToMemory: boolean;
+	    Notify: boolean;
 	    LastRun?: string;
 	    CreatedAt: string;
 	
@@ -340,6 +342,8 @@ export namespace scheduler {
 	        this.Schedule = source["Schedule"];
 	        this.Prompt = source["Prompt"];
 	        this.Enabled = source["Enabled"];
+	        this.SaveToMemory = source["SaveToMemory"];
+	        this.Notify = source["Notify"];
 	        this.LastRun = source["LastRun"];
 	        this.CreatedAt = source["CreatedAt"];
 	    }

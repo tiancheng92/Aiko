@@ -2832,32 +2832,41 @@ ul { list-style: none; padding: 0; margin: 0; }
 .cron-toggle-row {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
   border-top: 1px solid var(--lg-border-subtle);
-  padding-top: 12px;
-  margin-top: 2px;
+  margin-top: 4px;
 }
+/* Override .modal-box label (column) — this row needs horizontal layout */
 .cron-toggle-label {
-  display: flex;
+  display: flex !important;
+  flex-direction: row !important;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 6px 0;
+  padding: 10px 0;
   cursor: default;
+  border-bottom: 1px solid var(--lg-border-subtle);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-primary);
 }
+.cron-toggle-label:last-child { border-bottom: none; }
 .cron-toggle-text {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 .cron-toggle-title {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
+  line-height: 1.3;
 }
 .cron-toggle-hint {
   font-size: 11px;
   color: var(--text-tertiary);
+  line-height: 1.4;
 }
 .toggle-switch {
   position: relative;
@@ -2880,6 +2889,7 @@ ul { list-style: none; padding: 0; margin: 0; }
   height: 16px;
   border-radius: 50%;
   background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
   transition: transform 0.2s;
   display: block;
 }

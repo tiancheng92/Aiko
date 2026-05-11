@@ -30,8 +30,8 @@ export function ConfirmToolExecution(arg1, arg2, arg3) {
   return window['go']['main']['App']['ConfirmToolExecution'](arg1, arg2, arg3);
 }
 
-export function CreateCronJob(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['CreateCronJob'](arg1, arg2, arg3, arg4);
+export function CreateCronJob(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['CreateCronJob'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function DeleteCronJob(arg1) {
@@ -326,8 +326,8 @@ export function StopTTS() {
   return window['go']['main']['App']['StopTTS']();
 }
 
-export function UpdateCronJob(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['UpdateCronJob'](arg1, arg2, arg3, arg4, arg5);
+export function UpdateCronJob(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+  return window['go']['main']['App']['UpdateCronJob'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
 export function UpdateMCPServer(arg1) {

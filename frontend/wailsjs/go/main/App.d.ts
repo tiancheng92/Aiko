@@ -24,7 +24,7 @@ export function ClearChatHistory():Promise<void>;
 
 export function ConfirmToolExecution(arg1:string,arg2:boolean,arg3:string):Promise<void>;
 
-export function CreateCronJob(arg1:string,arg2:string,arg3:string,arg4:string):Promise<scheduler.Job>;
+export function CreateCronJob(arg1:string,arg2:string,arg3:string,arg4:string,arg5:boolean,arg6:boolean):Promise<scheduler.Job>;
 
 export function DeleteCronJob(arg1:number):Promise<void>;
 
@@ -172,6 +172,6 @@ export function StopSMSWatcher():Promise<void>;
 
 export function StopTTS():Promise<void>;
 
-export function UpdateCronJob(arg1:number,arg2:string,arg3:string,arg4:string,arg5:string):Promise<scheduler.Job>;
+export function UpdateCronJob(arg1:number,arg2:string,arg3:string,arg4:string,arg5:string,arg6:boolean,arg7:boolean):Promise<scheduler.Job>;
 
 export function UpdateMCPServer(arg1:mcp.ServerConfig):Promise<void>;
