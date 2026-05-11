@@ -426,6 +426,23 @@ func drainIter(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIterator[
 	return resp, len(uniqueTools), ok
 }
 
+// nextEvent wraps iter.Next() in a goroutine so callers can race it against
+// ctx.Done(). iter.Next() blocks on sync.Cond.Wait() and has no context
+// awareness; without this wrapper, StopGeneration cannot unblock a thinking LLM.
+type iterResult struct {
+	event *adk.AgentEvent
+	ok    bool
+}
+
+func nextEvent(iter *adk.AsyncIterator[*adk.AgentEvent]) <-chan iterResult {
+	c := make(chan iterResult, 1)
+	go func() {
+		event, ok := iter.Next()
+		c <- iterResult{event, ok}
+	}()
+	return c
+}
+
 // drainIterInner is the recursive core of drainIter; it accepts a shared uniqueTools
 // map so that distinct tool names are accumulated correctly across interrupt/resume cycles.
 func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIterator[*adk.AgentEvent],
@@ -434,7 +451,14 @@ func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIter
 	var sb strings.Builder
 
 	for {
-		event, ok := iter.Next()
+		var event *adk.AgentEvent
+		var ok bool
+		select {
+		case <-ctx.Done():
+			return "", false
+		case r := <-nextEvent(iter):
+			event, ok = r.event, r.ok
+		}
 		if !ok {
 			break
 		}
