@@ -29,13 +29,25 @@ function pauseDismiss() {
   if (hideTimer) { clearTimeout(hideTimer); hideTimer = null }
 }
 
-/** pos places the notification bubble above the pet using measured height. */
+const BUBBLE_W  = 320
+const MARGIN    = 8
+const MENU_BAR  = 38  // macOS menu bar height
+
+/** pos places the notification bubble above the pet, clamped to the viewport. */
 const pos = computed(() => {
-  if (props.petPos.x < 0) return { x: 40, y: 40 }
-  return {
-    x: props.petPos.x - 20,
-    y: props.petPos.y - bubbleH.value - GAP,
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  let bx, by
+  if (props.petPos.x < 0) {
+    bx = 40
+    by = 40
+  } else {
+    bx = props.petPos.x - 20
+    by = props.petPos.y - bubbleH.value - GAP
   }
+  bx = Math.max(MARGIN, Math.min(bx, vw - BUBBLE_W - MARGIN))
+  by = Math.max(MENU_BAR + MARGIN, Math.min(by, vh - bubbleH.value - MARGIN))
+  return { x: bx, y: by }
 })
 
 /** renderMd renders markdown content for notification body. */
