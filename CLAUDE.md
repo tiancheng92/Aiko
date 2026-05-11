@@ -106,6 +106,7 @@ frontend/src/
 | `chat:emotion` | backend→frontend | AI 返回情绪标签（驱动 Live2D/VRM 表情）|
 | `chat:clear` | frontend→frontend | 清空聊天历史 |
 | `chat:proactive:message` | backend→frontend | 主动消息推送（聊天框打开时直接推入）|
+| `chat:cron:start` | backend→frontend | 定时任务开始（SaveToMemory=true）：推入触发者消息 + 流式助手占位符，开启 loading 状态 |
 | `bubble:toggle` | any | 切换聊天气泡显示/隐藏 |
 | `pet:state:change` | any | 宠物状态变更 (idle/thinking/speaking/error) |
 | `knowledge:progress` | backend→frontend | 知识库导入进度更新 |

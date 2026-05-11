@@ -485,7 +485,8 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 
 	// Build a chat function for the scheduler.
 	// When SaveToMemory is true the job uses ag.Chat() so the exchange goes
-	// through persistAndMigrate (identical to typing in the chat panel).
+	// through persistAndMigrate (identical to typing in the chat panel) AND
+	// streams tokens to the chat panel via chat:cron:start / chat:token / chat:done.
 	// Otherwise ChatDirect is used to avoid polluting short/long-term memory.
 	chatFn := func(ctx context.Context, job scheduler.Job) (string, error) {
 		a.mu.RLock()
@@ -496,6 +497,12 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		}
 		var ch <-chan agent.StreamResult
 		if job.SaveToMemory {
+			// Signal the chat panel to open a streaming assistant bubble and
+			// show the cron job prompt as the user-side trigger message.
+			wailsruntime.EventsEmit(a.ctx, "chat:cron:start", map[string]any{
+				"name":   job.Name,
+				"prompt": job.Prompt,
+			})
 			ch = ag.Chat(ctx, job.Prompt)
 		} else {
 			ch = ag.ChatDirect(ctx, job.Prompt)
@@ -503,12 +510,21 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		var sb strings.Builder
 		for r := range ch {
 			if r.Err != nil {
+				if job.SaveToMemory {
+					wailsruntime.EventsEmit(a.ctx, "chat:done", "")
+				}
 				return "", r.Err
 			}
 			if r.Done {
 				break
 			}
 			sb.WriteString(r.Token)
+			if job.SaveToMemory {
+				wailsruntime.EventsEmit(a.ctx, "chat:token", r.Token)
+			}
+		}
+		if job.SaveToMemory {
+			wailsruntime.EventsEmit(a.ctx, "chat:done", "")
 		}
 		return sb.String(), nil
 	}
@@ -516,8 +532,8 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	onResult := func(job scheduler.Job, result string, err error) {
 		if err != nil {
 			slog.Error("cron job failed", "job", job.Name, "err", err)
-			// Always surface failures so a silently broken job stays visible.
 			failMsg := "任务执行失败: " + err.Error()
+			// Always show in-app bubble for failures.
 			wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
 				"title":   job.Name,
 				"message": failMsg,
@@ -525,16 +541,17 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 			go notify.System("⏰ "+job.Name, failMsg)
 			return
 		}
-		// Notify via in-app bubble and/or macOS system notification per job config.
+		// Always show in-app bubble with the result.
+		wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
+			"title":   "⏰ " + job.Name,
+			"message": result,
+		})
+		// Extra macOS system notification when Notify is enabled.
 		if job.Notify {
-			wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
-				"title":   job.Name,
-				"message": result,
-			})
 			go notify.System("⏰ "+job.Name, result)
 		}
-		// When SaveToMemory is on, chatFn already used ag.Chat() which calls
-		// persistAndMigrate — no extra lm.Store call needed here.
+		// When SaveToMemory is on, chatFn already used ag.Chat() (persistAndMigrate)
+		// and streamed tokens to the chat panel — nothing more to do here.
 	}
 
 	// NOTE: scheduler.Start is deferred until after a.mu is released below —

@@ -427,7 +427,7 @@ function formatTime(ts) {
 }
 
 let proactiveStarted = false
-let offToken, offDone, offError, offClear, offProactiveStart, offProactiveMessage
+let offToken, offDone, offError, offClear, offProactiveStart, offProactiveMessage, offCronStart
 let offTTSDone, offTTSError, offTTSAudio
 let offSoundsChanged
 let offVoiceStart, offVoiceTranscript, offVoiceEnd, offVoiceFinal, offVoiceError, offVoiceAutoSend
@@ -539,6 +539,17 @@ onMounted(async () => {
     EventsEmit('pet:state:change', 'speaking')
     scrollToBottom()
     setTimeout(() => EventsEmit('pet:state:change', 'idle'), 2000)
+  })
+
+  offCronStart = EventsOn('chat:cron:start', ({ name, prompt }) => {
+    // Push a user-side trigger label followed by a streaming assistant placeholder.
+    messages.value.push({ role: 'user', content: `⏰ **${name}**\n${prompt}`, isCron: true })
+    messages.value.push({ role: 'assistant', content: '', streaming: true, thinking: true, isCron: true })
+    loading.value = true
+    isStreaming.value = true
+    firstTokenThisTurn = true
+    EventsEmit('pet:state:change', 'thinking')
+    scrollToBottom()
   })
 
   offToken = EventsOn('chat:token', (token) => {
@@ -676,7 +687,7 @@ onUnmounted(() => {
   // Invoke every EventsOn teardown; undefined entries are safely skipped via
   // optional chaining so a partial mount (e.g. early error) does not throw here.
   offToken?.(); offDone?.(); offError?.(); offClear?.()
-  offProactiveStart?.(); offProactiveMessage?.()
+  offProactiveStart?.(); offProactiveMessage?.(); offCronStart?.()
   offTTSDone?.(); offTTSError?.(); offTTSAudio?.()
   offSoundsChanged?.()
   offVoiceStart?.(); offVoiceTranscript?.(); offVoiceEnd?.(); offVoiceFinal?.(); offVoiceError?.(); offVoiceAutoSend?.()
