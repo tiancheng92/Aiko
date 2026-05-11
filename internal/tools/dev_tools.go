@@ -2,7 +2,6 @@
 package tools
 
 import (
-	"bytes"
 	"context"
 	"crypto/md5"
 	"crypto/sha1"
@@ -1228,6 +1227,3 @@ func hueToRGB(p, q, t float64) float64 {
 	}
 	return p
 }
-
-// Ensure bytes import is used — removed in Task 3 cleanup.
-var _ = bytes.NewBuffer
