@@ -1611,10 +1611,10 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 <div v-if="job.LastRun" class="cron-lastrun">上次执行：{{ new Date(job.LastRun).toLocaleString() }}</div>
               </div>
               <div class="cron-actions">
-                <button class="btn-small" @click="runCronJobNow(job.ID)">执行</button>
+                <button class="btn-cron-run" @click="runCronJobNow(job.ID)">执行</button>
                 <button class="btn-small" @click="editCronJob(job)">编辑</button>
-                <button v-if="job.Enabled" class="btn-toggle" @click="toggleCronJob(job)">禁用</button>
-                <button v-else class="btn-toggle btn-toggle--enable" @click="toggleCronJob(job)">启用</button>
+                <button v-if="job.Enabled" class="btn-cron-disable" @click="toggleCronJob(job)">禁用</button>
+                <button v-else class="btn-cron-enable" @click="toggleCronJob(job)">启用</button>
                 <button class="btn-danger-small" @click="deleteCronJob(job.ID)">删除</button>
               </div>
             </div>
@@ -2307,6 +2307,38 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   color: var(--success);
 }
 .btn-toggle--enable:hover { background: rgba(48, 209, 88, 0.25); }
+
+/* Cron-specific action buttons */
+.btn-cron-run {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: var(--r-button);
+  background: rgba(0, 122, 255, 0.14);
+  color: var(--accent);
+  border: 1px solid rgba(0, 122, 255, 0.28);
+  font-weight: 500;
+}
+.btn-cron-run:hover { background: rgba(0, 122, 255, 0.24); border-color: rgba(0, 122, 255, 0.45); }
+.btn-cron-disable {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: var(--r-button);
+  background: rgba(255, 159, 10, 0.12);
+  color: #ff9f0a;
+  border: 1px solid rgba(255, 159, 10, 0.28);
+  font-weight: 500;
+}
+.btn-cron-disable:hover { background: rgba(255, 159, 10, 0.22); border-color: rgba(255, 159, 10, 0.45); }
+.btn-cron-enable {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: var(--r-button);
+  background: rgba(48, 209, 88, 0.14);
+  color: var(--success);
+  border: 1px solid rgba(48, 209, 88, 0.28);
+  font-weight: 500;
+}
+.btn-cron-enable:hover { background: rgba(48, 209, 88, 0.24); border-color: rgba(48, 209, 88, 0.45); }
 
 /* URL row with fetch button */
 .url-row { display: flex; gap: 8px; align-items: center; }
