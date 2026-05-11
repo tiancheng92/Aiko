@@ -532,10 +532,27 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 			a.mu.RLock()
 			lm := a.longMem
 			a.mu.RUnlock()
-			if lm != nil {
+			if lm == nil {
+				slog.Warn("cron: SaveToMemory skipped — embedder not configured", "job", job.Name)
+				wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
+					"title":   job.Name,
+					"message": "存入记忆失败：未配置 Embedding 模型",
+				})
+			} else {
 				content := fmt.Sprintf("[定时任务: %s]\n%s", job.Name, result)
 				if storeErr := lm.Store(context.Background(), content); storeErr != nil {
-					slog.Warn("cron: failed to save result to memory", "job", job.Name, "err", storeErr)
+					slog.Error("cron: failed to save result to memory", "job", job.Name, "err", storeErr)
+					wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
+						"title":   job.Name,
+						"message": "存入记忆失败: " + storeErr.Error(),
+					})
+				} else if !job.Notify {
+					// Only show success bubble when Notify is off — otherwise the main
+					// result bubble already surfaced the execution outcome.
+					wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
+						"title":   job.Name,
+						"message": "已存入记忆 ✓",
+					})
 				}
 			}
 		}
