@@ -1,11 +1,5 @@
 <template>
-  <div v-if="preview" :class="['link-preview', { 'has-image': !!preview.image }]" @click="open">
-    <!-- OG banner image — only when present -->
-    <div v-if="preview.image" class="lp-banner">
-      <img :src="preview.image" class="lp-banner-img" @error="hideImage" />
-      <div class="lp-banner-blur" />
-    </div>
-
+  <div v-if="preview" class="link-preview" @click="open">
     <!-- Content area -->
     <div class="lp-body">
       <div class="lp-title">{{ stripHtml(preview.title) || preview.url }}</div>
@@ -75,12 +69,6 @@ function open() {
   BrowserOpenURL(props.url)
 }
 
-/** hideImage removes the broken OG image and collapses the banner. */
-function hideImage(e) {
-  e.target.closest('.lp-banner')?.remove()
-  e.target.closest('.link-preview')?.classList.remove('has-image')
-}
-
 /** hideFavicon hides the favicon if it fails to load. */
 function hideFavicon(e) {
   e.target.style.display = 'none'
@@ -96,48 +84,16 @@ function hideFavicon(e) {
   background: rgba(15, 20, 35, 0.75);
   border: 1px solid rgba(255, 255, 255, 0.09);
   cursor: pointer;
-  max-width: 360px;
+  max-width: 100%;
   transition: border-color 0.15s, background 0.15s;
   backdrop-filter: blur(12px);
   /* blue left accent when no image */
   border-left: 3px solid rgba(3, 105, 161, 0.7);
 }
 
-.link-preview.has-image {
-  border-left-width: 1px;
-  border-left-color: rgba(255, 255, 255, 0.09);
-}
-
 .link-preview:hover {
   background: rgba(3, 105, 161, 0.08);
   border-color: rgba(3, 105, 161, 0.45);
-}
-
-.link-preview.has-image:hover {
-  border-left-color: rgba(3, 105, 161, 0.45);
-}
-
-/* ── Banner ────────────────────────────────────────────────── */
-.lp-banner {
-  position: relative;
-  width: 100%;
-  height: 120px;
-  overflow: hidden;
-}
-
-.lp-banner-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-/* subtle gradient overlay so title sits clearly above image */
-.lp-banner-blur {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to bottom, transparent 40%, rgba(15, 20, 35, 0.7) 100%);
-  pointer-events: none;
 }
 
 /* ── Body ──────────────────────────────────────────────────── */

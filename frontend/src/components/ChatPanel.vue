@@ -1129,12 +1129,20 @@ defineExpose({ focusInput, scrollToBottom })
                   </div>
                 </div>
                 <div v-if="m.content" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')"></div>
+                <template v-if="!m.streaming && !m.thinking && m.content">
+                  <LinkPreview v-for="u in extractUrls(m.content)" :key="u" :url="u" />
+                </template>
               </div>
               <template v-else>
                 <div v-if="m.thinking || (m.streaming && !renderMarkdown(m.content))" :class="['bubble', 'thinking-bubble', { proactive: m.isProactive }]">
                   <span class="dot" /><span class="dot" /><span class="dot" />
                 </div>
-                <div v-else :class="['bubble', 'markdown', { proactive: m.isProactive }]" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')" />
+                <div v-else :class="['bubble', 'markdown', { proactive: m.isProactive }]">
+                  <div v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')" />
+                  <template v-if="!m.streaming && !m.thinking && m.content">
+                    <LinkPreview v-for="u in extractUrls(m.content)" :key="u" :url="u" />
+                  </template>
+                </div>
               </template>
 
               <!-- Action buttons: absolutely positioned, no layout impact -->
@@ -1171,17 +1179,14 @@ defineExpose({ focusInput, scrollToBottom })
             </div>
           </div>
 
-          <!-- Link preview cards — shown below the bubble once streaming is done -->
-          <template v-if="!m.streaming && !m.thinking && m.content">
-            <LinkPreview
-              v-for="u in extractUrls(m.content)"
-              :key="u"
-              :url="u"
-            />
-          </template>
           <div v-if="(m.time && !m.streaming && !m.thinking) || (isEverCollapsed(m, i) && !isCollapsed(m, i))" class="msg-meta-row">
+            <!-- user: recollapse left of timestamp; assistant: recollapse right of timestamp -->
+            <button v-if="m.role === 'user' && isEverCollapsed(m, i) && !isCollapsed(m, i)" class="recollapse-btn" @click.stop="toggleExpand(m, i)">
+              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+              收起
+            </button>
             <span v-if="m.time && !m.streaming && !m.thinking" class="msg-time">{{ formatTime(m.time) }}</span>
-            <button v-if="isEverCollapsed(m, i) && !isCollapsed(m, i)" class="recollapse-btn" @click.stop="toggleExpand(m, i)">
+            <button v-if="m.role !== 'user' && isEverCollapsed(m, i) && !isCollapsed(m, i)" class="recollapse-btn" @click.stop="toggleExpand(m, i)">
               <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
               收起
             </button>
@@ -2433,6 +2438,16 @@ defineExpose({ focusInput, scrollToBottom })
 .msg-file-chip span {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Link preview inside user bubble: keep dark bg on hover so text stays readable */
+.msg.user :deep(.link-preview) {
+  background: rgba(0, 0, 0, 0.35);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+.msg.user :deep(.link-preview:hover) {
+  background: rgba(0, 0, 0, 0.5);
+  border-color: rgba(255, 255, 255, 0.28);
 }
 </style>
 

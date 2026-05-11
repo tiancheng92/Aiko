@@ -130,12 +130,12 @@ html[data-theme="frosted"] {
   --text-body-muted: rgba(255, 255, 255, 0.72);  /* 12–13px readable body (WCAG AA on glass) */
   --text-label-muted:rgba(255, 255, 255, 0.46);  /* decorative labels only */
 
-  /* Brand accent — iOS system blue */
-  --accent:          #0A84FF;
-  --accent-hover:    #409CFF;
-  --accent-alpha-20: rgba(10, 132, 255, 0.20);
-  --accent-alpha-12: rgba(10, 132, 255, 0.12);
-  --accent-alpha-08: rgba(10, 132, 255, 0.08);
+  /* Brand accent — muted steel blue */
+  --accent:          #2563EB;
+  --accent-hover:    #3B82F6;
+  --accent-alpha-20: rgba(37, 99, 235, 0.20);
+  --accent-alpha-12: rgba(37, 99, 235, 0.12);
+  --accent-alpha-08: rgba(37, 99, 235, 0.08);
 
   /* Semantic status colours */
   --danger:       #FF453A;
