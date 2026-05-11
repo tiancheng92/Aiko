@@ -1598,12 +1598,12 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 </div>
                 <div v-if="job.Description" class="cron-desc">{{ job.Description }}</div>
                 <div class="cron-prompt">{{ job.Prompt }}</div>
-                <div class="cron-flags">
-                  <span class="cron-flag" :class="job.Notify ? 'cron-flag--on' : 'cron-flag--off'">
+                <div v-if="job.Notify || job.SaveToMemory" class="cron-flags">
+                  <span v-if="job.Notify" class="cron-flag cron-flag--on">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width="10" height="10"><path d="M8 1a5 5 0 0 0-5 5v1.38l-.8 1.6A1 1 0 0 0 3.1 10.5h9.8a1 1 0 0 0 .9-1.52L13 7.38V6a5 5 0 0 0-5-5zm0 13a2 2 0 0 1-1.73-1h3.46A2 2 0 0 1 8 14z"/></svg>
                     通知
                   </span>
-                  <span class="cron-flag" :class="job.SaveToMemory ? 'cron-flag--on' : 'cron-flag--off'">
+                  <span v-if="job.SaveToMemory" class="cron-flag cron-flag--on">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width="10" height="10"><path d="M8 1a3.5 3.5 0 1 0 0 7A3.5 3.5 0 0 0 8 1zM3 10.5C3 9.12 5.24 8 8 8s5 1.12 5 2.5V14H3v-3.5z"/></svg>
                     存入记忆
                   </span>
