@@ -1549,6 +1549,25 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               </div>
               <p id="timeout-hint" class="section-hint" style="margin-top:8px">超时后进程强制终止，范围 1–3600 秒</p>
             </div>
+
+            <div class="settings-section" style="margin-top:12px">
+              <h3 class="section-title">Web 工具</h3>
+              <div class="form-row">
+                <label for="jina-api-key-input">Jina API Key</label>
+                <input
+                  id="jina-api-key-input"
+                  v-model="cfg.JinaAPIKey"
+                  type="password"
+                  placeholder="jina_xxxxxxxxxxxx（留空即可）"
+                  spellcheck="false"
+                  autocorrect="off"
+                  autocomplete="off"
+                  class="short-input"
+                  aria-describedby="jina-hint"
+                />
+              </div>
+              <p id="jina-hint" class="section-hint" style="margin-top:8px">可选，提升 web_fetch 抓取额度（留空使用免费模式）</p>
+            </div>
           </template>
         </div>
         <div v-if="activeTab === 'knowledge'" class="tab-pane">
