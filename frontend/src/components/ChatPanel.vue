@@ -711,6 +711,29 @@ const BOLD_OPEN_FIX = /(\p{Lo})\*\*(?=[　-〿＀-￯'-‟])/gu
 const _mdCache = new Map()
 const _MD_CACHE_MAX = 200
 
+/**
+ * closeUnclosedFences appends a closing fence for any unclosed fenced code
+ * block so that `marked` does not misparse pipe characters inside the block
+ * as table separators during streaming.
+ */
+function closeUnclosedFences(text) {
+  const lines = text.split('\n')
+  let inFence = false
+  let fenceChar = ''
+  for (const line of lines) {
+    const m = line.match(/^(`{3,}|~{3,})/)
+    if (m) {
+      if (!inFence) {
+        inFence = true
+        fenceChar = m[1][0]
+      } else if (m[1][0] === fenceChar) {
+        inFence = false
+      }
+    }
+  }
+  return inFence ? text + '\n' + fenceChar.repeat(3) : text
+}
+
 /** renderMarkdown converts markdown text to sanitized HTML, caching results to avoid re-parsing. */
 function renderMarkdown(text) {
   if (!text) return ''
@@ -728,7 +751,7 @@ function renderMarkdown(text) {
       return real || match
     }
   )
-  const processed = ddgFixed
+  const processed = closeUnclosedFences(ddgFixed)
     .replace(BOLD_CLOSE_FIX, `$1${ZWJ}**`)
     .replace(BOLD_OPEN_FIX, `$1**${ZWJ}`)
   const html = marked(processed).replace(/‍/g, '')
