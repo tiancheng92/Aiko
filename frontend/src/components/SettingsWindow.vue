@@ -1420,7 +1420,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           <template v-if="toolsSubTab === 'mcp'">
             <div class="section-header">
               <h3>MCP 扩展工具</h3>
-              <button class="btn-small" @click="openMCPForm">+ 添加</button>
+              <button class="btn-accent-add" @click="openMCPForm">+ 添加</button>
             </div>
 
             <div v-if="mcpServers.length === 0" class="empty-hint">
@@ -1434,10 +1434,10 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 <span class="mcp-endpoint">{{ srv.transport === 'stdio' ? srv.command : srv.url }}</span>
               </div>
               <div class="mcp-actions">
-                <button class="btn-toggle" :class="{ active: srv.enabled }" @click="toggleMCPServer(srv)">
+                <button :class="srv.enabled ? 'btn-mcp-enabled' : 'btn-mcp-disabled'" @click="toggleMCPServer(srv)">
                   {{ srv.enabled ? '已启用' : '已禁用' }}
                 </button>
-                <button class="btn-small" @click="editMCPServer(srv)">编辑</button>
+                <button class="btn-edit-small" @click="editMCPServer(srv)">编辑</button>
                 <button class="btn-danger-small" @click="deleteMCPServer(srv.id)">删除</button>
               </div>
             </div>
@@ -1511,7 +1511,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                   @keydown.enter="addPath"
                   spellcheck="false" autocorrect="off" autocomplete="off"
                 />
-                <button class="btn-small" @click="addPath">添加</button>
+                <button class="btn-accent-add" @click="addPath">添加</button>
               </div>
             </div>
 
@@ -1533,7 +1533,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                   @keydown.enter="addTrustedCommand"
                   spellcheck="false" autocorrect="off" autocomplete="off"
                 />
-                <button class="btn-small" @click="addTrustedCommand">添加</button>
+                <button class="btn-accent-add" @click="addTrustedCommand">添加</button>
               </div>
             </div>
 
@@ -1554,7 +1554,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
         <div v-if="activeTab === 'knowledge'" class="tab-pane">
           <div class="section-header">
             <h3>知识库文件</h3>
-            <button @click="importFile" :disabled="!!importProgress" class="btn-small">+ 导入文档</button>
+            <button @click="importFile" :disabled="!!importProgress" class="btn-accent-add">+ 导入文档</button>
           </div>
           <p class="section-hint">支持 .txt、.md、.pdf、.epub；导入后 AI 可通过语义检索引用文档内容</p>
           <div v-if="importProgress" class="progress">
@@ -1670,7 +1670,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           <template v-if="automationSubTab === 'proactive'">
             <div class="section-header">
               <h3>提醒事项</h3>
-              <button class="btn-small" @click="loadProactiveItems">刷新</button>
+              <button class="btn-refresh" @click="loadProactiveItems">刷新</button>
             </div>
 
             <div v-if="proactiveError" class="form-error">{{ proactiveError }}</div>
@@ -2246,7 +2246,6 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .btn-secondary,
 .btn-cancel,
-.btn-edit,
 .btn-small,
 .fetch-btn,
 .btn-retry,
@@ -2257,6 +2256,22 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   padding: 5px 12px;
   font-size: 12px;
 }
+.btn-edit {
+  background: rgba(94, 92, 230, 0.12);
+  color: #9b9cf5;
+  border: 1px solid rgba(94, 92, 230, 0.28);
+  padding: 5px 12px;
+  font-size: 12px;
+}
+.btn-edit:hover { background: rgba(94, 92, 230, 0.20); border-color: rgba(94, 92, 230, 0.45); }
+.btn-edit-small {
+  background: rgba(94, 92, 230, 0.12);
+  color: #9b9cf5;
+  border: 1px solid rgba(94, 92, 230, 0.28);
+  font-size: 11px;
+  padding: 4px 10px;
+}
+.btn-edit-small:hover { background: rgba(94, 92, 230, 0.20); border-color: rgba(94, 92, 230, 0.45); }
 .btn-retry { padding: 3px 10px; font-size: 11px; }
 .btn-small { padding: 4px 10px; font-size: 11px; }
 .btn-reset-size { padding: 4px 10px; font-size: 11px; align-self: flex-start; }
@@ -2339,6 +2354,52 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   font-weight: 500;
 }
 .btn-cron-enable:hover { background: rgba(48, 209, 88, 0.24); border-color: rgba(48, 209, 88, 0.45); }
+
+/* Accent add button — blue outline, used for all "+ add / import" actions */
+.btn-accent-add {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: var(--r-button);
+  background: rgba(0, 122, 255, 0.12);
+  color: var(--accent);
+  border: 1px solid rgba(0, 122, 255, 0.28);
+  font-weight: 500;
+}
+.btn-accent-add:hover:not(:disabled) { background: rgba(0, 122, 255, 0.22); border-color: rgba(0, 122, 255, 0.45); }
+
+/* Refresh button — subtle blue tint */
+.btn-refresh {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: var(--r-button);
+  background: rgba(100, 210, 255, 0.10);
+  color: #64d2ff;
+  border: 1px solid rgba(100, 210, 255, 0.25);
+  font-weight: 500;
+}
+.btn-refresh:hover { background: rgba(100, 210, 255, 0.18); border-color: rgba(100, 210, 255, 0.42); }
+
+/* MCP server enable/disable toggle */
+.btn-mcp-enabled {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: var(--r-button);
+  background: rgba(48, 209, 88, 0.14);
+  color: var(--success);
+  border: 1px solid rgba(48, 209, 88, 0.28);
+  font-weight: 500;
+}
+.btn-mcp-enabled:hover { background: rgba(48, 209, 88, 0.22); border-color: rgba(48, 209, 88, 0.45); }
+.btn-mcp-disabled {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: var(--r-button);
+  background: rgba(255, 159, 10, 0.10);
+  color: #ff9f0a;
+  border: 1px solid rgba(255, 159, 10, 0.25);
+  font-weight: 500;
+}
+.btn-mcp-disabled:hover { background: rgba(255, 159, 10, 0.20); border-color: rgba(255, 159, 10, 0.42); }
 
 /* URL row with fetch button */
 .url-row { display: flex; gap: 8px; align-items: center; }
