@@ -32,6 +32,7 @@ export namespace config {
 	    TTSSummarizeThreshold: number;
 	    TTSBackend: string;
 	    ThemeStyle: string;
+	    JinaAPIKey: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -70,6 +71,7 @@ export namespace config {
 	        this.TTSSummarizeThreshold = source["TTSSummarizeThreshold"];
 	        this.TTSBackend = source["TTSBackend"];
 	        this.ThemeStyle = source["ThemeStyle"];
+	        this.JinaAPIKey = source["JinaAPIKey"];
 	    }
 	}
 	export class ModelProfile {
