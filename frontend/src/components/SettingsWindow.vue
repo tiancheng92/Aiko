@@ -100,7 +100,7 @@ const mcpFormSaving = ref(false)
 // Cron jobs
 const cronJobs = ref([])
 const showCronForm = ref(false)
-const cronForm = ref({ id: 0, name: '', description: '', schedule: '', prompt: '' })
+const cronForm = ref({ id: 0, name: '', description: '', schedule: '', prompt: '', saveToMemory: false, notify: true })
 const cronFormError = ref('')
 const cronFormSaving = ref(false)
 
@@ -805,14 +805,14 @@ async function fetchCronJobs() {
 
 /** openCronForm opens the form to create a new job. */
 function openCronForm() {
-  cronForm.value = { id: 0, name: '', description: '', schedule: '', prompt: '' }
+  cronForm.value = { id: 0, name: '', description: '', schedule: '', prompt: '', saveToMemory: false, notify: true }
   cronFormError.value = ''
   showCronForm.value = true
 }
 
 /** editCronJob opens the form pre-filled with an existing job. */
 function editCronJob(job) {
-  cronForm.value = { id: job.ID, name: job.Name, description: job.Description, schedule: job.Schedule, prompt: job.Prompt }
+  cronForm.value = { id: job.ID, name: job.Name, description: job.Description, schedule: job.Schedule, prompt: job.Prompt, saveToMemory: job.SaveToMemory, notify: job.Notify }
   cronFormError.value = ''
   showCronForm.value = true
 }
@@ -830,7 +830,7 @@ function isValidCron(expr) {
 /** saveCronJob creates or updates a job. */
 async function saveCronJob() {
   if (cronFormSaving.value) return
-  const { id, name, description, schedule, prompt } = cronForm.value
+  const { id, name, description, schedule, prompt, saveToMemory, notify } = cronForm.value
   if (!name.trim() || !schedule.trim() || !prompt.trim()) {
     cronFormError.value = '名称、Cron 表达式和触发提示词为必填项'
     return
@@ -842,9 +842,9 @@ async function saveCronJob() {
   cronFormSaving.value = true
   try {
     if (id) {
-      await UpdateCronJob(id, name, description, schedule, prompt)
+      await UpdateCronJob(id, name, description, schedule, prompt, saveToMemory, notify)
     } else {
-      await CreateCronJob(name, description, schedule, prompt)
+      await CreateCronJob(name, description, schedule, prompt, saveToMemory, notify)
     }
     showCronForm.value = false
     await fetchCronJobs()
@@ -1598,6 +1598,16 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 </div>
                 <div v-if="job.Description" class="cron-desc">{{ job.Description }}</div>
                 <div class="cron-prompt">{{ job.Prompt }}</div>
+                <div class="cron-flags">
+                  <span class="cron-flag" :class="job.Notify ? 'cron-flag--on' : 'cron-flag--off'">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width="10" height="10"><path d="M8 1a5 5 0 0 0-5 5v1.38l-.8 1.6A1 1 0 0 0 3.1 10.5h9.8a1 1 0 0 0 .9-1.52L13 7.38V6a5 5 0 0 0-5-5zm0 13a2 2 0 0 1-1.73-1h3.46A2 2 0 0 1 8 14z"/></svg>
+                    通知
+                  </span>
+                  <span class="cron-flag" :class="job.SaveToMemory ? 'cron-flag--on' : 'cron-flag--off'">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width="10" height="10"><path d="M8 1a3.5 3.5 0 1 0 0 7A3.5 3.5 0 0 0 8 1zM3 10.5C3 9.12 5.24 8 8 8s5 1.12 5 2.5V14H3v-3.5z"/></svg>
+                    存入记忆
+                  </span>
+                </div>
                 <div v-if="job.LastRun" class="cron-lastrun">上次执行：{{ new Date(job.LastRun).toLocaleString() }}</div>
               </div>
               <div class="cron-actions">
@@ -1617,6 +1627,36 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 <label>描述<input v-model="cronForm.description" placeholder="可选说明" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
                 <label>执行时间（Cron）*<span class="field-hint">5 段 cron 格式（分 时 日 月 周），如 0 8 * * * = 每天 8 点；也支持 @daily、@hourly 等</span><input v-model="cronForm.schedule" placeholder="0 8 * * *" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
                 <label>触发指令 *<textarea v-model="cronForm.prompt" rows="4" placeholder="到达时间时发给 AI 的指令，如：帮我总结今日新闻" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
+                <div class="cron-toggle-row">
+                  <label class="cron-toggle-label">
+                    <span class="cron-toggle-text">
+                      <span class="cron-toggle-title">系统通知</span>
+                      <span class="cron-toggle-hint">执行完成后发送 macOS 系统通知</span>
+                    </span>
+                    <button
+                      type="button"
+                      class="toggle-switch"
+                      :class="{ 'toggle-switch--on': cronForm.notify }"
+                      :aria-checked="cronForm.notify"
+                      role="switch"
+                      @click="cronForm.notify = !cronForm.notify"
+                    ><span class="toggle-thumb" /></button>
+                  </label>
+                  <label class="cron-toggle-label">
+                    <span class="cron-toggle-text">
+                      <span class="cron-toggle-title">存入记忆</span>
+                      <span class="cron-toggle-hint">执行成功后将结果写入长期记忆</span>
+                    </span>
+                    <button
+                      type="button"
+                      class="toggle-switch"
+                      :class="{ 'toggle-switch--on': cronForm.saveToMemory }"
+                      :aria-checked="cronForm.saveToMemory"
+                      role="switch"
+                      @click="cronForm.saveToMemory = !cronForm.saveToMemory"
+                    ><span class="toggle-thumb" /></button>
+                  </label>
+                </div>
                 <div v-if="cronFormError" class="form-error">{{ cronFormError }}</div>
                 <div class="modal-actions">
                   <button class="btn-cancel" @click="showCronForm = false">取消</button>
@@ -2773,6 +2813,77 @@ ul { list-style: none; padding: 0; margin: 0; }
 .cron-status--on  { background: rgba(48, 209, 88, 0.14); color: var(--success); }
 .cron-status--off { background: rgba(255, 255, 255, 0.06); color: var(--text-tertiary); }
 .cron-row--editing { border-color: var(--accent); background: var(--accent-alpha-08); }
+.cron-flags {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+.cron-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-weight: 500;
+}
+.cron-flag--on  { background: rgba(0, 122, 255, 0.12); color: var(--accent); }
+.cron-flag--off { background: rgba(255, 255, 255, 0.05); color: var(--text-tertiary); }
+.cron-toggle-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-top: 1px solid var(--lg-border-subtle);
+  padding-top: 12px;
+  margin-top: 2px;
+}
+.cron-toggle-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  cursor: default;
+}
+.cron-toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cron-toggle-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.cron-toggle-hint {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.toggle-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s;
+  padding: 0;
+}
+.toggle-switch--on { background: var(--accent); }
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s;
+  display: block;
+}
+.toggle-switch--on .toggle-thumb { transform: translateX(16px); }
 .cron-edit-form { flex: 1; display: flex; flex-direction: column; gap: 12px; }
 .cron-form {
   background: var(--surface-card);

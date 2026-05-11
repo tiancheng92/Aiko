@@ -510,8 +510,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	onResult := func(job scheduler.Job, result string, err error) {
 		if err != nil {
 			slog.Error("cron job failed", "job", job.Name, "err", err)
-			// Still surface the failure to the user via both channels so a
-			// silently broken cron job becomes visible.
+			// Always surface failures so a silently broken job stays visible.
 			failMsg := "任务执行失败: " + err.Error()
 			wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
 				"title":   job.Name,
@@ -520,13 +519,26 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 			go notify.System("⏰ "+job.Name, failMsg)
 			return
 		}
-		// In-app bubble + macOS system notification. Both run so the user sees
-		// the result whether the app is focused or backgrounded.
-		wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
-			"title":   job.Name,
-			"message": result,
-		})
-		go notify.System("⏰ "+job.Name, result)
+		// Notify via in-app bubble and/or macOS system notification per job config.
+		if job.Notify {
+			wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
+				"title":   job.Name,
+				"message": result,
+			})
+			go notify.System("⏰ "+job.Name, result)
+		}
+		// Save result to long-term vector memory if the user opted in.
+		if job.SaveToMemory {
+			a.mu.RLock()
+			lm := a.longMem
+			a.mu.RUnlock()
+			if lm != nil {
+				content := fmt.Sprintf("[定时任务: %s]\n%s", job.Name, result)
+				if storeErr := lm.Store(context.Background(), content); storeErr != nil {
+					slog.Warn("cron: failed to save result to memory", "job", job.Name, "err", storeErr)
+				}
+			}
+		}
 	}
 
 	// NOTE: scheduler.Start is deferred until after a.mu is released below —
@@ -2023,25 +2035,25 @@ func (a *App) ListCronJobs() ([]scheduler.Job, error) {
 }
 
 // CreateCronJob creates a new scheduled job.
-func (a *App) CreateCronJob(name, description, schedule, prompt string) (scheduler.Job, error) {
+func (a *App) CreateCronJob(name, description, schedule, prompt string, saveToMemory, notify bool) (scheduler.Job, error) {
 	a.mu.RLock()
 	sched := a.scheduler
 	a.mu.RUnlock()
 	if sched == nil {
 		return scheduler.Job{}, fmt.Errorf("scheduler not ready")
 	}
-	return sched.CreateJob(a.ctx, name, description, schedule, prompt)
+	return sched.CreateJob(a.ctx, name, description, schedule, prompt, saveToMemory, notify)
 }
 
 // UpdateCronJob updates an existing scheduled job.
-func (a *App) UpdateCronJob(id int64, name, description, schedule, prompt string) (scheduler.Job, error) {
+func (a *App) UpdateCronJob(id int64, name, description, schedule, prompt string, saveToMemory, notify bool) (scheduler.Job, error) {
 	a.mu.RLock()
 	sched := a.scheduler
 	a.mu.RUnlock()
 	if sched == nil {
 		return scheduler.Job{}, fmt.Errorf("scheduler not ready")
 	}
-	return sched.UpdateJob(a.ctx, id, name, description, schedule, prompt)
+	return sched.UpdateJob(a.ctx, id, name, description, schedule, prompt, saveToMemory, notify)
 }
 
 // DeleteCronJob removes a scheduled job by ID.

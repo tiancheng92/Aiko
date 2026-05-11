@@ -126,6 +126,9 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE messages ADD COLUMN images TEXT NOT NULL DEFAULT ''`,
 		// v3: store attached file names as JSON array alongside each message.
 		`ALTER TABLE messages ADD COLUMN files TEXT NOT NULL DEFAULT ''`,
+		// v4: per-job flags — save result to long-term memory, send system notification.
+		`ALTER TABLE cron_jobs ADD COLUMN save_to_memory INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE cron_jobs ADD COLUMN notify INTEGER NOT NULL DEFAULT 1`,
 	}
 	for _, p := range patches {
 		if _, err := db.Exec(p); err != nil {

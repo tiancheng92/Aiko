@@ -14,14 +14,16 @@ import (
 
 // Job represents a single scheduled task persisted in SQLite.
 type Job struct {
-    ID          int64
-    Name        string
-    Description string
-    Schedule    string  // cron expression e.g. "0 8 * * *"
-    Prompt      string  // the message to send to the agent
-    Enabled     bool
-    LastRun     *string // RFC3339 or nil; string so Wails can generate TS bindings
-    CreatedAt   string  // RFC3339; string so Wails can generate TS bindings
+    ID           int64
+    Name         string
+    Description  string
+    Schedule     string  // cron expression e.g. "0 8 * * *"
+    Prompt       string  // the message to send to the agent
+    Enabled      bool
+    SaveToMemory bool    // save result to long-term memory on success
+    Notify       bool    // send system notification after execution
+    LastRun      *string // RFC3339 or nil; string so Wails can generate TS bindings
+    CreatedAt    string  // RFC3339; string so Wails can generate TS bindings
 }
 
 // ResultFunc is called when a job fires, with the job and the agent's response.
@@ -91,36 +93,45 @@ func (s *Scheduler) Stop() {
 }
 
 // CreateJob persists a new job and schedules it immediately.
-func (s *Scheduler) CreateJob(ctx context.Context, name, description, schedule, prompt string) (Job, error) {
+func (s *Scheduler) CreateJob(ctx context.Context, name, description, schedule, prompt string, saveToMemory, notify bool) (Job, error) {
     // Validate the cron expression before persisting.
     if _, err := cron.ParseStandard(schedule); err != nil {
         return Job{}, fmt.Errorf("invalid cron expression %q: %w", schedule, err)
     }
+    stm, ntf := boolToInt(saveToMemory), boolToInt(notify)
     res, err := s.db.ExecContext(ctx, `
-        INSERT INTO cron_jobs(name, description, schedule, prompt, enabled)
-        VALUES (?, ?, ?, ?, 1)
-    `, name, description, schedule, prompt)
+        INSERT INTO cron_jobs(name, description, schedule, prompt, enabled, save_to_memory, notify)
+        VALUES (?, ?, ?, ?, 1, ?, ?)
+    `, name, description, schedule, prompt, stm, ntf)
     if err != nil {
         return Job{}, fmt.Errorf("insert job: %w", err)
     }
     id, _ := res.LastInsertId()
-    j := Job{ID: id, Name: name, Description: description, Schedule: schedule, Prompt: prompt, Enabled: true}
+    j := Job{ID: id, Name: name, Description: description, Schedule: schedule, Prompt: prompt, Enabled: true, SaveToMemory: saveToMemory, Notify: notify}
     if err := s.scheduleJob(j); err != nil {
         return j, fmt.Errorf("schedule job: %w", err)
     }
     return j, nil
 }
 
+// boolToInt converts a bool to 0/1 for SQLite storage.
+func boolToInt(b bool) int {
+    if b {
+        return 1
+    }
+    return 0
+}
+
 // RunJobNow fires a job immediately regardless of its schedule.
 func (s *Scheduler) RunJobNow(id int64) error {
 	var j Job
-	var enabled int
+	var enabled, saveToMemory, notify int
 	var lastRun sql.NullTime
 	var createdAt time.Time
 	err := s.db.QueryRowContext(context.Background(),
-		`SELECT id, name, description, schedule, prompt, enabled, last_run, created_at
+		`SELECT id, name, description, schedule, prompt, enabled, save_to_memory, notify, last_run, created_at
 		 FROM cron_jobs WHERE id=? LIMIT 1`, id).
-		Scan(&j.ID, &j.Name, &j.Description, &j.Schedule, &j.Prompt, &enabled, &lastRun, &createdAt)
+		Scan(&j.ID, &j.Name, &j.Description, &j.Schedule, &j.Prompt, &enabled, &saveToMemory, &notify, &lastRun, &createdAt)
 	if err == sql.ErrNoRows {
 		return fmt.Errorf("job %d not found", id)
 	}
@@ -128,6 +139,8 @@ func (s *Scheduler) RunJobNow(id int64) error {
 		return err
 	}
 	j.Enabled = enabled == 1
+	j.SaveToMemory = saveToMemory == 1
+	j.Notify = notify == 1
 	if lastRun.Valid {
 		s := lastRun.Time.Format(time.RFC3339)
 		j.LastRun = &s
@@ -161,15 +174,15 @@ func (s *Scheduler) DeleteJob(ctx context.Context, id int64) error {
     return err
 }
 
-// UpdateJob persists name/description/schedule/prompt changes for an existing job
+// UpdateJob persists name/description/schedule/prompt/flags changes for an existing job
 // and reschedules it in the cron engine.
-func (s *Scheduler) UpdateJob(ctx context.Context, id int64, name, description, schedule, prompt string) (Job, error) {
+func (s *Scheduler) UpdateJob(ctx context.Context, id int64, name, description, schedule, prompt string, saveToMemory, notify bool) (Job, error) {
     if _, err := cron.ParseStandard(schedule); err != nil {
         return Job{}, fmt.Errorf("invalid cron expression %q: %w", schedule, err)
     }
     _, err := s.db.ExecContext(ctx,
-        `UPDATE cron_jobs SET name=?, description=?, schedule=?, prompt=? WHERE id=?`,
-        name, description, schedule, prompt, id)
+        `UPDATE cron_jobs SET name=?, description=?, schedule=?, prompt=?, save_to_memory=?, notify=? WHERE id=?`,
+        name, description, schedule, prompt, boolToInt(saveToMemory), boolToInt(notify), id)
     if err != nil {
         return Job{}, fmt.Errorf("update job: %w", err)
     }
@@ -253,7 +266,7 @@ func (s *Scheduler) SetJobEnabled(ctx context.Context, id int64, enabled bool) e
 // ListJobs returns all jobs ordered by created_at.
 func (s *Scheduler) ListJobs(ctx context.Context) ([]Job, error) {
     rows, err := s.db.QueryContext(ctx, `
-        SELECT id, name, description, schedule, prompt, enabled, last_run, created_at
+        SELECT id, name, description, schedule, prompt, enabled, save_to_memory, notify, last_run, created_at
         FROM cron_jobs ORDER BY created_at ASC
     `)
     if err != nil {
@@ -263,13 +276,15 @@ func (s *Scheduler) ListJobs(ctx context.Context) ([]Job, error) {
     var jobs []Job
     for rows.Next() {
         var j Job
-        var enabled int
+        var enabled, saveToMemory, notify int
         var lastRun sql.NullTime
         var createdAt time.Time
-        if err := rows.Scan(&j.ID, &j.Name, &j.Description, &j.Schedule, &j.Prompt, &enabled, &lastRun, &createdAt); err != nil {
+        if err := rows.Scan(&j.ID, &j.Name, &j.Description, &j.Schedule, &j.Prompt, &enabled, &saveToMemory, &notify, &lastRun, &createdAt); err != nil {
             return nil, err
         }
         j.Enabled = enabled == 1
+        j.SaveToMemory = saveToMemory == 1
+        j.Notify = notify == 1
         if lastRun.Valid {
             s := lastRun.Time.Format(time.RFC3339)
             j.LastRun = &s

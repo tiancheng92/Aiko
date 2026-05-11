@@ -81,7 +81,7 @@ func (t *CronTool) add(ctx context.Context, args map[string]any) (string, error)
 	if name == "" || schedule == "" || prompt == "" {
 		return "请提供 name、schedule 和 prompt 参数", nil
 	}
-	j, err := t.Scheduler.CreateJob(ctx, name, desc, schedule, prompt)
+	j, err := t.Scheduler.CreateJob(ctx, name, desc, schedule, prompt, false, true)
 	if err != nil {
 		return "", fmt.Errorf("create cron job: %w", err)
 	}
@@ -151,7 +151,7 @@ func (t *CronTool) update(ctx context.Context, args map[string]any) (string, err
 		prompt = v
 	}
 
-	j, err := t.Scheduler.UpdateJob(ctx, id, name, desc, schedule, prompt)
+	j, err := t.Scheduler.UpdateJob(ctx, id, name, desc, schedule, prompt, current.SaveToMemory, current.Notify)
 	if err != nil {
 		return "", fmt.Errorf("update cron job: %w", err)
 	}
