@@ -550,10 +550,16 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 			go notify.System("⏰ "+job.Name, failMsg)
 			return
 		}
-		// Always show in-app bubble with the result.
+		slog.Info("cron job completed", "job", job.Name, "result_len", len(result))
+		// Show in-app bubble. Truncate long results so the bubble stays readable.
+		bubbleMsg := result
+		const bubbleMaxRunes = 200
+		if runes := []rune(result); len(runes) > bubbleMaxRunes {
+			bubbleMsg = string(runes[:bubbleMaxRunes]) + "…"
+		}
 		wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
 			"title":   "⏰ " + job.Name,
-			"message": result,
+			"message": bubbleMsg,
 		})
 		// Extra macOS system notification when Notify is enabled.
 		if job.Notify {
