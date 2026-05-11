@@ -29,6 +29,9 @@ type Job struct {
 // ResultFunc is called when a job fires, with the job and the agent's response.
 type ResultFunc func(job Job, result string, err error)
 
+// jobTimeout is the maximum duration allowed for a single cron job execution.
+const jobTimeout = 10 * time.Minute
+
 // Scheduler manages cron jobs backed by SQLite.
 type Scheduler struct {
     mu       sync.Mutex
@@ -151,7 +154,7 @@ func (s *Scheduler) RunJobNow(id int64) error {
 	s.wg.Add(1)
 	go func(job Job) {
 		defer s.wg.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), jobTimeout)
 		defer cancel()
 		_, _ = s.db.ExecContext(ctx, `UPDATE cron_jobs SET last_run=? WHERE id=?`, time.Now(), job.ID)
 		slog.Info("cron job fired manually", "job", job.Name)
@@ -224,7 +227,7 @@ func (s *Scheduler) makeJobFunc(j Job) func() {
     return func() {
         s.wg.Add(1)
         defer s.wg.Done()
-        ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+        ctx, cancel := context.WithTimeout(context.Background(), jobTimeout)
         defer cancel()
         _, _ = s.db.ExecContext(ctx, `UPDATE cron_jobs SET last_run=? WHERE id=?`, time.Now(), j.ID)
         slog.Info("cron job fired", "job", j.Name)
@@ -301,7 +304,7 @@ func (s *Scheduler) scheduleJob(j Job) error {
     eid, err := s.cr.AddFunc(j.Schedule, func() {
         s.wg.Add(1)
         defer s.wg.Done()
-        ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+        ctx, cancel := context.WithTimeout(context.Background(), jobTimeout)
         defer cancel()
         // Update last_run.
         _, _ = s.db.ExecContext(ctx, `UPDATE cron_jobs SET last_run=? WHERE id=?`, time.Now(), j.ID)
