@@ -40,10 +40,35 @@ renderer.code = ({ text, lang }) => {
     ? hljs.highlight(text, { language }).value
     : hljs.highlightAuto(text).value
   const cls = language ? `hljs language-${language}` : 'hljs'
-  // Generate line numbers
-  const lines = highlighted.split('\n')
-  const digits = String(lines.length).length
-  const numbered = lines.map((line, i) =>
+  // Split HLJS output into per-line HTML while preserving span balance.
+  // A naive split('\n') breaks multi-line spans (e.g. Go raw string literals
+  // highlighted as one <span class="hljs-string">…</span>), producing malformed
+  // HTML that the browser renders incorrectly. Instead we scan the HLJS HTML,
+  // and at each newline we close all open spans then re-open them on the next
+  // line so every line has balanced HTML.
+  const lineHtmls = []
+  let cur = ''
+  const stack = [] // opening tags currently open
+  for (let i = 0; i < highlighted.length; i++) {
+    if (highlighted[i] === '\n') {
+      lineHtmls.push(cur + stack.map(() => '</span>').join(''))
+      cur = stack.join('') // re-open on next line
+    } else if (highlighted[i] === '<') {
+      const gt = highlighted.indexOf('>', i)
+      const tag = highlighted.slice(i, gt + 1)
+      cur += tag
+      if (tag.startsWith('<span')) stack.push(tag)
+      else if (tag.startsWith('</span')) stack.pop()
+      i = gt
+    } else {
+      cur += highlighted[i]
+    }
+  }
+  if (cur) lineHtmls.push(cur + stack.map(() => '</span>').join(''))
+  // Drop trailing empty line that appears when code ends with \n.
+  if (lineHtmls.length > 1 && lineHtmls[lineHtmls.length - 1] === '') lineHtmls.pop()
+  const digits = String(lineHtmls.length).length
+  const numbered = lineHtmls.map((line, i) =>
     `<span class="code-line"><span class="line-nr">${String(i + 1).padStart(digits)}</span><span class="line-code">${line || ' '}</span></span>`
   ).join('')
   return `<div class="code-block"><div class="code-header"><span class="code-lang">${language || 'text'}</span><button class="code-copy" onclick="navigator.clipboard.writeText(decodeURIComponent(atob(this.dataset.code)));this.textContent='✓';setTimeout(()=>this.textContent='复制',2000)" data-code="${btoa(encodeURIComponent(text))}">复制</button></div><pre><code class="${cls}">${numbered}</code></pre></div>`
@@ -1556,20 +1581,15 @@ defineExpose({ focusInput, scrollToBottom })
 
 /* Meta row: timestamp at its side, recollapse button centered */
 .msg-meta-row {
-  position: relative;
   display: flex;
   align-items: center;
+  gap: 8px;
   min-height: 18px;
   margin-top: 3px;
   padding: 0 4px;
 }
 .msg.user .msg-meta-row { justify-content: flex-end; }
 .msg.assistant .msg-meta-row { justify-content: flex-start; }
-.msg-meta-row .recollapse-btn {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-}
 
 /* Timestamp */
 .msg-time {
