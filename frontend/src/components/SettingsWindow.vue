@@ -1111,9 +1111,9 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               <span v-if="p.id === activeProfileID" class="profile-badge">使用中</span>
             </div>
             <div class="profile-card-actions">
-              <button v-if="p.id !== activeProfileID" class="btn-activate" @click="activateProfile(p.id)">激活</button>
+              <button v-if="p.id !== activeProfileID" class="btn-on-sm" @click="activateProfile(p.id)">激活</button>
               <button class="btn-edit" @click="editProfile(p)">编辑</button>
-              <button class="btn-del" @click="deleteProfile(p.id)">删除</button>
+              <button class="btn-danger-sm" @click="deleteProfile(p.id)">删除</button>
             </div>
           </div>
 
@@ -1357,8 +1357,8 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               <span class="size-val">{{ cfg.PetSize || '自动' }}{{ cfg.PetSize ? 'px' : '' }}</span>
             </div>
             <div class="size-hint">设为 0 时自动根据屏幕高度缩放；拖动滑块可实时预览</div>
-            <button class="btn-reset-size" @click="cfg.PetSize = 0; EventsEmit('config:pet:size:changed', 0)">重置为自动</button>
-            <button class="btn-reset-size" @click="resetBallPosition" style="margin-top:6px">重置桌宠位置</button>
+            <button class="btn-neutral-sm" @click="cfg.PetSize = 0; EventsEmit('config:pet:size:changed', 0)">重置为自动</button>
+            <button class="btn-neutral-sm" @click="resetBallPosition" style="margin-top:6px">重置桌宠位置</button>
           </label>
           <label>聊天框宽度
             <div class="size-row">
@@ -1379,7 +1379,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               />
               <span class="size-val">{{ cfg.ChatHeight || '默认' }}{{ cfg.ChatHeight ? 'px' : '' }}</span>
             </div>
-            <button class="btn-reset-size" @click="resetChatSize">重置为默认</button>
+            <button class="btn-neutral-sm" @click="resetChatSize">重置为默认</button>
           </label>
           <div class="settings-section-title" style="margin-top:20px">语音与音效</div>
           <div class="sms-toggle-row" style="margin-top:8px">
@@ -1420,7 +1420,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           <template v-if="toolsSubTab === 'mcp'">
             <div class="section-header">
               <h3>MCP 扩展工具</h3>
-              <button class="btn-accent-add" @click="openMCPForm">+ 添加</button>
+              <button class="btn-add-sm" @click="openMCPForm">+ 添加</button>
             </div>
 
             <div v-if="mcpServers.length === 0" class="empty-hint">
@@ -1434,10 +1434,10 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 <span class="mcp-endpoint">{{ srv.transport === 'stdio' ? srv.command : srv.url }}</span>
               </div>
               <div class="mcp-actions">
-                <button :class="srv.enabled ? 'btn-mcp-enabled' : 'btn-mcp-disabled'" @click="toggleMCPServer(srv)">
+                <button :class="srv.enabled ? 'btn-on-sm' : 'btn-off-sm'" @click="toggleMCPServer(srv)">
                   {{ srv.enabled ? '已启用' : '已禁用' }}
                 </button>
-                <button class="btn-edit-small" @click="editMCPServer(srv)">编辑</button>
+                <button class="btn-edit-sm" @click="editMCPServer(srv)">编辑</button>
                 <button class="btn-danger-small" @click="deleteMCPServer(srv.id)">删除</button>
               </div>
             </div>
@@ -1511,7 +1511,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                   @keydown.enter="addPath"
                   spellcheck="false" autocorrect="off" autocomplete="off"
                 />
-                <button class="btn-accent-add" @click="addPath">添加</button>
+                <button class="btn-add-sm" @click="addPath">添加</button>
               </div>
             </div>
 
@@ -1533,7 +1533,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                   @keydown.enter="addTrustedCommand"
                   spellcheck="false" autocorrect="off" autocomplete="off"
                 />
-                <button class="btn-accent-add" @click="addTrustedCommand">添加</button>
+                <button class="btn-add-sm" @click="addTrustedCommand">添加</button>
               </div>
             </div>
 
@@ -1554,7 +1554,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
         <div v-if="activeTab === 'knowledge'" class="tab-pane">
           <div class="section-header">
             <h3>知识库文件</h3>
-            <button @click="importFile" :disabled="!!importProgress" class="btn-accent-add">+ 导入文档</button>
+            <button @click="importFile" :disabled="!!importProgress" class="btn-add-sm">+ 导入文档</button>
           </div>
           <p class="section-hint">支持 .txt、.md、.pdf、.epub；导入后 AI 可通过语义检索引用文档内容</p>
           <div v-if="importProgress" class="progress">
@@ -1580,7 +1580,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           <template v-if="automationSubTab === 'cron'">
             <div class="section-header">
               <h3>定时任务</h3>
-              <button class="btn-small" @click="openCronForm">+ 新建</button>
+              <button class="btn-add-sm" @click="openCronForm">+ 新建</button>
             </div>
 
             <div v-if="cronJobs.length === 0" class="empty-hint">
@@ -1611,10 +1611,10 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 <div v-if="job.LastRun" class="cron-lastrun">上次执行：{{ new Date(job.LastRun).toLocaleString() }}</div>
               </div>
               <div class="cron-actions">
-                <button class="btn-cron-run" @click="runCronJobNow(job.ID)">执行</button>
-                <button class="btn-small" @click="editCronJob(job)">编辑</button>
-                <button v-if="job.Enabled" class="btn-cron-disable" @click="toggleCronJob(job)">禁用</button>
-                <button v-else class="btn-cron-enable" @click="toggleCronJob(job)">启用</button>
+                <button class="btn-add-sm" @click="runCronJobNow(job.ID)">执行</button>
+                <button class="btn-edit-sm" @click="editCronJob(job)">编辑</button>
+                <button v-if="job.Enabled" class="btn-off-sm" @click="toggleCronJob(job)">禁用</button>
+                <button v-else class="btn-on-sm" @click="toggleCronJob(job)">启用</button>
                 <button class="btn-danger-small" @click="deleteCronJob(job.ID)">删除</button>
               </div>
             </div>
@@ -1670,7 +1670,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           <template v-if="automationSubTab === 'proactive'">
             <div class="section-header">
               <h3>提醒事项</h3>
-              <button class="btn-refresh" @click="loadProactiveItems">刷新</button>
+              <button class="btn-neutral-sm" @click="loadProactiveItems">刷新</button>
             </div>
 
             <div v-if="proactiveError" class="form-error">{{ proactiveError }}</div>
@@ -1684,7 +1684,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 <span class="proactive-time">{{ formatProactiveTime(item.TriggerAt) }}</span>
                 <span class="proactive-prompt">{{ truncatePrompt(item.Prompt, 60) }}</span>
               </div>
-              <button class="btn-small btn-danger" @click="deleteProactiveItem(item.ID)">删除</button>
+              <button class="btn-danger-sm" @click="deleteProactiveItem(item.ID)">删除</button>
             </div>
           </template>
         </div>
@@ -2198,7 +2198,21 @@ input[type="range"]::-webkit-slider-thumb {
 input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.1); }
 input[type="checkbox"] { accent-color: var(--accent); }
 
-/* Buttons — macOS style (primary, secondary, destructive, small) */
+/* ─── Button System ──────────────────────────────────────────────────────────
+   7 semantic tiers, 2 sizes. All tiers share the same base reset; size
+   variants (no suffix = modal/form size, -sm = inline list/card size).
+
+   Tier  Color    Meaning
+   ────  ───────  ────────────────────────────────────────────────────────────
+   primary  blue solid   Save / Confirm (high-frequency happy-path action)
+   add      blue outline Create / Import / Run (positive, reversible)
+   edit     indigo outline  Edit / Configure (neutral-positive)
+   on       green outline   Enabled / Active state toggle
+   off      amber outline   Disabled state toggle (click to re-enable)
+   neutral  grey outline    Cancel / Reset / Refresh (no side-effect)
+   danger   red outline/fill Delete / Destructive (irreversible)
+   ────────────────────────────────────────────────────────────────────────── */
+
 button {
   background: var(--lg-surface-input);
   color: var(--text-primary);
@@ -2210,7 +2224,7 @@ button {
   font-weight: 500;
   font-family: inherit;
   letter-spacing: -0.01em;
-  transition: background 0.12s, border-color 0.12s, transform 0.08s;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.08s;
   box-shadow: none;
   -webkit-appearance: none;
   appearance: none;
@@ -2220,9 +2234,9 @@ button:active:not(:disabled) { transform: scale(0.97); }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* PRIMARY — solid blue; save / confirm */
 .btn-primary,
 .btn-save,
-.btn-setup,
 .btn-add {
   background: var(--accent);
   color: #fff;
@@ -2232,167 +2246,116 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 }
 .btn-primary:hover:not(:disabled),
 .btn-save:hover:not(:disabled),
-.btn-setup:hover:not(:disabled),
 .btn-add:hover:not(:disabled) { background: var(--accent-hover); border-color: transparent; }
 
-.btn-done {
-  background: var(--lg-surface-input);
-  color: var(--text-primary);
-  border: 1px solid var(--lg-border);
-  padding: 5px 20px;
-  font-weight: 500;
-}
-.btn-done:hover { background: var(--lg-surface-input-h); }
-
-.btn-secondary,
-.btn-cancel,
-.btn-small,
-.fetch-btn,
-.btn-retry,
-.btn-reset-size {
-  background: var(--lg-surface-input);
-  color: var(--text-primary);
-  border: 1px solid var(--lg-border);
-  padding: 5px 12px;
-  font-size: 12px;
-}
-.btn-edit {
-  background: rgba(94, 92, 230, 0.12);
-  color: #9b9cf5;
-  border: 1px solid rgba(94, 92, 230, 0.28);
-  padding: 5px 12px;
-  font-size: 12px;
-}
-.btn-edit:hover { background: rgba(94, 92, 230, 0.20); border-color: rgba(94, 92, 230, 0.45); }
-.btn-edit-small {
-  background: rgba(94, 92, 230, 0.12);
-  color: #9b9cf5;
-  border: 1px solid rgba(94, 92, 230, 0.28);
-  font-size: 11px;
-  padding: 4px 10px;
-}
-.btn-edit-small:hover { background: rgba(94, 92, 230, 0.20); border-color: rgba(94, 92, 230, 0.45); }
-.btn-retry { padding: 3px 10px; font-size: 11px; }
-.btn-small { padding: 4px 10px; font-size: 11px; }
-.btn-reset-size { padding: 4px 10px; font-size: 11px; align-self: flex-start; }
-
-.btn-activate {
-  background: rgba(48, 209, 88, 0.14);
-  color: var(--success);
-  border: 1px solid rgba(48, 209, 88, 0.25);
-  font-size: 11px;
-  padding: 4px 10px;
-}
-.btn-activate:hover { background: rgba(48, 209, 88, 0.22); border-color: rgba(48, 209, 88, 0.4); }
-
-.btn-del,
-.btn-danger-small,
-.btn-danger {
-  background: var(--danger-bg);
-  color: var(--danger);
-  border: 1px solid rgba(255, 69, 58, 0.25);
-  font-size: 11px;
-  padding: 4px 10px;
-}
-.btn-del:hover,
-.btn-danger-small:hover,
-.btn-danger:hover { background: rgba(255, 69, 58, 0.22); border-color: rgba(255, 69, 58, 0.4); }
-
-.fetch-btn--primary { background: var(--accent); color: #fff; border-color: transparent; }
-.fetch-btn--primary:hover:not(:disabled) { background: var(--accent-hover); }
-
-/* Toggle button (MCP enabled / Cron enable) */
-.btn-toggle {
-  font-size: 11px;
-  padding: 4px 10px;
-  border-radius: var(--r-button);
-  border: 1px solid var(--lg-border);
-  background: var(--lg-surface-input);
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-.btn-toggle.active {
-  background: rgba(48, 209, 88, 0.15);
-  border-color: rgba(48, 209, 88, 0.35);
-  color: var(--success);
-}
-/* Cron-specific action buttons */
-.btn-cron-run {
-  font-size: 11px;
-  padding: 4px 10px;
-  border-radius: var(--r-button);
-  background: rgba(0, 122, 255, 0.14);
-  color: var(--accent);
-  border: 1px solid rgba(0, 122, 255, 0.28);
-  font-weight: 500;
-}
-.btn-cron-run:hover { background: rgba(0, 122, 255, 0.24); border-color: rgba(0, 122, 255, 0.45); }
-.btn-cron-disable {
-  font-size: 11px;
-  padding: 4px 10px;
-  border-radius: var(--r-button);
-  background: rgba(255, 159, 10, 0.12);
-  color: #ff9f0a;
-  border: 1px solid rgba(255, 159, 10, 0.28);
-  font-weight: 500;
-}
-.btn-cron-disable:hover { background: rgba(255, 159, 10, 0.22); border-color: rgba(255, 159, 10, 0.45); }
-.btn-cron-enable {
-  font-size: 11px;
-  padding: 4px 10px;
-  border-radius: var(--r-button);
-  background: rgba(48, 209, 88, 0.14);
-  color: var(--success);
-  border: 1px solid rgba(48, 209, 88, 0.28);
-  font-weight: 500;
-}
-.btn-cron-enable:hover { background: rgba(48, 209, 88, 0.24); border-color: rgba(48, 209, 88, 0.45); }
-
-/* Accent add button — blue outline, used for all "+ add / import" actions */
-.btn-accent-add {
-  font-size: 11px;
-  padding: 4px 10px;
-  border-radius: var(--r-button);
+/* ADD — blue outline; create / import / run (smaller inline variant) */
+.btn-add-sm {
+  font-size: 11px; padding: 4px 10px;
   background: rgba(0, 122, 255, 0.12);
   color: var(--accent);
   border: 1px solid rgba(0, 122, 255, 0.28);
   font-weight: 500;
 }
-.btn-accent-add:hover:not(:disabled) { background: rgba(0, 122, 255, 0.22); border-color: rgba(0, 122, 255, 0.45); }
+.btn-add-sm:hover:not(:disabled) { background: rgba(0, 122, 255, 0.22); border-color: rgba(0, 122, 255, 0.45); }
 
-/* Refresh button — subtle blue tint */
-.btn-refresh {
-  font-size: 11px;
-  padding: 4px 10px;
-  border-radius: var(--r-button);
-  background: rgba(100, 210, 255, 0.10);
-  color: #64d2ff;
-  border: 1px solid rgba(100, 210, 255, 0.25);
+/* EDIT — indigo outline; edit / configure */
+.btn-edit {
+  background: rgba(94, 92, 230, 0.12);
+  color: #a5a6f6;
+  border: 1px solid rgba(94, 92, 230, 0.28);
+  padding: 5px 12px;
+  font-size: 12px;
+}
+.btn-edit:hover:not(:disabled) { background: rgba(94, 92, 230, 0.20); border-color: rgba(94, 92, 230, 0.45); }
+.btn-edit-sm {
+  font-size: 11px; padding: 4px 10px;
+  background: rgba(94, 92, 230, 0.12);
+  color: #a5a6f6;
+  border: 1px solid rgba(94, 92, 230, 0.28);
   font-weight: 500;
 }
-.btn-refresh:hover { background: rgba(100, 210, 255, 0.18); border-color: rgba(100, 210, 255, 0.42); }
+.btn-edit-sm:hover:not(:disabled) { background: rgba(94, 92, 230, 0.20); border-color: rgba(94, 92, 230, 0.45); }
 
-/* MCP server enable/disable toggle */
-.btn-mcp-enabled {
-  font-size: 11px;
-  padding: 4px 10px;
-  border-radius: var(--r-button);
-  background: rgba(48, 209, 88, 0.14);
+/* ON — green outline; enabled / active / activate */
+.btn-on-sm {
+  font-size: 11px; padding: 4px 10px;
+  background: rgba(48, 209, 88, 0.12);
   color: var(--success);
   border: 1px solid rgba(48, 209, 88, 0.28);
   font-weight: 500;
 }
-.btn-mcp-enabled:hover { background: rgba(48, 209, 88, 0.22); border-color: rgba(48, 209, 88, 0.45); }
-.btn-mcp-disabled {
-  font-size: 11px;
-  padding: 4px 10px;
-  border-radius: var(--r-button);
+.btn-on-sm:hover:not(:disabled) { background: rgba(48, 209, 88, 0.22); border-color: rgba(48, 209, 88, 0.45); }
+
+/* OFF — amber outline; disabled state toggle (click to re-enable) */
+.btn-off-sm {
+  font-size: 11px; padding: 4px 10px;
   background: rgba(255, 159, 10, 0.10);
   color: #ff9f0a;
-  border: 1px solid rgba(255, 159, 10, 0.25);
+  border: 1px solid rgba(255, 159, 10, 0.26);
   font-weight: 500;
 }
-.btn-mcp-disabled:hover { background: rgba(255, 159, 10, 0.20); border-color: rgba(255, 159, 10, 0.42); }
+.btn-off-sm:hover:not(:disabled) { background: rgba(255, 159, 10, 0.20); border-color: rgba(255, 159, 10, 0.44); }
+
+/* NEUTRAL — grey; cancel / reset / refresh / secondary actions */
+.btn-neutral,
+.btn-cancel,
+.btn-done,
+.btn-secondary,
+.fetch-btn {
+  background: var(--lg-surface-input);
+  color: var(--text-primary);
+  border: 1px solid var(--lg-border);
+  padding: 5px 12px;
+  font-size: 12px;
+}
+.btn-neutral:hover:not(:disabled),
+.btn-cancel:hover:not(:disabled),
+.btn-done:hover:not(:disabled),
+.btn-secondary:hover:not(:disabled),
+.fetch-btn:hover:not(:disabled) { background: var(--lg-surface-input-h); border-color: var(--border-strong); }
+.btn-neutral-sm {
+  font-size: 11px; padding: 4px 10px;
+  background: var(--lg-surface-input);
+  color: var(--text-secondary);
+  border: 1px solid var(--lg-border);
+  font-weight: 500;
+}
+.btn-neutral-sm:hover:not(:disabled) { background: var(--lg-surface-input-h); color: var(--text-primary); border-color: var(--border-strong); }
+
+/* DANGER — red; delete / destructive */
+.btn-danger-sm,
+.btn-danger-small {
+  font-size: 11px; padding: 4px 10px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid rgba(255, 69, 58, 0.25);
+  font-weight: 500;
+}
+.btn-danger-sm:hover:not(:disabled),
+.btn-danger-small:hover:not(:disabled) { background: rgba(255, 69, 58, 0.22); border-color: rgba(255, 69, 58, 0.42); }
+
+/* SETUP — same as primary but for setup/install actions */
+.btn-setup {
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid transparent;
+  font-weight: 500;
+  padding: 6px 14px;
+}
+.btn-setup:hover:not(:disabled) { background: var(--accent-hover); }
+
+/* fetch-btn primary variant */
+.fetch-btn--primary { background: var(--accent); color: #fff; border-color: transparent; }
+.fetch-btn--primary:hover:not(:disabled) { background: var(--accent-hover); }
+
+/* Inline retry (error recovery) — neutral-sm with tighter padding */
+.btn-retry {
+  font-size: 11px; padding: 3px 10px;
+  background: var(--lg-surface-input);
+  color: var(--text-secondary);
+  border: 1px solid var(--lg-border);
+}
+.btn-retry:hover:not(:disabled) { background: var(--lg-surface-input-h); color: var(--text-primary); }
 
 /* URL row with fetch button */
 .url-row { display: flex; gap: 8px; align-items: center; }
