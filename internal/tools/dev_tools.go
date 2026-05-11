@@ -71,7 +71,7 @@ func (t *FormatJSONTool) InvokableRun(_ context.Context, input string, _ ...tool
 
 	switch action {
 	case "validate":
-		return "valid JSON ✓", nil
+		return "有效的 JSON ✓", nil
 	case "minify":
 		b, err := json.Marshal(raw)
 		if err != nil {
