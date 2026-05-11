@@ -1563,7 +1563,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           <ul v-if="sources.length">
             <li v-for="src in sources" :key="src">
               <span>{{ src }}</span>
-              <button @click="deleteSource(src)">删除</button>
+              <button class="btn-danger-small" :aria-label="`删除 ${src}`" @click="deleteSource(src)">删除</button>
             </li>
           </ul>
           <p v-else class="empty">暂无知识库文件，点击「导入文档」开始添加</p>
@@ -2316,13 +2316,6 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   border-color: rgba(48, 209, 88, 0.35);
   color: var(--success);
 }
-.btn-toggle--enable {
-  background: rgba(48, 209, 88, 0.15);
-  border-color: rgba(48, 209, 88, 0.35);
-  color: var(--success);
-}
-.btn-toggle--enable:hover { background: rgba(48, 209, 88, 0.25); }
-
 /* Cron-specific action buttons */
 .btn-cron-run {
   font-size: 11px;
@@ -2594,7 +2587,17 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Toggle switch (iOS/macOS style) */
 .toggle { display: flex; align-items: center; cursor: pointer; }
-.toggle input { display: none; }
+.toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .toggle-track {
   width: 38px; height: 22px;
   background: rgba(255, 255, 255, 0.12);
@@ -2635,7 +2638,6 @@ ul { list-style: none; padding: 0; margin: 0; }
 }
 .tab-pane > ul li:last-child { border-bottom: none; }
 .tab-pane > ul li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 10px; font-variant-numeric: tabular-nums; }
-.tab-pane > ul li button { font-size: 11px; padding: 4px 10px; }
 
 .empty { color: var(--text-tertiary); font-size: 12px; margin-top: 6px; padding: 16px 0; text-align: center; }
 .progress {
