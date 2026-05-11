@@ -35,7 +35,7 @@ type Scheduler struct {
     db       *sql.DB
     cr       *cron.Cron
     entryIDs map[int64]cron.EntryID // job.ID -> cron entry ID
-    chatFn   func(ctx context.Context, prompt string) (string, error)
+    chatFn   func(ctx context.Context, job Job) (string, error)
     onResult ResultFunc
     // wg tracks in-flight job invocations (cron-triggered and RunJobNow) so
     // Stop can wait for them to drain before returning.
@@ -43,8 +43,9 @@ type Scheduler struct {
 }
 
 // New creates a Scheduler. chatFn is called to execute each job's prompt.
+// The Job is passed so chatFn can adjust behaviour (e.g. memory persistence).
 // onResult is called with the job output after each execution.
-func New(db *sql.DB, chatFn func(ctx context.Context, prompt string) (string, error), onResult ResultFunc) *Scheduler {
+func New(db *sql.DB, chatFn func(ctx context.Context, job Job) (string, error), onResult ResultFunc) *Scheduler {
     s := &Scheduler{
         db:       db,
         cr:       cron.New(),
@@ -154,7 +155,7 @@ func (s *Scheduler) RunJobNow(id int64) error {
 		defer cancel()
 		_, _ = s.db.ExecContext(ctx, `UPDATE cron_jobs SET last_run=? WHERE id=?`, time.Now(), job.ID)
 		slog.Info("cron job fired manually", "job", job.Name)
-		result, err := s.chatFn(ctx, job.Prompt)
+		result, err := s.chatFn(ctx, job)
 		if s.onResult != nil {
 			s.onResult(job, result, err)
 		}
@@ -227,7 +228,7 @@ func (s *Scheduler) makeJobFunc(j Job) func() {
         defer cancel()
         _, _ = s.db.ExecContext(ctx, `UPDATE cron_jobs SET last_run=? WHERE id=?`, time.Now(), j.ID)
         slog.Info("cron job fired", "job", j.Name)
-        result, err := s.chatFn(ctx, j.Prompt)
+        result, err := s.chatFn(ctx, j)
         if s.onResult != nil {
             s.onResult(j, result, err)
         }
@@ -305,7 +306,7 @@ func (s *Scheduler) scheduleJob(j Job) error {
         // Update last_run.
         _, _ = s.db.ExecContext(ctx, `UPDATE cron_jobs SET last_run=? WHERE id=?`, time.Now(), j.ID)
         slog.Info("cron job fired", "job", j.Name)
-        result, err := s.chatFn(ctx, j.Prompt)
+        result, err := s.chatFn(ctx, j)
         if s.onResult != nil {
             s.onResult(j, result, err)
         }

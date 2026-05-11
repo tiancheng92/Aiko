@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -463,8 +464,22 @@ func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIter
 			break
 		}
 		if event.Err != nil {
-			ch <- StreamResult{Err: event.Err}
-			return "", false
+			// Context cancellation means the user hit Stop — propagate silently.
+			if errors.Is(event.Err, context.Canceled) {
+				return "", false
+			}
+			// Interrupt signals must pass through for the checkpoint/resume flow.
+			if _, ok := compose.IsInterruptRerunError(event.Err); ok {
+				ch <- StreamResult{Err: event.Err}
+				return "", false
+			}
+			// All other errors (tool failure, network glitch, etc.) are surfaced as
+			// a token so the LLM can acknowledge the problem and continue.
+			slog.Warn("agent: non-fatal event error, forwarding to LLM", "err", event.Err)
+			errToken := fmt.Sprintf("\n\n[工具调用出错: %v]", event.Err)
+			ch <- StreamResult{Token: errToken}
+			sb.WriteString(errToken)
+			continue
 		}
 		if event.Action != nil && event.Action.Interrupted != nil {
 			resumeIter, err := handleInterrupt(ctx, runner, event, ch, pendingConfirms, emitEvent, checkpointID)

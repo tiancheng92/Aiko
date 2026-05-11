@@ -484,16 +484,22 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	builtinTools := internaltools.AllEino(a.permStore)
 
 	// Build a chat function for the scheduler.
-	// IMPORTANT: Scheduler jobs use a direct LLM call that bypasses persistAndMigrate,
-	// so job prompts and results are NOT written to short/long-term memory.
-	chatFn := func(ctx context.Context, prompt string) (string, error) {
+	// When SaveToMemory is true the job uses ag.Chat() so the exchange goes
+	// through persistAndMigrate (identical to typing in the chat panel).
+	// Otherwise ChatDirect is used to avoid polluting short/long-term memory.
+	chatFn := func(ctx context.Context, job scheduler.Job) (string, error) {
 		a.mu.RLock()
 		ag := a.petAgent
 		a.mu.RUnlock()
 		if ag == nil {
 			return "", fmt.Errorf("agent not ready")
 		}
-		ch := ag.ChatDirect(ctx, prompt) // ChatDirect skips memory persistence
+		var ch <-chan agent.StreamResult
+		if job.SaveToMemory {
+			ch = ag.Chat(ctx, job.Prompt)
+		} else {
+			ch = ag.ChatDirect(ctx, job.Prompt)
+		}
 		var sb strings.Builder
 		for r := range ch {
 			if r.Err != nil {
@@ -527,35 +533,8 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 			})
 			go notify.System("⏰ "+job.Name, result)
 		}
-		// Save result to long-term vector memory if the user opted in.
-		if job.SaveToMemory {
-			a.mu.RLock()
-			lm := a.longMem
-			a.mu.RUnlock()
-			if lm == nil {
-				slog.Warn("cron: SaveToMemory skipped — embedder not configured", "job", job.Name)
-				wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
-					"title":   job.Name,
-					"message": "存入记忆失败：未配置 Embedding 模型",
-				})
-			} else {
-				content := fmt.Sprintf("[定时任务: %s]\n%s", job.Name, result)
-				if storeErr := lm.Store(context.Background(), content); storeErr != nil {
-					slog.Error("cron: failed to save result to memory", "job", job.Name, "err", storeErr)
-					wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
-						"title":   job.Name,
-						"message": "存入记忆失败: " + storeErr.Error(),
-					})
-				} else if !job.Notify {
-					// Only show success bubble when Notify is off — otherwise the main
-					// result bubble already surfaced the execution outcome.
-					wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
-						"title":   job.Name,
-						"message": "已存入记忆 ✓",
-					})
-				}
-			}
-		}
+		// When SaveToMemory is on, chatFn already used ag.Chat() which calls
+		// persistAndMigrate — no extra lm.Store call needed here.
 	}
 
 	// NOTE: scheduler.Start is deferred until after a.mu is released below —
