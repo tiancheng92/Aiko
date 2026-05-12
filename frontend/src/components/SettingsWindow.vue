@@ -82,7 +82,7 @@ const fetchingModels = ref(false)
 const profiles = ref([])
 const activeProfileID = ref(0)
 const showProfileForm = ref(false)
-const profileForm = ref({ id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, tts_model_dir: '', tts_voice: '', tts_speed: 1.0, tts_backend: '' })
+const profileForm = ref({ id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, embedding_inherit: true, embedding_base_url: '', embedding_api_key: '', tts_model_dir: '', tts_voice: '', tts_speed: 1.0, tts_backend: '' })
 const profileFormError = ref('')
 const profileFormSaving = ref(false)
 const profileModels = ref([])
@@ -352,7 +352,7 @@ async function fetchProfiles() {
 
 /** openProfileForm opens the add-profile form with empty fields. */
 function openProfileForm() {
-  profileForm.value = { id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, tts_model_dir: '', tts_voice: '', tts_speed: 1.0, tts_backend: '' }
+  profileForm.value = { id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, embedding_inherit: true, embedding_base_url: '', embedding_api_key: '', tts_model_dir: '', tts_voice: '', tts_speed: 1.0, tts_backend: '' }
   profileFormError.value = ''
   profileModels.value = []
   showProfileForm.value = true
@@ -360,7 +360,7 @@ function openProfileForm() {
 
 /** editProfile opens the form pre-filled for an existing profile. */
 function editProfile(p) {
-  profileForm.value = { ...p, tts_backend: p.tts_backend || '' }
+  profileForm.value = { ...p, embedding_inherit: p.embedding_inherit ?? true, tts_backend: p.tts_backend || '' }
   profileFormError.value = ''
   profileModels.value = []
   showProfileForm.value = true
@@ -1163,6 +1163,22 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 </div>
               </label>
               <label>向量维度<span class="field-hint">与所选向量模型保持一致，默认 1536</span><input type="number" v-model.number="profileForm.embedding_dim" min="256" max="4096" /></label>
+              <label class="checkbox-label" style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px">
+                <input type="checkbox" v-model="profileForm.embedding_inherit" style="width:14px;height:14px;flex-shrink:0" />
+                向量模型继承 Chat 模型配置（使用相同的 Base URL 和 API Key）
+              </label>
+              <template v-if="!profileForm.embedding_inherit">
+                <label style="margin-top:8px">向量模型 Base URL
+                  <input
+                    v-model="profileForm.embedding_base_url"
+                    placeholder="https://api.openai.com/v1"
+                    spellcheck="false" autocorrect="off" autocomplete="off"
+                  />
+                </label>
+                <label>向量模型 API Key
+                  <input v-model="profileForm.embedding_api_key" type="password" placeholder="（可选）" spellcheck="false" autocorrect="off" autocomplete="off" />
+                </label>
+              </template>
               <div class="form-group" style="margin-top:12px">
                 <label class="form-label">语音合成引擎（TTS）</label>
                 <select v-model="profileForm.tts_backend" class="form-input">
