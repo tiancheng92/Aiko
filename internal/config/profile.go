@@ -24,9 +24,10 @@ type ModelProfile struct {
 	Model          string   `json:"model"`
 	EmbeddingModel   string   `json:"embedding_model"`
 	EmbeddingDim     int      `json:"embedding_dim"`
-	EmbeddingInherit bool     `json:"embedding_inherit"`
-	EmbeddingBaseURL string   `json:"embedding_base_url"`
-	EmbeddingAPIKey  string   `json:"embedding_api_key"`
+	EmbeddingInherit   bool     `json:"embedding_inherit"`
+	EmbeddingProvider  string   `json:"embedding_provider"`
+	EmbeddingBaseURL   string   `json:"embedding_base_url"`
+	EmbeddingAPIKey    string   `json:"embedding_api_key"`
 	TTSModelDir      string   `json:"tts_model_dir"` // kokoro 模型目录（含 onnx/voices bin）
 	TTSVoice       string   `json:"tts_voice"`
 	TTSSpeed       float64  `json:"tts_speed"`
@@ -43,7 +44,7 @@ func NewProfileStore(db *sql.DB) *ProfileStore { return &ProfileStore{db: db} }
 func (s *ProfileStore) List() ([]ModelProfile, error) {
 	rows, err := s.db.Query(`
 		SELECT id, name, provider, base_url, api_key, model, embedding_model, embedding_dim,
-		       embedding_inherit, embedding_base_url, embedding_api_key,
+		       embedding_inherit, embedding_provider, embedding_base_url, embedding_api_key,
 		       tts_model, tts_voice, tts_speed, tts_backend
 		FROM model_profiles ORDER BY id`)
 	if err != nil {
@@ -56,7 +57,7 @@ func (s *ProfileStore) List() ([]ModelProfile, error) {
 		var inheritInt int
 		if err := rows.Scan(&p.ID, &p.Name, &p.Provider, &p.BaseURL, &p.APIKey,
 			&p.Model, &p.EmbeddingModel, &p.EmbeddingDim,
-			&inheritInt, &p.EmbeddingBaseURL, &p.EmbeddingAPIKey,
+			&inheritInt, &p.EmbeddingProvider, &p.EmbeddingBaseURL, &p.EmbeddingAPIKey,
 			&p.TTSModelDir, &p.TTSVoice, &p.TTSSpeed, &p.TTSBackend); err != nil {
 			return nil, err
 		}
@@ -72,12 +73,12 @@ func (s *ProfileStore) Get(id int64) (*ModelProfile, error) {
 	var inheritInt int
 	err := s.db.QueryRow(`
 		SELECT id, name, provider, base_url, api_key, model, embedding_model, embedding_dim,
-		       embedding_inherit, embedding_base_url, embedding_api_key,
+		       embedding_inherit, embedding_provider, embedding_base_url, embedding_api_key,
 		       tts_model, tts_voice, tts_speed, tts_backend
 		FROM model_profiles WHERE id = ?`, id).
 		Scan(&p.ID, &p.Name, &p.Provider, &p.BaseURL, &p.APIKey,
 			&p.Model, &p.EmbeddingModel, &p.EmbeddingDim,
-			&inheritInt, &p.EmbeddingBaseURL, &p.EmbeddingAPIKey,
+			&inheritInt, &p.EmbeddingProvider, &p.EmbeddingBaseURL, &p.EmbeddingAPIKey,
 			&p.TTSModelDir, &p.TTSVoice, &p.TTSSpeed, &p.TTSBackend)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("profile %d not found", id)
@@ -102,14 +103,17 @@ func (s *ProfileStore) Save(p *ModelProfile) error {
 	if p.EmbeddingInherit {
 		inheritInt = 1
 	}
+	if p.EmbeddingProvider == "" {
+		p.EmbeddingProvider = "openai"
+	}
 	if p.ID == 0 {
 		res, err := s.db.Exec(`
 			INSERT INTO model_profiles(name, provider, base_url, api_key, model,
-			  embedding_model, embedding_dim, embedding_inherit, embedding_base_url, embedding_api_key,
+			  embedding_model, embedding_dim, embedding_inherit, embedding_provider, embedding_base_url, embedding_api_key,
 			  tts_model, tts_voice, tts_speed, tts_backend)
-			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			p.Name, p.Provider, p.BaseURL, p.APIKey, p.Model,
-			p.EmbeddingModel, p.EmbeddingDim, inheritInt, p.EmbeddingBaseURL, p.EmbeddingAPIKey,
+			p.EmbeddingModel, p.EmbeddingDim, inheritInt, p.EmbeddingProvider, p.EmbeddingBaseURL, p.EmbeddingAPIKey,
 			p.TTSModelDir, p.TTSVoice, p.TTSSpeed, p.TTSBackend)
 		if err != nil {
 			return err
@@ -119,11 +123,11 @@ func (s *ProfileStore) Save(p *ModelProfile) error {
 	}
 	_, err := s.db.Exec(`
 		UPDATE model_profiles SET name=?, provider=?, base_url=?, api_key=?, model=?,
-		  embedding_model=?, embedding_dim=?, embedding_inherit=?, embedding_base_url=?, embedding_api_key=?,
+		  embedding_model=?, embedding_dim=?, embedding_inherit=?, embedding_provider=?, embedding_base_url=?, embedding_api_key=?,
 		  tts_model=?, tts_voice=?, tts_speed=?, tts_backend=?
 		WHERE id=?`,
 		p.Name, p.Provider, p.BaseURL, p.APIKey, p.Model,
-		p.EmbeddingModel, p.EmbeddingDim, inheritInt, p.EmbeddingBaseURL, p.EmbeddingAPIKey,
+		p.EmbeddingModel, p.EmbeddingDim, inheritInt, p.EmbeddingProvider, p.EmbeddingBaseURL, p.EmbeddingAPIKey,
 		p.TTSModelDir, p.TTSVoice, p.TTSSpeed, p.TTSBackend, p.ID)
 	return err
 }

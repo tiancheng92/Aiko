@@ -82,11 +82,13 @@ const fetchingModels = ref(false)
 const profiles = ref([])
 const activeProfileID = ref(0)
 const showProfileForm = ref(false)
-const profileForm = ref({ id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, embedding_inherit: true, embedding_base_url: '', embedding_api_key: '', tts_model_dir: '', tts_voice: '', tts_speed: 1.0, tts_backend: '' })
+const profileForm = ref({ id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, embedding_inherit: true, embedding_provider: 'openai', embedding_base_url: '', embedding_api_key: '', tts_model_dir: '', tts_voice: '', tts_speed: 1.0, tts_backend: '' })
 const profileFormError = ref('')
 const profileFormSaving = ref(false)
 const profileModels = ref([])
 const fetchingProfileModels = ref(false)
+const embeddingModels = ref([])
+const fetchingEmbeddingModels = ref(false)
 const kokoroTTSVoices = ref([])
 const kokoroInstalling = ref(false)
 
@@ -352,9 +354,10 @@ async function fetchProfiles() {
 
 /** openProfileForm opens the add-profile form with empty fields. */
 function openProfileForm() {
-  profileForm.value = { id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, embedding_inherit: true, embedding_base_url: '', embedding_api_key: '', tts_model_dir: '', tts_voice: '', tts_speed: 1.0, tts_backend: '' }
+  profileForm.value = { id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, embedding_inherit: true, embedding_provider: 'openai', embedding_base_url: '', embedding_api_key: '', tts_model_dir: '', tts_voice: '', tts_speed: 1.0, tts_backend: '' }
   profileFormError.value = ''
   profileModels.value = []
+  embeddingModels.value = []
   showProfileForm.value = true
 }
 
@@ -363,6 +366,7 @@ function editProfile(p) {
   profileForm.value = { ...p, embedding_inherit: p.embedding_inherit ?? true, tts_backend: p.tts_backend || '' }
   profileFormError.value = ''
   profileModels.value = []
+  embeddingModels.value = []
   showProfileForm.value = true
   fetchKokoroTTSVoices()
 }
@@ -381,6 +385,26 @@ async function fetchProfileModels() {
     profileModels.value = []
   } finally {
     fetchingProfileModels.value = false
+  }
+}
+
+/** fetchEmbeddingModels fetches models for the embedding-specific base_url. */
+async function fetchEmbeddingModels() {
+  fetchingEmbeddingModels.value = true
+  try {
+    const provider = profileForm.value.embedding_provider
+    const baseURL = profileForm.value.embedding_base_url
+    const apiKey = profileForm.value.embedding_api_key
+    if (provider === 'openrouter') {
+      embeddingModels.value = await ListOpenRouterModels(baseURL, apiKey) || []
+    } else {
+      if (!baseURL) return
+      embeddingModels.value = await ListLLMModels(baseURL, apiKey) || []
+    }
+  } catch {
+    embeddingModels.value = []
+  } finally {
+    fetchingEmbeddingModels.value = false
   }
 }
 
@@ -1161,12 +1185,23 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 </label>
               </div>
               <template v-if="!profileForm.embedding_inherit">
-                <label style="margin-top:4px">向量模型 Base URL
-                  <input
-                    v-model="profileForm.embedding_base_url"
-                    placeholder="https://api.openai.com/v1"
-                    spellcheck="false" autocorrect="off" autocomplete="off"
-                  />
+                <label style="margin-top:4px">向量模型接入方式
+                  <select v-model="profileForm.embedding_provider">
+                    <option value="openai">OpenAI 兼容接口</option>
+                    <option value="openrouter">OpenRouter</option>
+                  </select>
+                </label>
+                <label>向量模型 Base URL
+                  <div class="url-row">
+                    <input
+                      v-model="profileForm.embedding_base_url"
+                      :placeholder="profileForm.embedding_provider === 'openrouter' ? 'https://openrouter.ai/api/v1（留空使用默认）' : 'https://api.openai.com/v1'"
+                      spellcheck="false" autocorrect="off" autocomplete="off"
+                    />
+                    <button class="fetch-btn" @click="fetchEmbeddingModels" :disabled="fetchingEmbeddingModels || (profileForm.embedding_provider !== 'openrouter' && !profileForm.embedding_base_url)">
+                      {{ fetchingEmbeddingModels ? '获取中...' : '获取模型' }}
+                    </button>
+                  </div>
                 </label>
                 <label>向量模型 API Key
                   <input v-model="profileForm.embedding_api_key" type="password" placeholder="（可选）" spellcheck="false" autocorrect="off" autocomplete="off" />
@@ -1174,11 +1209,20 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               </template>
               <label>向量模型（Embedding）
                 <div class="select-row">
-                  <select v-if="profileModels.length" v-model="profileForm.embedding_model">
-                    <option value="">-- 不启用（关闭知识库检索）--</option>
-                    <option v-for="m in profileModels" :key="m" :value="m">{{ m }}</option>
-                  </select>
-                  <input v-else v-model="profileForm.embedding_model" placeholder="text-embedding-3-small（可选）" spellcheck="false" autocorrect="off" autocomplete="off" />
+                  <template v-if="profileForm.embedding_inherit">
+                    <select v-if="profileModels.length" v-model="profileForm.embedding_model">
+                      <option value="">-- 不启用（关闭知识库检索）--</option>
+                      <option v-for="m in profileModels" :key="m" :value="m">{{ m }}</option>
+                    </select>
+                    <input v-else v-model="profileForm.embedding_model" placeholder="text-embedding-3-small（可选）" spellcheck="false" autocorrect="off" autocomplete="off" />
+                  </template>
+                  <template v-else>
+                    <select v-if="embeddingModels.length" v-model="profileForm.embedding_model">
+                      <option value="">-- 不启用（关闭知识库检索）--</option>
+                      <option v-for="m in embeddingModels" :key="m" :value="m">{{ m }}</option>
+                    </select>
+                    <input v-else v-model="profileForm.embedding_model" placeholder="text-embedding-3-small（可选）" spellcheck="false" autocorrect="off" autocomplete="off" />
+                  </template>
                 </div>
               </label>
               <label>向量维度<span class="field-hint">与所选向量模型保持一致，默认 1536</span><input type="number" v-model.number="profileForm.embedding_dim" min="256" max="4096" /></label>
@@ -2508,7 +2552,9 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: flex-start; justify-content: center;
+  overflow-y: auto;
+  padding: 40px 0;
   animation: fadeIn 0.15s ease-out;
 }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -2521,8 +2567,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   box-shadow: var(--lg-shadow);
   padding: 24px;
   width: 420px;
-  max-height: 80vh;
-  overflow-y: auto;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;

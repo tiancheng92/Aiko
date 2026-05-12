@@ -135,6 +135,8 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE model_profiles ADD COLUMN embedding_inherit  INTEGER NOT NULL DEFAULT 1`,
 		`ALTER TABLE model_profiles ADD COLUMN embedding_base_url TEXT    NOT NULL DEFAULT ''`,
 		`ALTER TABLE model_profiles ADD COLUMN embedding_api_key  TEXT    NOT NULL DEFAULT ''`,
+		// v7: embedding model may use a different provider (openai-compat vs openrouter).
+		`ALTER TABLE model_profiles ADD COLUMN embedding_provider TEXT    NOT NULL DEFAULT 'openai'`,
 	}
 	for _, p := range patches {
 		if _, err := db.Exec(p); err != nil {

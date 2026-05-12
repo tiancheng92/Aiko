@@ -18,8 +18,9 @@ type Config struct {
 	RenderBackend  string // "live2d" | "vrm"; default "live2d"
 	VRMModel       string // selected .vrm filename
 	EmbeddingDim     int
-	EmbeddingBaseURL string
-	EmbeddingAPIKey  string
+	EmbeddingProvider string // "openai" or "openrouter"; default "openai"
+	EmbeddingBaseURL  string
+	EmbeddingAPIKey   string
 	SystemPrompt     string
 	ShortTermLimit int
 	NudgeInterval  int      // 每隔多少轮触发一次 self-growth nudge，0 表示使用默认值 5
@@ -184,9 +185,14 @@ func (c *Config) ApplyProfile(p *ModelProfile) {
 	}
 	// Resolve embedding endpoint: inherit from LLM config or use dedicated values.
 	if p.EmbeddingInherit {
+		c.EmbeddingProvider = c.LLMProvider
 		c.EmbeddingBaseURL = c.LLMBaseURL
 		c.EmbeddingAPIKey = c.LLMAPIKey
 	} else {
+		c.EmbeddingProvider = p.EmbeddingProvider
+		if c.EmbeddingProvider == "" {
+			c.EmbeddingProvider = "openai"
+		}
 		c.EmbeddingBaseURL = p.EmbeddingBaseURL
 		c.EmbeddingAPIKey = p.EmbeddingAPIKey
 	}

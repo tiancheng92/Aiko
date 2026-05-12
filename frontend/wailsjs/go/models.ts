@@ -10,6 +10,9 @@ export namespace config {
 	    RenderBackend: string;
 	    VRMModel: string;
 	    EmbeddingDim: number;
+	    EmbeddingProvider: string;
+	    EmbeddingBaseURL: string;
+	    EmbeddingAPIKey: string;
 	    SystemPrompt: string;
 	    ShortTermLimit: number;
 	    NudgeInterval: number;
@@ -50,6 +53,9 @@ export namespace config {
 	        this.RenderBackend = source["RenderBackend"];
 	        this.VRMModel = source["VRMModel"];
 	        this.EmbeddingDim = source["EmbeddingDim"];
+	        this.EmbeddingProvider = source["EmbeddingProvider"];
+	        this.EmbeddingBaseURL = source["EmbeddingBaseURL"];
+	        this.EmbeddingAPIKey = source["EmbeddingAPIKey"];
 	        this.SystemPrompt = source["SystemPrompt"];
 	        this.ShortTermLimit = source["ShortTermLimit"];
 	        this.NudgeInterval = source["NudgeInterval"];
@@ -85,6 +91,10 @@ export namespace config {
 	    model: string;
 	    embedding_model: string;
 	    embedding_dim: number;
+	    embedding_inherit: boolean;
+	    embedding_provider: string;
+	    embedding_base_url: string;
+	    embedding_api_key: string;
 	    tts_model_dir: string;
 	    tts_voice: string;
 	    tts_speed: number;
@@ -104,6 +114,10 @@ export namespace config {
 	        this.model = source["model"];
 	        this.embedding_model = source["embedding_model"];
 	        this.embedding_dim = source["embedding_dim"];
+	        this.embedding_inherit = source["embedding_inherit"];
+	        this.embedding_provider = source["embedding_provider"];
+	        this.embedding_base_url = source["embedding_base_url"];
+	        this.embedding_api_key = source["embedding_api_key"];
 	        this.tts_model_dir = source["tts_model_dir"];
 	        this.tts_voice = source["tts_voice"];
 	        this.tts_speed = source["tts_speed"];
