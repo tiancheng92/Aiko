@@ -165,6 +165,8 @@ func (t *UpdateUserProfileTool) InvokableRun(_ context.Context, input string, _ 
 }
 
 // ListSkillsTool lists all auto-saved skills stored under ~/.aiko/auto-skills/.
+// It returns only skill names and descriptions (summaries written by the agent).
+// Use get_all_skills to retrieve the full content of every skill.
 type ListSkillsTool struct {
 	DataDir string
 }
@@ -175,10 +177,10 @@ func (t *ListSkillsTool) Name() string { return "list_skills" }
 // Permission returns the required permission level.
 func (t *ListSkillsTool) Permission() PermissionLevel { return PermPublic }
 
-// Info returns the eino tool schema for list_skills.
+// Info returns the eino tool schema for list_skill_names.
 func (t *ListSkillsTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return infoFromSchema(t.Name(),
-		"列出所有已保存的自动技能（名称+描述）。在调用 save_skill 前，先调用此工具确认是否已存在同名或类似技能，避免重复；改名前也应先调用以获取旧技能名称。",
+		"列出你（AI）通过 save_skill 自主沉淀的技能的名称与一句话描述（概览索引）。⚠️ 注意：此列表并不包s全部可用技能——系统内置工具、用户配置的技能等均不在此列，仅列出由 AI 自主写入的技能文件。适合快速检索：调用 save_skill 前先确认是否存在同名/相似技能；查找旧技能名称以便重命名。",
 		map[string]*schema.ParameterInfo{},
 	), nil
 }
