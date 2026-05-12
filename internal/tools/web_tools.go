@@ -96,6 +96,12 @@ func (t *WebSearchTool) InvokableRun(ctx context.Context, input string, _ ...too
 	if timeRange != "" && (startDate != "" || endDate != "") {
 		return "参数错误：time_range 与 start_date / end_date 不能同时使用，请二选一", nil
 	}
+	switch timeRange {
+	case "", "day", "week", "month", "year":
+		// valid
+	default:
+		return "time_range 无效，可选值：day、week、month、year", nil
+	}
 
 	// Use Tavily when API key is configured; fall back to DuckDuckGo otherwise.
 	if t.Cfg != nil && t.Cfg.TavilyAPIKey != "" {
@@ -159,7 +165,6 @@ type tavilyResponse struct {
 // timeRange, startDate, endDate are optional — empty string omits them from the request.
 func tavilySearch(ctx context.Context, query string, numResults int, apiKey, timeRange, startDate, endDate string) (string, error) {
 	body := map[string]any{
-		"api_key":        apiKey,
 		"query":          query,
 		"max_results":    numResults,
 		"search_depth":   "advanced",
@@ -189,8 +194,10 @@ func tavilySearch(ctx context.Context, query string, numResults int, apiKey, tim
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("tavily request failed: %w", err)
 	}
