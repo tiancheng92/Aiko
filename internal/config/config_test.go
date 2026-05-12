@@ -100,3 +100,86 @@ func TestConfigThemeStyle_Default(t *testing.T) {
 		t.Errorf("ThemeStyle default: got %q, want %q", loaded.ThemeStyle, "frosted")
 	}
 }
+
+// TestApplyProfile_Inherit verifies that inherit=true copies LLM base_url/api_key to embedding fields.
+func TestApplyProfile_Inherit(t *testing.T) {
+	p := &config.ModelProfile{
+		BaseURL:          "http://llm.local/v1",
+		APIKey:           "llm-key",
+		Model:            "llama3",
+		EmbeddingModel:   "nomic-embed",
+		EmbeddingDim:     768,
+		EmbeddingInherit: true,
+		EmbeddingBaseURL: "",
+		EmbeddingAPIKey:  "",
+	}
+	cfg := &config.Config{}
+	cfg.ApplyProfile(p)
+
+	if cfg.EmbeddingBaseURL != "http://llm.local/v1" {
+		t.Errorf("EmbeddingBaseURL: got %q, want %q", cfg.EmbeddingBaseURL, "http://llm.local/v1")
+	}
+	if cfg.EmbeddingAPIKey != "llm-key" {
+		t.Errorf("EmbeddingAPIKey: got %q, want %q", cfg.EmbeddingAPIKey, "llm-key")
+	}
+}
+
+// TestApplyProfile_Independent verifies that inherit=false uses the dedicated embedding fields.
+func TestApplyProfile_Independent(t *testing.T) {
+	p := &config.ModelProfile{
+		BaseURL:          "http://llm.local/v1",
+		APIKey:           "llm-key",
+		Model:            "llama3",
+		EmbeddingModel:   "text-embedding-3-small",
+		EmbeddingDim:     1536,
+		EmbeddingInherit: false,
+		EmbeddingBaseURL: "https://api.openai.com/v1",
+		EmbeddingAPIKey:  "emb-key",
+	}
+	cfg := &config.Config{}
+	cfg.ApplyProfile(p)
+
+	if cfg.EmbeddingBaseURL != "https://api.openai.com/v1" {
+		t.Errorf("EmbeddingBaseURL: got %q, want %q", cfg.EmbeddingBaseURL, "https://api.openai.com/v1")
+	}
+	if cfg.EmbeddingAPIKey != "emb-key" {
+		t.Errorf("EmbeddingAPIKey: got %q, want %q", cfg.EmbeddingAPIKey, "emb-key")
+	}
+	// LLM fields must not be affected by this check.
+	if cfg.LLMBaseURL != "http://llm.local/v1" {
+		t.Errorf("LLMBaseURL: got %q, want %q", cfg.LLMBaseURL, "http://llm.local/v1")
+	}
+}
+
+// TestVectorEnabled_EmptyModel verifies VectorEnabled=false when EmbeddingModel is empty.
+func TestVectorEnabled_EmptyModel(t *testing.T) {
+	cfg := &config.Config{
+		EmbeddingBaseURL: "http://llm.local/v1",
+		EmbeddingModel:   "",
+	}
+	if cfg.VectorEnabled() {
+		t.Error("VectorEnabled: expected false when EmbeddingModel is empty")
+	}
+}
+
+// TestVectorEnabled_EmptyURL verifies VectorEnabled=false when EmbeddingBaseURL is empty.
+func TestVectorEnabled_EmptyURL(t *testing.T) {
+	cfg := &config.Config{
+		EmbeddingModel:   "text-embedding-3-small",
+		EmbeddingBaseURL: "",
+	}
+	if cfg.VectorEnabled() {
+		t.Error("VectorEnabled: expected false when EmbeddingBaseURL is empty")
+	}
+}
+
+// TestVectorEnabled_Configured verifies VectorEnabled=true when both fields are set.
+func TestVectorEnabled_Configured(t *testing.T) {
+	cfg := &config.Config{
+		EmbeddingModel:   "text-embedding-3-small",
+		EmbeddingBaseURL: "https://api.openai.com/v1",
+	}
+	if !cfg.VectorEnabled() {
+		t.Error("VectorEnabled: expected true when model and base_url are set")
+	}
+}

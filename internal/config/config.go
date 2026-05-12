@@ -17,8 +17,10 @@ type Config struct {
 	Live2DModel    string // 模型目录名，默认 "hiyori"
 	RenderBackend  string // "live2d" | "vrm"; default "live2d"
 	VRMModel       string // selected .vrm filename
-	EmbeddingDim   int
-	SystemPrompt   string
+	EmbeddingDim     int
+	EmbeddingBaseURL string
+	EmbeddingAPIKey  string
+	SystemPrompt     string
 	ShortTermLimit int
 	NudgeInterval  int      // 每隔多少轮触发一次 self-growth nudge，0 表示使用默认值 5
 	AllowedPaths  []string // file system path whitelist; empty = deny all
@@ -180,6 +182,14 @@ func (c *Config) ApplyProfile(p *ModelProfile) {
 		c.LLMBaseURL = "https://openrouter.ai/api/v1"
 		p.BaseURL = c.LLMBaseURL
 	}
+	// Resolve embedding endpoint: inherit from LLM config or use dedicated values.
+	if p.EmbeddingInherit {
+		c.EmbeddingBaseURL = c.LLMBaseURL
+		c.EmbeddingAPIKey = c.LLMAPIKey
+	} else {
+		c.EmbeddingBaseURL = p.EmbeddingBaseURL
+		c.EmbeddingAPIKey = p.EmbeddingAPIKey
+	}
 	c.TTSModelDir = p.TTSModelDir
 	c.TTSVoice = p.TTSVoice
 	if p.TTSSpeed == 0 {
@@ -205,7 +215,7 @@ func (c *Config) MissingRequired() []string {
 
 // VectorEnabled reports whether embedding is configured.
 func (c *Config) VectorEnabled() bool {
-	return c.EmbeddingModel != ""
+	return c.EmbeddingModel != "" && c.EmbeddingBaseURL != ""
 }
 
 func parseInt(s string, def int) int {
