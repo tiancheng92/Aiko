@@ -129,6 +129,8 @@ func migrate(db *sql.DB) error {
 		// v4: per-job flags — save result to long-term memory, send system notification.
 		`ALTER TABLE cron_jobs ADD COLUMN save_to_memory INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE cron_jobs ADD COLUMN notify INTEGER NOT NULL DEFAULT 1`,
+		// v5: wall-clock next fire time; enables poll-based scheduling (immune to sleep/wake drift).
+		`ALTER TABLE cron_jobs ADD COLUMN next_run_at DATETIME`,
 	}
 	for _, p := range patches {
 		if _, err := db.Exec(p); err != nil {

@@ -2,28 +2,29 @@
 package scheduler
 
 import (
-    "context"
-    "database/sql"
-    "fmt"
-    "log/slog"
-    "sync"
-    "time"
+	"context"
+	"database/sql"
+	"fmt"
+	"log/slog"
+	"sync"
+	"time"
 
-    "github.com/robfig/cron/v3"
+	"github.com/robfig/cron/v3"
 )
 
 // Job represents a single scheduled task persisted in SQLite.
 type Job struct {
-    ID           int64
-    Name         string
-    Description  string
-    Schedule     string  // cron expression e.g. "0 8 * * *"
-    Prompt       string  // the message to send to the agent
-    Enabled      bool
-    SaveToMemory bool    // save result to long-term memory on success
-    Notify       bool    // send system notification after execution
-    LastRun      *string // RFC3339 or nil; string so Wails can generate TS bindings
-    CreatedAt    string  // RFC3339; string so Wails can generate TS bindings
+	ID           int64
+	Name         string
+	Description  string
+	Schedule     string  // cron expression e.g. "0 8 * * *"
+	Prompt       string  // the message to send to the agent
+	Enabled      bool
+	SaveToMemory bool
+	Notify       bool
+	LastRun      *string // RFC3339 or nil
+	NextRunAt    *string // RFC3339 or nil
+	CreatedAt    string  // RFC3339
 }
 
 // ResultFunc is called when a job fires, with the job and the agent's response.
@@ -32,115 +33,342 @@ type ResultFunc func(job Job, result string, err error)
 // jobTimeout is the maximum duration allowed for a single cron job execution.
 const jobTimeout = 10 * time.Minute
 
-// Scheduler manages cron jobs backed by SQLite.
+// pollInterval is how often the scheduler checks for due jobs.
+// After system sleep/wake the next poll fires within one interval because we
+// compare against wall-clock time stored in the DB, not an internal timer.
+const pollInterval = time.Minute
+
+// Scheduler manages cron jobs backed by SQLite using a poll-based design.
+// Instead of relying on cron engine timers (which use the monotonic clock and
+// therefore pause during system sleep), each job stores its next_run_at wall-
+// clock timestamp in the DB. A background goroutine wakes every minute, reads
+// due rows (next_run_at <= now), advances next_run_at, and executes them.
+// This mirrors the approach used by Hermes Agent's cron/scheduler.py.
 type Scheduler struct {
-    mu       sync.Mutex
-    db       *sql.DB
-    cr       *cron.Cron
-    entryIDs map[int64]cron.EntryID // job.ID -> cron entry ID
-    chatFn   func(ctx context.Context, job Job) (string, error)
-    onResult ResultFunc
-    // wg tracks in-flight job invocations (cron-triggered and RunJobNow) so
-    // Stop can wait for them to drain before returning.
-    wg sync.WaitGroup
+	mu       sync.Mutex
+	db       *sql.DB
+	chatFn   func(ctx context.Context, job Job) (string, error)
+	onResult ResultFunc
+	done     chan struct{}
+	wg       sync.WaitGroup
+	// pollNow is a channel that triggers an immediate poll tick (used by
+	// TriggerPoll so the wake observer can bypass the 1-minute wait).
+	pollNow  chan struct{}
 }
 
 // New creates a Scheduler. chatFn is called to execute each job's prompt.
-// The Job is passed so chatFn can adjust behaviour (e.g. memory persistence).
-// onResult is called with the job output after each execution.
 func New(db *sql.DB, chatFn func(ctx context.Context, job Job) (string, error), onResult ResultFunc) *Scheduler {
-    s := &Scheduler{
-        db:       db,
-        cr:       cron.New(),
-        entryIDs: make(map[int64]cron.EntryID),
-        chatFn:   chatFn,
-        onResult: onResult,
-    }
-    return s
+	return &Scheduler{
+		db:       db,
+		chatFn:   chatFn,
+		onResult: onResult,
+		pollNow:  make(chan struct{}, 1),
+	}
 }
 
-// Start loads all enabled jobs from DB and starts the cron engine.
+// Start initialises next_run_at for enabled jobs that lack one, then launches
+// the background poll loop.
 func (s *Scheduler) Start(ctx context.Context) error {
-    jobs, err := s.ListJobs(ctx)
-    if err != nil {
-        return fmt.Errorf("load jobs: %w", err)
-    }
-    for _, j := range jobs {
-        if j.Enabled {
-            if err := s.scheduleJob(j); err != nil {
-                slog.Warn("failed to schedule job", "job", j.Name, "err", err)
-            }
-        }
-    }
-    s.cr.Start()
-    return nil
+	jobs, err := s.ListJobs(ctx)
+	if err != nil {
+		return fmt.Errorf("load jobs: %w", err)
+	}
+	for _, j := range jobs {
+		if j.Enabled && j.NextRunAt == nil {
+			if err := s.initNextRun(ctx, j); err != nil {
+				slog.Warn("scheduler: init next_run_at", "job", j.Name, "err", err)
+			}
+		}
+	}
+
+	s.mu.Lock()
+	s.done = make(chan struct{})
+	s.mu.Unlock()
+
+	s.wg.Add(1)
+	go s.loop(ctx)
+	return nil
 }
 
-// Stop halts the cron engine and waits up to 5 seconds for any in-flight job
-// invocations to finish. Jobs that exceed the grace period are abandoned so
-// shutdown doesn't block indefinitely.
+// Stop halts the poll loop and waits for in-flight executions to finish.
 func (s *Scheduler) Stop() {
-	ctx := s.cr.Stop() // returns a ctx that is done once cron workers exit
-	select {
-	case <-ctx.Done():
-	case <-time.After(5 * time.Second):
-		slog.Warn("scheduler: cron workers did not stop within grace period")
+	s.mu.Lock()
+	if s.done != nil {
+		close(s.done)
+		s.done = nil
 	}
-	// Best-effort wait for in-flight RunJobNow/scheduleJob goroutines.
-	done := make(chan struct{})
-	go func() { s.wg.Wait(); close(done) }()
+	s.mu.Unlock()
+	s.wg.Wait()
+}
+
+// TriggerPoll requests an immediate poll without waiting for the next tick.
+// Non-blocking: if a poll is already queued the call is a no-op.
+func (s *Scheduler) TriggerPoll() {
 	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		slog.Warn("scheduler: in-flight jobs did not finish within grace period")
+	case s.pollNow <- struct{}{}:
+	default:
 	}
 }
 
-// CreateJob persists a new job and schedules it immediately.
+// loop is the background goroutine that drives periodic polling.
+func (s *Scheduler) loop(ctx context.Context) {
+	defer s.wg.Done()
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+	s.mu.Lock()
+	done := s.done
+	s.mu.Unlock()
+
+	// Poll once immediately on start so jobs due at startup are not skipped.
+	s.poll(ctx)
+
+	for {
+		select {
+		case <-ticker.C:
+			s.poll(ctx)
+		case <-s.pollNow:
+			s.poll(ctx)
+		case <-done:
+			return
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// poll queries all enabled jobs whose next_run_at is in the past, advances
+// their next_run_at before executing (at-most-once semantics, matching
+// Hermes' "advance first, then run" pattern), and fires each one.
+func (s *Scheduler) poll(ctx context.Context) {
+	now := time.Now().UTC()
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, name, description, schedule, prompt, enabled,
+		       save_to_memory, notify, last_run, next_run_at, created_at
+		FROM cron_jobs
+		WHERE enabled = 1 AND next_run_at IS NOT NULL AND next_run_at <= ?
+	`, now.Format(time.RFC3339))
+	if err != nil {
+		slog.Warn("scheduler poll: query", "err", err)
+		return
+	}
+	defer rows.Close()
+
+	var due []Job
+	for rows.Next() {
+		j, err := scanJob(rows)
+		if err != nil {
+			slog.Warn("scheduler poll: scan", "err", err)
+			continue
+		}
+		due = append(due, j)
+	}
+	if err := rows.Err(); err != nil {
+		slog.Warn("scheduler poll: rows", "err", err)
+		return
+	}
+
+	for _, j := range due {
+		// Advance next_run_at before execution — ensures at-most-once delivery
+		// even if the process crashes mid-run (same pattern as Hermes Agent).
+		next, err := computeNextRun(j.Schedule, now)
+		if err != nil {
+			slog.Warn("scheduler poll: compute next", "job", j.Name, "err", err)
+			continue
+		}
+		nextStr := next.UTC().Format(time.RFC3339)
+		if _, err := s.db.ExecContext(ctx,
+			`UPDATE cron_jobs SET next_run_at = ? WHERE id = ?`,
+			nextStr, j.ID,
+		); err != nil {
+			slog.Warn("scheduler poll: advance next_run_at", "job", j.Name, "err", err)
+			continue
+		}
+		s.fireJob(j)
+	}
+}
+
+// fireJob runs a job in a goroutine.
+func (s *Scheduler) fireJob(j Job) {
+	s.wg.Add(1)
+	go func(job Job) {
+		defer s.wg.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), jobTimeout)
+		defer cancel()
+		slog.Info("cron job fired", "job", job.Name)
+		result, err := s.chatFn(ctx, job)
+		if _, dbErr := s.db.ExecContext(context.Background(),
+			`UPDATE cron_jobs SET last_run = ? WHERE id = ?`,
+			time.Now().UTC().Format(time.RFC3339), job.ID,
+		); dbErr != nil {
+			slog.Warn("scheduler: update last_run", "job", job.Name, "err", dbErr)
+		}
+		if s.onResult != nil {
+			s.onResult(job, result, err)
+		}
+	}(j)
+}
+
+// CreateJob persists a new job and sets its initial next_run_at.
 func (s *Scheduler) CreateJob(ctx context.Context, name, description, schedule, prompt string, saveToMemory, notify bool) (Job, error) {
-    // Validate the cron expression before persisting.
-    if _, err := cron.ParseStandard(schedule); err != nil {
-        return Job{}, fmt.Errorf("invalid cron expression %q: %w", schedule, err)
-    }
-    stm, ntf := boolToInt(saveToMemory), boolToInt(notify)
-    res, err := s.db.ExecContext(ctx, `
-        INSERT INTO cron_jobs(name, description, schedule, prompt, enabled, save_to_memory, notify)
-        VALUES (?, ?, ?, ?, 1, ?, ?)
-    `, name, description, schedule, prompt, stm, ntf)
-    if err != nil {
-        return Job{}, fmt.Errorf("insert job: %w", err)
-    }
-    id, _ := res.LastInsertId()
-    j := Job{ID: id, Name: name, Description: description, Schedule: schedule, Prompt: prompt, Enabled: true, SaveToMemory: saveToMemory, Notify: notify}
-    if err := s.scheduleJob(j); err != nil {
-        return j, fmt.Errorf("schedule job: %w", err)
-    }
-    return j, nil
+	if _, err := cron.ParseStandard(schedule); err != nil {
+		return Job{}, fmt.Errorf("invalid cron expression %q: %w", schedule, err)
+	}
+	next, err := computeNextRun(schedule, time.Now())
+	if err != nil {
+		return Job{}, err
+	}
+	nextStr := next.UTC().Format(time.RFC3339)
+	stm, ntf := boolToInt(saveToMemory), boolToInt(notify)
+	res, err := s.db.ExecContext(ctx, `
+		INSERT INTO cron_jobs(name, description, schedule, prompt, enabled, save_to_memory, notify, next_run_at)
+		VALUES (?, ?, ?, ?, 1, ?, ?, ?)
+	`, name, description, schedule, prompt, stm, ntf, nextStr)
+	if err != nil {
+		return Job{}, fmt.Errorf("insert job: %w", err)
+	}
+	id, _ := res.LastInsertId()
+	j := Job{
+		ID: id, Name: name, Description: description,
+		Schedule: schedule, Prompt: prompt, Enabled: true,
+		SaveToMemory: saveToMemory, Notify: notify, NextRunAt: &nextStr,
+	}
+	return j, nil
 }
 
-// boolToInt converts a bool to 0/1 for SQLite storage.
-func boolToInt(b bool) int {
-    if b {
-        return 1
-    }
-    return 0
+// DeleteJob removes a job from the DB.
+func (s *Scheduler) DeleteJob(ctx context.Context, id int64) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM cron_jobs WHERE id = ?`, id)
+	return err
+}
+
+// UpdateJob persists changes and recomputes next_run_at from now.
+func (s *Scheduler) UpdateJob(ctx context.Context, id int64, name, description, schedule, prompt string, saveToMemory, notify bool) (Job, error) {
+	if _, err := cron.ParseStandard(schedule); err != nil {
+		return Job{}, fmt.Errorf("invalid cron expression %q: %w", schedule, err)
+	}
+	next, err := computeNextRun(schedule, time.Now())
+	if err != nil {
+		return Job{}, err
+	}
+	nextStr := next.UTC().Format(time.RFC3339)
+	_, err = s.db.ExecContext(ctx,
+		`UPDATE cron_jobs SET name=?, description=?, schedule=?, prompt=?,
+		        save_to_memory=?, notify=?, next_run_at=? WHERE id=?`,
+		name, description, schedule, prompt,
+		boolToInt(saveToMemory), boolToInt(notify), nextStr, id)
+	if err != nil {
+		return Job{}, fmt.Errorf("update job: %w", err)
+	}
+	jobs, err := s.ListJobs(ctx)
+	if err != nil {
+		return Job{}, err
+	}
+	for _, j := range jobs {
+		if j.ID == id {
+			return j, nil
+		}
+	}
+	return Job{}, fmt.Errorf("job %d not found after update", id)
+}
+
+// SetJobEnabled enables or disables a job. Enabling recomputes next_run_at.
+func (s *Scheduler) SetJobEnabled(ctx context.Context, id int64, enabled bool) error {
+	v := boolToInt(enabled)
+	if _, err := s.db.ExecContext(ctx, `UPDATE cron_jobs SET enabled=? WHERE id=?`, v, id); err != nil {
+		return fmt.Errorf("set enabled: %w", err)
+	}
+	if enabled {
+		jobs, err := s.ListJobs(ctx)
+		if err != nil {
+			return err
+		}
+		for _, j := range jobs {
+			if j.ID == id {
+				return s.initNextRun(ctx, j)
+			}
+		}
+	}
+	return nil
 }
 
 // RunJobNow fires a job immediately regardless of its schedule.
 func (s *Scheduler) RunJobNow(id int64) error {
+	rows, err := s.db.QueryContext(context.Background(), `
+		SELECT id, name, description, schedule, prompt, enabled,
+		       save_to_memory, notify, last_run, next_run_at, created_at
+		FROM cron_jobs WHERE id = ? LIMIT 1`, id)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return fmt.Errorf("job %d not found", id)
+	}
+	j, err := scanJob(rows)
+	if err != nil {
+		return err
+	}
+	s.fireJob(j)
+	return nil
+}
+
+// ListJobs returns all jobs ordered by created_at.
+func (s *Scheduler) ListJobs(ctx context.Context) ([]Job, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, name, description, schedule, prompt, enabled,
+		       save_to_memory, notify, last_run, next_run_at, created_at
+		FROM cron_jobs ORDER BY created_at ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var jobs []Job
+	for rows.Next() {
+		j, err := scanJob(rows)
+		if err != nil {
+			return nil, err
+		}
+		jobs = append(jobs, j)
+	}
+	return jobs, rows.Err()
+}
+
+// initNextRun sets next_run_at for a job that doesn't have one yet.
+func (s *Scheduler) initNextRun(ctx context.Context, j Job) error {
+	next, err := computeNextRun(j.Schedule, time.Now())
+	if err != nil {
+		return err
+	}
+	nextStr := next.UTC().Format(time.RFC3339)
+	_, err = s.db.ExecContext(ctx,
+		`UPDATE cron_jobs SET next_run_at = ? WHERE id = ?`, nextStr, j.ID)
+	return err
+}
+
+// computeNextRun returns the next wall-clock fire time after `after`.
+func computeNextRun(schedule string, after time.Time) (time.Time, error) {
+	p, err := cron.ParseStandard(schedule)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parse schedule %q: %w", schedule, err)
+	}
+	return p.Next(after), nil
+}
+
+// scanJob scans one row from a cron_jobs query into a Job.
+func scanJob(rows *sql.Rows) (Job, error) {
 	var j Job
 	var enabled, saveToMemory, notify int
 	var lastRun sql.NullTime
+	var nextRunAt sql.NullString
 	var createdAt time.Time
-	err := s.db.QueryRowContext(context.Background(),
-		`SELECT id, name, description, schedule, prompt, enabled, save_to_memory, notify, last_run, created_at
-		 FROM cron_jobs WHERE id=? LIMIT 1`, id).
-		Scan(&j.ID, &j.Name, &j.Description, &j.Schedule, &j.Prompt, &enabled, &saveToMemory, &notify, &lastRun, &createdAt)
-	if err == sql.ErrNoRows {
-		return fmt.Errorf("job %d not found", id)
-	}
-	if err != nil {
-		return err
+	if err := rows.Scan(
+		&j.ID, &j.Name, &j.Description, &j.Schedule, &j.Prompt,
+		&enabled, &saveToMemory, &notify,
+		&lastRun, &nextRunAt, &createdAt,
+	); err != nil {
+		return Job{}, err
 	}
 	j.Enabled = enabled == 1
 	j.SaveToMemory = saveToMemory == 1
@@ -149,177 +377,17 @@ func (s *Scheduler) RunJobNow(id int64) error {
 		s := lastRun.Time.Format(time.RFC3339)
 		j.LastRun = &s
 	}
+	if nextRunAt.Valid {
+		j.NextRunAt = &nextRunAt.String
+	}
 	j.CreatedAt = createdAt.Format(time.RFC3339)
-
-	s.wg.Add(1)
-	go func(job Job) {
-		defer s.wg.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), jobTimeout)
-		defer cancel()
-		_, _ = s.db.ExecContext(ctx, `UPDATE cron_jobs SET last_run=? WHERE id=?`, time.Now(), job.ID)
-		slog.Info("cron job fired manually", "job", job.Name)
-		result, err := s.chatFn(ctx, job)
-		if s.onResult != nil {
-			s.onResult(job, result, err)
-		}
-	}(j)
-	return nil
+	return j, nil
 }
 
-// DeleteJob removes a job from cron and from the DB.
-func (s *Scheduler) DeleteJob(ctx context.Context, id int64) error {
-    s.mu.Lock()
-    if eid, ok := s.entryIDs[id]; ok {
-        s.cr.Remove(eid)
-        delete(s.entryIDs, id)
-    }
-    s.mu.Unlock()
-    _, err := s.db.ExecContext(ctx, `DELETE FROM cron_jobs WHERE id = ?`, id)
-    return err
+// boolToInt converts a bool to 0/1 for SQLite storage.
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
-
-// UpdateJob persists name/description/schedule/prompt/flags changes for an existing job
-// and reschedules it in the cron engine.
-func (s *Scheduler) UpdateJob(ctx context.Context, id int64, name, description, schedule, prompt string, saveToMemory, notify bool) (Job, error) {
-    if _, err := cron.ParseStandard(schedule); err != nil {
-        return Job{}, fmt.Errorf("invalid cron expression %q: %w", schedule, err)
-    }
-    _, err := s.db.ExecContext(ctx,
-        `UPDATE cron_jobs SET name=?, description=?, schedule=?, prompt=?, save_to_memory=?, notify=? WHERE id=?`,
-        name, description, schedule, prompt, boolToInt(saveToMemory), boolToInt(notify), id)
-    if err != nil {
-        return Job{}, fmt.Errorf("update job: %w", err)
-    }
-    jobs, err := s.ListJobs(ctx)
-    if err != nil {
-        return Job{}, err
-    }
-    var updated Job
-    for _, j := range jobs {
-        if j.ID == id {
-            updated = j
-            break
-        }
-    }
-    // Reschedule: remove old entry then re-add if enabled, holding mu across
-    // the full swap so a concurrent DeleteJob/SetJobEnabled can't observe a
-    // half-updated entryIDs map.
-    s.mu.Lock()
-    if eid, ok := s.entryIDs[id]; ok {
-        s.cr.Remove(eid)
-        delete(s.entryIDs, id)
-    }
-    if updated.Enabled {
-        eid, err := s.cr.AddFunc(updated.Schedule, s.makeJobFunc(updated))
-        if err != nil {
-            s.mu.Unlock()
-            return updated, fmt.Errorf("reschedule job: %w", err)
-        }
-        s.entryIDs[id] = eid
-    }
-    s.mu.Unlock()
-    return updated, nil
-}
-
-// makeJobFunc builds the closure invoked by cron for a given job, mirroring
-// the logic in scheduleJob but suitable for callers that already hold mu.
-func (s *Scheduler) makeJobFunc(j Job) func() {
-    return func() {
-        s.wg.Add(1)
-        defer s.wg.Done()
-        ctx, cancel := context.WithTimeout(context.Background(), jobTimeout)
-        defer cancel()
-        _, _ = s.db.ExecContext(ctx, `UPDATE cron_jobs SET last_run=? WHERE id=?`, time.Now(), j.ID)
-        slog.Info("cron job fired", "job", j.Name)
-        result, err := s.chatFn(ctx, j)
-        if s.onResult != nil {
-            s.onResult(j, result, err)
-        }
-    }
-}
-
-// SetJobEnabled enables or disables a scheduled job.
-func (s *Scheduler) SetJobEnabled(ctx context.Context, id int64, enabled bool) error {
-    v := 0
-    if enabled {
-        v = 1
-    }
-    if _, err := s.db.ExecContext(ctx, `UPDATE cron_jobs SET enabled=? WHERE id=?`, v, id); err != nil {
-        return fmt.Errorf("set job enabled: %w", err)
-    }
-    s.mu.Lock()
-    if eid, ok := s.entryIDs[id]; ok {
-        s.cr.Remove(eid)
-        delete(s.entryIDs, id)
-    }
-    s.mu.Unlock()
-    if enabled {
-        jobs, err := s.ListJobs(ctx)
-        if err != nil {
-            return err
-        }
-        for _, j := range jobs {
-            if j.ID == id {
-                return s.scheduleJob(j)
-            }
-        }
-    }
-    return nil
-}
-
-// ListJobs returns all jobs ordered by created_at.
-func (s *Scheduler) ListJobs(ctx context.Context) ([]Job, error) {
-    rows, err := s.db.QueryContext(ctx, `
-        SELECT id, name, description, schedule, prompt, enabled, save_to_memory, notify, last_run, created_at
-        FROM cron_jobs ORDER BY created_at ASC
-    `)
-    if err != nil {
-        return nil, err
-    }
-    defer rows.Close()
-    var jobs []Job
-    for rows.Next() {
-        var j Job
-        var enabled, saveToMemory, notify int
-        var lastRun sql.NullTime
-        var createdAt time.Time
-        if err := rows.Scan(&j.ID, &j.Name, &j.Description, &j.Schedule, &j.Prompt, &enabled, &saveToMemory, &notify, &lastRun, &createdAt); err != nil {
-            return nil, err
-        }
-        j.Enabled = enabled == 1
-        j.SaveToMemory = saveToMemory == 1
-        j.Notify = notify == 1
-        if lastRun.Valid {
-            s := lastRun.Time.Format(time.RFC3339)
-            j.LastRun = &s
-        }
-        j.CreatedAt = createdAt.Format(time.RFC3339)
-        jobs = append(jobs, j)
-    }
-    return jobs, rows.Err()
-}
-
-// scheduleJob registers a job with the cron engine.
-func (s *Scheduler) scheduleJob(j Job) error {
-    eid, err := s.cr.AddFunc(j.Schedule, func() {
-        s.wg.Add(1)
-        defer s.wg.Done()
-        ctx, cancel := context.WithTimeout(context.Background(), jobTimeout)
-        defer cancel()
-        // Update last_run.
-        _, _ = s.db.ExecContext(ctx, `UPDATE cron_jobs SET last_run=? WHERE id=?`, time.Now(), j.ID)
-        slog.Info("cron job fired", "job", j.Name)
-        result, err := s.chatFn(ctx, j)
-        if s.onResult != nil {
-            s.onResult(j, result, err)
-        }
-    })
-    if err != nil {
-        return err
-    }
-    s.mu.Lock()
-    s.entryIDs[j.ID] = eid
-    s.mu.Unlock()
-    return nil
-}
-

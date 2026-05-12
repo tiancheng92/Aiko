@@ -792,8 +792,10 @@ function extractUrls(text) {
   // Remove markdown image syntax ![...](...) so image URLs are not previewed.
   const noImages = text.replace(/!\[[^\]]*\]\([^)]+\)/g, '')
   const matches = noImages.match(/https?:\/\/[^\s)>\]"']+/g) || []
+  // Strip trailing punctuation that is not part of the URL (e.g. `.`, `,`, `` ` ``, `。`, `、`).
+  const stripped = matches.map(u => u.replace(/[.,;:!?`'"。、…）\]]+$/, ''))
   // Deduplicate while preserving order.
-  return [...new Set(matches)]
+  return [...new Set(stripped)]
 }
 
 /** copyMessage copies the message content to clipboard. */

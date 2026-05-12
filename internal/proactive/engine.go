@@ -7,8 +7,6 @@ import (
 	"unicode/utf8"
 
 	"aiko/internal/notify"
-
-	"github.com/robfig/cron/v3"
 )
 
 const (
@@ -16,6 +14,8 @@ const (
 	notifMaxRunes = 80
 	// fireDeadline is how long after trigger_at an item is still fired; beyond this it is silently dropped.
 	fireDeadline = 5 * time.Minute
+	// pollInterval is how often the engine checks for due proactive items.
+	pollInterval = time.Minute
 )
 
 // AppInterface is the subset of *app.App that ProactiveEngine needs.
@@ -28,18 +28,22 @@ type AppInterface interface {
 }
 
 // ProactiveEngine drives scheduled and follow-up proactive messages.
+// It uses a simple ticker loop that compares wall-clock time against
+// trigger_at stored in SQLite, so it is immune to system sleep/wake drift —
+// the same approach used by Hermes Agent's cron/scheduler.py.
 type ProactiveEngine struct {
-	app   AppInterface
-	store Store
-	cron  *cron.Cron
+	app     AppInterface
+	store   Store
+	done    chan struct{}
+	pollNow chan struct{}
 }
 
 // NewEngine creates a ProactiveEngine. store may be nil (engine skips poll jobs).
 func NewEngine(app AppInterface, store Store) *ProactiveEngine {
 	return &ProactiveEngine{
-		app:   app,
-		store: store,
-		cron:  cron.New(),
+		app:     app,
+		store:   store,
+		pollNow: make(chan struct{}, 1),
 	}
 }
 
@@ -48,27 +52,59 @@ func (e *ProactiveEngine) Store() Store {
 	return e.store
 }
 
-// Start registers cron jobs and begins the scheduler.
-// ctx is used as a lifecycle signal — once it is cancelled, subsequent poll
-// ticks become no-ops. A fresh 30s context is created per poll so cancellation
-// of the outer ctx does not propagate to an in-flight DB read.
+// Start launches the background poll loop.
+// ctx is used as a lifecycle signal — once cancelled the loop exits.
 func (e *ProactiveEngine) Start(ctx context.Context) {
+	e.done = make(chan struct{})
 	if e.store != nil {
-		_, _ = e.cron.AddFunc("* * * * *", func() {
-			if ctx.Err() != nil {
-				return
-			}
-			pollCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			e.Poll(pollCtx)
-		})
+		go e.loop(ctx)
 	}
-	e.cron.Start()
 }
 
-// Stop stops the cron scheduler.
+// Stop stops the poll loop.
 func (e *ProactiveEngine) Stop() {
-	e.cron.Stop()
+	if e.done != nil {
+		close(e.done)
+		e.done = nil
+	}
+}
+
+// TriggerPoll requests an immediate poll without waiting for the next tick.
+// Non-blocking: if a poll is already queued the call is a no-op.
+func (e *ProactiveEngine) TriggerPoll() {
+	select {
+	case e.pollNow <- struct{}{}:
+	default:
+	}
+}
+
+// loop is the background goroutine that drives periodic polling.
+func (e *ProactiveEngine) loop(ctx context.Context) {
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			e.pollOnce(ctx)
+		case <-e.pollNow:
+			e.pollOnce(ctx)
+		case <-e.done:
+			return
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// pollOnce wraps Poll with a fresh timeout context.
+func (e *ProactiveEngine) pollOnce(ctx context.Context) {
+	if ctx.Err() != nil {
+		return
+	}
+	pollCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	e.Poll(pollCtx)
 }
 
 // Fire delivers a proactive message directly to the user without LLM processing.

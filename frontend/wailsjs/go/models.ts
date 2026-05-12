@@ -33,6 +33,7 @@ export namespace config {
 	    TTSBackend: string;
 	    ThemeStyle: string;
 	    JinaAPIKey: string;
+	    TavilyAPIKey: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -72,6 +73,7 @@ export namespace config {
 	        this.TTSBackend = source["TTSBackend"];
 	        this.ThemeStyle = source["ThemeStyle"];
 	        this.JinaAPIKey = source["JinaAPIKey"];
+	        this.TavilyAPIKey = source["TavilyAPIKey"];
 	    }
 	}
 	export class ModelProfile {
@@ -330,6 +332,7 @@ export namespace scheduler {
 	    SaveToMemory: boolean;
 	    Notify: boolean;
 	    LastRun?: string;
+	    NextRunAt?: string;
 	    CreatedAt: string;
 	
 	    static createFrom(source: any = {}) {
@@ -347,6 +350,7 @@ export namespace scheduler {
 	        this.SaveToMemory = source["SaveToMemory"];
 	        this.Notify = source["Notify"];
 	        this.LastRun = source["LastRun"];
+	        this.NextRunAt = source["NextRunAt"];
 	        this.CreatedAt = source["CreatedAt"];
 	    }
 	}

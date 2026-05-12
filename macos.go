@@ -47,6 +47,27 @@ static int gVoicePipeFd = -1;
 // setVoicePipeFd stores the write-end fd so STT callbacks can send text to Go.
 static void setVoicePipeFd(int fd) { gVoicePipeFd = fd; }
 
+// gWakePipeFd is the write end of a pipe that notifies Go when the system wakes.
+static int gWakePipeFd = -1;
+
+// setWakePipeFd stores the write-end fd for the wake observer.
+static void setWakePipeFd(int fd) { gWakePipeFd = fd; }
+
+// registerWakeObserver installs an NSWorkspace wake notification observer.
+// On wake, it writes a single byte (1) to gWakePipeFd so Go can restart schedulers.
+static void registerWakeObserver(void) {
+    [[[NSWorkspace sharedWorkspace] notificationCenter]
+        addObserverForName:NSWorkspaceDidWakeNotification
+        object:nil
+        queue:[NSOperationQueue mainQueue]
+        usingBlock:^(NSNotification *note) {
+            if (gWakePipeFd >= 0) {
+                char b = 1;
+                write(gWakePipeFd, &b, 1);
+            }
+        }];
+}
+
 // sendVoiceText writes a length-prefixed text message to the voice pipe.
 // Format: 4-byte little-endian uint32 length, followed by UTF-8 text bytes.
 static void sendVoiceText(const char *text) {
@@ -1160,4 +1181,28 @@ func GetMousePosition() (x, y float64) {
 	x = sx - ox
 	y = h - (sy - oy)
 	return
+}
+
+// registerSystemWakeObserver sets up a pipe-based NSWorkspace wake notification
+// listener. onWake is called from a goroutine each time the system wakes from
+// sleep. This avoids C→Go callbacks (which cause CGO re-entry on m=0).
+func registerSystemWakeObserver(onWake func()) {
+	var fds [2]int
+	if err := syscall.Pipe(fds[:]); err != nil {
+		slog.Error("registerSystemWakeObserver: pipe failed", "err", err)
+		return
+	}
+	readFd, writeFd := fds[0], fds[1]
+	C.setWakePipeFd(C.int(writeFd))
+	C.registerWakeObserver()
+	go func() {
+		buf := make([]byte, 1)
+		for {
+			n, err := syscall.Read(readFd, buf)
+			if err != nil || n == 0 {
+				return
+			}
+			onWake()
+		}
+	}()
 }

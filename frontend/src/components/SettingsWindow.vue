@@ -158,6 +158,7 @@ let resizeStart = null
 let offProgress = null
 let offScreen = null
 let offUpdateProgress = null
+let offCronJobDone = null
 
 /**
  * tabMeta defines sidebar tabs with SVG icons and search keywords.
@@ -272,6 +273,8 @@ onMounted(async () => {
     updateProgressMsg.value = data.msg
   })
 
+  offCronJobDone = EventsOn('cron:job:done', () => { fetchCronJobs() })
+
   // Enable auto-save watcher only after all initial data has been loaded.
   mountedReady.value = true
 })
@@ -280,6 +283,7 @@ onUnmounted(() => {
   offProgress?.()
   offScreen?.()
   offUpdateProgress?.()
+  offCronJobDone?.()
   clearTimeout(saveTimer)
   // Safety net — ensure no drag listeners linger if the component unmounts mid-drag.
   window.removeEventListener('mousemove', onMouseMove)
@@ -1478,16 +1482,50 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               <div class="public-tools-title">始终开启（无需授权）</div>
               <div class="public-tools">{{ publicToolNames }}</div>
               <div class="protected-tools-title">敏感工具（可单独开关）</div>
-              <div v-for="perm in protectedToolPerms" :key="perm.ToolName" class="perm-row">
-                <div class="perm-info">
-                  <span class="perm-name">{{ perm.ToolName }}</span>
-                  <span :class="['perm-level', perm.Level]">{{ perm.Level }}</span>
+              <template v-for="perm in protectedToolPerms" :key="perm.ToolName">
+                <div class="perm-row">
+                  <div class="perm-info">
+                    <span class="perm-name">{{ perm.ToolName }}</span>
+                    <span :class="['perm-level', perm.Level]">{{ perm.Level }}</span>
+                  </div>
+                  <label class="toggle">
+                    <input type="checkbox" :checked="perm.Granted" @change="togglePerm(perm)" />
+                    <span class="toggle-track" />
+                  </label>
                 </div>
-                <label class="toggle">
-                  <input type="checkbox" :checked="perm.Granted" @change="togglePerm(perm)" />
-                  <span class="toggle-track" />
-                </label>
-              </div>
+                <template v-if="perm.ToolName === 'web_fetch'">
+                  <div class="tool-api-key-row">
+                    <label for="jina-api-key-input">Jina API Key</label>
+                    <input
+                      id="jina-api-key-input"
+                      v-model="cfg.JinaAPIKey"
+                      type="password"
+                      placeholder="jina_xxxxxxxxxxxx（留空即可）"
+                      spellcheck="false"
+                      autocorrect="off"
+                      autocomplete="off"
+                      class="tool-api-key-input"
+                    />
+                  </div>
+                  <p class="tool-api-key-hint">可选，提升抓取额度（留空使用免费模式）</p>
+                </template>
+                <template v-if="perm.ToolName === 'web_search'">
+                  <div class="tool-api-key-row">
+                    <label for="tavily-api-key-input">Tavily API Key</label>
+                    <input
+                      id="tavily-api-key-input"
+                      v-model="cfg.TavilyAPIKey"
+                      type="password"
+                      placeholder="tvly-xxxxxxxxxxxx（留空则使用 DuckDuckGo）"
+                      spellcheck="false"
+                      autocorrect="off"
+                      autocomplete="off"
+                      class="tool-api-key-input"
+                    />
+                  </div>
+                  <p class="tool-api-key-hint">可选，设置后使用 Tavily（支持时效过滤），留空自动退回 DuckDuckGo</p>
+                </template>
+              </template>
             </template>
           </template>
 
@@ -1550,39 +1588,6 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               <p id="timeout-hint" class="section-hint" style="margin-top:8px">超时后进程强制终止，范围 1–3600 秒</p>
             </div>
 
-            <div class="settings-section" style="margin-top:12px">
-              <h3 class="section-title">Web 工具</h3>
-              <div class="form-row">
-                <label for="jina-api-key-input">Jina API Key</label>
-                <input
-                  id="jina-api-key-input"
-                  v-model="cfg.JinaAPIKey"
-                  type="password"
-                  placeholder="jina_xxxxxxxxxxxx（留空即可）"
-                  spellcheck="false"
-                  autocorrect="off"
-                  autocomplete="off"
-                  class="short-input"
-                  aria-describedby="jina-hint"
-                />
-              </div>
-              <p id="jina-hint" class="section-hint" style="margin-top:8px">可选，提升 web_fetch 抓取额度（留空使用免费模式）</p>
-              <div class="form-row" style="margin-top:8px">
-                <label for="tavily-api-key-input">Tavily API Key</label>
-                <input
-                  id="tavily-api-key-input"
-                  v-model="cfg.TavilyAPIKey"
-                  type="password"
-                  placeholder="tvly-xxxxxxxxxxxx（留空则使用 DuckDuckGo）"
-                  spellcheck="false"
-                  autocorrect="off"
-                  autocomplete="off"
-                  class="short-input"
-                  aria-describedby="tavily-hint"
-                />
-              </div>
-              <p id="tavily-hint" class="section-hint" style="margin-top:8px">可选，设置后 web_search 使用 Tavily（支持时效过滤），留空自动退回 DuckDuckGo</p>
-            </div>
           </template>
         </div>
         <div v-if="activeTab === 'knowledge'" class="tab-pane">
@@ -1642,7 +1647,10 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                     存入记忆
                   </span>
                 </div>
-                <div v-if="job.LastRun" class="cron-lastrun">上次执行：{{ new Date(job.LastRun).toLocaleString() }}</div>
+                <div class="cron-lastrun">
+                  <span v-if="job.LastRun">上次执行：{{ new Date(job.LastRun).toLocaleString() }}</span>
+                  <span v-if="job.NextRunAt && job.Enabled">下次执行：{{ new Date(job.NextRunAt).toLocaleString() }}</span>
+                </div>
               </div>
               <div class="cron-actions">
                 <button class="btn-add-sm" @click="runCronJobNow(job.ID)">执行</button>
@@ -2557,6 +2565,43 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   border-radius: var(--r-input);
   border: 1px solid var(--lg-border-subtle);
 }
+.tool-api-key-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px 4px;
+  background: var(--surface-input);
+  border: 1px solid var(--lg-border-subtle);
+  border-top: none;
+  border-radius: 0 0 var(--r-input) var(--r-input);
+  margin-top: -2px;
+  margin-bottom: 0;
+}
+.tool-api-key-row label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  min-width: 92px;
+}
+.tool-api-key-input {
+  flex: 1;
+  font-size: 12px;
+  padding: 4px 8px;
+  background: var(--surface-card);
+  border: 1px solid var(--lg-border-subtle);
+  border-radius: 6px;
+  color: var(--text-primary);
+  outline: none;
+}
+.tool-api-key-input:focus {
+  border-color: var(--accent);
+}
+.tool-api-key-hint {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  padding: 3px 12px 8px;
+  margin: 0;
+}
 .perm-row {
   display: flex;
   justify-content: space-between;
@@ -2892,6 +2937,9 @@ ul { list-style: none; padding: 0; margin: 0; }
   font-size: 11px;
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 14px;
 }
 .cron-actions { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
 .cron-status {

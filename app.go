@@ -427,6 +427,24 @@ func (a *App) startup(ctx context.Context) {
 	// Watch for mouse moving to a different screen and migrate the window.
 	a.startScreenWatcher()
 
+	// On system wake, trigger an immediate poll so jobs/reminders due during
+	// sleep are delivered within seconds rather than waiting up to 1 minute.
+	// The poll-based schedulers already use wall-clock timestamps in the DB, so
+	// no restart is needed — a single extra tick is sufficient.
+	registerSystemWakeObserver(func() {
+		slog.Info("system wake detected: triggering immediate poll")
+		a.mu.RLock()
+		sched := a.scheduler
+		engine := a.proactiveEngine
+		a.mu.RUnlock()
+		if sched != nil {
+			sched.TriggerPoll()
+		}
+		if engine != nil {
+			engine.TriggerPoll()
+		}
+	})
+
 	// Start SMS watcher if enabled in config.
 	if a.cfg.SMSWatcherEnabled {
 		if err := a.startSMSWatcher(); err != nil {
@@ -548,6 +566,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 				"message": failMsg,
 			})
 			go notify.System("⏰ "+job.Name, failMsg)
+			wailsruntime.EventsEmit(a.ctx, "cron:job:done", job.ID)
 			return
 		}
 		slog.Info("cron job completed", "job", job.Name, "result_len", len(result))
@@ -567,6 +586,8 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		}
 		// When SaveToMemory is on, chatFn already used ag.Chat() (persistAndMigrate)
 		// and streamed tokens to the chat panel — nothing more to do here.
+		// Notify the settings window to refresh the job list so LastRun updates.
+		wailsruntime.EventsEmit(a.ctx, "cron:job:done", job.ID)
 	}
 
 	// NOTE: scheduler.Start is deferred until after a.mu is released below —
