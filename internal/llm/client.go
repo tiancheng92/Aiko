@@ -99,14 +99,15 @@ func NewChatModel(ctx context.Context, cfg *config.Config) (model.ToolCallingCha
 }
 
 // NewEmbedder creates an eino Embedder from config. Returns nil, nil if embedding not configured.
-// Always uses the OpenAI-compatible embedder (OpenRouter does not expose an embeddings endpoint).
+// Uses cfg.EmbeddingBaseURL and cfg.EmbeddingAPIKey (resolved by ApplyProfile from the active
+// ModelProfile — either inherited from LLM config or independently set).
 func NewEmbedder(ctx context.Context, cfg *config.Config) (embedding.Embedder, error) {
 	if !cfg.VectorEnabled() {
 		return nil, nil
 	}
 	return embeddopenai.NewEmbedder(ctx, &embeddopenai.EmbeddingConfig{
-		BaseURL: cfg.LLMBaseURL,
-		APIKey:  cfg.LLMAPIKey,
+		BaseURL: cfg.EmbeddingBaseURL,
+		APIKey:  cfg.EmbeddingAPIKey,
 		Model:   cfg.EmbeddingModel,
 	})
 }
