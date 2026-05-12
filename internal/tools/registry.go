@@ -118,7 +118,6 @@ func All() []Tool {
 		&GetNetworkStatusTool{},
 		&GetLocationTool{},
 		&GetWeatherTool{},
-		&WebSearchTool{},
 		&GetBrowserURLTool{},
 		&GetRemindersTool{},
 		&CompleteReminderTool{},
@@ -175,6 +174,7 @@ func AllPermissionDeclarations() []namedPermDecl {
 	// Contextual tools: we instantiate zero-value structs purely to read their
 	// declared Name/Permission. Runtime dependencies are not required here.
 	ctxPrototypes := []Tool{
+		&WebSearchTool{},
 		&WebFetchTool{},
 		&SearchKnowledgeTool{},
 		&CronTool{},
@@ -232,6 +232,7 @@ func AllContextual(
 	onSkillSaved func(),
 ) []tool.BaseTool {
 	contextTools := []Tool{
+		&WebSearchTool{Cfg: cfg},
 		&WebFetchTool{Cfg: cfg},
 		&SearchKnowledgeTool{KnowledgeSt: knowledgeSt},
 		&CronTool{Scheduler: sched},

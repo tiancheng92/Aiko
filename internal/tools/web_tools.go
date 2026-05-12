@@ -2,7 +2,9 @@
 package tools
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -35,15 +37,17 @@ var (
 	reBlankLines = regexp.MustCompile(`\n{3,}`)
 )
 
-// WebSearchTool searches the web via DuckDuckGo HTML endpoint.
-type WebSearchTool struct{}
+// WebSearchTool searches the web via Tavily (when API key is configured) or DuckDuckGo.
+type WebSearchTool struct {
+	Cfg *config.Config // optional; nil or empty TavilyAPIKey = DuckDuckGo fallback
+}
 
 func (t *WebSearchTool) Name() string                { return "web_search" }
 func (t *WebSearchTool) Permission() PermissionLevel { return PermProtected }
 
 // Info returns the eino tool schema for web_search.
 func (t *WebSearchTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "用 DuckDuckGo 搜索互联网，返回结果标题、URL 和摘要。适合查找最新资讯、文档或概念解释。若已知具体页面 URL，直接用 web_fetch 更精准。",
+	return infoFromSchema(t.Name(), "搜索互联网，返回结果标题、URL 和摘要。配置 Tavily API Key 后使用 Tavily（更准确，支持时效过滤）；未配置时自动退回 DuckDuckGo。若已知具体页面 URL，直接用 web_fetch 更精准。\n可选参数（仅 Tavily 生效）：time_range 支持 \"day\"、\"week\"、\"month\"、\"year\"；start_date / end_date 格式为 \"YYYY-MM-DD\"。",
 		map[string]*schema.ParameterInfo{
 			"query": {
 				Type:     schema.String,
@@ -52,27 +56,56 @@ func (t *WebSearchTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 			},
 			"num_results": {
 				Type: schema.Integer,
-				Desc: "返回结果数量，默认 5，最多 10",
+				Desc: "返回结果数量，默认 10，最多 10",
+			},
+			"time_range": {
+				Type: schema.String,
+				Desc: "时效过滤：\"day\"、\"week\"、\"month\"、\"year\"（仅 Tavily）",
+			},
+			"start_date": {
+				Type: schema.String,
+				Desc: "起始日期，格式 \"YYYY-MM-DD\"（仅 Tavily）",
+			},
+			"end_date": {
+				Type: schema.String,
+				Desc: "结束日期，格式 \"YYYY-MM-DD\"（仅 Tavily）",
 			},
 		},
 	), nil
 }
 
-// InvokableRun queries DuckDuckGo HTML search and returns formatted results.
+// InvokableRun routes to Tavily (if key configured) or DuckDuckGo.
 func (t *WebSearchTool) InvokableRun(ctx context.Context, input string, _ ...tool.Option) (string, error) {
 	args := parseArgs(input)
 	query, _ := args["query"].(string)
 	if query == "" {
 		return "请提供搜索词", nil
 	}
-	numResults := 5
+	numResults := 10
 	if n, ok := args["num_results"].(float64); ok && n > 0 {
 		numResults = int(n)
 	}
 	if numResults > 10 {
 		numResults = 10
 	}
+	timeRange, _ := args["time_range"].(string)
+	startDate, _ := args["start_date"].(string)
+	endDate, _ := args["end_date"].(string)
 
+	// time_range and (start_date / end_date) are mutually exclusive.
+	if timeRange != "" && (startDate != "" || endDate != "") {
+		return "参数错误：time_range 与 start_date / end_date 不能同时使用，请二选一", nil
+	}
+
+	// Use Tavily when API key is configured; fall back to DuckDuckGo otherwise.
+	if t.Cfg != nil && t.Cfg.TavilyAPIKey != "" {
+		return tavilySearch(ctx, query, numResults, t.Cfg.TavilyAPIKey, timeRange, startDate, endDate)
+	}
+	return ddgSearch(ctx, query, numResults)
+}
+
+// ddgSearch performs a DuckDuckGo HTML search and returns formatted results.
+func ddgSearch(ctx context.Context, query string, numResults int) (string, error) {
 	searchURL := "https://html.duckduckgo.com/html/?q=" + url.QueryEscape(query)
 	reqCtx, cancel := context.WithTimeout(ctx, webTimeout)
 	defer cancel()
@@ -105,6 +138,106 @@ func (t *WebSearchTool) InvokableRun(ctx context.Context, input string, _ ...too
 	var sb strings.Builder
 	for i, r := range results {
 		fmt.Fprintf(&sb, "[%d] %s — %s\n    %s\n\n", i+1, r.title, r.url, r.snippet)
+	}
+	return strings.TrimRight(sb.String(), "\n"), nil
+}
+
+// tavilyResult is the JSON shape of a single Tavily search result.
+type tavilyResult struct {
+	Title   string `json:"title"`
+	URL     string `json:"url"`
+	Content string `json:"content"`
+}
+
+// tavilyResponse is the top-level Tavily API response.
+type tavilyResponse struct {
+	Answer  string         `json:"answer"`
+	Results []tavilyResult `json:"results"`
+}
+
+// tavilySearch queries the Tavily Search API and returns formatted results.
+// timeRange, startDate, endDate are optional — empty string omits them from the request.
+func tavilySearch(ctx context.Context, query string, numResults int, apiKey, timeRange, startDate, endDate string) (string, error) {
+	body := map[string]any{
+		"api_key":        apiKey,
+		"query":          query,
+		"max_results":    numResults,
+		"search_depth":   "advanced",
+		"include_answer": true,
+	}
+	if timeRange != "" {
+		body["time_range"] = timeRange
+	}
+	if startDate != "" {
+		body["start_date"] = startDate
+	}
+	if endDate != "" {
+		body["end_date"] = endDate
+	}
+
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("marshal tavily request: %w", err)
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, webTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, "https://api.tavily.com/search", bytes.NewReader(payload))
+	if err != nil {
+		return "", fmt.Errorf("build tavily request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("tavily request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Sprintf("Tavily 请求失败（%d）: %s", resp.StatusCode, string(b)), nil
+	}
+
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
+	if err != nil {
+		return "", fmt.Errorf("read tavily response: %w", err)
+	}
+
+	var tr tavilyResponse
+	if err := json.Unmarshal(raw, &tr); err != nil {
+		return "", fmt.Errorf("parse tavily response: %w", err)
+	}
+
+	// Deduplicate and normalise URLs.
+	seen := map[string]bool{}
+	var results []tavilyResult
+	for _, r := range tr.Results {
+		norm := normalizeURL(r.URL)
+		if norm == "" || seen[norm] {
+			continue
+		}
+		seen[norm] = true
+		r.URL = norm
+		results = append(results, r)
+		if len(results) >= numResults {
+			break
+		}
+	}
+
+	if len(results) == 0 {
+		return "未找到搜索结果", nil
+	}
+
+	var sb strings.Builder
+	// Prepend synthesised answer if Tavily returned one.
+	if answer := strings.TrimSpace(tr.Answer); answer != "" {
+		fmt.Fprintf(&sb, "[Summary]\n%s\n\n", answer)
+	}
+	for i, r := range results {
+		fmt.Fprintf(&sb, "[%d] %s — %s\n    %s\n\n", i+1, r.Title, r.URL, strings.TrimSpace(r.Content))
 	}
 	return strings.TrimRight(sb.String(), "\n"), nil
 }
