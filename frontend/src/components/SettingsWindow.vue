@@ -1567,6 +1567,21 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 />
               </div>
               <p id="jina-hint" class="section-hint" style="margin-top:8px">可选，提升 web_fetch 抓取额度（留空使用免费模式）</p>
+              <div class="form-row" style="margin-top:8px">
+                <label for="tavily-api-key-input">Tavily API Key</label>
+                <input
+                  id="tavily-api-key-input"
+                  v-model="cfg.TavilyAPIKey"
+                  type="password"
+                  placeholder="tvly-xxxxxxxxxxxx（留空则使用 DuckDuckGo）"
+                  spellcheck="false"
+                  autocorrect="off"
+                  autocomplete="off"
+                  class="short-input"
+                  aria-describedby="tavily-hint"
+                />
+              </div>
+              <p id="tavily-hint" class="section-hint" style="margin-top:8px">可选，设置后 web_search 使用 Tavily（支持时效过滤），留空自动退回 DuckDuckGo</p>
             </div>
           </template>
         </div>
