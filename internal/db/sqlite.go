@@ -131,6 +131,10 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE cron_jobs ADD COLUMN notify INTEGER NOT NULL DEFAULT 1`,
 		// v5: wall-clock next fire time; enables poll-based scheduling (immune to sleep/wake drift).
 		`ALTER TABLE cron_jobs ADD COLUMN next_run_at DATETIME`,
+		// v6: embedding model may use a separate base_url and api_key.
+		`ALTER TABLE model_profiles ADD COLUMN embedding_inherit  INTEGER NOT NULL DEFAULT 1`,
+		`ALTER TABLE model_profiles ADD COLUMN embedding_base_url TEXT    NOT NULL DEFAULT ''`,
+		`ALTER TABLE model_profiles ADD COLUMN embedding_api_key  TEXT    NOT NULL DEFAULT ''`,
 	}
 	for _, p := range patches {
 		if _, err := db.Exec(p); err != nil {

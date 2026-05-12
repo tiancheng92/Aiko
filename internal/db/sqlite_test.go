@@ -46,3 +46,42 @@ func TestMigrateProactiveItems(t *testing.T) {
 		t.Errorf("expected 1 row, got %d", count)
 	}
 }
+
+// TestMigrateModelProfilesEmbeddingColumns verifies that after migration
+// model_profiles has the three new embedding columns with expected defaults.
+func TestMigrateModelProfilesEmbeddingColumns(t *testing.T) {
+	database, err := db.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer database.Close()
+
+	// Insert a minimal row — new columns must accept omission (use DEFAULT).
+	_, err = database.Exec(
+		`INSERT INTO model_profiles (name, provider, base_url, api_key, model,
+		  embedding_model, embedding_dim, tts_model, tts_voice, tts_speed, tts_backend)
+		 VALUES ('test', 'openai', '', '', 'gpt-4o', '', 1536, '', '', 1.0, '')`,
+	)
+	if err != nil {
+		t.Fatalf("insert minimal row: %v", err)
+	}
+
+	var inherit int
+	var embBaseURL, embAPIKey string
+	err = database.QueryRow(
+		`SELECT embedding_inherit, embedding_base_url, embedding_api_key
+		 FROM model_profiles WHERE name = 'test'`,
+	).Scan(&inherit, &embBaseURL, &embAPIKey)
+	if err != nil {
+		t.Fatalf("scan new columns: %v", err)
+	}
+	if inherit != 1 {
+		t.Errorf("embedding_inherit default: got %d, want 1", inherit)
+	}
+	if embBaseURL != "" {
+		t.Errorf("embedding_base_url default: got %q, want ''", embBaseURL)
+	}
+	if embAPIKey != "" {
+		t.Errorf("embedding_api_key default: got %q, want ''", embAPIKey)
+	}
+}
