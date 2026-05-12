@@ -111,19 +111,22 @@ func (t *GetCalendarEventsTool) InvokableRun(_ context.Context, input string, _ 
 		calFilterEnd = "end if"
 	}
 
+	// "every calendar" returns a flat list of all calendars (iCloud, Google, Exchange, subscriptions).
+	// Calendar.app does not expose an "account" class in its AppleScript dictionary.
 	script := fmt.Sprintf(`
 tell application "Calendar"
 	%s
 	%s
 	set output to ""
-	set calList to every calendar
-	repeat with cal in calList
+	repeat with cal in every calendar
 		%s
 		set evList to (every event of cal whose start date >= startDate and start date <= endDate)
 		repeat with ev in evList
+			set evSD to start date of ev
+			set evED to end date of ev
 			set evTitle to summary of ev
-			set evStart to start date of ev as string
-			set evEnd to end date of ev as string
+			set evStart to evSD as string
+			set evEnd to evED as string
 			set evLoc to ""
 			try
 				set evLoc to location of ev
@@ -134,7 +137,7 @@ tell application "Calendar"
 				set evNotes to description of ev
 				if evNotes is missing value then set evNotes to ""
 			end try
-			set output to output & evTitle & "||" & evStart & "||" & evEnd & "||" & evLoc & "||" & evNotes & "|||"
+			set output to output & evTitle & "||" & evStart & "||" & evEnd & "||" & evLoc & "||" & evNotes & "///"
 		end repeat
 		%s
 	end repeat
@@ -155,9 +158,9 @@ end tell`,
 		return raw, nil
 	}
 
-	// Parse "title||start||end||loc||notes|||" records
+	// Parse "title||start||end||loc||notes///" records
 	var events []calendarEvent
-	for _, record := range strings.Split(raw, "|||") {
+	for _, record := range strings.Split(raw, "///") {
 		record = strings.TrimSpace(record)
 		if record == "" {
 			continue
