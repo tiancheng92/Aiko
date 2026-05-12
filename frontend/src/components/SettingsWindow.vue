@@ -1153,22 +1153,15 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                   <input v-else v-model="profileForm.model" placeholder="gpt-4o" spellcheck="false" autocorrect="off" autocomplete="off" />
                 </div>
               </label>
-              <label>向量模型（Embedding）
-                <div class="select-row">
-                  <select v-if="profileModels.length" v-model="profileForm.embedding_model">
-                    <option value="">-- 不启用（关闭知识库检索）--</option>
-                    <option v-for="m in profileModels" :key="m" :value="m">{{ m }}</option>
-                  </select>
-                  <input v-else v-model="profileForm.embedding_model" placeholder="text-embedding-3-small（可选）" spellcheck="false" autocorrect="off" autocomplete="off" />
-                </div>
-              </label>
-              <label>向量维度<span class="field-hint">与所选向量模型保持一致，默认 1536</span><input type="number" v-model.number="profileForm.embedding_dim" min="256" max="4096" /></label>
-              <label class="checkbox-label" style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px">
-                <input type="checkbox" v-model="profileForm.embedding_inherit" style="width:14px;height:14px;flex-shrink:0" />
-                向量模型继承 Chat 模型配置（使用相同的 Base URL 和 API Key）
-              </label>
+              <div class="embed-inherit-row">
+                <span class="embed-inherit-label">向量模型继承 Chat 模型配置<span class="field-hint" style="margin-left:4px">使用相同的 Base URL 和 API Key</span></span>
+                <label class="toggle">
+                  <input type="checkbox" v-model="profileForm.embedding_inherit" />
+                  <span class="toggle-track" />
+                </label>
+              </div>
               <template v-if="!profileForm.embedding_inherit">
-                <label style="margin-top:8px">向量模型 Base URL
+                <label style="margin-top:4px">向量模型 Base URL
                   <input
                     v-model="profileForm.embedding_base_url"
                     placeholder="https://api.openai.com/v1"
@@ -1179,6 +1172,16 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                   <input v-model="profileForm.embedding_api_key" type="password" placeholder="（可选）" spellcheck="false" autocorrect="off" autocomplete="off" />
                 </label>
               </template>
+              <label>向量模型（Embedding）
+                <div class="select-row">
+                  <select v-if="profileModels.length" v-model="profileForm.embedding_model">
+                    <option value="">-- 不启用（关闭知识库检索）--</option>
+                    <option v-for="m in profileModels" :key="m" :value="m">{{ m }}</option>
+                  </select>
+                  <input v-else v-model="profileForm.embedding_model" placeholder="text-embedding-3-small（可选）" spellcheck="false" autocorrect="off" autocomplete="off" />
+                </div>
+              </label>
+              <label>向量维度<span class="field-hint">与所选向量模型保持一致，默认 1536</span><input type="number" v-model.number="profileForm.embedding_dim" min="256" max="4096" /></label>
               <div class="form-group" style="margin-top:12px">
                 <label class="form-label">语音合成引擎（TTS）</label>
                 <select v-model="profileForm.tts_backend" class="form-input">
@@ -2421,6 +2424,24 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .select-row { display: flex; }
 .select-row select, .select-row input { flex: 1; }
+
+/* Embedding inherit toggle row */
+.embed-inherit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  margin: 6px 0 4px;
+  background: var(--lg-surface-input, rgba(255,255,255,0.05));
+  border: 1px solid var(--lg-border, rgba(255,255,255,0.08));
+  border-radius: 8px;
+}
+.embed-inherit-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex: 1;
+  padding-right: 12px;
+}
 
 /* Section header (used across tabs) */
 .section-header {
