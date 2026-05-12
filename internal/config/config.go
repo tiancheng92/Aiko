@@ -42,6 +42,7 @@ type Config struct {
 	// ThemeStyle controls the UI visual style. Values: "liquid-glass" | "frosted".
 	ThemeStyle string
 	JinaAPIKey string // optional; empty = Jina free tier (~200 req/day)
+	TavilyAPIKey string // optional; empty = DuckDuckGo fallback
 }
 
 type Store struct{ db *sql.DB }
@@ -108,6 +109,7 @@ func (s *Store) Load() (*Config, error) {
 	cfg.TTSSummarizeThreshold = parseInt(m["tts_summarize_threshold"], 200)
 	cfg.ThemeStyle = orDefault(m["theme_style"], "frosted")
 	cfg.JinaAPIKey = m["jina_api_key"]
+	cfg.TavilyAPIKey = m["tavily_api_key"]
 	return cfg, nil
 }
 
@@ -146,6 +148,7 @@ func (s *Store) Save(cfg *Config) error {
 		"code_timeout":             strconv.Itoa(cfg.CodeTimeout),
 		"theme_style":              cfg.ThemeStyle,
 		"jina_api_key":             cfg.JinaAPIKey,
+		"tavily_api_key":           cfg.TavilyAPIKey,
 	}
 	tx, err := s.db.Begin()
 	if err != nil {
