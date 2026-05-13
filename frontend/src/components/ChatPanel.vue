@@ -412,6 +412,8 @@ function checkBubbleCollapse(m, i, fromHistory = false) {
   }
 }
 const textareaEl = ref(null)
+/** lpExpanded tracks whether the extra link previews are shown for each message (keyed by msgKey). */
+const lpExpanded = ref({})
 const isRecording = ref(false)
 const voiceHint = ref('')
 const voiceAutoSend = ref(false)
@@ -1132,7 +1134,18 @@ defineExpose({ focusInput, scrollToBottom })
                 </div>
                 <div v-if="m.content" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')"></div>
                 <template v-if="!m.streaming && !m.thinking && m.content">
-                  <LinkPreview v-for="u in extractUrls(m.content)" :key="u" :url="u" />
+                  <template v-if="extractUrls(m.content).length <= 1">
+                    <LinkPreview v-for="u in extractUrls(m.content)" :key="u" :url="u" />
+                  </template>
+                  <template v-else>
+                    <LinkPreview :url="extractUrls(m.content)[0]" :key="extractUrls(m.content)[0]" />
+                    <template v-if="lpExpanded[msgKey(m, i)]">
+                      <LinkPreview v-for="u in extractUrls(m.content).slice(1)" :key="u" :url="u" />
+                    </template>
+                    <button class="lp-toggle-btn" @click="lpExpanded[msgKey(m, i)] = !lpExpanded[msgKey(m, i)]">
+                      {{ lpExpanded[msgKey(m, i)] ? '收起链接 ↑' : `展开另外 ${extractUrls(m.content).length - 1} 个链接 ↓` }}
+                    </button>
+                  </template>
                 </template>
               </div>
               <template v-else>
@@ -1142,7 +1155,18 @@ defineExpose({ focusInput, scrollToBottom })
                 <div v-else :class="['bubble', 'markdown', { proactive: m.isProactive }]">
                   <div v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')" />
                   <template v-if="!m.streaming && !m.thinking && m.content">
-                    <LinkPreview v-for="u in extractUrls(m.content)" :key="u" :url="u" />
+                    <template v-if="extractUrls(m.content).length <= 1">
+                      <LinkPreview v-for="u in extractUrls(m.content)" :key="u" :url="u" />
+                    </template>
+                    <template v-else>
+                      <LinkPreview :url="extractUrls(m.content)[0]" :key="extractUrls(m.content)[0]" />
+                      <template v-if="lpExpanded[msgKey(m, i)]">
+                        <LinkPreview v-for="u in extractUrls(m.content).slice(1)" :key="u" :url="u" />
+                      </template>
+                      <button class="lp-toggle-btn" @click="lpExpanded[msgKey(m, i)] = !lpExpanded[msgKey(m, i)]">
+                        {{ lpExpanded[msgKey(m, i)] ? '收起链接 ↑' : `展开另外 ${extractUrls(m.content).length - 1} 个链接 ↓` }}
+                      </button>
+                    </template>
                   </template>
                 </div>
               </template>
@@ -2451,6 +2475,20 @@ defineExpose({ focusInput, scrollToBottom })
   background: rgba(0, 0, 0, 0.5);
   border-color: rgba(255, 255, 255, 0.28);
 }
+
+.lp-toggle-btn {
+  display: inline-block;
+  margin-top: 5px;
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: 11px;
+  color: rgba(3, 105, 161, 0.8);
+  cursor: pointer;
+  user-select: none;
+  font-family: inherit;
+}
+.lp-toggle-btn:hover { color: rgba(3, 105, 161, 1); }
 </style>
 
 <style>

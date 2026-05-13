@@ -141,7 +141,7 @@ func (s *Scheduler) loop(ctx context.Context) {
 // their next_run_at before executing (at-most-once semantics, matching
 // Hermes' "advance first, then run" pattern), and fires each one.
 func (s *Scheduler) poll(ctx context.Context) {
-	now := time.Now().UTC()
+	now := time.Now()
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, name, description, schedule, prompt, enabled,
 		       save_to_memory, notify, last_run, next_run_at, created_at
