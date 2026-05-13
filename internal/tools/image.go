@@ -4,7 +4,6 @@ package tools
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
 	"mime"
@@ -69,104 +68,6 @@ func (t *ReadImageTool) InvokableRun(ctx context.Context, input string, _ ...too
 	// Return via plain string — the context accumulator in agent.go converts
 	// data URLs in tool results into images for the conversation history.
 	return "data:" + mimeType + ";base64," + b64, nil
-}
-
-// imageGenerationRequest is the JSON body for POST /v1/images/generations.
-type imageGenerationRequest struct {
-	Model          string `json:"model"`
-	Prompt         string `json:"prompt"`
-	N              int    `json:"n"`
-	Size           string `json:"size"`
-	ResponseFormat string `json:"response_format"`
-}
-
-// imageGenerationResponse parses the API response.
-type imageGenerationResponse struct {
-	Data []struct {
-		B64JSON string `json:"b64_json"`
-		URL     string `json:"url"`
-	} `json:"data"`
-	Error *struct {
-		Message string `json:"message"`
-	} `json:"error"`
-}
-
-// InvokableRun calls the OpenAI images/generations endpoint and returns the
-// generated image as a data URL (base64) so the LLM and the frontend can
-// both see it.
-func (t *GenerateImageTool) InvokableRun(ctx context.Context, input string, _ ...tool.Option) (string, error) {
-	if t.Cfg == nil {
-		return "generate_image 不可用：配置未初始化", nil
-	}
-	args := parseArgs(input)
-	prompt, _ := args["prompt"].(string)
-	if prompt == "" {
-		return "参数 prompt 不能为空", nil
-	}
-	size, _ := args["size"].(string)
-	if size == "" {
-		size = "1024x1024"
-	}
-
-	baseURL := strings.TrimRight(t.Cfg.LLMBaseURL, "/")
-	if baseURL == "" {
-		baseURL = "https://api.openai.com/v1"
-	}
-	apiKey := t.Cfg.LLMAPIKey
-
-	reqBody := imageGenerationRequest{
-		Model:          "gpt-image-1",
-		Prompt:         prompt,
-		N:              1,
-		Size:           size,
-		ResponseFormat: "b64_json",
-	}
-	rawBody, err := json.Marshal(reqBody)
-	if err != nil {
-		return fmt.Sprintf("构建请求失败: %v", err), nil
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		baseURL+"/images/generations", strings.NewReader(string(rawBody)))
-	if err != nil {
-		return fmt.Sprintf("创建 HTTP 请求失败: %v", err), nil
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	if apiKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
-	}
-
-	client := &http.Client{Timeout: 120 * time.Second}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		return fmt.Sprintf("图片生成请求失败: %v", err), nil
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Sprintf("读取响应失败: %v", err), nil
-	}
-
-	var apiResp imageGenerationResponse
-	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return fmt.Sprintf("解析响应失败: %v\n原始响应: %s", err, body), nil
-	}
-	if apiResp.Error != nil {
-		return fmt.Sprintf("API 错误: %s", apiResp.Error.Message), nil
-	}
-	if len(apiResp.Data) == 0 {
-		return "API 未返回任何图片数据", nil
-	}
-
-	item := apiResp.Data[0]
-	if item.B64JSON != "" {
-		return "data:image/png;base64," + item.B64JSON, nil
-	}
-	if item.URL != "" {
-		return item.URL, nil
-	}
-	return "API 返回了空的图片数据", nil
 }
 
 // InvokableRun saves a base64 data URL or downloads an http(s) URL to a local file.

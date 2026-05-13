@@ -192,7 +192,6 @@ func AllPermissionDeclarations() []namedPermDecl {
 		&ExecuteShellTool{},
 		&ExecuteCodeTool{},
 		&ReadImageTool{},
-		&GenerateImageTool{},
 		&SaveImageTool{},
 	}
 	for _, t := range ctxPrototypes {
@@ -256,7 +255,6 @@ func AllContextual(
 		&ExecuteCodeTool{Cfg: cfg, RegisterCmd: registerCmd, UnregisterCmd: unregisterCmd},
 		// Image tools
 		&ReadImageTool{Cfg: cfg},
-		&GenerateImageTool{Cfg: cfg},
 		&SaveImageTool{Cfg: cfg},
 	}
 	result := make([]tool.BaseTool, len(contextTools))
