@@ -36,9 +36,10 @@ const emotionPromptSuffix = "\n\n在每条回复的第一行必须输出情绪�
 
 // StreamResult is a single streamed token or a terminal signal.
 type StreamResult struct {
-	Token string
-	Err   error
-	Done  bool
+	Token  string
+	Images []string // base64 data URLs or http(s) URLs of images output by the LLM
+	Err    error
+	Done   bool
 }
 
 // ToolConfirmRequest is emitted via Wails event when a tool requests user confirmation.
@@ -346,13 +347,13 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 
 		msgs := append(ctxMsgs, &schema.Message{Role: schema.User, Content: content})
 		checkpointID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
-		fullResponse, toolCallCount, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID)
+		fullResponse, toolImgs, toolCallCount, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID)
 		if !ok {
 			return
 		}
 
 		ch <- StreamResult{Done: true}
-		go a.persistAndMigrate(context.Background(), userInput, nil, nil, fullResponse, toolCallCount)
+		go a.persistAndMigrate(context.Background(), userInput, nil, nil, fullResponse, toolImgs, toolCallCount)
 	}()
 
 	return ch
@@ -370,7 +371,7 @@ func (a *Agent) ChatDirect(ctx context.Context, prompt string) <-chan StreamResu
 				ch <- StreamResult{Err: fmt.Errorf("agent panic: %v", r)}
 			}
 		}()
-		_, _, ok := drainRunner(ctx, a.runner, prompt, ch, nil, nil, fmt.Sprintf("direct-%d", time.Now().UnixNano()))
+		_, _, _, ok := drainRunner(ctx, a.runner, prompt, ch, nil, nil, fmt.Sprintf("direct-%d", time.Now().UnixNano()))
 		if !ok {
 			return
 		}
@@ -403,28 +404,30 @@ func (a *Agent) ChatDirectCollect(ctx context.Context, prompt string) (string, e
 // and returns the accumulated response string and tool-call count.
 // Returns (response, toolCalls, true) on success or ("", 0, false) after sending an error to ch.
 func drainRunner(ctx context.Context, runner *adk.Runner, query string, ch chan<- StreamResult,
-	pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, int, bool) {
+	pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, []string, int, bool) {
 	iter := runner.Query(ctx, query, adk.WithCheckPointID(checkpointID))
 	return drainIter(ctx, runner, iter, ch, pendingConfirms, emitEvent, checkpointID)
 }
 
 // drainRunnerMsg consumes all events from runner.Run with a pre-built message list,
-// forwards tokens to ch, and returns the accumulated response string and tool-call count.
-// Returns (response, toolCalls, true) on success or ("", 0, false) after sending an error to ch.
+// forwards tokens to ch, and returns the accumulated response string, tool images,
+// and tool-call count.
+// Returns (response, images, toolCalls, true) on success or ("", nil, 0, false) after sending an error to ch.
 func drainRunnerMsg(ctx context.Context, runner *adk.Runner, msgs []adk.Message, ch chan<- StreamResult,
-	pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, int, bool) {
+	pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, []string, int, bool) {
 	iter := runner.Run(ctx, msgs, adk.WithCheckPointID(checkpointID))
 	return drainIter(ctx, runner, iter, ch, pendingConfirms, emitEvent, checkpointID)
 }
 
 // drainIter consumes all events from an AsyncIterator, forwards tokens to ch,
-// handles interrupt events, and returns the accumulated response string and the
-// number of distinct tool names invoked this turn.
+// handles interrupt events, and returns the accumulated response string, collected
+// tool images, and the number of distinct tool names invoked this turn.
 func drainIter(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIterator[*adk.AgentEvent],
-	ch chan<- StreamResult, pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, int, bool) {
+	ch chan<- StreamResult, pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, []string, int, bool) {
 	uniqueTools := make(map[string]struct{})
-	resp, ok := drainIterInner(ctx, runner, iter, ch, pendingConfirms, emitEvent, checkpointID, uniqueTools)
-	return resp, len(uniqueTools), ok
+	var imgs []string
+	resp, ok := drainIterInner(ctx, runner, iter, ch, pendingConfirms, emitEvent, checkpointID, uniqueTools, &imgs)
+	return resp, imgs, len(uniqueTools), ok
 }
 
 // nextEvent wraps iter.Next() in a goroutine so callers can race it against
@@ -446,9 +449,11 @@ func nextEvent(iter *adk.AsyncIterator[*adk.AgentEvent]) <-chan iterResult {
 
 // drainIterInner is the recursive core of drainIter; it accepts a shared uniqueTools
 // map so that distinct tool names are accumulated correctly across interrupt/resume cycles.
+// imgsBuf accumulates images produced by tool calls (e.g. read_image) across all
+// recursive invocations so they can be persisted by the caller.
 func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIterator[*adk.AgentEvent],
 	ch chan<- StreamResult, pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string,
-	uniqueTools map[string]struct{}) (string, bool) {
+	uniqueTools map[string]struct{}, imgsBuf *[]string) (string, bool) {
 	var sb strings.Builder
 
 	for {
@@ -487,7 +492,7 @@ func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIter
 				return "", false
 			}
 			if resumeIter != nil {
-				resp, ok := drainIterInner(ctx, runner, resumeIter, ch, pendingConfirms, emitEvent, checkpointID, uniqueTools)
+				resp, ok := drainIterInner(ctx, runner, resumeIter, ch, pendingConfirms, emitEvent, checkpointID, uniqueTools, imgsBuf)
 				if !ok {
 					return "", false
 				}
@@ -510,20 +515,47 @@ func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIter
 					ch <- StreamResult{Err: recvErr}
 					return "", false
 				}
-				if m == nil || m.Content == "" {
+				if m == nil {
 					continue
 				}
 				if m.Role == schema.Tool || len(m.ToolCalls) > 0 {
 					for _, tc := range m.ToolCalls {
 						uniqueTools[tc.Function.Name] = struct{}{}
 					}
+					// Tool results that are image data URLs or image HTTP URLs
+					// (e.g. from read_image / generate_image) are forwarded as
+					// images; the raw text is intentionally suppressed.
+					if m.Role == schema.Tool {
+						if imgs := extractToolImages(m.Content); len(imgs) > 0 {
+							ch <- StreamResult{Images: imgs}
+							*imgsBuf = append(*imgsBuf, imgs...)
+						}
+					}
+					continue
+				}
+				if imgs := extractImages(m.AssistantGenMultiContent); len(imgs) > 0 {
+					ch <- StreamResult{Images: imgs}
+					*imgsBuf = append(*imgsBuf, imgs...)
+				}
+				if m.Content == "" {
 					continue
 				}
 				ch <- StreamResult{Token: m.Content}
 				sb.WriteString(m.Content)
 			}
-		} else if mo.Message != nil && mo.Message.Content != "" {
-			if mo.Message.Role != schema.Tool && len(mo.Message.ToolCalls) == 0 {
+		} else if mo.Message != nil && mo.Message.Role == schema.Tool {
+			// Tool result: forward image data URLs / HTTP image URLs to the frontend;
+			// suppress raw text so tool internals stay out of the chat panel.
+			if imgs := extractToolImages(mo.Message.Content); len(imgs) > 0 {
+				ch <- StreamResult{Images: imgs}
+				*imgsBuf = append(*imgsBuf, imgs...)
+			}
+		} else if mo.Message != nil && len(mo.Message.ToolCalls) == 0 {
+			if imgs := extractImages(mo.Message.AssistantGenMultiContent); len(imgs) > 0 {
+				ch <- StreamResult{Images: imgs}
+				*imgsBuf = append(*imgsBuf, imgs...)
+			}
+			if mo.Message.Content != "" {
 				ch <- StreamResult{Token: mo.Message.Content}
 				sb.WriteString(mo.Message.Content)
 			}
@@ -534,6 +566,54 @@ func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIter
 		}
 	}
 	return sb.String(), true
+}
+
+// extractImages returns data URLs or HTTP(S) URLs for any image parts in parts.
+// Only assistant-generated images are passed here; tool returns are never included.
+func extractImages(parts []schema.MessageOutputPart) []string {
+	var imgs []string
+	for _, p := range parts {
+		if p.Type != "image" || p.Image == nil {
+			continue
+		}
+		if p.Image.Base64Data != nil && *p.Image.Base64Data != "" {
+			mime := p.Image.MIMEType
+			if mime == "" {
+				mime = "image/png"
+			}
+			imgs = append(imgs, "data:"+mime+";base64,"+*p.Image.Base64Data)
+		} else if p.Image.URL != nil && *p.Image.URL != "" {
+			imgs = append(imgs, *p.Image.URL)
+		}
+	}
+	return imgs
+}
+
+// extractToolImages extracts image data URLs or HTTP(S) image URLs from a tool
+// result string. Tool implementations that return a single data URL or image URL
+// (e.g. read_image, generate_image) are detected here and forwarded to the
+// frontend via StreamResult.Images so the chat panel can render them.
+func extractToolImages(content string) []string {
+	content = strings.TrimSpace(content)
+	if strings.HasPrefix(content, "data:image/") {
+		return []string{content}
+	}
+	if (strings.HasPrefix(content, "http://") || strings.HasPrefix(content, "https://")) &&
+		isImageURL(content) {
+		return []string{content}
+	}
+	return nil
+}
+
+// isImageURL reports whether url has a common image file extension or image-related path.
+func isImageURL(url string) bool {
+	lower := strings.ToLower(url)
+	for _, ext := range []string{".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"} {
+		if strings.Contains(lower, ext) {
+			return true
+		}
+	}
+	return false
 }
 
 // handleInterrupt processes an eino interrupt event by notifying the frontend and
@@ -664,7 +744,7 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 
 		msgs := append(ctxMsgs, sendMsg)
 		checkpointID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
-		fullResponse, toolCallCount, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID)
+		fullResponse, toolImgs, toolCallCount, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID)
 		if !ok {
 			return
 		}
@@ -683,7 +763,7 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 				userFiles = names
 			}
 		}
-		go a.persistAndMigrate(context.Background(), userMemory, userImages, userFiles, fullResponse, toolCallCount)
+		go a.persistAndMigrate(context.Background(), userMemory, userImages, userFiles, fullResponse, toolImgs, toolCallCount)
 	}()
 
 	return ch
@@ -818,7 +898,7 @@ func (a *Agent) buildContext(ctx context.Context, userInput string) ([]adk.Messa
 // persistAndMigrate saves user and assistant messages to SQLite, then checks
 // whether the total message count exceeds ShortTermLimit. If so, the oldest
 // excess messages are migrated to long-term vector memory.
-func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userImages []string, userFiles []string, assistantReply string, toolCallCount int) {
+func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userImages []string, userFiles []string, assistantReply string, assistantImages []string, toolCallCount int) {
 	if a.shortMem == nil {
 		return
 	}
@@ -837,7 +917,7 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userIma
 	if _, _, stripped, ok := parseEmotionTag(assistantReply); ok {
 		assistantReply = stripped
 	}
-	if _, err := a.shortMem.Add("assistant", assistantReply); err != nil {
+	if _, err := a.shortMem.AddWithImages("assistant", assistantReply, assistantImages); err != nil {
 		slog.Error("save assistant message failed", "err", err)
 		return
 	}

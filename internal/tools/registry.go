@@ -191,6 +191,9 @@ func AllPermissionDeclarations() []namedPermDecl {
 		&MoveFileTool{},
 		&ExecuteShellTool{},
 		&ExecuteCodeTool{},
+		&ReadImageTool{},
+		&GenerateImageTool{},
+		&SaveImageTool{},
 	}
 	for _, t := range ctxPrototypes {
 		decls = append(decls, namedPermDecl{Name_: t.Name(), Perm_: t.Permission()})
@@ -251,6 +254,10 @@ func AllContextual(
 		// Execution tools
 		&ExecuteShellTool{Cfg: cfg, RegisterCmd: registerCmd, UnregisterCmd: unregisterCmd},
 		&ExecuteCodeTool{Cfg: cfg, RegisterCmd: registerCmd, UnregisterCmd: unregisterCmd},
+		// Image tools
+		&ReadImageTool{Cfg: cfg},
+		&GenerateImageTool{Cfg: cfg},
+		&SaveImageTool{Cfg: cfg},
 	}
 	result := make([]tool.BaseTool, len(contextTools))
 	for i, t := range contextTools {

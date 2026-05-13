@@ -332,10 +332,19 @@ const fileInputEl = ref(null)
 
 /** lightboxSrc holds the data URL of the image currently shown in the lightbox, or null. */
 const lightboxSrc = ref(null)
+/** lightboxFullscreen tracks whether the lightbox is in full-window mode. */
+const lightboxFullscreen = ref(false)
 
 /** previewImage opens the lightbox for the given image src. */
 function previewImage(src) {
   lightboxSrc.value = src
+  lightboxFullscreen.value = false
+}
+
+/** closeLightbox closes the lightbox and resets fullscreen state. */
+function closeLightbox() {
+  lightboxSrc.value = null
+  lightboxFullscreen.value = false
 }
 const loading = ref(false)
 const messagesEl = ref(null)
@@ -454,7 +463,7 @@ function formatTime(ts) {
 }
 
 let proactiveStarted = false
-let offToken, offDone, offError, offClear, offProactiveStart, offProactiveMessage, offCronStart
+let offToken, offDone, offError, offClear, offProactiveStart, offProactiveMessage, offCronStart, offImage
 let offTTSDone, offTTSError, offTTSAudio
 let offSoundsChanged
 let offVoiceStart, offVoiceTranscript, offVoiceEnd, offVoiceFinal, offVoiceError, offVoiceAutoSend
@@ -615,6 +624,13 @@ onMounted(async () => {
     EventsEmit('pet:state:change', 'error')
   })
 
+  offImage = EventsOn('chat:image', (imgs) => {
+    const idx = messages.value.findLastIndex(m => m.role === 'assistant')
+    if (idx < 0 || !Array.isArray(imgs)) return
+    const existing = messages.value[idx].images || []
+    messages.value[idx] = { ...messages.value[idx], images: [...existing, ...imgs] }
+  })
+
   try { voiceAutoSend.value = await GetVoiceAutoSend() } catch {}
   try { soundsEnabled = await GetSoundsEnabled() } catch {}
   try { cfg.value = await GetConfig() } catch {}
@@ -713,7 +729,7 @@ onMounted(async () => {
 onUnmounted(() => {
   // Invoke every EventsOn teardown; undefined entries are safely skipped via
   // optional chaining so a partial mount (e.g. early error) does not throw here.
-  offToken?.(); offDone?.(); offError?.(); offClear?.()
+  offToken?.(); offDone?.(); offError?.(); offClear?.(); offImage?.()
   offProactiveStart?.(); offProactiveMessage?.(); offCronStart?.()
   offTTSDone?.(); offTTSError?.(); offTTSAudio?.()
   offSoundsChanged?.()
@@ -1168,6 +1184,9 @@ defineExpose({ focusInput, scrollToBottom })
                       </button>
                     </template>
                   </template>
+                  <div v-if="m.images && m.images.length > 0" class="msg-images">
+                    <img v-for="(img, imgIdx) in m.images" :key="imgIdx" :src="img" class="msg-img" @click.stop="previewImage(img)" />
+                  </div>
                 </div>
               </template>
 
@@ -1221,10 +1240,21 @@ defineExpose({ focusInput, scrollToBottom })
       </div>
       </TransitionGroup>
     </div>
-    <!-- Image lightbox -->
-    <div v-if="lightboxSrc" class="lightbox" @click="lightboxSrc = null">
-      <img :src="lightboxSrc" class="lightbox-img" @click.stop />
-    </div>
+    <!-- Image lightbox (normal: inside panel; fullscreen: teleported to body to escape backdrop-filter stacking context) -->
+    <template v-if="lightboxSrc">
+      <Teleport to="body" :disabled="!lightboxFullscreen">
+        <div :class="['lightbox', { 'lightbox-fullscreen': lightboxFullscreen }]" @click="closeLightbox">
+          <img :src="lightboxSrc" class="lightbox-img" @click.stop />
+          <button class="lightbox-fullscreen-btn" @click.stop="lightboxFullscreen = !lightboxFullscreen" title="全屏预览">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+              <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+            </svg>
+            {{ lightboxFullscreen ? '退出全屏' : '全屏预览' }}
+          </button>
+        </div>
+      </Teleport>
+    </template>
 
     <!-- Tool execution confirmation modal -->
     <ToolConfirmModal />
@@ -2353,25 +2383,55 @@ defineExpose({ focusInput, scrollToBottom })
   cursor: zoom-in;
 }
 
-/* Lightbox */
+/* Lightbox — inside panel (normal mode) */
 .lightbox {
   position: absolute;
   inset: 0;
   z-index: 200;
   background: rgba(0,0,0,0.85);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 14px;
   cursor: zoom-out;
   pointer-events: auto;
 }
+/* Fullscreen mode: teleported to body so position:fixed covers the full window */
+body > .lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+}
+body > .lightbox .lightbox-img {
+  max-width: 98%;
+  max-height: calc(100% - 60px);
+  border-radius: 4px;
+}
 .lightbox-img {
   max-width: 90%;
-  max-height: 90%;
+  max-height: 80%;
   border-radius: 10px;
   box-shadow: 0 8px 40px rgba(0,0,0,0.6);
   object-fit: contain;
   cursor: default;
+}
+.lightbox-fullscreen-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.85);
+  font-size: 13px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 0.15s;
+}
+.lightbox-fullscreen-btn:hover {
+  background: rgba(255,255,255,0.2);
 }
 
 /* Attach file button */

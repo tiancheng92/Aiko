@@ -302,6 +302,9 @@ func (a *App) ChatDirect(ctx context.Context, prompt string) error {
 			wailsruntime.EventsEmit(a.ctx, "chat:done", nil)
 			return r.Err
 		}
+		if len(r.Images) > 0 {
+			wailsruntime.EventsEmit(a.ctx, "chat:image", r.Images)
+		}
 		if r.Done {
 			break
 		}
@@ -533,6 +536,9 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 					wailsruntime.EventsEmit(a.ctx, "chat:done", "")
 				}
 				return "", r.Err
+			}
+			if job.SaveToMemory && len(r.Images) > 0 {
+				wailsruntime.EventsEmit(a.ctx, "chat:image", r.Images)
 			}
 			if r.Done {
 				break
@@ -1202,6 +1208,9 @@ func (a *App) SendMessage(userInput string) error {
 				wailsruntime.EventsEmit(a.ctx, "chat:error", a.formatChatError(result.Err))
 				return
 			}
+			if len(result.Images) > 0 {
+				wailsruntime.EventsEmit(a.ctx, "chat:image", result.Images)
+			}
 			if result.Done {
 				if tail := ep.Flush(); tail != "" {
 					wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
@@ -1329,6 +1338,9 @@ func (a *App) SendMessageWithImages(userInput string, images []string) error {
 				wailsruntime.EventsEmit(a.ctx, "chat:error", a.formatChatError(result.Err))
 				return
 			}
+			if len(result.Images) > 0 {
+				wailsruntime.EventsEmit(a.ctx, "chat:image", result.Images)
+			}
 			if result.Done {
 				if tail := ep.Flush(); tail != "" {
 					wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
@@ -1436,6 +1448,7 @@ func (a *App) SendMessageWithFiles(userInput string, images []string, files []Fi
 			a.mu.Unlock()
 		}()
 		ch := ag.ChatWithMessage(chatCtx, msg)
+		ep := agent.NewEmotionParser()
 		for result := range ch {
 			if result.Err != nil {
 				if errors.Is(result.Err, context.Canceled) {
@@ -1444,11 +1457,29 @@ func (a *App) SendMessageWithFiles(userInput string, images []string, files []Fi
 				wailsruntime.EventsEmit(a.ctx, "chat:error", a.formatChatError(result.Err))
 				return
 			}
+			if len(result.Images) > 0 {
+				wailsruntime.EventsEmit(a.ctx, "chat:image", result.Images)
+			}
 			if result.Done {
+				if tail := ep.Flush(); tail != "" {
+					wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
+				}
 				wailsruntime.EventsEmit(a.ctx, "chat:done", "")
 				return
 			}
-			wailsruntime.EventsEmit(a.ctx, "chat:token", result.Token)
+			text, emotion, intensity := ep.Feed(result.Token)
+			if emotion != "" {
+				wailsruntime.EventsEmit(a.ctx, "chat:emotion", map[string]any{
+					"emotion":   emotion,
+					"intensity": intensity,
+				})
+			}
+			if text != "" {
+				wailsruntime.EventsEmit(a.ctx, "chat:token", text)
+			}
+		}
+		if tail := ep.Flush(); tail != "" {
+			wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
 		}
 		wailsruntime.EventsEmit(a.ctx, "chat:done", "")
 	}()
