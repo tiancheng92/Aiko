@@ -66,15 +66,23 @@ func New(db *sql.DB, chatFn func(ctx context.Context, job Job) (string, error), 
 	}
 }
 
-// Start initialises next_run_at for enabled jobs that lack one, then launches
-// the background poll loop.
+// Start initialises next_run_at for enabled jobs that lack one (or have a
+// non-UTC legacy value written before the UTC-normalisation fix), then
+// launches the background poll loop.
 func (s *Scheduler) Start(ctx context.Context) error {
 	jobs, err := s.ListJobs(ctx)
 	if err != nil {
 		return fmt.Errorf("load jobs: %w", err)
 	}
 	for _, j := range jobs {
-		if j.Enabled && j.NextRunAt == nil {
+		if !j.Enabled {
+			continue
+		}
+		// Re-initialise if next_run_at is absent or stored in a non-UTC format
+		// (legacy rows written with a local-timezone offset like +08:00).
+		needsInit := j.NextRunAt == nil ||
+			(len(*j.NextRunAt) > 0 && (*j.NextRunAt)[len(*j.NextRunAt)-1] != 'Z')
+		if needsInit {
 			if err := s.initNextRun(ctx, j); err != nil {
 				slog.Warn("scheduler: init next_run_at", "job", j.Name, "err", err)
 			}
@@ -147,7 +155,7 @@ func (s *Scheduler) poll(ctx context.Context) {
 		       save_to_memory, notify, last_run, next_run_at, created_at
 		FROM cron_jobs
 		WHERE enabled = 1 AND next_run_at IS NOT NULL AND next_run_at <= ?
-	`, now.Format(time.RFC3339))
+	`, now.UTC().Format(time.RFC3339))
 	if err != nil {
 		slog.Warn("scheduler poll: query", "err", err)
 		return
@@ -357,12 +365,12 @@ func computeNextRun(schedule string, after time.Time) (time.Time, error) {
 }
 
 // scanJob scans one row from a cron_jobs query into a Job.
+// All DATETIME columns are stored as RFC3339 text; scan them as NullString
+// to avoid driver-level time parsing which modernc.org/sqlite does not do.
 func scanJob(rows *sql.Rows) (Job, error) {
 	var j Job
 	var enabled, saveToMemory, notify int
-	var lastRun sql.NullTime
-	var nextRunAt sql.NullString
-	var createdAt time.Time
+	var lastRun, nextRunAt, createdAt sql.NullString
 	if err := rows.Scan(
 		&j.ID, &j.Name, &j.Description, &j.Schedule, &j.Prompt,
 		&enabled, &saveToMemory, &notify,
@@ -373,14 +381,15 @@ func scanJob(rows *sql.Rows) (Job, error) {
 	j.Enabled = enabled == 1
 	j.SaveToMemory = saveToMemory == 1
 	j.Notify = notify == 1
-	if lastRun.Valid {
-		s := lastRun.Time.Format(time.RFC3339)
-		j.LastRun = &s
+	if lastRun.Valid && lastRun.String != "" {
+		j.LastRun = &lastRun.String
 	}
-	if nextRunAt.Valid {
+	if nextRunAt.Valid && nextRunAt.String != "" {
 		j.NextRunAt = &nextRunAt.String
 	}
-	j.CreatedAt = createdAt.Format(time.RFC3339)
+	if createdAt.Valid {
+		j.CreatedAt = createdAt.String
+	}
 	return j, nil
 }
 
