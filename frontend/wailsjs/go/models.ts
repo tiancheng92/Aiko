@@ -290,6 +290,7 @@ export namespace memory {
 	    ID: number;
 	    Role: string;
 	    Content: string;
+	    ThinkingContent: string;
 	    Images: string[];
 	    Files: string[];
 	    CreatedAt: string;
@@ -303,6 +304,7 @@ export namespace memory {
 	        this.ID = source["ID"];
 	        this.Role = source["Role"];
 	        this.Content = source["Content"];
+	        this.ThinkingContent = source["ThinkingContent"];
 	        this.Images = source["Images"];
 	        this.Files = source["Files"];
 	        this.CreatedAt = source["CreatedAt"];

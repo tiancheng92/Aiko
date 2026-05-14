@@ -5,6 +5,7 @@ import ContextMenu from './ContextMenu.vue'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { ExportChatHistory, GetChatSize, PingLLM, SaveChatSize, GetConfig, ListModelProfiles } from '../../wailsjs/go/main/App'
 import { ICON_EXPORT, ICON_TRASH, ICON_SETTING } from '../utils/icons'
+import { springAnimate } from '../composables/useSpring.js'
 
 const props = defineProps({
   ballPos:  { type: Object, default: () => ({ x: -1, y: -1 }) },
@@ -145,6 +146,7 @@ onUnmounted(() => {
   window.removeEventListener('mousemove', onResizeMove)
   window.removeEventListener('mouseup', onResizeUp)
   window.removeEventListener('blur', onResizeUp)
+  cancelFsAnim?.()
 })
 
 watch(() => props.visible, (v) => {
@@ -157,9 +159,91 @@ watch(() => props.visible, (v) => {
 
 const isFullscreen = ref(false)
 
-/** toggleFullscreen switches between normal and fullscreen chat mode. */
+// ─── Fullscreen spring animation ──────────────────────────────────────────────
+// When non-null, bubbleStyle uses these values instead of the reactive pos/size.
+const animLeft   = ref(null)
+const animTop    = ref(null)
+const animWidth  = ref(null)
+const animHeight = ref(null)
+const animRadius = ref(null)
+let cancelFsAnim = null
+
+/**
+ * bubbleStyle computes the :style binding for the chat bubble.
+ * During a fullscreen toggle animation the spring-driven anim* refs take
+ * priority; otherwise the normal reactive pos/bubbleW/bubbleH are used.
+ */
+const bubbleStyle = computed(() => {
+  if (animLeft.value !== null) {
+    return {
+      left:         animLeft.value   + 'px',
+      top:          animTop.value    + 'px',
+      width:        animWidth.value  + 'px',
+      height:       animHeight.value + 'px',
+      borderRadius: animRadius.value + 'px',
+    }
+  }
+  if (isFullscreen.value) {
+    return {
+      left:         '0px',
+      top:          '38px',
+      width:        '100vw',
+      height:       'calc(100vh - 38px)',
+      borderRadius: '0px',
+    }
+  }
+  return {
+    left:   pos.value.x    + 'px',
+    top:    pos.value.y    + 'px',
+    width:  bubbleW.value  + 'px',
+    height: bubbleH.value  + 'px',
+  }
+})
+
+/** toggleFullscreen spring-animates all geometry between normal and fullscreen. */
 function toggleFullscreen() {
-  isFullscreen.value = !isFullscreen.value
+  cancelFsAnim?.()
+
+  const MENU_BAR  = 38
+  const toFs      = !isFullscreen.value
+  const fromX     = isFullscreen.value ? 0                          : pos.value.x
+  const fromY     = isFullscreen.value ? MENU_BAR                   : pos.value.y
+  const fromW     = isFullscreen.value ? window.innerWidth          : bubbleW.value
+  const fromH     = isFullscreen.value ? window.innerHeight - MENU_BAR : bubbleH.value
+  const fromR     = isFullscreen.value ? 0                          : 14
+  const toX       = toFs ? 0                          : pos.value.x
+  const toY       = toFs ? MENU_BAR                   : pos.value.y
+  const toW       = toFs ? window.innerWidth          : bubbleW.value
+  const toH       = toFs ? window.innerHeight - MENU_BAR : bubbleH.value
+  const toR       = toFs ? 0                          : 14
+
+  animLeft.value   = fromX
+  animTop.value    = fromY
+  animWidth.value  = fromW
+  animHeight.value = fromH
+  animRadius.value = fromR
+  isFullscreen.value = toFs       // flip immediately for z-index / class
+
+  cancelFsAnim = springAnimate({
+    from: 0, to: 1,
+    stiffness: 280, damping: 30,
+    restDelta: 0.004, restVelocity: 0.02,
+    onUpdate: (p) => {
+      animLeft.value   = fromX + (toX - fromX) * p
+      animTop.value    = fromY + (toY - fromY) * p
+      animWidth.value  = fromW + (toW - fromW) * p
+      animHeight.value = fromH + (toH - fromH) * p
+      animRadius.value = fromR + (toR - fromR) * p
+    },
+    onDone: () => {
+      animLeft.value   = null
+      animTop.value    = null
+      animWidth.value  = null
+      animHeight.value = null
+      animRadius.value = null
+      cancelFsAnim     = null
+    },
+  })
 }
 
 const MIN_W = 300
@@ -292,13 +376,8 @@ defineExpose({ focusInput, scrollToBottom })
 <template>
   <div
     class="chat-bubble"
-    :class="{ fullscreen: isFullscreen, 'no-transition': isResizing }"
-    :style="isFullscreen ? {} : {
-      left:   pos.x + 'px',
-      top:    pos.y + 'px',
-      width:  bubbleW + 'px',
-      height: bubbleH + 'px',
-    }"
+    :class="{ fullscreen: isFullscreen, 'no-transition': isResizing || animLeft !== null }"
+    :style="bubbleStyle"
     @contextmenu="onBubbleContextMenu"
     @keydown="onUserActivity"
     @mousedown="onUserActivity"
@@ -461,14 +540,8 @@ defineExpose({ focusInput, scrollToBottom })
   outline-offset: 1px;
 }
 
-/* Fullscreen mode — flush under macOS menu bar (38px) */
+/* Fullscreen mode — position/size/border-radius are all driven by :style (spring anim) */
 .chat-bubble.fullscreen {
-  position: fixed;
-  left: 0 !important;
-  top: 38px !important;
-  width: 100vw !important;
-  height: calc(100vh - 38px) !important;
-  border-radius: 0;
   z-index: 2001;
 }
 

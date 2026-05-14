@@ -7,6 +7,7 @@ import SettingsWindow from './components/SettingsWindow.vue'
 import NotificationBubble from './components/NotificationBubble.vue'
 import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize, GetConfig } from '../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../wailsjs/runtime/runtime'
+import { springAnimate } from './composables/useSpring'
 
 const bubbleOpen = ref(false)
 const renderBackend = ref('live2d')
@@ -393,6 +394,8 @@ onUnmounted(() => {
   stopSiriAnim?.()
   stopRippleAnim?.()
   if (siriHideTimer) clearTimeout(siriHideTimer)
+  cancelBubble?.()
+  cancelSettings?.()
 })
 
 /** toggleBubble flips the chat bubble open/close state. */
@@ -410,6 +413,103 @@ function toggleBubble() {
 /** openSettings opens the settings window. */
 function openSettings() {
   settingsOpen.value = true
+}
+
+// ── Spring transition helpers ─────────────────────────────────────────────────
+// Shared options for normalized progress [0..1] space.
+const SPRING_OPTS = { restDelta: 0.005, restVelocity: 0.04 }
+
+// In-flight cancel fns so rapid open→close→open doesn't stack animations.
+let cancelBubble = null
+let cancelSettings = null
+
+/** applyBubbleStyle writes transform + opacity from a spring progress value p ∈ [0..1].
+ *  transform-origin is bottom-center so the bubble grows from the pet position. */
+function applyBubbleStyle(el, p) {
+  el.style.opacity        = Math.min(1, Math.max(0, p * 2)).toString()
+  el.style.transform      = `scale(${0.82 + 0.18 * p}) translateY(${20 * (1 - p)}px)`
+  el.style.transformOrigin = 'bottom center'
+}
+
+/** applySettingsStyle writes transform + opacity from spring progress p ∈ [0..1]. */
+function applySettingsStyle(el, p) {
+  el.style.opacity   = Math.min(1, Math.max(0, p * 1.8)).toString()
+  el.style.transform = `scale(${0.90 + 0.10 * p}) translateY(${10 * (1 - p)}px)`
+}
+
+// ── ChatBubble JS transition hooks ───────────────────────────────────────────
+/** onBubbleEnter: spring from 0 → 1, underdamped (ζ ≈ 0.67) for gentle overshoot. */
+function onBubbleEnter(el, done) {
+  cancelBubble?.()
+  applyBubbleStyle(el, 0)
+  // ζ = 22/(2·√320) ≈ 0.614 — clear underdamping; scale briefly exceeds 1 by ~8%.
+  cancelBubble = springAnimate({
+    from: 0, to: 1,
+    stiffness: 320, damping: 22,
+    ...SPRING_OPTS,
+    onUpdate: (p) => applyBubbleStyle(el, p),
+    onDone: () => {
+      el.style.opacity = ''
+      el.style.transform = ''
+      el.style.transformOrigin = ''
+      cancelBubble = null
+      done()
+    },
+  })
+}
+
+/** onBubbleLeave: spring from 1 → 0, near-critical (ζ ≈ 1.0) for decisive close. */
+function onBubbleLeave(el, done) {
+  cancelBubble?.()
+  applyBubbleStyle(el, 1)
+  // ζ = 36/(2·√320) ≈ 1.006 — near-critical: clean stop, no bounce.
+  cancelBubble = springAnimate({
+    from: 1, to: 0,
+    stiffness: 320, damping: 36,
+    ...SPRING_OPTS,
+    onUpdate: (p) => applyBubbleStyle(el, p),
+    onDone: () => {
+      cancelBubble = null
+      done() // Vue applies display:none
+    },
+  })
+}
+
+// ── SettingsWindow JS transition hooks ───────────────────────────────────────
+/** onSettingsEnter: spring from 0 → 1, slightly underdamped (ζ ≈ 0.72) — refined pop. */
+function onSettingsEnter(el, done) {
+  cancelSettings?.()
+  applySettingsStyle(el, 0)
+  // ζ = 26/(2·√260) ≈ 0.806 — subtle overshoot on scale for a glass-card feel.
+  cancelSettings = springAnimate({
+    from: 0, to: 1,
+    stiffness: 260, damping: 26,
+    ...SPRING_OPTS,
+    onUpdate: (p) => applySettingsStyle(el, p),
+    onDone: () => {
+      el.style.opacity = ''
+      el.style.transform = ''
+      cancelSettings = null
+      done()
+    },
+  })
+}
+
+/** onSettingsLeave: spring from 1 → 0, overdamped (ζ ≈ 1.1) — fast, authoritative close. */
+function onSettingsLeave(el, done) {
+  cancelSettings?.()
+  applySettingsStyle(el, 1)
+  // ζ = 40/(2·√260) ≈ 1.24 — slightly overdamped: snappy close without any bounce.
+  cancelSettings = springAnimate({
+    from: 1, to: 0,
+    stiffness: 260, damping: 40,
+    ...SPRING_OPTS,
+    onUpdate: (p) => applySettingsStyle(el, p),
+    onDone: () => {
+      cancelSettings = null
+      done()
+    },
+  })
 }
 </script>
 
@@ -430,7 +530,7 @@ function openSettings() {
     @ball-size="s => ballSize = s"
     @open-settings="openSettings"
   />
-  <Transition name="chat-pop">
+  <Transition :css="false" @enter="onBubbleEnter" @leave="onBubbleLeave">
     <ChatBubble
       ref="chatBubbleRef"
       v-show="bubbleOpen"
@@ -442,7 +542,7 @@ function openSettings() {
       @open-settings="openSettings"
     />
   </Transition>
-  <Transition name="settings-pop">
+  <Transition :css="false" @enter="onSettingsEnter" @leave="onSettingsLeave">
     <SettingsWindow
       v-if="settingsOpen"
       :active-screen="activeScreen"
@@ -471,43 +571,6 @@ function openSettings() {
 </template>
 
 <style scoped>
-/* ── Chat bubble appear / disappear ────────────────────────── */
-.chat-pop-enter-active,
-.chat-pop-leave-active {
-  transform-origin: bottom center;
-}
-.chat-pop-enter-active {
-  transition: opacity 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
-              transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.chat-pop-leave-active {
-  transition: opacity 0.18s ease-in,
-              transform 0.18s ease-in;
-}
-.chat-pop-enter-from,
-.chat-pop-leave-to {
-  opacity: 0;
-  transform: scale(0.88) translateY(14px);
-}
-
-/* ── Settings window appear / disappear ────────────────────── */
-.settings-pop-enter-active,
-.settings-pop-leave-active {
-  transform-origin: center center;
-}
-.settings-pop-enter-active {
-  transition: opacity 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
-              transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.settings-pop-leave-active {
-  transition: opacity 0.16s ease-in,
-              transform 0.16s ease-in;
-}
-.settings-pop-enter-from,
-.settings-pop-leave-to {
-  opacity: 0;
-  transform: scale(0.92);
-}
 
 /* ── Siri wrapper ───────────────────────────────────────────── */
 .siri-wrapper {

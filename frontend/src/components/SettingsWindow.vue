@@ -1,6 +1,7 @@
 <!-- frontend/src/components/SettingsWindow.vue -->
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { springAnimate } from '../composables/useSpring.js'
 import {
   GetConfig, SaveConfig,
   ImportKnowledge, ListKnowledgeSources, DeleteKnowledgeSource,
@@ -162,6 +163,76 @@ let offScreen = null
 let offUpdateProgress = null
 let offCronJobDone = null
 
+// ── Modal spring animation ──────────────────────────────────────────────────
+// Shared across all 4 modal types (only one modal open at a time).
+let cancelModal = null
+
+/** applyModalBoxStyle writes transform + opacity from spring progress p ∈ [0..1]. */
+function applyModalBoxStyle(box, p) {
+  box.style.transform = `scale(${0.94 + 0.06 * p}) translateY(${8 * (1 - p)}px)`
+  box.style.opacity   = Math.min(1, p * 1.6).toString()
+}
+
+/** onModalEnter springs the overlay opacity and inner box scale+translate in. */
+function onModalEnter(el, done) {
+  cancelModal?.()
+  const box = el.querySelector('.modal-box')
+  el.style.opacity = '0'
+  if (box) applyModalBoxStyle(box, 0)
+
+  let overlayDone = false
+  let boxDone = !box
+
+  function checkDone() {
+    if (overlayDone && boxDone) { cancelModal = null; done() }
+  }
+
+  const cancelOverlay = springAnimate({
+    from: 0, to: 1, stiffness: 420, damping: 34,
+    restDelta: 0.004, restVelocity: 0.03,
+    onUpdate : (p) => { el.style.opacity = p.toString() },
+    onDone   : () => { el.style.opacity = ''; overlayDone = true; checkDone() },
+  })
+
+  const cancelBox = box ? springAnimate({
+    from: 0, to: 1, stiffness: 320, damping: 22,
+    restDelta: 0.004, restVelocity: 0.03,
+    onUpdate : (p) => applyModalBoxStyle(box, p),
+    onDone   : () => { box.style.transform = ''; box.style.opacity = ''; boxDone = true; checkDone() },
+  }) : null
+
+  cancelModal = () => { cancelOverlay(); cancelBox?.() }
+}
+
+/** onModalLeave springs the overlay + box out, then calls done(). */
+function onModalLeave(el, done) {
+  cancelModal?.()
+  const box = el.querySelector('.modal-box')
+
+  let overlayDone = false
+  let boxDone = !box
+
+  function checkDone() {
+    if (overlayDone && boxDone) { cancelModal = null; done() }
+  }
+
+  const cancelOverlay = springAnimate({
+    from: 1, to: 0, stiffness: 420, damping: 42,
+    restDelta: 0.004, restVelocity: 0.03,
+    onUpdate : (p) => { el.style.opacity = p.toString() },
+    onDone   : () => { overlayDone = true; checkDone() },
+  })
+
+  const cancelBox = box ? springAnimate({
+    from: 1, to: 0, stiffness: 420, damping: 40,
+    restDelta: 0.004, restVelocity: 0.03,
+    onUpdate : (p) => applyModalBoxStyle(box, p),
+    onDone   : () => { boxDone = true; checkDone() },
+  }) : null
+
+  cancelModal = () => { cancelOverlay(); cancelBox?.() }
+}
+
 /**
  * tabMeta defines sidebar tabs with SVG icons and search keywords.
  * `_haystack` is pre-lowercased so the search filter doesn't re-normalize
@@ -286,6 +357,7 @@ onUnmounted(() => {
   offScreen?.()
   offUpdateProgress?.()
   offCronJobDone?.()
+  cancelModal?.()
   clearTimeout(saveTimer)
   // Safety net — ensure no drag listeners linger if the component unmounts mid-drag.
   window.removeEventListener('mousemove', onMouseMove)
@@ -1146,6 +1218,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           </div>
 
           <!-- Profile form dialog -->
+          <Transition :css="false" @enter="onModalEnter" @leave="onModalLeave">
           <div v-if="showProfileForm" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="profile-form-title" @click.self="showProfileForm = false">
             <div class="modal-box">
               <div id="profile-form-title" class="modal-title">{{ profileForm.id ? '编辑配置' : '新增配置' }}</div>
@@ -1267,6 +1340,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               </div>
             </div>
           </div>
+          </Transition>
         </div>
 
         <!-- 对话设置 -->
@@ -1510,6 +1584,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             </div>
 
             <!-- Add/Edit Modal -->
+            <Transition :css="false" @enter="onModalEnter" @leave="onModalLeave">
             <div v-if="showMCPForm" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="mcp-form-title" @click.self="showMCPForm = false">
               <div class="modal-box">
                 <div id="mcp-form-title" class="modal-title">{{ mcpForm.id ? '编辑 MCP 服务器' : '新增 MCP 服务器' }}</div>
@@ -1536,6 +1611,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 </div>
               </div>
             </div>
+            </Transition>
           </template>
 
           <!-- 工具权限子 tab -->
@@ -1725,6 +1801,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             </div>
 
             <!-- Add/Edit Modal -->
+            <Transition :css="false" @enter="onModalEnter" @leave="onModalLeave">
             <div v-if="showCronForm" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="cron-form-title" @click.self="showCronForm = false">
               <div class="modal-box">
                 <div id="cron-form-title" class="modal-title">{{ cronForm.id ? '编辑定时任务' : '新建定时任务' }}</div>
@@ -1769,6 +1846,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 </div>
               </div>
             </div>
+            </Transition>
           </template>
 
           <!-- 提醒事项子 tab -->
@@ -1972,6 +2050,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
     <!-- Confirm dialog — reuses modal-overlay/modal-box pattern so it looks
          identical to the edit/add form modals and stays within .settings-win
          (no Teleport → no click-through issues on macOS). -->
+    <Transition :css="false" @enter="onModalEnter" @leave="onModalLeave">
     <div
       v-if="confirm.visible.value"
       class="modal-overlay"
@@ -1992,6 +2071,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
         </div>
       </div>
     </div>
+    </Transition>
   </div>
 </template>
 
@@ -2134,7 +2214,11 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 /* Sidebar */
 .win-sidebar {
   width: 200px;
-  background: var(--lg-surface-elevated);
+  background: linear-gradient(
+    180deg,
+    var(--lg-surface-elevated) 0%,
+    color-mix(in srgb, var(--lg-surface-elevated) 92%, black) 100%
+  );
   border-right: 1px solid var(--lg-border-subtle);
   display: flex;
   flex-direction: column;
@@ -2164,7 +2248,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   gap: 10px;
   width: 100%;
   height: 32px;
-  transition: background 0.12s, color 0.12s;
+  transition: background 0.16s, color 0.16s, box-shadow 0.16s;
   box-shadow: none;
   letter-spacing: -0.01em;
 }
@@ -2173,6 +2257,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   background: var(--accent);
   color: #fff;
   font-weight: 500;
+  box-shadow: 0 2px 10px var(--accent-alpha-20), inset 0 1px 0 rgba(255,255,255,0.15);
 }
 .nav-item.active .nav-svg { color: #fff; }
 .nav-item.match { box-shadow: inset 0 0 0 1px var(--accent-alpha-20); }
@@ -2219,7 +2304,15 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
 /* Tab pane — macOS "card of rows" pattern: each top-level label / .settings-section
    / .sms-toggle-row renders as a row inside a card container. */
-.tab-pane { display: flex; flex-direction: column; gap: 18px; max-width: 720px; }
+@keyframes tabPaneEnter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+.tab-pane {
+  display: flex; flex-direction: column; gap: 18px; max-width: 720px;
+  animation: tabPaneEnter 0.26s cubic-bezier(0.34, 1.2, 0.64, 1);
+}
+@media (prefers-reduced-motion: reduce) { .tab-pane { animation: none; } }
 .tab-pane > label,
 .tab-pane > .settings-section {
   display: flex;
@@ -2233,10 +2326,18 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   color: var(--text-secondary);
   font-weight: 400;
   letter-spacing: -0.01em;
-  transition: border-color 0.15s;
+  transition: border-color 0.18s, box-shadow 0.18s, transform 0.22s cubic-bezier(0.34, 1.2, 0.64, 1);
 }
-.tab-pane > label:hover,
-.tab-pane > .settings-section:hover { border-color: var(--lg-border); }
+.tab-pane > .settings-section:hover {
+  border-color: var(--lg-border);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.18);
+}
+.tab-pane > label:hover { border-color: var(--lg-border); }
+@media (prefers-reduced-motion: reduce) {
+  .tab-pane > label, .tab-pane > .settings-section { transition: border-color 0.15s; }
+  .tab-pane > .settings-section:hover { transform: none; box-shadow: none; }
+}
 .tab-pane > label { font-size: 12px; font-weight: 500; color: var(--text-primary); }
 .tab-pane > label > input,
 .tab-pane > label > textarea,
@@ -2510,6 +2611,18 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
+
+/* Inline section group label (used in general / appearance tabs) */
+.settings-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0 2px 6px;
+  border-bottom: 1px solid var(--lg-border-subtle);
+  margin-bottom: 2px;
+}
 .section-hint { font-size: 12px; color: var(--text-secondary); margin: 0 0 10px; line-height: 1.5; }
 
 /* Model profile cards */
@@ -2521,9 +2634,18 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   background: var(--surface-card);
   border-radius: var(--r-card);
   border: 1px solid var(--lg-border-subtle);
-  transition: border-color 0.12s, background 0.12s;
+  transition: border-color 0.18s, background 0.18s, transform 0.22s cubic-bezier(0.34, 1.2, 0.64, 1), box-shadow 0.22s;
 }
-.profile-card:hover { background: var(--surface-card-hover); border-color: var(--lg-border); }
+.profile-card:hover {
+  background: var(--surface-card-hover);
+  border-color: var(--lg-border);
+  transform: translateY(-1.5px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .profile-card { transition: border-color 0.12s, background 0.12s; }
+  .profile-card:hover { transform: none; box-shadow: none; }
+}
 .profile-card.active {
   border-color: var(--accent);
   background: var(--accent-alpha-08);
@@ -2546,7 +2668,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 }
 .profile-card-actions { display: flex; gap: 6px; flex-shrink: 0; }
 
-/* Modal (profile form dialog) */
+/* Modal (profile form dialog) — animated via JS spring hooks in script */
 .modal-overlay {
   position: fixed; inset: 0; z-index: 200;
   background: rgba(0, 0, 0, 0.5);
@@ -2555,9 +2677,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   display: flex; align-items: flex-start; justify-content: center;
   overflow-y: auto;
   padding: 40px 0;
-  animation: fadeIn 0.15s ease-out;
 }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 .modal-box {
   background: var(--lg-surface-modal);
   backdrop-filter: var(--lg-blur-sm);
@@ -2571,9 +2691,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   display: flex;
   flex-direction: column;
   gap: 12px;
-  animation: modalIn 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: transform, opacity;
 }
-@keyframes modalIn { from { transform: scale(0.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .modal-box::-webkit-scrollbar { width: 8px; }
 .modal-box::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 4px; }
 .modal-box label {
@@ -2693,9 +2812,18 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   border: 1px solid var(--lg-border-subtle);
   border-radius: var(--r-input);
   margin-bottom: 4px;
-  transition: background 0.12s;
+  transition: background 0.18s, border-color 0.18s, transform 0.22s cubic-bezier(0.34, 1.2, 0.64, 1), box-shadow 0.22s;
 }
-.perm-row:hover { background: var(--surface-card-hover); }
+.perm-row:hover {
+  background: var(--surface-card-hover);
+  border-color: var(--lg-border);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.13);
+}
+@media (prefers-reduced-motion: reduce) {
+  .perm-row { transition: background 0.12s; }
+  .perm-row:hover { transform: none; box-shadow: none; }
+}
 .perm-info { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .perm-name { font-size: 13px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .perm-level {
@@ -2759,7 +2887,9 @@ ul { list-style: none; padding: 0; margin: 0; }
   border-bottom: 1px solid var(--lg-border-subtle);
   font-size: 13px;
   color: var(--text-primary);
+  transition: background 0.15s;
 }
+.tab-pane > ul li:hover { background: var(--surface-card-hover); }
 .tab-pane > ul li:last-child { border-bottom: none; }
 .tab-pane > ul li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 10px; font-variant-numeric: tabular-nums; }
 
@@ -2914,9 +3044,18 @@ ul { list-style: none; padding: 0; margin: 0; }
   border-radius: var(--r-card);
   margin-bottom: 6px;
   gap: 10px;
-  transition: background 0.12s;
+  transition: background 0.18s, border-color 0.18s, transform 0.22s cubic-bezier(0.34, 1.2, 0.64, 1), box-shadow 0.22s;
 }
-.mcp-row:hover { background: var(--surface-card-hover); }
+.mcp-row:hover {
+  background: var(--surface-card-hover);
+  border-color: var(--lg-border);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.16);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mcp-row { transition: background 0.12s; }
+  .mcp-row:hover { transform: none; box-shadow: none; }
+}
 .mcp-info { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
 .mcp-name { font-weight: 600; font-size: 13px; color: var(--text-primary); }
 .mcp-transport {
@@ -2991,9 +3130,18 @@ ul { list-style: none; padding: 0; margin: 0; }
   border: 1px solid var(--lg-border-subtle);
   border-radius: var(--r-card);
   margin-bottom: 6px;
-  transition: border-color 0.12s, background 0.12s;
+  transition: border-color 0.18s, background 0.18s, transform 0.22s cubic-bezier(0.34, 1.2, 0.64, 1), box-shadow 0.22s;
 }
-.cron-row:hover { background: var(--surface-card-hover); }
+.cron-row:hover {
+  background: var(--surface-card-hover);
+  border-color: var(--lg-border);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.16);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cron-row { transition: border-color 0.12s, background 0.12s; }
+  .cron-row:hover { transform: none; box-shadow: none; }
+}
 .cron-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .cron-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .cron-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
@@ -3099,10 +3247,13 @@ ul { list-style: none; padding: 0; margin: 0; }
   background: rgba(255, 255, 255, 0.12);
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.2s;
+  transition: background 0.22s, box-shadow 0.22s;
   padding: 0;
 }
-.toggle-switch--on { background: var(--accent); }
+.toggle-switch--on {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-alpha-20);
+}
 .toggle-thumb {
   position: absolute;
   top: 2px;
@@ -3112,10 +3263,13 @@ ul { list-style: none; padding: 0; margin: 0; }
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 3px rgba(0,0,0,0.25);
-  transition: transform 0.2s;
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
   display: block;
 }
 .toggle-switch--on .toggle-thumb { transform: translateX(16px); }
+@media (prefers-reduced-motion: reduce) {
+  .toggle-thumb { transition: transform 0.15s; }
+}
 .cron-edit-form { flex: 1; display: flex; flex-direction: column; gap: 12px; }
 .cron-form {
   background: var(--surface-card);
@@ -3262,6 +3416,17 @@ ul { list-style: none; padding: 0; margin: 0; }
   border-radius: var(--r-card);
   margin-bottom: 6px;
   gap: 10px;
+  transition: background 0.18s, border-color 0.18s, transform 0.22s cubic-bezier(0.34, 1.2, 0.64, 1), box-shadow 0.22s;
+}
+.proactive-row:hover {
+  background: var(--surface-card-hover);
+  border-color: var(--lg-border);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.16);
+}
+@media (prefers-reduced-motion: reduce) {
+  .proactive-row { transition: none; }
+  .proactive-row:hover { transform: none; box-shadow: none; }
 }
 .proactive-info { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
 .proactive-time {
@@ -3348,6 +3513,16 @@ ul { list-style: none; padding: 0; margin: 0; }
   background: var(--surface-card);
   border: 1px solid var(--lg-border-subtle);
   border-radius: var(--r-card);
+  transition: border-color 0.18s, transform 0.22s cubic-bezier(0.34, 1.2, 0.64, 1), box-shadow 0.22s;
+}
+.about-version-row:hover {
+  border-color: var(--lg-border);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.16);
+}
+@media (prefers-reduced-motion: reduce) {
+  .about-version-row { transition: border-color 0.15s; }
+  .about-version-row:hover { transform: none; box-shadow: none; }
 }
 .about-label { font-size: 13px; color: var(--text-secondary); flex: 1; }
 .about-version {

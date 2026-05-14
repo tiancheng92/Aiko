@@ -18,6 +18,7 @@ import 'highlight.js/styles/github-dark.css'
 import { useSounds } from '../composables/useSounds'
 import { useTypingScheduler } from '../composables/useTypingScheduler'
 import { useEscapeKey } from '../composables/useEscapeKey'
+import { springAnimate } from '../composables/useSpring'
 import ToolConfirmModal from './ToolConfirmModal.vue'
 import ExecutionProgress from './ExecutionProgress.vue'
 import LinkPreview from './LinkPreview.vue'
@@ -333,20 +334,93 @@ const fileInputEl = ref(null)
 const lightboxSrc = ref(null)
 /** lightboxFullscreen tracks whether the lightbox is in full-window mode. */
 const lightboxFullscreen = ref(false)
+/** lightboxZoom is the current scale factor (1 = 100%). */
+const lightboxZoom = ref(1)
+/** lightboxPan is the current x/y offset in pixels when panning a zoomed image. */
+const lightboxPan = ref({ x: 0, y: 0 })
+/** lbDragging is true while the user is panning the image. */
+const lbDragging = ref(false)
+let _lbDragStart = { x: 0, y: 0 }
+let _lbPanStart = { x: 0, y: 0 }
+let _lbDidDrag = false
 
 /** previewImage opens the lightbox for the given image src. */
 function previewImage(src) {
   lightboxSrc.value = src
   lightboxFullscreen.value = false
+  lightboxZoom.value = 1
+  lightboxPan.value = { x: 0, y: 0 }
 }
 
-/** closeLightbox closes the lightbox and resets fullscreen state. */
+/** closeLightbox closes the lightbox and resets all state. */
 function closeLightbox() {
   lightboxSrc.value = null
   lightboxFullscreen.value = false
+  lightboxZoom.value = 1
+  lightboxPan.value = { x: 0, y: 0 }
 }
+
+/** onLightboxBgClick closes the lightbox on background click, but not after a drag. */
+function onLightboxBgClick() {
+  if (_lbDidDrag) { _lbDidDrag = false; return }
+  closeLightbox()
+}
+
+/** onLightboxWheel zooms in/out with the scroll wheel. */
+function onLightboxWheel(e) {
+  e.preventDefault()
+  const factor = e.deltaY > 0 ? 0.88 : 1.14
+  lightboxZoom.value = Math.min(10, Math.max(0.1, lightboxZoom.value * factor))
+}
+
+/** onLbImgMousedown starts a pan drag. */
+function onLbImgMousedown(e) {
+  if (e.button !== 0) return
+  lbDragging.value = true
+  _lbDidDrag = false
+  _lbDragStart = { x: e.clientX, y: e.clientY }
+  _lbPanStart = { ...lightboxPan.value }
+  e.preventDefault()
+}
+
+/** onLbMousemove updates pan offset while dragging. */
+function onLbMousemove(e) {
+  if (!lbDragging.value) return
+  const dx = e.clientX - _lbDragStart.x
+  const dy = e.clientY - _lbDragStart.y
+  if (Math.abs(dx) > 2 || Math.abs(dy) > 2) _lbDidDrag = true
+  lightboxPan.value = { x: _lbPanStart.x + dx, y: _lbPanStart.y + dy }
+}
+
+/** onLbMouseup ends a pan drag. */
+function onLbMouseup() { lbDragging.value = false }
+
+/** lbZoomIn increases zoom by 25%. */
+function lbZoomIn() { lightboxZoom.value = Math.min(10, lightboxZoom.value * 1.25) }
+/** lbZoomOut decreases zoom by 20%. */
+function lbZoomOut() { lightboxZoom.value = Math.max(0.1, lightboxZoom.value / 1.25) }
+/** lbReset resets zoom and pan to defaults. */
+function lbReset() { lightboxZoom.value = 1; lightboxPan.value = { x: 0, y: 0 } }
 const loading = ref(false)
 const messagesEl = ref(null)
+const chatPanelEl = ref(null)
+const spotlightEl = ref(null)
+let _rafPending = false
+/** onChatPanelMousemove updates the spotlight position via GPU-composited transform (no repaint). */
+function onChatPanelMousemove(e) {
+  if (_rafPending) return
+  _rafPending = true
+  requestAnimationFrame(() => {
+    _rafPending = false
+    const panel = chatPanelEl.value
+    const spot = spotlightEl.value
+    if (!panel || !spot) return
+    const rect = panel.getBoundingClientRect()
+    const x = e.clientX - rect.left - 260
+    const y = e.clientY - rect.top - 260
+    spot.style.transform = `translate(${x}px, ${y}px)`
+  })
+}
 /** sentinelObserver watches the top-of-list sentinel for infinite-scroll lazy loading. */
 let sentinelObserver = null
 const codeMaxWidth = ref(0)
@@ -381,13 +455,109 @@ function isEverCollapsed(m, i) {
   return collapsedIds.value.has(msgKey(m, i))
 }
 
-/** toggleExpand expands or re-collapses a message. */
+/** springCancels maps message keys to in-flight spring cancel functions. */
+const springCancels = new Map()
+
+
+/** toggleExpand expands or collapses a message using spring physics.
+ *
+ *  Expand —  ζ ≈ 0.75 (underdamped): opens with a gentle overshoot so the
+ *  bubble briefly shows a sliver of extra space, then settles back — giving a
+ *  physical "inhale" feel that no cubic-bezier can replicate.
+ *
+ *  Collapse — ζ ≈ 1.02 (near-critical): closes decisively with no bounce; the
+ *  spring decelerates exactly as it hits 350px and stops dead. */
 function toggleExpand(m, i) {
   const k = msgKey(m, i)
-  const next = new Set(expandedIds.value)
-  if (next.has(k)) next.delete(k)
-  else next.add(k)
-  expandedIds.value = next
+
+  // Cancel any in-flight spring for this key before starting a new one.
+  springCancels.get(k)?.()
+  springCancels.delete(k)
+
+  const wrapEl = messagesEl.value?.querySelector(`[data-msg-key="${CSS.escape(k)}"]`)
+  const rowEl = wrapEl?.querySelector('.bubble-row')
+
+  // No DOM — instant toggle (history prepend before paint, or unmounted).
+  if (!rowEl) {
+    const next = new Set(expandedIds.value)
+    if (next.has(k)) next.delete(k); else next.add(k)
+    expandedIds.value = next
+    return
+  }
+
+  // Respect OS reduced-motion: instant toggle, no spring.
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const next = new Set(expandedIds.value)
+    if (next.has(k)) next.delete(k); else next.add(k)
+    expandedIds.value = next
+    return
+  }
+
+  if (!expandedIds.value.has(k)) {
+    // ── EXPAND ──────────────────────────────────────────────────────────
+    // Hold the element at COLLAPSE_HEIGHT via inline style so the visual
+    // doesn't jump while Vue re-renders and removes `.is-collapsed`.
+    rowEl.style.height = COLLAPSE_HEIGHT + 'px'
+    rowEl.style.maxHeight = 'none'
+    rowEl.style.overflow = 'hidden'
+    rowEl.style.willChange = 'height'
+    rowEl.style.transition = 'none'
+
+    const next = new Set(expandedIds.value)
+    next.add(k)
+    expandedIds.value = next
+
+    nextTick(() => {
+      const targetH = rowEl.scrollHeight
+      // ζ = 22 / (2·√180) ≈ 0.82 — gentle underdamping gives ~1.5% overshoot:
+      // the bubble briefly grows ~5px past content height then snaps back.
+      const cancel = springAnimate({
+        from: COLLAPSE_HEIGHT,
+        to: targetH,
+        stiffness: 180,
+        damping: 22,
+        onUpdate: (h) => { rowEl.style.height = h + 'px' },
+        onDone: () => {
+          rowEl.style.cssText = ''
+          springCancels.delete(k)
+        },
+      })
+      springCancels.set(k, cancel)
+    })
+  } else {
+    // ── COLLAPSE ─────────────────────────────────────────────────────────
+    // ζ = 34 / (2·√280) ≈ 1.015 — near-critical: fast, zero bounce.
+    const startH = rowEl.scrollHeight
+    rowEl.style.height = startH + 'px'
+    rowEl.style.maxHeight = 'none'
+    rowEl.style.overflow = 'hidden'
+    rowEl.style.willChange = 'height'
+    rowEl.style.transition = 'none'
+
+    const cancel = springAnimate({
+      from: startH,
+      to: COLLAPSE_HEIGHT,
+      stiffness: 280,
+      damping: 34,
+      // Floor prevents the element from briefly clipping below 350px on
+      // the negligible undershoot that occurs even at near-critical damping.
+      onUpdate: (h) => { rowEl.style.height = Math.max(h, COLLAPSE_HEIGHT - 20) + 'px' },
+      onDone: () => {
+        rowEl.style.cssText = ''
+        const next = new Set(expandedIds.value)
+        next.delete(k)
+        expandedIds.value = next
+        springCancels.delete(k)
+      },
+    })
+    springCancels.set(k, cancel)
+  }
+}
+
+/** toggleThinkingExpanded toggles the thinking block's expand/collapse state for message at index i. */
+function toggleThinkingExpanded(i) {
+  const m = messages.value[i]
+  if (m) messages.value[i] = { ...m, thinkingExpanded: !m.thinkingExpanded }
 }
 
 const COLLAPSE_HEIGHT = 350
@@ -771,6 +941,9 @@ onUnmounted(() => {
   // Stop any in-flight TTS playback so detached <audio> elements can be GC'd.
   if (currentTTSAudio) { try { currentTTSAudio.pause() } catch {} ; currentTTSAudio = null }
   resizeObserver?.disconnect()
+  // Cancel any in-flight spring animations.
+  springCancels.forEach(cancel => cancel())
+  springCancels.clear()
 })
 
 // CommonMark flanking-delimiter rules break ** adjacent to CJK/fullwidth chars.
@@ -1150,7 +1323,8 @@ defineExpose({ focusInput, scrollToBottom })
 </script>
 
 <template>
-  <div class="chat-panel" :style="{ '--code-max-width': codeMaxWidth > 0 ? codeMaxWidth + 'px' : 'none' }">
+  <div class="chat-panel" ref="chatPanelEl" @mousemove="onChatPanelMousemove" :style="{ '--code-max-width': codeMaxWidth > 0 ? codeMaxWidth + 'px' : 'none' }">
+    <div class="chat-spotlight" ref="spotlightEl" aria-hidden="true" />
     <div class="messages" ref="messagesEl" @click="onMessagesClick">
       <!-- Lazy-load sentinel: entering viewport triggers loading older messages -->
       <div id="msg-load-sentinel" class="load-sentinel">
@@ -1201,18 +1375,27 @@ defineExpose({ focusInput, scrollToBottom })
                 <div v-if="!m.thinkingContent && (m.thinking || (m.streaming && !renderMarkdown(m.content)))" :class="['bubble', 'thinking-bubble', { proactive: m.isProactive }]">
                   <span class="dot" /><span class="dot" /><span class="dot" />
                 </div>
-                <!-- ThinkingBlock: shown when thinkingContent is non-empty -->
-                <div v-if="m.thinkingContent" class="thinking-block">
-                  <div class="thinking-block-header" @click="messages[i].thinkingExpanded = !messages[i].thinkingExpanded">
-                    <svg class="thinking-chevron" :class="{ expanded: m.thinkingExpanded }" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                    <span>思考过程</span>
+                <div v-if="!m.thinking || m.content || m.thinkingContent" :class="['bubble', 'markdown', { proactive: m.isProactive }]">
+                  <!-- ThinkingBlock: inside the bubble, at the top -->
+                  <div v-if="m.thinkingContent" :class="['thinking-block', { 'thinking-streaming': m.streaming && !m.content, expanded: m.thinkingExpanded }]">
+                    <div class="thinking-block-header" @click="toggleThinkingExpanded(i)">
+                      <div class="thinking-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                      </div>
+                      <span class="thinking-label">思考过程</span>
+                      <span v-if="m.streaming && !m.content" class="thinking-streaming-badge">
+                        <span class="thinking-dot" /><span class="thinking-dot" /><span class="thinking-dot" />
+                      </span>
+                      <div class="thinking-toggle-icon" :class="{ expanded: m.thinkingExpanded }">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                      </div>
+                    </div>
+                    <div class="thinking-block-body" :class="{ expanded: m.thinkingExpanded }">
+                      <div class="thinking-block-text">{{ m.thinkingContent }}<span v-if="m.streaming && m.thinkingExpanded" class="cursor">▋</span></div>
+                    </div>
                   </div>
-                  <div class="thinking-block-body" :class="{ expanded: m.thinkingExpanded }">
-                    <div class="thinking-block-text">{{ m.thinkingContent }}<span v-if="m.streaming && m.thinkingExpanded" class="cursor">▋</span></div>
-                  </div>
-                </div>
-                <div v-if="!m.thinking || m.content" :class="['bubble', 'markdown', { proactive: m.isProactive }]">
-                  <div v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')" />
+                  <div v-if="m.thinkingContent && (m.content || m.streaming)" class="thinking-divider" />
+                  <div v-if="m.content || m.streaming" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')" />
                   <template v-if="!m.streaming && !m.thinking && m.content">
                     <template v-if="extractUrls(m.content).length <= 1">
                       <LinkPreview v-for="u in extractUrls(m.content)" :key="u" :url="u" />
@@ -1258,12 +1441,14 @@ defineExpose({ focusInput, scrollToBottom })
               </div>
 
               <!-- Collapse fade overlay + expand button (inside bubble-row so width matches bubble) -->
-              <div v-if="isCollapsed(m, i)" class="collapse-fade" :class="m.role" @click.stop="toggleExpand(m, i)">
-                <button class="collapse-btn" @click.stop="toggleExpand(m, i)">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                  展开
-                </button>
-              </div>
+              <Transition name="coll-fade">
+                <div v-if="isCollapsed(m, i)" class="collapse-fade" :class="m.role" @click.stop="toggleExpand(m, i)">
+                  <button class="collapse-btn" @click.stop="toggleExpand(m, i)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    展开
+                  </button>
+                </div>
+              </Transition>
             </div>
           </div>
 
@@ -1286,15 +1471,46 @@ defineExpose({ focusInput, scrollToBottom })
     <!-- Image lightbox (normal: inside panel; fullscreen: teleported to body to escape backdrop-filter stacking context) -->
     <template v-if="lightboxSrc">
       <Teleport to="body" :disabled="!lightboxFullscreen">
-        <div :class="['lightbox', { 'lightbox-fullscreen': lightboxFullscreen }]" @click="closeLightbox">
-          <img :src="lightboxSrc" class="lightbox-img" @click.stop />
-          <button class="lightbox-fullscreen-btn" @click.stop="lightboxFullscreen = !lightboxFullscreen" title="全屏预览">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
-              <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
-            </svg>
-            {{ lightboxFullscreen ? '退出全屏' : '全屏预览' }}
-          </button>
+        <div
+          :class="['lightbox', { 'lightbox-fullscreen': lightboxFullscreen }]"
+          @click="onLightboxBgClick"
+          @wheel.prevent="onLightboxWheel"
+          @mousemove="onLbMousemove"
+          @mouseup="onLbMouseup"
+          @mouseleave="onLbMouseup"
+        >
+          <img
+            :src="lightboxSrc"
+            class="lightbox-img"
+            :style="{
+              transform: `translate(${lightboxPan.x}px, ${lightboxPan.y}px) scale(${lightboxZoom})`,
+              cursor: lightboxZoom > 1 ? (lbDragging ? 'grabbing' : 'grab') : 'default',
+              transition: lbDragging ? 'none' : 'transform 0.18s cubic-bezier(0.16,1,0.3,1)',
+            }"
+            draggable="false"
+            @click.stop
+            @mousedown="onLbImgMousedown"
+            @dblclick="lbReset"
+          />
+          <!-- Toolbar: zoom controls + fullscreen -->
+          <div class="lightbox-toolbar" @click.stop>
+            <button class="lb-btn" @click="lbZoomOut" title="缩小 (-)">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+            <span class="lb-zoom-label">{{ Math.round(lightboxZoom * 100) }}%</span>
+            <button class="lb-btn" @click="lbZoomIn" title="放大 (+)">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+            <div class="lb-sep" />
+            <button class="lb-btn" @click="lbReset" title="重置 (双击图片)">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            </button>
+            <div class="lb-sep" />
+            <button class="lb-btn" @click="lightboxFullscreen = !lightboxFullscreen" :title="lightboxFullscreen ? '退出全屏' : '全屏'">
+              <svg v-if="!lightboxFullscreen" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+              <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>
+            </button>
+          </div>
         </div>
       </Teleport>
     </template>
@@ -1429,6 +1645,29 @@ defineExpose({ focusInput, scrollToBottom })
   -webkit-font-smoothing: antialiased;
 }
 
+/* Spotlight glow: a fixed-size orb moved via transform (GPU-composited, no repaint). */
+.chat-spotlight {
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 520px;
+  height: 520px;
+  border-radius: 50%;
+  z-index: 0;
+  background: radial-gradient(circle, rgba(70, 140, 255, 0.07) 0%, transparent 70%);
+  will-change: transform;
+  transform: translate(-260px, -260px);
+  transition: opacity 0.35s ease;
+  opacity: 0;
+}
+.chat-panel:hover .chat-spotlight {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-spotlight { display: none; }
+}
+
 /* Messages list */
 .messages {
   flex: 1;
@@ -1436,6 +1675,8 @@ defineExpose({ focusInput, scrollToBottom })
   padding: 16px 14px;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.1) transparent;
+  position: relative;
+  z-index: 1;
 }
 
 .messages-inner {
@@ -1522,6 +1763,11 @@ defineExpose({ focusInput, scrollToBottom })
   padding-bottom: 10px;
   cursor: pointer;
 }
+/* Collapse-fade Transition: fade in when collapsed, fade out quickly when expanding. */
+.coll-fade-enter-active { transition: opacity 0.22s var(--ease-enter) 0.1s; }
+.coll-fade-leave-active { transition: opacity 0.12s var(--ease-exit); }
+.coll-fade-enter-from, .coll-fade-leave-to { opacity: 0; }
+
 /* User bubble fade: blend into the solid accent background. */
 .collapse-fade.user {
   background: linear-gradient(
@@ -1590,17 +1836,33 @@ defineExpose({ focusInput, scrollToBottom })
   -webkit-user-select: text;
 }
 
-/* User bubble — solid accent (macOS iMessage-like) */
+/* User bubble — solid accent */
 .user .bubble {
   background: var(--accent);
   color: #fff;
   border-radius: 16px 16px 4px 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), 0 0 0 0.5px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 1px 3px rgba(0, 0, 0, 0.22),
+    0 2px 8px rgba(0, 0, 0, 0.14);
+  transition: transform 0.28s cubic-bezier(0.34, 1.3, 0.64, 1),
+              box-shadow 0.28s cubic-bezier(0.34, 1.3, 0.64, 1);
 }
 .user .bubble.has-images {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+.user .bubble-wrap:hover .bubble {
+  transform: translateY(-1.5px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 4px 18px rgba(0, 0, 0, 0.24),
+    0 1px 4px rgba(0, 0, 0, 0.18);
+}
+@media (prefers-reduced-motion: reduce) {
+  .user .bubble { transition: none; }
+  .user .bubble-wrap:hover .bubble { transform: none; }
 }
 
 /* Assistant bubble — glass surface */
@@ -1610,8 +1872,23 @@ defineExpose({ focusInput, scrollToBottom })
   border-radius: 16px 16px 16px 4px;
   border: 1px solid var(--lg-border-subtle);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.08) inset,
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
     0 2px 8px rgba(0, 0, 0, 0.18);
+  transition: transform 0.28s cubic-bezier(0.34, 1.3, 0.64, 1),
+              box-shadow 0.28s cubic-bezier(0.34, 1.3, 0.64, 1),
+              border-color 0.2s ease;
+}
+.assistant .bubble-wrap:hover .bubble {
+  transform: translateY(-1.5px);
+  border-color: rgba(80, 150, 255, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 4px 18px rgba(0, 0, 0, 0.22),
+    0 0 0 1px rgba(60, 130, 255, 0.12);
+}
+@media (prefers-reduced-motion: reduce) {
+  .assistant .bubble { transition: none; }
+  .assistant .bubble-wrap:hover .bubble { transform: none; }
 }
 
 /* System / error bubble */
@@ -2238,6 +2515,8 @@ defineExpose({ focusInput, scrollToBottom })
   flex-shrink: 0;
   transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
   overflow: hidden;
+  position: relative;
+  z-index: 1;
 }
 .input-area:hover:not(:focus-within) { background: var(--lg-surface-input-h); }
 .input-area:focus-within {
@@ -2427,18 +2706,25 @@ defineExpose({ focusInput, scrollToBottom })
 }
 
 /* Lightbox — inside panel (normal mode) */
+@keyframes lightbox-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes lightbox-img-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1);    }
+}
 .lightbox {
   position: absolute;
   inset: 0;
   z-index: 200;
-  background: rgba(0,0,0,0.85);
+  background: rgba(0, 0, 0, 0.88);
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  cursor: zoom-out;
+  overflow: hidden;
   pointer-events: auto;
+  animation: lightbox-in 0.18s var(--ease-enter) both;
 }
 /* Fullscreen mode: teleported to body so position:fixed covers the full window */
 body > .lightbox {
@@ -2446,35 +2732,80 @@ body > .lightbox {
   inset: 0;
   z-index: 9999;
 }
-body > .lightbox .lightbox-img {
-  max-width: 98%;
-  max-height: calc(100% - 60px);
-  border-radius: 4px;
-}
 .lightbox-img {
   max-width: 90%;
-  max-height: 80%;
+  max-height: calc(100% - 80px);
   border-radius: 10px;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  box-shadow: 0 12px 60px rgba(0, 0, 0, 0.7);
   object-fit: contain;
-  cursor: default;
+  transform-origin: center;
+  will-change: transform;
+  user-select: none;
+  -webkit-user-drag: none;
+  display: block;
+  animation: lightbox-img-in 0.24s var(--ease-enter) both;
 }
-.lightbox-fullscreen-btn {
+body > .lightbox .lightbox-img {
+  max-width: 96%;
+  max-height: calc(100% - 80px);
+  border-radius: 6px;
+}
+
+/* Toolbar */
+.lightbox-toolbar {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 18px;
-  border-radius: 20px;
-  border: 1px solid rgba(255,255,255,0.25);
-  background: rgba(255,255,255,0.1);
-  color: rgba(255,255,255,0.85);
-  font-size: 13px;
-  cursor: pointer;
-  backdrop-filter: blur(6px);
-  transition: background 0.15s;
+  gap: 2px;
+  background: rgba(18, 18, 22, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 32px;
+  padding: 4px 10px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
 }
-.lightbox-fullscreen-btn:hover {
-  background: rgba(255,255,255,0.2);
+.lb-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s var(--ease-enter), color 0.15s, transform 0.1s var(--ease-exit);
+  flex-shrink: 0;
+}
+.lb-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.lb-btn:active {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(0.9);
+}
+.lb-zoom-label {
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.6);
+  min-width: 38px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  letter-spacing: 0.02em;
+}
+.lb-sep {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0 4px;
+  flex-shrink: 0;
 }
 
 /* Attach file button */
@@ -2687,59 +3018,186 @@ body > .lightbox .lightbox-img {
 }
 .clear-confirm-ok:hover { background: #ff5e55; }
 
-/* ThinkingBlock */
+/* ── Design tokens ─────────────────────────────────────── */
+/* expo-out: snappy enter;  ease-in-cubic: brisk exit (30% faster) */
+:root {
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit:  cubic-bezier(0.4, 0, 0.9, 1);
+  --ease-spring: cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+
+/* ── ThinkingBlock ─────────────────────────────────────── */
+/* Entrance: fade-in + slide-up from 6px */
+@keyframes thinking-appear {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+@keyframes thinking-pulse {
+  0%, 100% { box-shadow: 0 0 18px rgba(60, 130, 255, 0.12), inset 0 0 12px rgba(60, 130, 255, 0.05); }
+  50%       { box-shadow: 0 0 28px rgba(60, 130, 255, 0.24), inset 0 0 18px rgba(60, 130, 255, 0.10); }
+}
+@keyframes thinking-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.5; }
+  40%           { transform: translateY(-4px); opacity: 1; }
+}
+
 .thinking-block {
-  width: 100%;
-  max-width: 480px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(135deg, rgba(40, 100, 220, 0.08) 0%, rgba(60, 150, 255, 0.05) 100%);
+  border: 1px solid rgba(80, 150, 255, 0.18);
   overflow: hidden;
+  position: relative;
+  animation: thinking-appear 0.22s var(--ease-enter) both;
+  transition: border-color 0.25s var(--ease-enter), box-shadow 0.25s var(--ease-enter);
+}
+
+/* Ambient glow when streaming */
+.thinking-block.thinking-streaming {
+  border-color: rgba(80, 150, 255, 0.38);
+  box-shadow: 0 0 18px rgba(60, 130, 255, 0.12), inset 0 0 12px rgba(60, 130, 255, 0.05);
+  animation: thinking-appear 0.22s var(--ease-enter) both,
+             thinking-pulse 2.4s ease-in-out infinite;
+}
+
+/* Top shimmer line */
+.thinking-block::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(80, 160, 255, 0.55) 40%, rgba(120, 200, 255, 0.45) 60%, transparent 100%);
+  opacity: 0.8;
+}
+
+.thinking-divider {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  margin: 8px 0;
 }
 
 .thinking-block-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 10px;
+  gap: 7px;
+  padding: 8px 11px;
   cursor: pointer;
   user-select: none;
-  font-size: 0.78em;
-  color: rgba(255, 255, 255, 0.5);
-  transition: color 0.15s;
+  transition: background 0.15s var(--ease-enter);
 }
-
 .thinking-block-header:hover {
-  color: rgba(255, 255, 255, 0.75);
+  background: rgba(80, 150, 255, 0.04);
 }
 
-.thinking-chevron {
-  transition: transform 0.2s ease;
+.thinking-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(60, 130, 255, 0.28), rgba(100, 190, 255, 0.2));
+  border: 1px solid rgba(80, 150, 255, 0.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  color: rgba(130, 185, 255, 0.95);
 }
 
-.thinking-chevron.expanded {
+.thinking-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: rgba(160, 205, 255, 0.88);
+  flex: 1;
+}
+
+/* Streaming badge: three bouncing dots */
+.thinking-streaming-badge {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-right: 2px;
+}
+
+.thinking-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(100, 175, 255, 0.75);
+  display: inline-block;
+  animation: thinking-bounce 1.2s ease-in-out infinite;
+}
+.thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* Chevron: spring on expand, brisk on collapse */
+.thinking-toggle-icon {
+  color: rgba(100, 170, 255, 0.5);
+  transition: transform 0.28s var(--ease-spring), color 0.15s;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.thinking-toggle-icon.expanded {
   transform: rotate(180deg);
+  color: rgba(130, 195, 255, 0.9);
+  transition: transform 0.18s var(--ease-exit), color 0.15s;
+}
+.thinking-block-header:hover .thinking-toggle-icon {
+  color: rgba(130, 195, 255, 0.8);
 }
 
+/* Body: expo-out open, faster close */
 .thinking-block-body {
   max-height: 0;
   overflow: hidden;
-  transition: max-height 0.25s ease;
+  transition: max-height 0.2s var(--ease-exit);
+}
+.thinking-block-body.expanded {
+  max-height: 190px;
+  overflow-y: auto;
+  transition: max-height 0.3s var(--ease-enter);
 }
 
-.thinking-block-body.expanded {
-  max-height: 400px;
-  overflow-y: auto;
+.thinking-block-body.expanded::-webkit-scrollbar {
+  width: 3px;
+}
+.thinking-block-body.expanded::-webkit-scrollbar-track {
+  background: transparent;
+}
+.thinking-block-body.expanded::-webkit-scrollbar-thumb {
+  background: rgba(80, 150, 255, 0.25);
+  border-radius: 2px;
 }
 
 .thinking-block-text {
-  padding: 0 10px 10px;
-  font-size: 0.8em;
-  color: rgba(255, 255, 255, 0.5);
+  padding: 2px 12px 10px;
+  font-size: 12px;
+  font-weight: 400;
+  color: rgba(185, 215, 255, 0.72);
   white-space: pre-wrap;
   word-break: break-word;
-  line-height: 1.5;
+  line-height: 1.65;
+  font-family: inherit;
+}
+
+/* ── prefers-reduced-motion ─────────────────────────────── */
+/* Respect user OS motion preferences: disable all decorative animations */
+@media (prefers-reduced-motion: reduce) {
+  .thinking-block,
+  .thinking-block.thinking-streaming {
+    animation: none;
+    transition: border-color 0s, box-shadow 0s;
+  }
+  .thinking-block-body,
+  .thinking-block-body.expanded { transition: none; }
+  .thinking-toggle-icon,
+  .thinking-toggle-icon.expanded { transition: color 0.15s; }
+  .thinking-dot { animation: none; opacity: 0.7; }
+  .lightbox { animation: none; }
+  .lightbox-img { animation: none; }
+  .lb-btn { transition: background 0.1s, color 0.1s; }
+  /* Collapse/expand: no height animation, no fade */
+  .coll-fade-enter-active,
+  .coll-fade-leave-active { transition: none; }
 }
 </style>
