@@ -1567,7 +1567,7 @@ defineExpose({ focusInput, scrollToBottom })
 /* Bubble row: relative container，按钮绝对定位不占空间 */
 .bubble-row { position: relative; display: inline-flex; }
 .msg.user .bubble-row { justify-content: flex-end; }
-.msg.assistant .bubble-row { justify-content: flex-start; }
+.msg.assistant .bubble-row { justify-content: flex-start; flex-direction: column; align-items: flex-start; }
 
 /* Bubble base */
 .bubble {
