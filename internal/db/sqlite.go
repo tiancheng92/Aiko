@@ -137,6 +137,8 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE model_profiles ADD COLUMN embedding_api_key  TEXT    NOT NULL DEFAULT ''`,
 		// v7: embedding model may use a different provider (openai-compat vs openrouter).
 		`ALTER TABLE model_profiles ADD COLUMN embedding_provider TEXT    NOT NULL DEFAULT 'openai'`,
+		// v8: store LLM reasoning/thinking content alongside each assistant message.
+		`ALTER TABLE messages ADD COLUMN thinking_content TEXT NOT NULL DEFAULT ''`,
 	}
 	for _, p := range patches {
 		if _, err := db.Exec(p); err != nil {
