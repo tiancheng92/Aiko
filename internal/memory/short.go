@@ -12,12 +12,13 @@ import (
 
 // Message is a single conversation turn stored in SQLite.
 type Message struct {
-	ID        int64
-	Role      string   // "user" | "assistant"
-	Content   string
-	Images    []string // data URLs, empty for most messages
-	Files     []string // attached file names (no content), empty for most messages
-	CreatedAt string
+	ID              int64
+	Role            string   // "user" | "assistant"
+	Content         string
+	ThinkingContent string   // LLM reasoning/thinking process, empty for most messages
+	Images          []string // data URLs, empty for most messages
+	Files           []string // attached file names (no content), empty for most messages
+	CreatedAt       string
 }
 
 // ShortStore manages short-term conversation history in SQLite.
@@ -26,11 +27,11 @@ type ShortStore struct{ db *sql.DB }
 // NewShortStore creates a ShortStore.
 func NewShortStore(db *sql.DB) *ShortStore { return &ShortStore{db: db} }
 
-// scanMessage scans a row that selects id, role, content, images, files, created_at.
+// scanMessage scans a row that selects id, role, content, thinking_content, images, files, created_at.
 func scanMessage(scan func(...any) error) (Message, error) {
 	var m Message
 	var imagesJSON, filesJSON string
-	if err := scan(&m.ID, &m.Role, &m.Content, &imagesJSON, &filesJSON, &m.CreatedAt); err != nil {
+	if err := scan(&m.ID, &m.Role, &m.Content, &m.ThinkingContent, &imagesJSON, &filesJSON, &m.CreatedAt); err != nil {
 		return m, err
 	}
 	if imagesJSON != "" {
@@ -49,7 +50,7 @@ func scanMessage(scan func(...any) error) (Message, error) {
 // Recent returns the most recent n messages in chronological order.
 func (s *ShortStore) Recent(n int) ([]Message, error) {
 	rows, err := s.db.Query(`
-		SELECT id, role, content, images, files, created_at
+		SELECT id, role, content, thinking_content, images, files, created_at
 		FROM messages
 		ORDER BY id DESC
 		LIMIT ?`, n)
@@ -86,8 +87,8 @@ func (s *ShortStore) AddWithImages(role, content string, images []string) (int64
 	return s.AddWithImagesAndFiles(role, content, images, nil)
 }
 
-// AddWithImagesAndFiles inserts a new message with optional images and file names and returns its ID.
-func (s *ShortStore) AddWithImagesAndFiles(role, content string, images []string, files []string) (int64, error) {
+// AddFull inserts a new message with all optional fields and returns its ID.
+func (s *ShortStore) AddFull(role, content, thinkingContent string, images []string, files []string) (int64, error) {
 	imagesJSON := ""
 	if len(images) > 0 {
 		b, err := json.Marshal(images)
@@ -107,18 +108,23 @@ func (s *ShortStore) AddWithImagesAndFiles(role, content string, images []string
 		}
 	}
 	res, err := s.db.Exec(
-		`INSERT INTO messages(role, content, images, files) VALUES(?, ?, ?, ?)`,
-		role, content, imagesJSON, filesJSON)
+		`INSERT INTO messages(role, content, thinking_content, images, files) VALUES(?, ?, ?, ?, ?)`,
+		role, content, thinkingContent, imagesJSON, filesJSON)
 	if err != nil {
 		return 0, err
 	}
 	return res.LastInsertId()
 }
 
+// AddWithImagesAndFiles inserts a new message with optional images and file names and returns its ID.
+func (s *ShortStore) AddWithImagesAndFiles(role, content string, images []string, files []string) (int64, error) {
+	return s.AddFull(role, content, "", images, files)
+}
+
 // BeforeID returns up to n messages with id < beforeID in chronological order.
 func (s *ShortStore) BeforeID(beforeID int64, n int) ([]Message, error) {
 	rows, err := s.db.Query(`
-		SELECT id, role, content, images, files, created_at
+		SELECT id, role, content, thinking_content, images, files, created_at
 		FROM messages
 		WHERE id < ?
 		ORDER BY id DESC
@@ -155,7 +161,7 @@ func (s *ShortStore) Count() (int, error) {
 // OldestN returns the oldest n messages in chronological order.
 func (s *ShortStore) OldestN(n int) ([]Message, error) {
 	rows, err := s.db.Query(`
-		SELECT id, role, content, images, files, created_at
+		SELECT id, role, content, thinking_content, images, files, created_at
 		FROM messages
 		ORDER BY id ASC
 		LIMIT ?`, n)
@@ -228,12 +234,12 @@ func (s *ShortStore) DeleteByIDs(ids []int64) error {
 func (s *ShortStore) DeleteLastAssistantMessage() (Message, error) {
 	var m Message
 	err := s.db.QueryRow(`
-		SELECT id, role, content, images, files, created_at
+		SELECT id, role, content, thinking_content, images, files, created_at
 		FROM messages
 		WHERE role = 'assistant'
 		ORDER BY id DESC
 		LIMIT 1`).Scan(
-		&m.ID, &m.Role, &m.Content,
+		&m.ID, &m.Role, &m.Content, &m.ThinkingContent,
 		new(string), new(string), &m.CreatedAt,
 	)
 	if err != nil {
@@ -247,7 +253,7 @@ func (s *ShortStore) DeleteLastAssistantMessage() (Message, error) {
 // Returns sql.ErrNoRows if none exists.
 func (s *ShortStore) LastUserMessage() (Message, error) {
 	rows, err := s.db.Query(`
-		SELECT id, role, content, images, files, created_at
+		SELECT id, role, content, thinking_content, images, files, created_at
 		FROM messages
 		WHERE role = 'user'
 		ORDER BY id DESC
