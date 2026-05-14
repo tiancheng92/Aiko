@@ -581,7 +581,7 @@ onMounted(async () => {
   })
 
   offProactiveMessage = EventsOn('chat:proactive:message', (text) => {
-    messages.value.push({ role: 'assistant', content: text, isProactive: true })
+    messages.value.push({ role: 'assistant', content: text, isProactive: true, thinkingContent: '', thinkingExpanded: false })
     EventsEmit('pet:state:change', 'speaking')
     scrollToBottom()
     setTimeout(() => EventsEmit('pet:state:change', 'idle'), 2000)
