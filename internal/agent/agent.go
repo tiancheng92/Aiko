@@ -36,10 +36,11 @@ const emotionPromptSuffix = "\n\n在每条回复的第一行必须输出情绪�
 
 // StreamResult is a single streamed token or a terminal signal.
 type StreamResult struct {
-	Token  string
-	Images []string // base64 data URLs or http(s) URLs of images output by the LLM
-	Err    error
-	Done   bool
+	Token         string
+	ThinkingToken string   // reasoning/thinking chunk from ReasoningContent
+	Images        []string // base64 data URLs or http(s) URLs of images output by the LLM
+	Err           error
+	Done          bool
 }
 
 // ToolConfirmRequest is emitted via Wails event when a tool requests user confirmation.
@@ -347,13 +348,13 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 
 		msgs := append(ctxMsgs, &schema.Message{Role: schema.User, Content: content})
 		checkpointID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
-		fullResponse, toolImgs, toolCallCount, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID)
+		fullResponse, thinkingContent, toolImgs, toolCallCount, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID)
 		if !ok {
 			return
 		}
 
 		ch <- StreamResult{Done: true}
-		go a.persistAndMigrate(context.Background(), userInput, nil, nil, fullResponse, toolImgs, toolCallCount)
+		go a.persistAndMigrate(context.Background(), userInput, nil, nil, fullResponse, thinkingContent, toolImgs, toolCallCount)
 	}()
 
 	return ch
@@ -371,7 +372,7 @@ func (a *Agent) ChatDirect(ctx context.Context, prompt string) <-chan StreamResu
 				ch <- StreamResult{Err: fmt.Errorf("agent panic: %v", r)}
 			}
 		}()
-		_, _, _, ok := drainRunner(ctx, a.runner, prompt, ch, nil, nil, fmt.Sprintf("direct-%d", time.Now().UnixNano()))
+		_, _, _, _, ok := drainRunner(ctx, a.runner, prompt, ch, nil, nil, fmt.Sprintf("direct-%d", time.Now().UnixNano()))
 		if !ok {
 			return
 		}
@@ -401,33 +402,33 @@ func (a *Agent) ChatDirectCollect(ctx context.Context, prompt string) (string, e
 }
 
 // drainRunner consumes all events from runner.Query, forwards tokens to ch,
-// and returns the accumulated response string and tool-call count.
-// Returns (response, toolCalls, true) on success or ("", 0, false) after sending an error to ch.
+// and returns the accumulated response string, thinking content, tool images, and tool-call count.
+// Returns (response, thinking, images, toolCalls, true) on success or ("", "", nil, 0, false) after sending an error to ch.
 func drainRunner(ctx context.Context, runner *adk.Runner, query string, ch chan<- StreamResult,
-	pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, []string, int, bool) {
+	pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, string, []string, int, bool) {
 	iter := runner.Query(ctx, query, adk.WithCheckPointID(checkpointID))
 	return drainIter(ctx, runner, iter, ch, pendingConfirms, emitEvent, checkpointID)
 }
 
 // drainRunnerMsg consumes all events from runner.Run with a pre-built message list,
-// forwards tokens to ch, and returns the accumulated response string, tool images,
-// and tool-call count.
-// Returns (response, images, toolCalls, true) on success or ("", nil, 0, false) after sending an error to ch.
+// forwards tokens to ch, and returns the accumulated response string, thinking content,
+// tool images, and tool-call count.
+// Returns (response, thinking, images, toolCalls, true) on success or ("", "", nil, 0, false) after sending an error to ch.
 func drainRunnerMsg(ctx context.Context, runner *adk.Runner, msgs []adk.Message, ch chan<- StreamResult,
-	pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, []string, int, bool) {
+	pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, string, []string, int, bool) {
 	iter := runner.Run(ctx, msgs, adk.WithCheckPointID(checkpointID))
 	return drainIter(ctx, runner, iter, ch, pendingConfirms, emitEvent, checkpointID)
 }
 
 // drainIter consumes all events from an AsyncIterator, forwards tokens to ch,
-// handles interrupt events, and returns the accumulated response string, collected
-// tool images, and the number of distinct tool names invoked this turn.
+// handles interrupt events, and returns the accumulated response string, thinking content,
+// collected tool images, and the number of distinct tool names invoked this turn.
 func drainIter(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIterator[*adk.AgentEvent],
-	ch chan<- StreamResult, pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, []string, int, bool) {
+	ch chan<- StreamResult, pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, string, []string, int, bool) {
 	uniqueTools := make(map[string]struct{})
 	var imgs []string
-	resp, ok := drainIterInner(ctx, runner, iter, ch, pendingConfirms, emitEvent, checkpointID, uniqueTools, &imgs)
-	return resp, imgs, len(uniqueTools), ok
+	resp, thinking, ok := drainIterInner(ctx, runner, iter, ch, pendingConfirms, emitEvent, checkpointID, uniqueTools, &imgs)
+	return resp, thinking, imgs, len(uniqueTools), ok
 }
 
 // nextEvent wraps iter.Next() in a goroutine so callers can race it against
@@ -453,15 +454,16 @@ func nextEvent(iter *adk.AsyncIterator[*adk.AgentEvent]) <-chan iterResult {
 // recursive invocations so they can be persisted by the caller.
 func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIterator[*adk.AgentEvent],
 	ch chan<- StreamResult, pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string,
-	uniqueTools map[string]struct{}, imgsBuf *[]string) (string, bool) {
+	uniqueTools map[string]struct{}, imgsBuf *[]string) (string, string, bool) {
 	var sb strings.Builder
+	var thinkingSb strings.Builder
 
 	for {
 		var event *adk.AgentEvent
 		var ok bool
 		select {
 		case <-ctx.Done():
-			return "", false
+			return "", "", false
 		case r := <-nextEvent(iter):
 			event, ok = r.event, r.ok
 		}
@@ -471,12 +473,12 @@ func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIter
 		if event.Err != nil {
 			// Context cancellation means the user hit Stop — propagate silently.
 			if errors.Is(event.Err, context.Canceled) {
-				return "", false
+				return "", "", false
 			}
 			// Interrupt signals must pass through for the checkpoint/resume flow.
 			if _, ok := compose.IsInterruptRerunError(event.Err); ok {
 				ch <- StreamResult{Err: event.Err}
-				return "", false
+				return "", "", false
 			}
 			// All other errors (tool failure, network glitch, etc.) are surfaced as
 			// a token so the LLM can acknowledge the problem and continue.
@@ -489,14 +491,15 @@ func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIter
 		if event.Action != nil && event.Action.Interrupted != nil {
 			resumeIter, err := handleInterrupt(ctx, runner, event, ch, pendingConfirms, emitEvent, checkpointID)
 			if err != nil {
-				return "", false
+				return "", "", false
 			}
 			if resumeIter != nil {
-				resp, ok := drainIterInner(ctx, runner, resumeIter, ch, pendingConfirms, emitEvent, checkpointID, uniqueTools, imgsBuf)
+				resp, thinkingResp, ok := drainIterInner(ctx, runner, resumeIter, ch, pendingConfirms, emitEvent, checkpointID, uniqueTools, imgsBuf)
 				if !ok {
-					return "", false
+					return "", "", false
 				}
 				sb.WriteString(resp)
+				thinkingSb.WriteString(thinkingResp)
 			}
 			continue
 		}
@@ -513,7 +516,7 @@ func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIter
 						break
 					}
 					ch <- StreamResult{Err: recvErr}
-					return "", false
+					return "", "", false
 				}
 				if m == nil {
 					continue
@@ -537,6 +540,10 @@ func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIter
 					ch <- StreamResult{Images: imgs}
 					*imgsBuf = append(*imgsBuf, imgs...)
 				}
+				if m.ReasoningContent != "" {
+					ch <- StreamResult{ThinkingToken: m.ReasoningContent}
+					thinkingSb.WriteString(m.ReasoningContent)
+				}
 				if m.Content == "" {
 					continue
 				}
@@ -555,6 +562,10 @@ func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIter
 				ch <- StreamResult{Images: imgs}
 				*imgsBuf = append(*imgsBuf, imgs...)
 			}
+			if mo.Message.ReasoningContent != "" {
+				ch <- StreamResult{ThinkingToken: mo.Message.ReasoningContent}
+				thinkingSb.WriteString(mo.Message.ReasoningContent)
+			}
 			if mo.Message.Content != "" {
 				ch <- StreamResult{Token: mo.Message.Content}
 				sb.WriteString(mo.Message.Content)
@@ -565,7 +576,7 @@ func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIter
 			}
 		}
 	}
-	return sb.String(), true
+	return sb.String(), thinkingSb.String(), true
 }
 
 // extractImages returns data URLs or HTTP(S) URLs for any image parts in parts.
@@ -744,7 +755,7 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 
 		msgs := append(ctxMsgs, sendMsg)
 		checkpointID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
-		fullResponse, toolImgs, toolCallCount, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID)
+		fullResponse, thinkingContent, toolImgs, toolCallCount, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID)
 		if !ok {
 			return
 		}
@@ -763,7 +774,7 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 				userFiles = names
 			}
 		}
-		go a.persistAndMigrate(context.Background(), userMemory, userImages, userFiles, fullResponse, toolImgs, toolCallCount)
+		go a.persistAndMigrate(context.Background(), userMemory, userImages, userFiles, fullResponse, thinkingContent, toolImgs, toolCallCount)
 	}()
 
 	return ch
@@ -898,7 +909,7 @@ func (a *Agent) buildContext(ctx context.Context, userInput string) ([]adk.Messa
 // persistAndMigrate saves user and assistant messages to SQLite, then checks
 // whether the total message count exceeds ShortTermLimit. If so, the oldest
 // excess messages are migrated to long-term vector memory.
-func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userImages []string, userFiles []string, assistantReply string, assistantImages []string, toolCallCount int) {
+func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userImages []string, userFiles []string, assistantReply string, thinkingContent string, assistantImages []string, toolCallCount int) {
 	if a.shortMem == nil {
 		return
 	}
@@ -917,7 +928,7 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userIma
 	if _, _, stripped, ok := parseEmotionTag(assistantReply); ok {
 		assistantReply = stripped
 	}
-	if _, err := a.shortMem.AddWithImages("assistant", assistantReply, assistantImages); err != nil {
+	if _, err := a.shortMem.AddFull("assistant", assistantReply, thinkingContent, assistantImages, nil); err != nil {
 		slog.Error("save assistant message failed", "err", err)
 		return
 	}
