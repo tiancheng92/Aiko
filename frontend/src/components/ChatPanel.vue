@@ -560,6 +560,8 @@ onMounted(async () => {
         messages.value.push({
           role: 'assistant',
           content: '你好！👋 我是你的 AI 桌面宠物。\n\n我支持：\n- 💬 **自然语言对话**\n- 🔧 **工具调用**（查询时间、系统信息、网络状态等）\n- 📚 **知识库问答**（在设置中导入文档）\n\n**快速操作提示：**\n- 右键点击我 → 切换表情 / 更换模型 / 打开设置\n- 右键点击聊天框 → 导出聊天记录\n\n请先在 ⚙️ **设置** 中配置 LLM 模型后开始聊天。',
+          thinkingContent: '',
+          thinkingExpanded: false,
         })
         scrollToBottom()
         await MarkWelcomeShown()
