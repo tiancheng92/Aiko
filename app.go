@@ -543,6 +543,12 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 			if r.Done {
 				break
 			}
+			if r.ThinkingToken != "" {
+				if job.SaveToMemory {
+					wailsruntime.EventsEmit(a.ctx, "chat:thinking", r.ThinkingToken)
+				}
+				continue
+			}
 			text, _, _ := ep.Feed(r.Token)
 			sb.WriteString(text)
 			if job.SaveToMemory && text != "" {

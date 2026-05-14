@@ -1188,7 +1188,7 @@ defineExpose({ focusInput, scrollToBottom })
                 </template>
               </div>
               <template v-else>
-                <div v-if="m.thinking || (m.streaming && !renderMarkdown(m.content))" :class="['bubble', 'thinking-bubble', { proactive: m.isProactive }]">
+                <div v-if="!m.thinkingContent && (m.thinking || (m.streaming && !renderMarkdown(m.content)))" :class="['bubble', 'thinking-bubble', { proactive: m.isProactive }]">
                   <span class="dot" /><span class="dot" /><span class="dot" />
                 </div>
                 <!-- ThinkingBlock: shown when thinkingContent is non-empty -->
