@@ -20,6 +20,7 @@ func newTestShortStore(t *testing.T) *memory.ShortStore {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		role TEXT NOT NULL,
 		content TEXT NOT NULL,
+		thinking_content TEXT NOT NULL DEFAULT '',
 		images TEXT NOT NULL DEFAULT '',
 		files TEXT NOT NULL DEFAULT '',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -85,5 +86,23 @@ func TestRecentMessages_RespectsLimit(t *testing.T) {
 	}
 	if len(msgs) != 3 {
 		t.Errorf("expected 3, got %d", len(msgs))
+	}
+}
+
+func TestAddFull_WithThinkingContent(t *testing.T) {
+	s := newTestShortStore(t)
+	_, err := s.AddFull("assistant", "response", "thinking process", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := s.Recent(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(msgs))
+	}
+	if msgs[0].ThinkingContent != "thinking process" {
+		t.Errorf("expected ThinkingContent %q, got %q", "thinking process", msgs[0].ThinkingContent)
 	}
 }
