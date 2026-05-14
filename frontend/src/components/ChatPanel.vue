@@ -444,7 +444,7 @@ function applyToken(token) {
   if (last && last.role === 'assistant' && last.streaming) {
     last.content += token  // direct mutation — Vue Proxy tracks this, no object copy needed
   } else {
-    messages.value.push({ role: 'assistant', content: token, streaming: true, isProactive: proactiveStarted })
+    messages.value.push({ role: 'assistant', content: token, streaming: true, isProactive: proactiveStarted, thinkingContent: '', thinkingExpanded: false })
     EventsEmit('pet:state:change', 'speaking')
   }
   scrollToBottom()
@@ -464,7 +464,7 @@ function formatTime(ts) {
 }
 
 let proactiveStarted = false
-let offToken, offDone, offError, offClear, offProactiveStart, offProactiveMessage, offCronStart, offImage
+let offToken, offDone, offError, offClear, offProactiveStart, offProactiveMessage, offCronStart, offImage, offThinking
 let offTTSDone, offTTSError, offTTSAudio
 let offSoundsChanged
 let offVoiceStart, offVoiceTranscript, offVoiceEnd, offVoiceFinal, offVoiceError, offVoiceAutoSend
@@ -474,7 +474,16 @@ let resizeObserver = null
 
 /** mapMsg converts a backend Message to the frontend shape. */
 function mapMsg(m) {
-  return { id: m.ID, role: m.Role, content: m.Content, time: m.CreatedAt, images: m.Images || [], files: m.Files || [] }
+  return {
+    id: m.ID,
+    role: m.Role,
+    content: m.Content,
+    thinkingContent: m.ThinkingContent ?? '',
+    thinkingExpanded: false,
+    time: m.CreatedAt,
+    images: m.Images || [],
+    files: m.Files || []
+  }
 }
 
 /** loadOlderMessages fetches the next page of older messages and prepends them. */
@@ -566,7 +575,7 @@ onMounted(async () => {
 
   offProactiveStart = EventsOn('chat:proactive:start', () => {
     proactiveStarted = true
-    messages.value.push({ role: 'assistant', content: '', streaming: true, isProactive: true })
+    messages.value.push({ role: 'assistant', content: '', streaming: true, isProactive: true, thinkingContent: '', thinkingExpanded: false })
     EventsEmit('pet:state:change', 'speaking')
     scrollToBottom()
   })
@@ -581,12 +590,21 @@ onMounted(async () => {
   offCronStart = EventsOn('chat:cron:start', ({ name, prompt }) => {
     // Push a user-side trigger label followed by a streaming assistant placeholder.
     messages.value.push({ role: 'user', content: `⏰ **${name}**\n${prompt}`, isCron: true })
-    messages.value.push({ role: 'assistant', content: '', streaming: true, thinking: true, isCron: true })
+    messages.value.push({ role: 'assistant', content: '', streaming: true, thinking: true, isCron: true, thinkingContent: '', thinkingExpanded: false })
     loading.value = true
     isStreaming.value = true
     firstTokenThisTurn = true
     EventsEmit('pet:state:change', 'thinking')
     scrollToBottom()
+  })
+
+  offThinking = EventsOn('chat:thinking', (token) => {
+    const last = messages.value[messages.value.length - 1]
+    if (last && last.role === 'assistant') {
+      if (last.thinkingContent === undefined) last.thinkingContent = ''
+      last.thinkingContent += token
+      last.thinkingExpanded = true
+    }
   })
 
   offToken = EventsOn('chat:token', (token) => {
@@ -601,7 +619,7 @@ onMounted(async () => {
     typingScheduler.flush()
     const idx = messages.value.length - 1
     const lastMsg = messages.value[idx]
-    if (idx >= 0) messages.value[idx] = { ...messages.value[idx], streaming: false, time: new Date() }
+    if (idx >= 0) messages.value[idx] = { ...messages.value[idx], streaming: false, thinkingExpanded: false, time: new Date() }
     loading.value = false
     isStreaming.value = false
     proactiveStarted = false
@@ -730,7 +748,7 @@ onMounted(async () => {
 onUnmounted(() => {
   // Invoke every EventsOn teardown; undefined entries are safely skipped via
   // optional chaining so a partial mount (e.g. early error) does not throw here.
-  offToken?.(); offDone?.(); offError?.(); offClear?.(); offImage?.()
+  offToken?.(); offDone?.(); offError?.(); offClear?.(); offImage?.(); offThinking?.()
   offProactiveStart?.(); offProactiveMessage?.(); offCronStart?.()
   offTTSDone?.(); offTTSError?.(); offTTSAudio?.()
   offSoundsChanged?.()
@@ -862,7 +880,7 @@ async function regenLastReply(assistantIdx) {
   loading.value = true
   isStreaming.value = true
   firstTokenThisTurn = true
-  messages.value.push({ role: 'assistant', content: '', streaming: true, thinking: true })
+  messages.value.push({ role: 'assistant', content: '', streaming: true, thinking: true, thinkingContent: '', thinkingExpanded: false })
   scrollToBottom()
   EventsEmit('pet:state:change', 'thinking')
   try {
@@ -1011,7 +1029,7 @@ async function send() {
   pendingFiles.value = []
 
   messages.value.push({ role: 'user', content: text, images: imgs, files: fileNames, time: new Date() })
-  messages.value.push({ role: 'assistant', content: '', streaming: true, thinking: true })
+  messages.value.push({ role: 'assistant', content: '', streaming: true, thinking: true, thinkingContent: '', thinkingExpanded: false })
   scrollToBottom()
   EventsEmit('pet:state:change', 'thinking')
   try {
