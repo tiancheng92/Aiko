@@ -435,9 +435,19 @@ let soundsEnabled = false
 
 /** applyToken appends a token to the last streaming assistant message. */
 function applyToken(token) {
-  // Remove thinking placeholder on first real token.
+  // Transition the thinking placeholder on first real token.
+  // If the placeholder already has thinkingContent, update it in-place to preserve
+  // the accumulated thinking text; otherwise remove it and fall through to create
+  // a fresh message (the old pure-dots placeholder path).
   const thinkIdx = messages.value.findLastIndex(m => m.thinking)
-  if (thinkIdx >= 0) messages.value.splice(thinkIdx, 1)
+  if (thinkIdx >= 0) {
+    if (messages.value[thinkIdx].thinkingContent) {
+      messages.value[thinkIdx] = { ...messages.value[thinkIdx], thinking: false, content: token }
+      scrollToBottom()
+      return
+    }
+    messages.value.splice(thinkIdx, 1)
+  }
 
   const idx = messages.value.length - 1
   const last = messages.value[idx]
