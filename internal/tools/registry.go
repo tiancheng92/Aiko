@@ -193,6 +193,7 @@ func AllPermissionDeclarations() []namedPermDecl {
 		&ExecuteCodeTool{},
 		&ReadImageTool{},
 		&SaveImageTool{},
+		&CheckAndUpdateTool{},
 	}
 	for _, t := range ctxPrototypes {
 		decls = append(decls, namedPermDecl{Name_: t.Name(), Perm_: t.Permission()})
@@ -222,6 +223,7 @@ func (d namedPermDecl) Permission() PermissionLevel { return d.Perm_ }
 // AllContextual returns tools that require runtime dependencies injected at startup.
 // onSkillSaved is called asynchronously whenever save_skill writes a new file,
 // allowing the caller to hot-reload the skill middleware without a full restart.
+// installUpdateFn and emitFn are injected for the check_and_update tool.
 func AllContextual(
 	permStore *PermissionStore,
 	knowledgeSt *knowledge.Store,
@@ -232,6 +234,9 @@ func AllContextual(
 	registerCmd func(id string, cancel func()),
 	unregisterCmd func(id string),
 	onSkillSaved func(),
+	installUpdateFn func(downloadURL string) error,
+	emitFn func(event string, data any),
+	currentVersion string,
 ) []tool.BaseTool {
 	contextTools := []Tool{
 		&WebSearchTool{Cfg: cfg},
@@ -256,6 +261,8 @@ func AllContextual(
 		// Image tools
 		&ReadImageTool{Cfg: cfg},
 		&SaveImageTool{Cfg: cfg},
+		// Update tool
+		&CheckAndUpdateTool{InstallFn: installUpdateFn, EmitFn: emitFn, CurrentVersion: currentVersion},
 	}
 	result := make([]tool.BaseTool, len(contextTools))
 	for i, t := range contextTools {

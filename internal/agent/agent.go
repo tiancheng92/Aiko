@@ -46,11 +46,13 @@ type StreamResult struct {
 // ToolConfirmRequest is emitted via Wails event when a tool requests user confirmation.
 type ToolConfirmRequest struct {
 	ID         string `json:"id"`
-	ToolType   string `json:"tool_type"` // "shell" or "code"
-	Command    string `json:"command,omitempty"`
-	Code       string `json:"code,omitempty"`
-	Language   string `json:"language,omitempty"`
-	WorkingDir string `json:"working_dir"`
+	ToolType       string `json:"tool_type"` // "shell", "code", or "update"
+	Command        string `json:"command,omitempty"`
+	Code           string `json:"code,omitempty"`
+	Language       string `json:"language,omitempty"`
+	WorkingDir     string `json:"working_dir"`
+	CurrentVersion string `json:"current_version,omitempty"`
+	LatestVersion  string `json:"latest_version,omitempty"`
 }
 
 // ToolConfirmResponse is the user's response to a tool confirmation request.
@@ -672,6 +674,13 @@ func handleInterrupt(
 			ID: info.ID, ToolType: "code",
 			Language: info.Language, Code: info.Code, WorkingDir: info.WorkingDir,
 		}
+	case internaltools.UpdateConfirmInfo:
+		req = ToolConfirmRequest{
+			ID:             info.ID,
+			ToolType:       "update",
+			CurrentVersion: info.CurrentVersion,
+			LatestVersion:  info.LatestVersion,
+		}
 	default:
 		slog.Warn("handleInterrupt: unrecognized interrupt info type",
 			"type", fmt.Sprintf("%T", ictx.Info), "value", ictx.Info)
@@ -753,14 +762,6 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 
 		sendMsg := msg
 
-		msgs := append(ctxMsgs, sendMsg)
-		checkpointID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
-		fullResponse, thinkingContent, toolImgs, toolCallCount, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID)
-		if !ok {
-			return
-		}
-
-		ch <- StreamResult{Done: true}
 		// Prefer the original user text stored in Extra (no file content) for memory.
 		userMemory := extractTextFromMessage(msg)
 		if orig, ok := msg.Extra["_user_text"].(string); ok && orig != "" {
@@ -774,6 +775,28 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 				userFiles = names
 			}
 		}
+
+		// Inject flush callback so check_and_update can persist before restart.
+		flushFn := func(assistantSummary string) {
+			if a.shortMem == nil {
+				return
+			}
+			_, _ = a.shortMem.AddWithImagesAndFiles("user", userMemory, userImages, userFiles)
+			if _, _, stripped, ok := parseEmotionTag(assistantSummary); ok {
+				assistantSummary = stripped
+			}
+			_, _ = a.shortMem.AddFull("assistant", assistantSummary, "", nil, nil)
+		}
+		ctx = context.WithValue(ctx, internaltools.PersistBeforeRestartKey{}, flushFn)
+
+		msgs := append(ctxMsgs, sendMsg)
+		checkpointID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
+		fullResponse, thinkingContent, toolImgs, toolCallCount, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID)
+		if !ok {
+			return
+		}
+
+		ch <- StreamResult{Done: true}
 		go a.persistAndMigrate(context.Background(), userMemory, userImages, userFiles, fullResponse, thinkingContent, toolImgs, toolCallCount)
 	}()
 

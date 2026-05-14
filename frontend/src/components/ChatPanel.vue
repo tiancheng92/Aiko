@@ -644,7 +644,7 @@ function formatTime(ts) {
 }
 
 let proactiveStarted = false
-let offToken, offDone, offError, offClear, offProactiveStart, offProactiveMessage, offCronStart, offImage, offThinking
+let offToken, offDone, offError, offClear, offProactiveStart, offProactiveMessage, offCronStart, offImage, offThinking, offSystemInject
 let offTTSDone, offTTSError, offTTSAudio
 let offSoundsChanged
 let offVoiceStart, offVoiceTranscript, offVoiceEnd, offVoiceFinal, offVoiceError, offVoiceAutoSend
@@ -750,6 +750,13 @@ onMounted(async () => {
       console.warn('welcome check failed:', e)
     }
   }
+
+  offSystemInject = EventsOn('chat:system:inject', (msg) => {
+    loading.value = false
+    isStreaming.value = false
+    messages.value.push({ role: 'system', content: msg })
+    nextTick(scrollToBottom)
+  })
 
   offClear = EventsOn('chat:clear', () => {
     showClearConfirm.value = true
@@ -931,7 +938,7 @@ onUnmounted(() => {
   // Invoke every EventsOn teardown; undefined entries are safely skipped via
   // optional chaining so a partial mount (e.g. early error) does not throw here.
   offToken?.(); offDone?.(); offError?.(); offClear?.(); offImage?.(); offThinking?.()
-  offProactiveStart?.(); offProactiveMessage?.(); offCronStart?.()
+  offProactiveStart?.(); offProactiveMessage?.(); offCronStart?.(); offSystemInject?.()
   offTTSDone?.(); offTTSError?.(); offTTSAudio?.()
   offSoundsChanged?.()
   offVoiceStart?.(); offVoiceTranscript?.(); offVoiceEnd?.(); offVoiceFinal?.(); offVoiceError?.(); offVoiceAutoSend?.()

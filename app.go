@@ -84,10 +84,11 @@ type App struct {
 	llmTransport    *llm.ErrorBodyTransport // captures raw error bodies from the active LLM HTTP client; guarded by mu
 	chatModel       model.ToolCallingChatModel // current chat model; guarded by mu; reused by rebuildAgentTools
 	rebuildGen      atomic.Int64              // incremented on each initLLMComponents; guards stale async MCP results
-	runningCmds     sync.Map
-	pendingConfirms sync.Map
-	watcherWG       sync.WaitGroup  // tracks background watchers started in startup
-	cancelWatcher   context.CancelFunc // cancels the screen-watcher goroutine on shutdown
+	runningCmds          sync.Map
+	pendingConfirms      sync.Map
+	watcherWG            sync.WaitGroup     // tracks background watchers started in startup
+	cancelWatcher        context.CancelFunc // cancels the screen-watcher goroutine on shutdown
+	pendingUpdateVersion string             // non-empty when a successful update marker was found on startup
 }
 
 // NewApp creates a new App instance.
@@ -381,6 +382,18 @@ func (a *App) startup(ctx context.Context) {
 
 	a.shortMem = memory.NewShortStore(a.sqlDB)
 
+	// Check for a successful-update marker written by InstallUpdate before restart.
+	markerPath := filepath.Join(dataDir, "update_success.json")
+	if markerData, merr := os.ReadFile(markerPath); merr == nil {
+		var m struct {
+			Version string `json:"version"`
+		}
+		if stdjson.Unmarshal(markerData, &m) == nil && m.Version != "" {
+			_ = os.Remove(markerPath)
+			a.pendingUpdateVersion = m.Version
+		}
+	}
+
 	a.permStore = internaltools.NewPermissionStore(a.sqlDB)
 	a.mcpStore = mcp.NewServerStore(a.sqlDB)
 	// Remove stale tool rows that no longer exist.
@@ -623,6 +636,9 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 			wailsruntime.EventsEmit(a.ctx, "tool:executed", map[string]interface{}{"id": id})
 		},
 		func() { go a.initLLMComponents(a.ctx) },
+		a.InstallUpdate,
+		func(event string, data any) { wailsruntime.EventsEmit(a.ctx, event, data) },
+		version,
 	)
 	proactiveStore := proactive.NewStore(a.sqlDB)
 	followupTool := internaltools.ToEino(proactive.NewScheduleFollowupTool(proactiveStore), a.permStore)
@@ -783,6 +799,9 @@ func (a *App) rebuildAgentTools(ctx context.Context, mcpTools []tool.BaseTool, c
 			wailsruntime.EventsEmit(a.ctx, "tool:executed", map[string]any{"id": id})
 		},
 		func() { go a.initLLMComponents(a.ctx) },
+		a.InstallUpdate,
+		func(event string, data any) { wailsruntime.EventsEmit(a.ctx, event, data) },
+		version,
 	)
 	proactiveStore := proactive.NewStore(a.sqlDB)
 	followupTool := internaltools.ToEino(proactive.NewScheduleFollowupTool(proactiveStore), a.permStore)
@@ -1925,6 +1944,15 @@ func (a *App) domReady(_ context.Context) {
 	// Re-apply scrollbar suppression after DOM is ready — WKWebView's internal
 	// scroll view may not exist yet during startup(), so we call it again here.
 	hideNativeScrollbars()
+
+	// Emit update-success notification if a marker was found during startup.
+	if a.pendingUpdateVersion != "" {
+		wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
+			"title":   "✅ 更新成功",
+			"message": "Aiko 已更新至 v" + a.pendingUpdateVersion,
+		})
+		a.pendingUpdateVersion = ""
+	}
 }
 
 func (a *App) shutdown(_ context.Context) {
@@ -2690,7 +2718,18 @@ func (a *App) InstallUpdate(downloadURL string) error {
 			"--preserve-metadata=entitlements", appBundle)
 	}
 
-	// 6. Write a tiny restart script and run it detached.
+	// 6. Write update-success marker so next launch can notify the user.
+	if home, err := os.UserHomeDir(); err == nil {
+		base := filepath.Base(downloadURL)
+		latestTag := strings.TrimSuffix(strings.TrimPrefix(base, "Aiko-"), ".dmg")
+		if latestTag == base || latestTag == "" {
+			latestTag = "latest"
+		}
+		markerPath := filepath.Join(home, ".aiko", "update_success.json")
+		_ = os.WriteFile(markerPath, []byte(fmt.Sprintf(`{"version":%q}`, latestTag)), 0o644)
+	}
+
+	// 7. Write a tiny restart script and run it detached.
 	emit(95, "准备重启…")
 	script := fmt.Sprintf("#!/bin/sh\nsleep 1\nopen %q\n", appBundle)
 	scriptPath := filepath.Join(os.TempDir(), "aiko-restart.sh")

@@ -1,7 +1,7 @@
 <!-- ToolConfirmModal.vue — confirmation dialog for shell/code tool execution requests -->
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { EventsOn } from '../../wailsjs/runtime/runtime'
+import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { ConfirmToolExecution } from '../../wailsjs/go/main/App'
 import { useEscapeKey } from '../composables/useEscapeKey'
 
@@ -12,6 +12,7 @@ const editedContent = ref('')
 /** Human-readable label for the tool type / language. */
 const languageLabel = computed(() => {
   if (!request.value) return ''
+  if (request.value.tool_type === 'update') return '应用更新'
   if (request.value.tool_type === 'shell') return 'Shell'
   const map = { python: 'Python', node: 'Node.js', ruby: 'Ruby', bash: 'Bash' }
   return map[request.value.language] || request.value.language
@@ -20,6 +21,7 @@ const languageLabel = computed(() => {
 /** Risk warning text shown below the editor. */
 const riskText = computed(() => {
   if (!request.value) return ''
+  if (request.value.tool_type === 'update') return '安装后应用将自动重启，更新过程约需 10-30 秒，当前对话将被保存。'
   if (request.value.tool_type === 'shell') return 'Shell 命令可修改系统文件、执行任意操作，请确认安全后再批准。'
   return `${languageLabel.value} 代码将使用系统解释器直接执行，请检查内容后再批准。`
 })
@@ -27,7 +29,11 @@ const riskText = computed(() => {
 /** Called when the backend emits a tool:confirm event. */
 function onConfirmEvent(req) {
   request.value = req
-  editedContent.value = req.tool_type === 'shell' ? req.command : req.code
+  if (req.tool_type === 'update') {
+    editedContent.value = ''
+  } else {
+    editedContent.value = req.tool_type === 'shell' ? req.command : req.code
+  }
   visible.value = true
 }
 
@@ -46,8 +52,18 @@ async function reject() {
 // EventsOff(name) removes all listeners for that name, so always invoke the
 // handle returned by EventsOn instead.
 let offConfirm = null
-onMounted(() => { offConfirm = EventsOn('tool:confirm', onConfirmEvent) })
-onUnmounted(() => offConfirm?.())
+let offRestarting = null
+onMounted(() => {
+  offConfirm = EventsOn('tool:confirm', onConfirmEvent)
+  offRestarting = EventsOn('app:restarting', ({ version }) => {
+    visible.value = false
+    EventsEmit('chat:system:inject', `正在安装更新 v${version}，应用即将重启…`)
+  })
+})
+onUnmounted(() => {
+  offConfirm?.()
+  offRestarting?.()
+})
 
 useEscapeKey(reject, visible)
 </script>
@@ -67,18 +83,29 @@ useEscapeKey(reject, visible)
         </div>
         <div class="modal-header-text">
           <h2 id="tc-title" class="modal-title">
-            Agent 请求执行{{ request?.tool_type === 'shell' ? ' Shell 命令' : '代码' }}
+            {{ request?.tool_type === 'update' ? 'Agent 请求安装应用更新' : `Agent 请求执行${request?.tool_type === 'shell' ? ' Shell 命令' : '代码'}` }}
           </h2>
           <span class="badge">{{ languageLabel }}</span>
         </div>
       </div>
 
-      <div class="modal-field">
+      <div v-if="request?.tool_type !== 'update'" class="modal-field">
         <label>工作目录</label>
         <span class="dir-path">{{ request?.working_dir }}</span>
       </div>
 
-      <div class="modal-field">
+      <!-- version info block (update type) -->
+      <div v-if="request?.tool_type === 'update'" class="modal-field">
+        <label>版本信息</label>
+        <span class="version-diff">
+          v{{ request.current_version }}
+          <span class="version-arrow">→</span>
+          v{{ request.latest_version }}
+        </span>
+      </div>
+
+      <!-- editable command/code block (shell/code types) -->
+      <div v-else class="modal-field">
         <label>{{ request?.tool_type === 'shell' ? '命令' : '代码' }}<span class="editable-hint">（可编辑）</span></label>
         <textarea
           v-model="editedContent"
@@ -101,7 +128,7 @@ useEscapeKey(reject, visible)
 
       <div class="modal-actions">
         <button class="btn-reject" @click="reject">拒绝</button>
-        <button class="btn-approve" @click="approve">批准执行</button>
+        <button class="btn-approve" @click="approve">{{ request?.tool_type === 'update' ? '安装更新' : '批准执行' }}</button>
       </div>
     </div>
   </div>
@@ -225,6 +252,24 @@ useEscapeKey(reject, visible)
   border-radius: 7px;
   word-break: break-all;
   line-height: 1.5;
+}
+
+.version-diff {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--lg-border-subtle);
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.version-arrow {
+  color: var(--accent);
+  font-size: 16px;
 }
 
 .content-editor {
