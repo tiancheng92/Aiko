@@ -1191,7 +1191,17 @@ defineExpose({ focusInput, scrollToBottom })
                 <div v-if="m.thinking || (m.streaming && !renderMarkdown(m.content))" :class="['bubble', 'thinking-bubble', { proactive: m.isProactive }]">
                   <span class="dot" /><span class="dot" /><span class="dot" />
                 </div>
-                <div v-else :class="['bubble', 'markdown', { proactive: m.isProactive }]">
+                <!-- ThinkingBlock: shown when thinkingContent is non-empty -->
+                <div v-if="m.thinkingContent" class="thinking-block">
+                  <div class="thinking-block-header" @click="m.thinkingExpanded = !m.thinkingExpanded">
+                    <svg class="thinking-chevron" :class="{ expanded: m.thinkingExpanded }" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    <span>思考过程</span>
+                  </div>
+                  <div class="thinking-block-body" :class="{ expanded: m.thinkingExpanded }">
+                    <div class="thinking-block-text">{{ m.thinkingContent }}<span v-if="m.streaming && m.thinkingExpanded" class="cursor">▋</span></div>
+                  </div>
+                </div>
+                <div v-if="!m.thinking || m.content" :class="['bubble', 'markdown', { proactive: m.isProactive }]">
                   <div v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')" />
                   <template v-if="!m.streaming && !m.thinking && m.content">
                     <template v-if="extractUrls(m.content).length <= 1">
@@ -2666,4 +2676,60 @@ body > .lightbox .lightbox-img {
   font-weight: 600;
 }
 .clear-confirm-ok:hover { background: #ff5e55; }
+
+/* ThinkingBlock */
+.thinking-block {
+  width: 100%;
+  max-width: 480px;
+  margin-bottom: 6px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.thinking-block-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.78em;
+  color: rgba(255, 255, 255, 0.5);
+  transition: color 0.15s;
+}
+
+.thinking-block-header:hover {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.thinking-chevron {
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.thinking-chevron.expanded {
+  transform: rotate(180deg);
+}
+
+.thinking-block-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+}
+
+.thinking-block-body.expanded {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.thinking-block-text {
+  padding: 0 10px 10px;
+  font-size: 0.8em;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+}
 </style>
