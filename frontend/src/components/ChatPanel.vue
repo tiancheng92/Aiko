@@ -1193,7 +1193,7 @@ defineExpose({ focusInput, scrollToBottom })
                 </div>
                 <!-- ThinkingBlock: shown when thinkingContent is non-empty -->
                 <div v-if="m.thinkingContent" class="thinking-block">
-                  <div class="thinking-block-header" @click="m.thinkingExpanded = !m.thinkingExpanded">
+                  <div class="thinking-block-header" @click="messages[i].thinkingExpanded = !messages[i].thinkingExpanded">
                     <svg class="thinking-chevron" :class="{ expanded: m.thinkingExpanded }" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                     <span>思考过程</span>
                   </div>
