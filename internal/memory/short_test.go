@@ -75,7 +75,7 @@ func TestRecentMessages_RolesAndOrder(t *testing.T) {
 
 func TestRecentMessages_RespectsLimit(t *testing.T) {
 	s := newTestShortStore(t)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		if _, err := s.Add("user", "msg"); err != nil {
 			t.Fatal(err)
 		}
