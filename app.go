@@ -1208,15 +1208,19 @@ func (a *App) SendMessage(userInput string) error {
 				wailsruntime.EventsEmit(a.ctx, "chat:error", a.formatChatError(result.Err))
 				return
 			}
-			if len(result.Images) > 0 {
-				wailsruntime.EventsEmit(a.ctx, "chat:image", result.Images)
-			}
 			if result.Done {
 				if tail := ep.Flush(); tail != "" {
 					wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
 				}
 				wailsruntime.EventsEmit(a.ctx, "chat:done", "")
 				return
+			}
+			if result.ThinkingToken != "" {
+				wailsruntime.EventsEmit(a.ctx, "chat:thinking", result.ThinkingToken)
+				continue
+			}
+			if len(result.Images) > 0 {
+				wailsruntime.EventsEmit(a.ctx, "chat:image", result.Images)
 			}
 			text, emotion, intensity := ep.Feed(result.Token)
 			if emotion != "" {
@@ -1338,15 +1342,19 @@ func (a *App) SendMessageWithImages(userInput string, images []string) error {
 				wailsruntime.EventsEmit(a.ctx, "chat:error", a.formatChatError(result.Err))
 				return
 			}
-			if len(result.Images) > 0 {
-				wailsruntime.EventsEmit(a.ctx, "chat:image", result.Images)
-			}
 			if result.Done {
 				if tail := ep.Flush(); tail != "" {
 					wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
 				}
 				wailsruntime.EventsEmit(a.ctx, "chat:done", "")
 				return
+			}
+			if result.ThinkingToken != "" {
+				wailsruntime.EventsEmit(a.ctx, "chat:thinking", result.ThinkingToken)
+				continue
+			}
+			if len(result.Images) > 0 {
+				wailsruntime.EventsEmit(a.ctx, "chat:image", result.Images)
 			}
 			text, emotion, intensity := ep.Feed(result.Token)
 			if emotion != "" {
@@ -1457,15 +1465,19 @@ func (a *App) SendMessageWithFiles(userInput string, images []string, files []Fi
 				wailsruntime.EventsEmit(a.ctx, "chat:error", a.formatChatError(result.Err))
 				return
 			}
-			if len(result.Images) > 0 {
-				wailsruntime.EventsEmit(a.ctx, "chat:image", result.Images)
-			}
 			if result.Done {
 				if tail := ep.Flush(); tail != "" {
 					wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
 				}
 				wailsruntime.EventsEmit(a.ctx, "chat:done", "")
 				return
+			}
+			if result.ThinkingToken != "" {
+				wailsruntime.EventsEmit(a.ctx, "chat:thinking", result.ThinkingToken)
+				continue
+			}
+			if len(result.Images) > 0 {
+				wailsruntime.EventsEmit(a.ctx, "chat:image", result.Images)
 			}
 			text, emotion, intensity := ep.Feed(result.Token)
 			if emotion != "" {
