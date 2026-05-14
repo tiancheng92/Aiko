@@ -29,7 +29,7 @@ var supportedImageExts = map[string]string{
 const maxReadImageSize = 10 * 1024 * 1024
 
 // InvokableRun reads a local image file and returns it as a multimodal ToolResult.
-func (t *ReadImageTool) InvokableRun(ctx context.Context, input string, _ ...tool.Option) (string, error) {
+func (t *ReadImageTool) InvokableRun(_ context.Context, input string, _ ...tool.Option) (string, error) {
 	if t.Cfg == nil {
 		return "read_image 不可用：配置未初始化", nil
 	}
@@ -64,7 +64,6 @@ func (t *ReadImageTool) InvokableRun(ctx context.Context, input string, _ ...too
 	}
 
 	b64 := base64.StdEncoding.EncodeToString(data)
-	_ = ctx
 	// Return via plain string — the context accumulator in agent.go converts
 	// data URLs in tool results into images for the conversation history.
 	return "data:" + mimeType + ";base64," + b64, nil

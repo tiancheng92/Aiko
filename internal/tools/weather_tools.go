@@ -69,10 +69,6 @@ func (t *GetWeatherTool) InvokableRun(_ context.Context, input string, _ ...tool
 	_ = json.Unmarshal([]byte(input), &params)
 
 	loc := params.Location
-	if loc == "" {
-		loc = "" // wttr.in auto-detects from IP when location is empty
-	}
-
 	apiURL := fmt.Sprintf("https://wttr.in/%s?format=j1", url.PathEscape(loc))
 	client := &http.Client{Timeout: weatherTimeout}
 	resp, err := client.Get(apiURL)

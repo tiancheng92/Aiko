@@ -56,6 +56,9 @@ func (t *CronTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 
 // InvokableRun dispatches to add/list/remove based on the action field.
 func (t *CronTool) InvokableRun(ctx context.Context, input string, _ ...tool.Option) (string, error) {
+	if t.Scheduler == nil {
+		return "定时任务调度器未初始化", nil
+	}
 	args := parseArgs(input)
 	action, _ := args["action"].(string)
 	switch action {

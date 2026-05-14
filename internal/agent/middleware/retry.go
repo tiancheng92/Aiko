@@ -4,6 +4,8 @@ package middleware
 import (
 	"context"
 	"time"
+
+	"github.com/cloudwego/eino/compose"
 )
 
 // maxRetryDelay caps the exponential back-off so a misconfigured caller
@@ -25,6 +27,11 @@ func Retry(maxAttempts int, baseDelay time.Duration) Middleware {
 				out, err = next(ctx, input)
 				if err == nil {
 					return out, nil
+				}
+				// Pass interrupt signals through immediately — retrying them would
+				// corrupt the checkpoint/resume flow.
+				if _, ok := compose.IsInterruptRerunError(err); ok {
+					return out, err
 				}
 				if attempt == maxAttempts {
 					break

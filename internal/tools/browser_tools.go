@@ -38,7 +38,7 @@ func (t *GetBrowserURLTool) InvokableRun(ctx context.Context, _ string, opts ...
 	}
 
 	fetcher := &WebFetchTool{}
-	input := fmt.Sprintf(`{"url":%q,"prompt":"请提取并返回该页面的主要正文内容，保留标题和重要结构。"}`, url)
+	input := fmt.Sprintf(`{"url":%q}`, url)
 	content, err := fetcher.InvokableRun(ctx, input, opts...)
 	if err != nil {
 		return fmt.Sprintf("已获取到 URL：%s\n\n但抓取页面内容时出错：%s", url, err.Error()), nil

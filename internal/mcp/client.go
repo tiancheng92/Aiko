@@ -88,38 +88,6 @@ func LoadToolsAsync(ctx context.Context, store *ServerStore, perServerTimeout ti
 	}()
 }
 
-// LoadTools connects to all enabled MCP servers and returns their tools as eino BaseTool slice.
-// Servers that fail to connect are logged and skipped (non-fatal).
-// The returned closers own the underlying MCP client connections; the caller
-// must Close them when the tool set is replaced (e.g. on config change) or the
-// process exits, otherwise stdio subprocesses and sockets leak.
-func LoadTools(ctx context.Context, store *ServerStore) ([]tool.BaseTool, []io.Closer) {
-	cfgs, err := store.List(ctx)
-	if err != nil {
-		slog.Error("failed to list mcp_servers", "err", err)
-		return nil, nil
-	}
-
-	var tools []tool.BaseTool
-	var closers []io.Closer
-	for _, cfg := range cfgs {
-		if !cfg.Enabled {
-			continue
-		}
-		serverTools, client, err := connectAndDiscover(ctx, cfg)
-		if err != nil {
-			slog.Warn("mcp server connect failed, skipping", "server", cfg.Name, "err", err)
-			continue
-		}
-		tools = append(tools, serverTools...)
-		if client != nil {
-			closers = append(closers, client)
-		}
-		slog.Info("mcp server connected", "server", cfg.Name, "tools", len(serverTools))
-	}
-	return tools, closers
-}
-
 // connectAndDiscover opens a connection to one MCP server and returns its tools.
 // The returned *mcpgo.Client must be closed by the caller when it is no longer
 // needed; on any error from this function the client (if created) is closed here.
@@ -132,8 +100,7 @@ func connectAndDiscover(ctx context.Context, cfg ServerConfig) ([]tool.BaseTool,
 		if cfg.Command == "" {
 			return nil, nil, fmt.Errorf("stdio transport requires a command")
 		}
-		args := append([]string{cfg.Command}, cfg.Args...)
-		client, err = mcpgo.NewStdioMCPClient(args[0], execenv.AugmentedEnv(), args[1:]...)
+		client, err = mcpgo.NewStdioMCPClient(cfg.Command, execenv.AugmentedEnv(), cfg.Args...)
 	case "sse":
 		if cfg.URL == "" {
 			return nil, nil, fmt.Errorf("sse transport requires a url")

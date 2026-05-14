@@ -80,11 +80,14 @@ func (s *ProfileStore) Get(id int64) (*ModelProfile, error) {
 			&p.Model, &p.EmbeddingModel, &p.EmbeddingDim,
 			&inheritInt, &p.EmbeddingProvider, &p.EmbeddingBaseURL, &p.EmbeddingAPIKey,
 			&p.TTSModelDir, &p.TTSVoice, &p.TTSSpeed, &p.TTSBackend)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, fmt.Errorf("profile %d not found", id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("profile %d not found", id)
+		}
+		return nil, err
 	}
 	p.EmbeddingInherit = inheritInt != 0
-	return &p, err
+	return &p, nil
 }
 
 // Save inserts or updates a profile. Sets p.ID on insert.

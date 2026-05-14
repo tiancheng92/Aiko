@@ -65,6 +65,9 @@ func checkPath(path string, allowedPaths []string) (string, error) {
 
 // InvokableRun lists files and subdirectories at the given path.
 func (t *ListDirectoryTool) InvokableRun(_ context.Context, input string, _ ...tool.Option) (string, error) {
+	if t.Cfg == nil {
+		return "list_directory 配置缺失，请在设置中完成初始化", nil
+	}
 	args := parseArgs(input)
 	path, _ := args["path"].(string)
 	if path == "" {
@@ -104,6 +107,9 @@ func (t *ListDirectoryTool) InvokableRun(_ context.Context, input string, _ ...t
 
 // InvokableRun reads the text content of a file.
 func (t *ReadFileTool) InvokableRun(_ context.Context, input string, _ ...tool.Option) (string, error) {
+	if t.Cfg == nil {
+		return "read_file 配置缺失，请在设置中完成初始化", nil
+	}
 	args := parseArgs(input)
 	path, _ := args["path"].(string)
 	if path == "" {
@@ -122,6 +128,9 @@ func (t *ReadFileTool) InvokableRun(_ context.Context, input string, _ ...tool.O
 
 // InvokableRun writes or appends text to a file.
 func (t *WriteFileTool) InvokableRun(_ context.Context, input string, _ ...tool.Option) (string, error) {
+	if t.Cfg == nil {
+		return "write_file 配置缺失，请在设置中完成初始化", nil
+	}
 	args := parseArgs(input)
 	path, _ := args["path"].(string)
 	content, _ := args["content"].(string)
@@ -150,6 +159,9 @@ func (t *WriteFileTool) InvokableRun(_ context.Context, input string, _ ...tool.
 
 // InvokableRun deletes a file at the given path.
 func (t *DeleteFileTool) InvokableRun(_ context.Context, input string, _ ...tool.Option) (string, error) {
+	if t.Cfg == nil {
+		return "delete_file 配置缺失，请在设置中完成初始化", nil
+	}
 	args := parseArgs(input)
 	path, _ := args["path"].(string)
 	if path == "" {
@@ -167,6 +179,9 @@ func (t *DeleteFileTool) InvokableRun(_ context.Context, input string, _ ...tool
 
 // InvokableRun creates a directory and all necessary parents.
 func (t *MakeDirectoryTool) InvokableRun(_ context.Context, input string, _ ...tool.Option) (string, error) {
+	if t.Cfg == nil {
+		return "make_directory 配置缺失，请在设置中完成初始化", nil
+	}
 	args := parseArgs(input)
 	path, _ := args["path"].(string)
 	if path == "" {
@@ -184,6 +199,9 @@ func (t *MakeDirectoryTool) InvokableRun(_ context.Context, input string, _ ...t
 
 // InvokableRun moves or renames a file or directory.
 func (t *MoveFileTool) InvokableRun(_ context.Context, input string, _ ...tool.Option) (string, error) {
+	if t.Cfg == nil {
+		return "move_file 配置缺失，请在设置中完成初始化", nil
+	}
 	args := parseArgs(input)
 	src, _ := args["source"].(string)
 	dst, _ := args["destination"].(string)

@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"time"
 )
 
@@ -95,16 +96,23 @@ func scanItems(rows *sql.Rows) ([]Item, error) {
 		if err := rows.Scan(&it.ID, &trigStr, &it.Prompt, &createdStr); err != nil {
 			return nil, fmt.Errorf("scan item: %w", err)
 		}
-		it.TriggerAt = parseDBTime(trigStr).UTC().Format(time.RFC3339)
-		it.CreatedAt = parseDBTime(createdStr).UTC().Format(time.RFC3339)
+		t, ok := parseDBTime(trigStr)
+		if !ok {
+			slog.Warn("proactive: unrecognised trigger_at format, skipping item", "id", it.ID, "trigger_at", trigStr)
+			continue
+		}
+		it.TriggerAt = t.UTC().Format(time.RFC3339)
+		if c, ok := parseDBTime(createdStr); ok {
+			it.CreatedAt = c.UTC().Format(time.RFC3339)
+		}
 		items = append(items, it)
 	}
 	return items, rows.Err()
 }
 
 // parseDBTime parses a SQLite DATETIME string (UTC) into time.Time.
-// Tries common SQLite formats; returns zero time on failure.
-func parseDBTime(s string) time.Time {
+// Returns (time, true) on success and (zero, false) if the format is unrecognised.
+func parseDBTime(s string) (time.Time, bool) {
 	for _, layout := range []string{
 		"2006-01-02T15:04:05Z",
 		"2006-01-02T15:04:05",
@@ -112,8 +120,8 @@ func parseDBTime(s string) time.Time {
 		"2006-01-02 15:04:05.999999999",
 	} {
 		if t, err := time.ParseInLocation(layout, s, time.UTC); err == nil {
-			return t
+			return t, true
 		}
 	}
-	return time.Time{}
+	return time.Time{}, false
 }

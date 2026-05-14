@@ -61,7 +61,7 @@ let offModelChangedLatency = null
 
 // ─── Idle auto-close ──────────────────────────────────────────────────────────
 
-const IDLE_MS = 60_000
+const IDLE_MS = 3 * 60_000
 const isLLMActive = ref(false)
 let idleTimer = null
 let offToken = null
@@ -130,14 +130,6 @@ onMounted(async () => {
     resetIdleTimer()
   })
 
-  watch(() => props.visible, (v) => {
-    if (v) {
-      resetIdleTimer()
-    } else {
-      clearTimeout(idleTimer)
-    }
-  }, { immediate: true })
-
   mounted = true
 })
 
@@ -154,6 +146,14 @@ onUnmounted(() => {
   window.removeEventListener('mouseup', onResizeUp)
   window.removeEventListener('blur', onResizeUp)
 })
+
+watch(() => props.visible, (v) => {
+  if (v) {
+    resetIdleTimer()
+  } else {
+    clearTimeout(idleTimer)
+  }
+}, { immediate: true })
 
 const isFullscreen = ref(false)
 

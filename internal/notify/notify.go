@@ -25,29 +25,30 @@ const maxBodyRunes = 200
 // macOS dispatches asynchronously to the main queue.
 type Sender func(title, body string)
 
-// sender stores the active Sender. atomic.Value so SetSender and System can
-// race safely without a mutex.
+// senderWrapper is stored inside the atomic.Value so we can represent
+// "no sender" as a nil *senderWrapper rather than a nil interface, which
+// would cause atomic.Value to panic on type inconsistency.
+type senderWrapper struct{ fn Sender }
+
+// sender stores the active *senderWrapper. Always stores a non-nil pointer;
+// a nil fn inside means no-op.
 var sender atomic.Value
 
 // SetSender registers the concrete notification backend. Passing nil reverts
 // to a no-op. Typically called once at startup from main.
 func SetSender(s Sender) {
-	if s == nil {
-		sender.Store(Sender(nil))
-		return
-	}
-	sender.Store(s)
+	sender.Store(&senderWrapper{fn: s})
 }
 
 // System sends a non-blocking desktop notification. If no sender has been
 // registered (e.g. on non-macOS or during tests), the call is a no-op.
 func System(title, body string) {
-	v, _ := sender.Load().(Sender)
-	if v == nil {
+	v, _ := sender.Load().(*senderWrapper)
+	if v == nil || v.fn == nil {
 		slog.Debug("notify: no sender registered, dropping", "title", title)
 		return
 	}
-	v(title, truncate(body, maxBodyRunes))
+	v.fn(title, truncate(body, maxBodyRunes))
 }
 
 // truncate returns the first n runes of s, appending "…" when truncated.

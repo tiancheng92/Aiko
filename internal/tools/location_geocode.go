@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"time"
 
 	json "github.com/bytedance/sonic"
@@ -32,7 +31,7 @@ func reverseGeocode(lat, lon float64) string {
 	}
 	// Nominatim requires a descriptive User-Agent per usage policy.
 	req.Header.Set("User-Agent", "Aiko-DesktopPet/1.0 (https://github.com/tiancheng92/Aiko)")
-	req.Header.Set("Accept-Language", url.QueryEscape("zh-CN,zh;q=0.9,en;q=0.8"))
+	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
 
 	client := &http.Client{Timeout: geocodeTimeout}
 	resp, err := client.Do(req)

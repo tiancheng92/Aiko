@@ -222,6 +222,8 @@ const IDLE_GESTURES = [
 
 let _speakingEmotion = null; // last emotion received, used on speaking state entry
 let _idleVarietyTimer = null;
+/** _pendingTimers tracks inner setTimeout IDs so they can be cleared on unmount. */
+const _pendingTimers = [];
 
 // Shared loader + clip cache (module-level singletons).
 const _animLoader = new GLTFLoader();
@@ -276,9 +278,9 @@ async function initAnimationSystem(v) {
   idleMixer = new THREE.AnimationMixer(v.scene);
   // Welcome greeting on first load, then settle into idle.
   await playAnimation("/vrm/appearing.vrma", { loop: false, fadeTime: 0.3 });
-  setTimeout(() => {
+  _pendingTimers.push(setTimeout(() => {
     if (mounted) playAnimation(STATE_ANIMS.idle, { fadeTime: 0.8 });
-  }, 3000);
+  }, 3000));
 }
 
 /** applyStateAnimation switches to the animation for the given petState. */
@@ -311,21 +313,21 @@ function scheduleIdleVariety() {
               Math.floor(Math.random() * IDLE_VARIETY_POOL.length)
             ];
           await playAnimation(pick, { fadeTime: 0.8 });
-          setTimeout(
+          _pendingTimers.push(setTimeout(
             () => {
               if (mounted && petState.value === "idle")
                 playAnimation(STATE_ANIMS.idle, { fadeTime: 1.0 });
             },
             15000 + Math.random() * 5000,
-          );
+          ));
         } else {
           const pick =
             IDLE_GESTURES[Math.floor(Math.random() * IDLE_GESTURES.length)];
           await playAnimation(pick, { loop: false, fadeTime: 0.5 });
-          setTimeout(() => {
+          _pendingTimers.push(setTimeout(() => {
             if (mounted && petState.value === "idle")
               playAnimation(STATE_ANIMS.idle, { fadeTime: 0.8 });
-          }, 3500);
+          }, 3500));
         }
       }
       scheduleIdleVariety();
@@ -718,6 +720,8 @@ onUnmounted(() => {
   }
   clearTimeout(blinkTimer);
   clearTimeout(_idleVarietyTimer);
+  _pendingTimers.forEach(clearTimeout);
+  _pendingTimers.length = 0;
   offPreviewAnim?.();
   offSizeChange?.();
   offPositionReset?.();

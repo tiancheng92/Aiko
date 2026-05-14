@@ -3,6 +3,7 @@ package proactive
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -34,7 +35,9 @@ type AppInterface interface {
 type ProactiveEngine struct {
 	app     AppInterface
 	store   Store
+	mu      sync.Mutex
 	done    chan struct{}
+	wg      sync.WaitGroup
 	pollNow chan struct{}
 }
 
@@ -55,18 +58,33 @@ func (e *ProactiveEngine) Store() Store {
 // Start launches the background poll loop.
 // ctx is used as a lifecycle signal — once cancelled the loop exits.
 func (e *ProactiveEngine) Start(ctx context.Context) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.done != nil {
+		return // already running
+	}
 	e.done = make(chan struct{})
 	if e.store != nil {
-		go e.loop(ctx)
+		e.wg.Add(1)
+		go func() {
+			defer e.wg.Done()
+			e.loop(ctx)
+		}()
 	}
 }
 
-// Stop stops the poll loop.
+// Stop stops the poll loop and waits for it to exit before returning.
+// Safe to call even if Start was never called.
 func (e *ProactiveEngine) Stop() {
-	if e.done != nil {
-		close(e.done)
-		e.done = nil
+	e.mu.Lock()
+	if e.done == nil {
+		e.mu.Unlock()
+		return
 	}
+	close(e.done)
+	e.done = nil
+	e.mu.Unlock()
+	e.wg.Wait()
 }
 
 // TriggerPoll requests an immediate poll without waiting for the next tick.
@@ -168,11 +186,3 @@ func (e *ProactiveEngine) Poll(ctx context.Context) {
 	}
 }
 
-// truncate returns the first n runes of s. If s is longer, it appends "…".
-func truncate(s string, n int) string {
-	runes := []rune(s)
-	if len(runes) <= n {
-		return s
-	}
-	return string(runes[:n]) + "…"
-}

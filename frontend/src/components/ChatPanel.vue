@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { SendMessage, SendMessageWithImages, SendMessageWithFiles, GetMessages, GetMessagesBeforeID, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig, RegenerateLastReply } from '../../wailsjs/go/main/App'
+import { SendMessage, SendMessageWithImages, SendMessageWithFiles, GetMessages, GetMessagesBeforeID, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig, RegenerateLastReply, GetSoundsEnabled } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 import { marked, Renderer } from 'marked'
 import markedKatex from 'marked-katex-extension'
@@ -18,7 +18,6 @@ import 'highlight.js/styles/github-dark.css'
 import { useSounds } from '../composables/useSounds'
 import { useTypingScheduler } from '../composables/useTypingScheduler'
 import { useEscapeKey } from '../composables/useEscapeKey'
-import { GetSoundsEnabled } from '../../wailsjs/go/main/App'
 import ToolConfirmModal from './ToolConfirmModal.vue'
 import ExecutionProgress from './ExecutionProgress.vue'
 import LinkPreview from './LinkPreview.vue'
@@ -348,6 +347,8 @@ function closeLightbox() {
 }
 const loading = ref(false)
 const messagesEl = ref(null)
+/** sentinelObserver watches the top-of-list sentinel for infinite-scroll lazy loading. */
+let sentinelObserver = null
 const codeMaxWidth = ref(0)
 const copiedIdx = ref(null)
 const showClearConfirm = ref(false)
@@ -536,10 +537,10 @@ onMounted(async () => {
   // Sentinel element at top of list triggers lazy-load via IntersectionObserver.
   const sentinel = document.getElementById('msg-load-sentinel')
   if (sentinel) {
-    const io = new IntersectionObserver(async (entries) => {
+    sentinelObserver = new IntersectionObserver(async (entries) => {
       if (entries[0].isIntersecting) await loadOlderMessages()
     }, { root: messagesEl.value, threshold: 0 })
-    io.observe(sentinel)
+    sentinelObserver.observe(sentinel)
   }
 
   // Show welcome message on first launch when chat history is empty.
@@ -735,6 +736,8 @@ onUnmounted(() => {
   offSoundsChanged?.()
   offVoiceStart?.(); offVoiceTranscript?.(); offVoiceEnd?.(); offVoiceFinal?.(); offVoiceError?.(); offVoiceAutoSend?.()
   document.removeEventListener('click', closeColDrops)
+  sentinelObserver?.disconnect()
+  sentinelObserver = null
   // Stop any in-flight TTS playback so detached <audio> elements can be GC'd.
   if (currentTTSAudio) { try { currentTTSAudio.pause() } catch {} ; currentTTSAudio = null }
   resizeObserver?.disconnect()

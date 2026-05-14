@@ -28,9 +28,13 @@ func (s *SystemSpeaker) Speak(ctx context.Context, text, voice string, speed flo
 		voice = ""
 	}
 
+	// Escape voice name the same way as text to prevent AppleScript injection.
+	safeVoice := strings.ReplaceAll(voice, `\`, `\\`)
+	safeVoice = strings.ReplaceAll(safeVoice, `"`, `\"`)
+
 	var script string
-	if voice != "" {
-		script = fmt.Sprintf(`say "%s" using "%s"`, safe, voice)
+	if safeVoice != "" {
+		script = fmt.Sprintf(`say "%s" using "%s"`, safe, safeVoice)
 	} else {
 		script = fmt.Sprintf(`say "%s"`, safe)
 	}

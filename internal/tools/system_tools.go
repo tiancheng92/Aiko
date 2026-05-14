@@ -190,10 +190,11 @@ func getUptime() (time.Duration, error) {
 		// Parse: { sec = 1735123456, usec = 123456 }
 		line := strings.TrimSpace(string(out))
 		parts := strings.Split(line, ",")
-		if len(parts) < 1 {
-			return 0, fmt.Errorf("unexpected boottime format")
+		eqParts := strings.Split(parts[0], "=")
+		if len(eqParts) < 2 {
+			return 0, fmt.Errorf("unexpected boottime format: %s", line)
 		}
-		secPart := strings.TrimSpace(strings.Split(parts[0], "=")[1])
+		secPart := strings.TrimSpace(eqParts[1])
 		bootTime, err := strconv.ParseInt(secPart, 10, 64)
 		if err != nil {
 			return 0, err
@@ -334,7 +335,11 @@ func getMemoryUsage() (used, total uint64, err error) {
 		}
 
 		freeMemory := (freePages + inactivePages) * pageSize
-		used = total - freeMemory
+		if freeMemory >= total {
+			used = 0
+		} else {
+			used = total - freeMemory
+		}
 		return used, total, nil
 	}
 	return 0, 0, fmt.Errorf("not supported on %s", runtime.GOOS)
