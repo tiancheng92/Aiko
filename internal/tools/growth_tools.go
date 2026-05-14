@@ -29,11 +29,11 @@ func (t *SaveMemoryTool) Permission() PermissionLevel { return PermPublic }
 // Info returns the eino tool schema for save_memory.
 func (t *SaveMemoryTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return infoFromSchema(t.Name(),
-		"保存单条具体事实、偏好或结论到长期记忆（一两句话）。保存前先用 search_memory 确认尚未存储类似内容，避免重复。对话历史由系统自动处理，无需摘要。",
+		"保存单条跨会话事实或临时结论到长期记忆（一两句话），如「用户今天提到了 X」。稳定的用户属性（偏好、习惯、背景）请用 update_user_profile。保存前先用 search_memory 确认尚未存储类似内容。对话历史由系统自动处理，无需摘要。",
 		map[string]*schema.ParameterInfo{
 			"content": {
 				Type:     schema.String,
-				Desc:     "要长期记住的具体事实、偏好或结论（一两句话）",
+				Desc:     "要长期记住的具体事实或临时结论（一两句话）",
 				Required: true,
 			},
 		},
@@ -128,7 +128,7 @@ func (t *UpdateUserProfileTool) Permission() PermissionLevel { return PermPublic
 // Info returns the eino tool schema for update_user_profile.
 func (t *UpdateUserProfileTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return infoFromSchema(t.Name(),
-		"更新用户画像中的某个条目（习惯、偏好、背景信息）。已存在的 key 会被覆盖，否则追加。",
+		"更新用户画像中的稳定属性（偏好、习惯、背景），如 preferred_language、timezone。已存在的 key 被覆盖，否则追加。临时事实或一次性结论请用 save_memory。",
 		map[string]*schema.ParameterInfo{
 			"key": {
 				Type:     schema.String,
@@ -180,7 +180,7 @@ func (t *ListSkillsTool) Permission() PermissionLevel { return PermPublic }
 // Info returns the eino tool schema for list_skill_names.
 func (t *ListSkillsTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return infoFromSchema(t.Name(),
-		"列出你（AI）通过 save_skill 自主沉淀的技能的名称与一句话描述（概览索引）。⚠️ 注意：此列表并不包s全部可用技能——系统内置工具、用户配置的技能等均不在此列，仅列出由 AI 自主写入的技能文件。适合快速检索：调用 save_skill 前先确认是否存在同名/相似技能；查找旧技能名称以便重命名。",
+		"列出 AI 通过 save_skill 自主沉淀的技能名称与一句话描述。调用 save_skill 前先确认是否已存在同名或相似技能；需要重命名时先通过此工具查找旧技能名。",
 		map[string]*schema.ParameterInfo{},
 	), nil
 }

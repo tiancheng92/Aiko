@@ -19,7 +19,7 @@ func (t *GetCalendarEventsTool) Permission() PermissionLevel { return PermPublic
 // Info returns eino tool metadata.
 func (t *GetCalendarEventsTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return infoFromSchema(t.Name(),
-		"查询 macOS 日历中指定日期范围内的事件。返回事件列表，包含标题、开始/结束时间、地点和备注。",
+		"查询 macOS 日历中指定日期范围内的事件，返回标题、开始/结束时间、地点和备注。仅支持 macOS。",
 		map[string]*schema.ParameterInfo{
 			"start_date": {
 				Desc:     "开始日期，格式 YYYY-MM-DD（必填）",
@@ -52,7 +52,7 @@ func (t *CreateCalendarEventTool) Permission() PermissionLevel { return PermProt
 // Info returns eino tool metadata.
 func (t *CreateCalendarEventTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return infoFromSchema(t.Name(),
-		"在 macOS 日历中创建新事件。创建前可用 get_calendar_events 确认该时间段没有冲突。",
+		"在 macOS 日历中创建新事件。创建前可用 get_calendar_events 确认无时间冲突。仅支持 macOS。",
 		map[string]*schema.ParameterInfo{
 			"title": {
 				Desc:     "事件标题（必填）",

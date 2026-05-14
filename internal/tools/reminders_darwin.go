@@ -38,7 +38,7 @@ func (t *GetRemindersTool) Permission() PermissionLevel { return PermPublic }
 // Info returns eino tool metadata.
 func (t *GetRemindersTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return infoFromSchema(t.Name(),
-		"获取 macOS 提醒事项。可按清单名过滤；不传则返回所有清单中未完成的提醒。",
+		"获取 macOS「提醒事项」App 中的提醒。可按清单名过滤；不传则返回所有清单的未完成提醒。仅支持 macOS。",
 		map[string]*schema.ParameterInfo{
 			"list": {
 				Desc:     "清单名称（可选）。留空则获取所有清单的未完成提醒。",
@@ -133,7 +133,7 @@ func (t *CompleteReminderTool) Permission() PermissionLevel { return PermPublic 
 // Info returns eino tool metadata.
 func (t *CompleteReminderTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return infoFromSchema(t.Name(),
-		"将 macOS 提醒事项标记为已完成。需要提供提醒名称，可选提供清单名称以避免同名歧义。",
+		"将 macOS「提醒事项」中的某条提醒标记为已完成。需提供提醒名称，可选提供清单名以避免同名歧义。仅支持 macOS。",
 		map[string]*schema.ParameterInfo{
 			"name": {
 				Desc:     "提醒事项的名称（精确匹配）。",

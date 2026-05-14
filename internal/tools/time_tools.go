@@ -56,7 +56,7 @@ func (t *FormatTimeTool) Permission() PermissionLevel { return PermPublic }
 // Info returns the eino tool schema for format_time.
 func (t *FormatTimeTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return infoFromSchema(t.Name(),
-		"将当前时间按指定 Go layout 格式输出。默认 RFC3339。",
+		"将当前时间按自定义 Go layout 格式输出，默认 RFC3339。仅在需要特定格式字符串时使用；普通时间查询直接用 get_current_time。",
 		map[string]*schema.ParameterInfo{
 			"layout": {
 				Type: schema.String,

@@ -26,7 +26,7 @@ func (t *GetMailsTool) Permission() PermissionLevel { return PermPublic }
 // Info returns eino tool metadata.
 func (t *GetMailsTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return infoFromSchema(t.Name(),
-		"获取 macOS Mail.app 中的邮件列表。支持按邮箱名、时间范围（since/until）和已读状态过滤。返回每封邮件的发件人、主题、日期和已读状态，不含正文（用 get_mail_content 读取正文）。",
+		"获取 macOS Mail.app 中的邮件列表。支持按邮箱名、时间范围（since/until）和已读状态过滤。返回发件人、主题、日期和已读状态，不含正文（用 get_mail_content 读取正文）。仅支持 macOS。",
 		map[string]*schema.ParameterInfo{
 			"mailbox": {
 				Desc:     "邮箱名称（可选），如 \"收件箱\" 或 \"inbox\"。留空则查询所有账户的收件箱。",
@@ -197,7 +197,7 @@ func (t *GetMailContentTool) Permission() PermissionLevel { return PermPublic }
 // Info returns eino tool metadata.
 func (t *GetMailContentTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return infoFromSchema(t.Name(),
-		"读取 macOS Mail.app 中某封邮件的完整正文。通过主题和可选的发件人来定位邮件。如有多封匹配，返回最新一封。",
+		"读取 macOS Mail.app 中某封邮件的完整正文。通过主题和可选的发件人定位邮件；多封匹配时返回最新一封。仅支持 macOS。",
 		map[string]*schema.ParameterInfo{
 			"subject": {
 				Desc:     "邮件主题（精确匹配或包含匹配）。",

@@ -20,7 +20,7 @@ func (t *TakeScreenshotTool) Permission() PermissionLevel { return PermProtected
 func (t *TakeScreenshotTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name:        t.Name(),
-		Desc:        "截取当前全屏截图，AI 将直接「看到」屏幕内容并进行分析。",
+		Desc:        "截取当前全屏截图，AI 将直接「看到」屏幕内容并进行分析。仅支持 macOS。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{}),
 	}, nil
 }

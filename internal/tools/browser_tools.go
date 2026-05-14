@@ -24,7 +24,7 @@ func (t *GetBrowserURLTool) Permission() PermissionLevel { return PermPublic }
 func (t *GetBrowserURLTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: t.Name(),
-		Desc: "获取用户当前浏览器（Chrome/Safari/Arc 等）正在访问的页面 URL，并抓取该页面的正文内容供 AI 分析或总结。无需任何参数。",
+		Desc: "获取用户当前浏览器（Chrome/Safari/Arc 等）正在访问的页面 URL，并抓取该页面的正文内容供 AI 分析或总结。无需任何参数。仅支持 macOS。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{}),
 	}, nil
 }

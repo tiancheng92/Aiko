@@ -998,10 +998,10 @@ func (t *GetExchangeRateTool) Permission() PermissionLevel { return PermProtecte
 
 // Info returns the eino tool schema for get_exchange_rate.
 func (t *GetExchangeRateTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "查询实时外汇汇率并换算金额（数据源: open.er-api.com，免费无需 API Key）。",
+	return infoFromSchema(t.Name(), "查询实时外汇汇率并换算金额。",
 		map[string]*schema.ParameterInfo{
 			"base":    {Type: schema.String, Desc: "基础货币代码，如 USD、CNY", Required: true},
-			"targets": {Type: schema.String, Desc: "目标货币代码列表（JSON 数组字符串），空则返回主要货币"},
+			"targets": {Type: schema.String, Desc: "目标货币代码列表，格式为 JSON 数组字符串，如 \"[\\\"USD\\\",\\\"EUR\\\"]\"；留空则返回主要货币"},
 			"amount":  {Type: schema.Number, Desc: "换算金额，默认 1"},
 		}), nil
 }

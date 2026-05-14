@@ -20,7 +20,7 @@ func (t *ListRunningAppsTool) Permission() PermissionLevel { return PermPublic }
 func (t *ListRunningAppsTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name:        t.Name(),
-		Desc:        "列出当前正在运行的所有可见应用程序名称。在使用 control_app 前可先调用此工具获取准确的应用名称。",
+		Desc:        "列出当前正在运行的所有可见应用程序名称。在使用 control_app 前可先调用此工具获取准确的应用名称。仅支持 macOS。",
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{}),
 	}, nil
 }
@@ -37,7 +37,7 @@ func (t *ControlAppTool) Permission() PermissionLevel { return PermProtected }
 // Info returns eino tool metadata.
 func (t *ControlAppTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return infoFromSchema(t.Name(),
-		"控制 macOS 应用程序：打开并激活、仅激活到前台、或退出。",
+		"控制 macOS 应用程序：打开并激活、仅激活到前台、或退出。仅支持 macOS。",
 		map[string]*schema.ParameterInfo{
 			"action": {
 				Type:     schema.String,

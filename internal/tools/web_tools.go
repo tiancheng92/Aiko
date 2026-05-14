@@ -47,7 +47,7 @@ func (t *WebSearchTool) Permission() PermissionLevel { return PermProtected }
 
 // Info returns the eino tool schema for web_search.
 func (t *WebSearchTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "搜索互联网，返回结果标题、URL 和摘要。配置 Tavily API Key 后使用 Tavily（更准确，支持时效过滤）；未配置时自动退回 DuckDuckGo。若已知具体页面 URL，直接用 web_fetch 更精准。\n可选参数（仅 Tavily 生效）：time_range 支持 \"day\"、\"week\"、\"month\"、\"year\"；start_date / end_date 格式为 \"YYYY-MM-DD\"。",
+	return infoFromSchema(t.Name(), "搜索互联网，返回结果标题、URL 和摘要。配置 Tavily API Key 后使用 Tavily（更准确，支持时效过滤）；未配置时自动退回 DuckDuckGo。若已知具体页面 URL，直接用 web_fetch 更精准。",
 		map[string]*schema.ParameterInfo{
 			"query": {
 				Type:     schema.String,
@@ -393,7 +393,7 @@ func (t *WebFetchTool) Permission() PermissionLevel { return PermProtected }
 
 // Info returns the eino tool schema for web_fetch.
 func (t *WebFetchTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "抓取指定 URL 的网页纯文本内容（去除 HTML/JS/CSS）。适合阅读文章、文档、GitHub README 等具体页面。先用 web_search 找到 URL 再用此工具读取详情。",
+	return infoFromSchema(t.Name(), "抓取指定 URL 的网页纯文本内容（去除 HTML/JS/CSS）。已知 URL 时直接使用；不知道 URL 时先用 web_search 搜索再调此工具读取详情。",
 		map[string]*schema.ParameterInfo{
 			"url": {
 				Type:     schema.String,
