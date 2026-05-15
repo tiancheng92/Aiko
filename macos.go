@@ -491,6 +491,21 @@ static void aikoReleaseKeyWindow() {
     });
 }
 
+// aikoLowerWindowLevel temporarily drops the main window to NSNormalWindowLevel so
+// other app windows can appear above it (e.g. while the settings modal is visible).
+static void aikoLowerWindowLevel() {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (gWindow) [gWindow setLevel:NSNormalWindowLevel];
+    });
+}
+
+// aikoRaiseWindowLevel restores the main window to NSFloatingWindowLevel (always-on-top).
+static void aikoRaiseWindowLevel() {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (gWindow) [gWindow setLevel:NSFloatingWindowLevel];
+    });
+}
+
 // startVoiceRecognition_SpeechAnalyzer starts STT using the macOS 26+ SpeechAnalyzer API.
 // Results are written to gVoicePipeFd in the same format as the SFSpeechRecognizer path:
 //   plain text  → partial transcript
@@ -1193,6 +1208,13 @@ func acquireKeyWindow() { C.aikoAcquireKeyWindow() }
 
 // releaseKeyWindow resigns key-window status, restoring focus to the previous app.
 func releaseKeyWindow() { C.aikoReleaseKeyWindow() }
+
+// lowerWindowLevel drops the main window to NSNormalWindowLevel so other apps can
+// appear above it (e.g. while the in-app settings modal is open).
+func lowerWindowLevel() { C.aikoLowerWindowLevel() }
+
+// raiseWindowLevel restores the main window to NSFloatingWindowLevel (always-on-top).
+func raiseWindowLevel() { C.aikoRaiseWindowLevel() }
 
 // getMouseX returns the current mouse cursor X in macOS screen coordinates.
 func getMouseX() float64 { return float64(C.getMouseScreenX()) }

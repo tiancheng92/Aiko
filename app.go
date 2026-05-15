@@ -138,6 +138,13 @@ func (a *App) AcquireKeyWindow() { acquireKeyWindow() }
 // ReleaseKeyWindow resigns key-window status, restoring focus to the previous app.
 func (a *App) ReleaseKeyWindow() { releaseKeyWindow() }
 
+// LowerWindowLevel drops the main window to NSNormalWindowLevel so other apps
+// can appear above it while the settings modal is open.
+func (a *App) LowerWindowLevel() { lowerWindowLevel() }
+
+// RaiseWindowLevel restores the main window to NSFloatingWindowLevel (always-on-top).
+func (a *App) RaiseWindowLevel() { raiseWindowLevel() }
+
 // ConfirmToolExecution is called by the frontend when the user approves or rejects
 // a pending tool execution request.
 func (a *App) ConfirmToolExecution(id string, approved bool, editedContent string) {

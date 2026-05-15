@@ -116,6 +116,8 @@ export function ListProactiveItems():Promise<Array<proactive.Item>>;
 
 export function ListVRMModels():Promise<Array<main.VRMModelInfo>>;
 
+export function LowerWindowLevel():Promise<void>;
+
 export function MarkWelcomeShown():Promise<void>;
 
 export function MissingRequiredConfig():Promise<Array<string>>;
@@ -125,6 +127,8 @@ export function OpenDirectoryDialog(arg1:string):Promise<string>;
 export function OpenFileDialog(arg1:string,arg2:Array<frontend.FileFilter>):Promise<string>;
 
 export function PingLLM():Promise<number>;
+
+export function RaiseWindowLevel():Promise<void>;
 
 export function RegenerateLastReply():Promise<void>;
 

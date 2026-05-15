@@ -214,6 +214,10 @@ export function ListVRMModels() {
   return window['go']['main']['App']['ListVRMModels']();
 }
 
+export function LowerWindowLevel() {
+  return window['go']['main']['App']['LowerWindowLevel']();
+}
+
 export function MarkWelcomeShown() {
   return window['go']['main']['App']['MarkWelcomeShown']();
 }
@@ -232,6 +236,10 @@ export function OpenFileDialog(arg1, arg2) {
 
 export function PingLLM() {
   return window['go']['main']['App']['PingLLM']();
+}
+
+export function RaiseWindowLevel() {
+  return window['go']['main']['App']['RaiseWindowLevel']();
 }
 
 export function RegenerateLastReply() {
