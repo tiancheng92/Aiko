@@ -5,7 +5,7 @@ import VRMPet from './components/VRMPet.vue'
 import ChatBubble from './components/ChatBubble.vue'
 import SettingsWindow from './components/SettingsWindow.vue'
 import NotificationBubble from './components/NotificationBubble.vue'
-import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize, GetConfig, SetChatVisible, LowerWindowLevel, RaiseWindowLevel } from '../wailsjs/go/main/App'
+import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize, GetConfig, SetChatVisible } from '../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../wailsjs/runtime/runtime'
 import { springAnimate } from './composables/useSpring'
 
@@ -351,7 +351,7 @@ onMounted(async () => {
       })
     }
   })
-  offSettings  = EventsOn('settings:open', () => { LowerWindowLevel(); settingsOpen.value = true })
+  offSettings  = EventsOn('settings:open', () => { settingsOpen.value = true })
   offRenderBackend = EventsOn('config:render:backend:changed', (backend) => {
     renderBackend.value = backend
   })
@@ -411,9 +411,8 @@ function toggleBubble() {
   }
 }
 
-/** openSettings lowers the main window level and opens the settings modal. */
+/** openSettings opens the settings window. */
 function openSettings() {
-  LowerWindowLevel()
   settingsOpen.value = true
 }
 
@@ -548,7 +547,7 @@ function onSettingsLeave(el, done) {
     <SettingsWindow
       v-if="settingsOpen"
       :active-screen="activeScreen"
-      @close="settingsOpen = false; RaiseWindowLevel()"
+      @close="settingsOpen = false"
     />
   </Transition>
   <NotificationBubble
