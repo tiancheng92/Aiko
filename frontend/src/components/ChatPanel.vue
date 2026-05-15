@@ -600,6 +600,8 @@ const voiceAutoSend = ref(false)
 const isStreaming = ref(false)
 const activeTTSMsgId = ref(null)  // id of the message currently being spoken
 const cfg = ref(null)
+const aiAvatar = ref('')    // data URL or '' (use default /logo.png)
+const userAvatar = ref('')  // data URL or '' (use default SVG)
 const { playSend, playReceive, playError, playStop } = useSounds()
 let soundsEnabled = false
 
@@ -647,6 +649,7 @@ let proactiveStarted = false
 let offToken, offDone, offError, offClear, offProactiveStart, offProactiveMessage, offCronStart, offImage, offThinking, offSystemInject
 let offTTSDone, offTTSError, offTTSAudio
 let offSoundsChanged
+let offAvatarChanged
 let offVoiceStart, offVoiceTranscript, offVoiceEnd, offVoiceFinal, offVoiceError, offVoiceAutoSend
 let offUpdateProgress
 
@@ -759,7 +762,7 @@ onMounted(async () => {
   offSystemInject = EventsOn('chat:system:inject', (msg) => {
     loading.value = false
     isStreaming.value = false
-    messages.value.push({ role: 'system', content: msg })
+    messages.value.push({ role: 'system', content: msg, isInfo: true })
     nextTick(scrollToBottom)
   })
 
@@ -862,7 +865,16 @@ onMounted(async () => {
 
   try { voiceAutoSend.value = await GetVoiceAutoSend() } catch {}
   try { soundsEnabled = await GetSoundsEnabled() } catch {}
-  try { cfg.value = await GetConfig() } catch {}
+  try {
+    cfg.value = await GetConfig()
+    aiAvatar.value = cfg.value?.AIAvatar || ''
+    userAvatar.value = cfg.value?.UserAvatar || ''
+  } catch {}
+
+  offAvatarChanged = EventsOn('config:avatar:changed', ({ role, dataURL }) => {
+    if (role === 'ai') aiAvatar.value = dataURL || ''
+    else if (role === 'user') userAvatar.value = dataURL || ''
+  })
 
   offSoundsChanged = EventsOn('config:sounds:changed', (val) => {
     soundsEnabled = val
@@ -970,7 +982,7 @@ onUnmounted(() => {
   offToken?.(); offDone?.(); offError?.(); offClear?.(); offImage?.(); offThinking?.()
   offProactiveStart?.(); offProactiveMessage?.(); offCronStart?.(); offSystemInject?.()
   offTTSDone?.(); offTTSError?.(); offTTSAudio?.()
-  offSoundsChanged?.()
+  offSoundsChanged?.(); offAvatarChanged?.()
   offVoiceStart?.(); offVoiceTranscript?.(); offVoiceEnd?.(); offVoiceFinal?.(); offVoiceError?.(); offVoiceAutoSend?.()
   offUpdateProgress?.()
   document.removeEventListener('click', closeColDrops)
@@ -1372,7 +1384,8 @@ defineExpose({ focusInput, scrollToBottom })
         <span v-else-if="!allLoaded" class="load-sentinel-dot" />
       </div>
       <TransitionGroup name="msg-slide" tag="div" class="messages-inner" :class="{ 'suppress-anim': suppressAnimation }">
-      <div v-for="(m, i) in messages" :key="msgKey(m, i)" :class="['msg', m.role]">
+      <div v-for="(m, i) in messages" :key="msgKey(m, i)" :class="['msg', m.role, { 'is-info': m.isInfo }]">
+        <img v-if="m.role === 'assistant'" class="msg-avatar" :src="aiAvatar || '/logo.png'" alt="AI" draggable="false" />
         <div class="bubble-wrap" :class="{ ghost: m.ghost }">
           <!-- Collapsible wrapper -->
           <div
@@ -1418,7 +1431,7 @@ defineExpose({ focusInput, scrollToBottom })
                   <div v-if="m.thinkingContent" :class="['thinking-block', { 'thinking-streaming': m.streaming && !m.content, expanded: m.thinkingExpanded }]">
                     <div class="thinking-block-header" @click="toggleThinkingExpanded(i)">
                       <div class="thinking-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/><path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/><path d="M3.477 10.896a4 4 0 0 1 .585-.396"/><path d="M19.938 10.5a4 4 0 0 1 .585.396"/><path d="M6 18a4 4 0 0 1-1.967-.516"/><path d="M19.967 17.484A4 4 0 0 1 18 18"/></svg>
                       </div>
                       <span class="thinking-label">思考过程</span>
                       <span v-if="m.streaming && !m.content" class="thinking-streaming-badge">
@@ -1454,30 +1467,6 @@ defineExpose({ focusInput, scrollToBottom })
                 </div>
               </template>
 
-              <!-- Action buttons: absolutely positioned, no layout impact -->
-              <div
-                v-if="!m.streaming && !m.thinking"
-                :class="['msg-actions', m.role]"
-              >
-                <button
-                  class="msg-action-btn"
-                  @click="copyMessage(i)"
-                  :title="copiedIdx === i ? '已复制' : '复制'"
-                >
-                  <svg v-if="copiedIdx !== i" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                  <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                </button>
-                <button
-                  v-if="m.role === 'assistant'"
-                  class="msg-action-btn"
-                  :title="activeTTSMsgId === i ? '停止朗读' : '朗读'"
-                  @click="speakMessage(i)"
-                >
-                  <svg v-if="activeTTSMsgId !== i" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-                  <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                </button>
-              </div>
-
               <!-- Collapse fade overlay + expand button (inside bubble-row so width matches bubble) -->
               <Transition name="coll-fade">
                 <div v-if="isCollapsed(m, i)" class="collapse-fade" :class="m.role" @click.stop="toggleExpand(m, i)">
@@ -1488,6 +1477,30 @@ defineExpose({ focusInput, scrollToBottom })
                 </div>
               </Transition>
             </div>
+          </div>
+
+          <!-- Action buttons: outside bubble-row so overflow:hidden when collapsed doesn't clip them -->
+          <div
+            v-if="!m.streaming && !m.thinking"
+            :class="['msg-actions', m.role]"
+          >
+            <button
+              class="msg-action-btn"
+              @click="copyMessage(i)"
+              :title="copiedIdx === i ? '已复制' : '复制'"
+            >
+              <svg v-if="copiedIdx !== i" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </button>
+            <button
+              v-if="m.role === 'assistant'"
+              class="msg-action-btn"
+              :title="activeTTSMsgId === i ? '停止朗读' : '朗读'"
+              @click="speakMessage(i)"
+            >
+              <svg v-if="activeTTSMsgId !== i" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+              <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            </button>
           </div>
 
           <div v-if="(m.time && !m.streaming && !m.thinking) || (isEverCollapsed(m, i) && !isCollapsed(m, i))" class="msg-meta-row">
@@ -1503,6 +1516,10 @@ defineExpose({ focusInput, scrollToBottom })
             </button>
           </div>
         </div>
+        <div v-if="m.role === 'user' && !userAvatar" class="msg-avatar user-avatar" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
+        </div>
+        <img v-else-if="m.role === 'user' && userAvatar" class="msg-avatar" :src="userAvatar" alt="用户" draggable="false" />
       </div>
       </TransitionGroup>
     </div>
@@ -1778,12 +1795,34 @@ defineExpose({ focusInput, scrollToBottom })
 .h-dot:nth-child(3) { animation-delay: 0.4s; }
 
 /* Row */
-.msg { display: flex; }
-.msg.user { justify-content: flex-end; }
-.msg.assistant, .msg.system { justify-content: flex-start; }
+.msg { display: flex; align-items: flex-start; }
+.msg.user { justify-content: flex-end; gap: 8px; }
+.msg.assistant, .msg.system { justify-content: flex-start; gap: 8px; }
+
+.msg-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 2px;
+  user-select: none;
+}
+img.msg-avatar {
+  object-fit: cover;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  -webkit-user-drag: none;
+}
+.user-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.6);
+}
 
 /* Wrap */
-.bubble-wrap { max-width: 88%; display: flex; flex-direction: column; }
+.bubble-wrap { max-width: 82%; display: flex; flex-direction: column; position: relative; }
 .msg.user .bubble-wrap { align-items: flex-end; }
 
 /* Collapsible wrapper */
@@ -1953,6 +1992,12 @@ defineExpose({ focusInput, scrollToBottom })
   border-radius: 10px;
   font-size: 12px;
   white-space: pre-wrap;
+}
+/* Info system bubble (e.g. app:restarting) — blue instead of red */
+.system.is-info .bubble {
+  background: var(--accent-alpha-08);
+  color: var(--accent-hover);
+  border-color: var(--accent-alpha-20);
 }
 
 /* Ghost bubbles: interrupted messages, visual only */
@@ -3195,7 +3240,9 @@ body > .lightbox .lightbox-img {
   justify-content: center;
   flex-shrink: 0;
   color: rgba(130, 185, 255, 0.95);
+  line-height: 0;
 }
+.thinking-icon svg { display: block; }
 
 .thinking-label {
   font-size: 11px;

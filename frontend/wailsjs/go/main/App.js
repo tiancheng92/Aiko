@@ -234,6 +234,10 @@ export function RegenerateLastReply() {
   return window['go']['main']['App']['RegenerateLastReply']();
 }
 
+export function ResetAvatar(arg1) {
+  return window['go']['main']['App']['ResetAvatar'](arg1);
+}
+
 export function ResetBallPosition(arg1, arg2) {
   return window['go']['main']['App']['ResetBallPosition'](arg1, arg2);
 }
@@ -276,6 +280,10 @@ export function SendMessageWithImages(arg1, arg2) {
 
 export function SetAutoLaunch(arg1) {
   return window['go']['main']['App']['SetAutoLaunch'](arg1);
+}
+
+export function SetAvatar(arg1, arg2) {
+  return window['go']['main']['App']['SetAvatar'](arg1, arg2);
 }
 
 export function SetChatVisible(arg1) {

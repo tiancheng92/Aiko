@@ -85,7 +85,7 @@ func (t *CheckAndUpdateTool) InvokableRun(ctx context.Context, _ string, opts ..
 
 		// Persist the current conversation turn before the process is replaced.
 		if flushFn, ok := ctx.Value(PersistBeforeRestartKey{}).(func(string)); ok {
-			flushFn("已确认安装更新 " + latestVersion + "，应用即将重启。")
+			flushFn("v" + latestVersion + " 更新完成，我回来啦~")
 		}
 
 		// Signal the frontend to clear loading state and show a farewell message.

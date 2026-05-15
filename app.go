@@ -907,6 +907,35 @@ func (a *App) SaveConfig(cfg *config.Config) error {
 	return nil
 }
 
+// SetAvatar stores a custom avatar data URL for the given role ("ai" or "user")
+// and emits config:avatar:changed so the frontend can update immediately.
+func (a *App) SetAvatar(role string, dataURL string) error {
+	a.mu.Lock()
+	switch role {
+	case "ai":
+		a.cfg.AIAvatar = dataURL
+	case "user":
+		a.cfg.UserAvatar = dataURL
+	default:
+		a.mu.Unlock()
+		return fmt.Errorf("unknown avatar role: %s", role)
+	}
+	cfgCopy := *a.cfg
+	a.mu.Unlock()
+
+	if err := a.configStore.Save(&cfgCopy); err != nil {
+		return err
+	}
+	wailsruntime.EventsEmit(a.ctx, "config:avatar:changed", map[string]string{"role": role, "dataURL": dataURL})
+	return nil
+}
+
+// ResetAvatar removes the custom avatar for the given role ("ai" or "user"),
+// reverting to the built-in default, and emits config:avatar:changed.
+func (a *App) ResetAvatar(role string) error {
+	return a.SetAvatar(role, "")
+}
+
 // ListModelProfiles returns all saved model profiles.
 func (a *App) ListModelProfiles() ([]config.ModelProfile, error) {
 	return a.profileStore.List()

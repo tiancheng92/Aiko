@@ -189,13 +189,15 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   line-height: 1;
-  transition: background 0.12s, color 0.12s;
+  transition: background 0.12s, color 0.12s, transform 0.1s cubic-bezier(0.16, 1, 0.3, 1);
   flex-shrink: 0;
 }
 .notif-close:hover {
   background: rgba(255, 69, 58, 0.16);
   color: var(--danger);
+  transform: scale(1.12);
 }
+.notif-close:active { transform: scale(0.94); }
 .notif-close:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;

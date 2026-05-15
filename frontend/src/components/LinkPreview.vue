@@ -1,4 +1,5 @@
 <template>
+  <Transition name="lp-reveal">
   <div v-if="preview" class="link-preview" @click="open">
     <!-- Content area -->
     <div class="lp-body">
@@ -15,6 +16,7 @@
       </div>
     </div>
   </div>
+  </Transition>
 </template>
 
 <script setup>
@@ -162,5 +164,18 @@ function hideFavicon(e) {
 
 .link-preview:hover .lp-ext-icon {
   color: rgba(3, 105, 161, 0.7);
+}
+
+/* Mount animation: fade + slide up from 6px below */
+.lp-reveal-enter-active {
+  transition: opacity 0.24s ease, transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.lp-reveal-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-reveal-enter-active { transition: opacity 0.14s; }
+  .lp-reveal-enter-from   { transform: none; }
 }
 </style>

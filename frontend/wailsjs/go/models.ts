@@ -37,6 +37,8 @@ export namespace config {
 	    ThemeStyle: string;
 	    JinaAPIKey: string;
 	    TavilyAPIKey: string;
+	    AIAvatar: string;
+	    UserAvatar: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -80,6 +82,8 @@ export namespace config {
 	        this.ThemeStyle = source["ThemeStyle"];
 	        this.JinaAPIKey = source["JinaAPIKey"];
 	        this.TavilyAPIKey = source["TavilyAPIKey"];
+	        this.AIAvatar = source["AIAvatar"];
+	        this.UserAvatar = source["UserAvatar"];
 	    }
 	}
 	export class ModelProfile {

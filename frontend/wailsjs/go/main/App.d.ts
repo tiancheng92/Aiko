@@ -126,6 +126,8 @@ export function PingLLM():Promise<number>;
 
 export function RegenerateLastReply():Promise<void>;
 
+export function ResetAvatar(arg1:string):Promise<void>;
+
 export function ResetBallPosition(arg1:number,arg2:number):Promise<void>;
 
 export function RunCronJobNow(arg1:number):Promise<void>;
@@ -147,6 +149,8 @@ export function SendMessageWithFiles(arg1:string,arg2:Array<string>,arg3:Array<m
 export function SendMessageWithImages(arg1:string,arg2:Array<string>):Promise<void>;
 
 export function SetAutoLaunch(arg1:boolean):Promise<void>;
+
+export function SetAvatar(arg1:string,arg2:string):Promise<void>;
 
 export function SetChatVisible(arg1:boolean):Promise<void>;
 

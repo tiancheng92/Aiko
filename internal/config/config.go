@@ -46,6 +46,10 @@ type Config struct {
 	ThemeStyle string
 	JinaAPIKey string // optional; empty = Jina free tier (~200 req/day)
 	TavilyAPIKey string // optional; empty = DuckDuckGo fallback
+	// AIAvatar is a data URL for the AI avatar; empty means use the default logo.
+	AIAvatar string
+	// UserAvatar is a data URL for the user avatar; empty means use the default icon.
+	UserAvatar string
 }
 
 type Store struct{ db *sql.DB }
@@ -113,6 +117,8 @@ func (s *Store) Load() (*Config, error) {
 	cfg.ThemeStyle = orDefault(m["theme_style"], "frosted")
 	cfg.JinaAPIKey = m["jina_api_key"]
 	cfg.TavilyAPIKey = m["tavily_api_key"]
+	cfg.AIAvatar = m["ai_avatar"]
+	cfg.UserAvatar = m["user_avatar"]
 	return cfg, nil
 }
 
@@ -152,6 +158,8 @@ func (s *Store) Save(cfg *Config) error {
 		"theme_style":              cfg.ThemeStyle,
 		"jina_api_key":             cfg.JinaAPIKey,
 		"tavily_api_key":           cfg.TavilyAPIKey,
+		"ai_avatar":                cfg.AIAvatar,
+		"user_avatar":              cfg.UserAvatar,
 	}
 	tx, err := s.db.Begin()
 	if err != nil {

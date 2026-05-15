@@ -22,6 +22,7 @@ import {
   GetVersion, CheckUpdate, InstallUpdate,
   ListVRMModels, ImportVRMFile, DeleteVRMModel,
   GetAutoLaunch, SetAutoLaunch,
+  SetAvatar, ResetAvatar,
 } from '../../wailsjs/go/main/App'
 import { ListProactiveItems, DeleteProactiveItem } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
@@ -70,9 +71,11 @@ const saving = ref(false)   // true while a debounced save is in-flight
 const statusMsg = ref('')   // operation-level feedback (profile switch, trigger, etc.)
 const mountedReady = ref(false)  // gate to suppress watcher fires during initial load
 let saveTimer = null
-const activeTab = ref('model')  // 'model' | 'ai' | 'appearance' | 'tools' | 'knowledge' | 'automation' | 'lark' | 'sms'
-const toolsSubTab = ref('mcp')         // 'mcp' | 'permissions' | 'settings'
+const activeTab = ref('general')  // 'general' | 'appearance' | 'model' | 'ai' | 'tools' | 'knowledge' | 'automation' | 'lark' | 'sms' | 'about'
+const toolsSubTab = ref('permissions')  // 'mcp' | 'permissions' | 'settings'
 const automationSubTab = ref('cron')   // 'cron' | 'proactive'
+const toolsSubTabIndex = computed(() => ['permissions', 'mcp', 'settings'].indexOf(toolsSubTab.value))
+const automationSubTabIndex = computed(() => ['cron', 'proactive'].indexOf(automationSubTab.value))
 const newPathInput = ref('')           // input buffer for adding allowed paths
 const newTrustedCmdInput = ref('') // input buffer for adding trusted commands
 
@@ -239,16 +242,26 @@ function onModalLeave(el, done) {
  * label/keywords on every keystroke.
  */
 const tabMeta = [
-  { id: 'model',      label: '模型',       iconSvg: ICON_TAB_MODEL,      keywords: 'model profile openai provider key embedding tts 模型 配置 接入 语音合成' },
-  { id: 'ai',         label: '对话',       iconSvg: ICON_TAB_AI,         keywords: 'prompt system memory skill 提示词 记忆 技能 上下文 自我成长' },
-  { id: 'knowledge',  label: '知识库',     iconSvg: ICON_TAB_KNOWLEDGE,  keywords: 'knowledge rag document import 文档 导入 向量' },
-  { id: 'tools',      label: '工具',       iconSvg: ICON_TAB_TOOLS,      keywords: 'mcp permission shell code path tool 权限 服务器 执行 白名单' },
-  { id: 'automation', label: '自动化',     iconSvg: ICON_TAB_AUTOMATION, keywords: 'cron schedule proactive reminder 定时 任务 提醒' },
-  { id: 'appearance', label: '外观',       iconSvg: ICON_TAB_APPEARANCE, keywords: 'live2d vrm pet size chat 模型 大小 语音 音效 朗读 桌宠' },
-  { id: 'general',    label: '通用',       iconSvg: ICON_TAB_GENERAL,    keywords: 'theme launch autostart 主题 启动 风格 自启 液态玻璃 毛玻璃' },
-  { id: 'lark',       label: '飞书',       iconSvg: ICON_TAB_LARK,       keywords: 'lark feishu cli 飞书' },
-  { id: 'sms',        label: '短信',       iconSvg: ICON_TAB_SMS,        keywords: 'sms message verification 短信 验证码 监听' },
-  { id: 'about',      label: '关于',       iconSvg: ICON_TAB_ABOUT,      keywords: 'version update about 版本 更新 关于' },
+  { id: 'general',    label: '通用',   iconSvg: ICON_TAB_GENERAL,    iconBg: '#636366',
+    keywords: 'theme launch autostart 主题 启动 风格 自启 开机自启 液态玻璃 毛玻璃 frosted liquid glass 界面主题 深色 暗色' },
+  { id: 'appearance', label: '外观',   iconSvg: ICON_TAB_APPEARANCE, iconBg: '#FF375F',
+    keywords: 'live2d vrm pet size chat 模型 大小 尺寸 语音 音效 朗读 桌宠 渲染 宠物 聊天框 头像 avatar 语音识别 自动发送 提示音 声音 自动朗读 TTS播放 动画' },
+  { id: 'model',      label: '模型',   iconSvg: ICON_TAB_MODEL,      iconBg: '#007AFF',
+    keywords: 'model profile openai openrouter deepseek provider key base url api embedding tts kokoro 模型 配置 接入 语音合成 声线 语速 摘要 向量 配置文件 激活' },
+  { id: 'ai',         label: '对话',   iconSvg: ICON_TAB_AI,         iconBg: '#5E5CE6',
+    keywords: 'prompt system memory skill nudge 提示词 系统提示 记忆 长期记忆 短期记忆 技能 技能目录 上下文 轮数 自我成长 用户画像 沉淀' },
+  { id: 'tools',      label: '工具',   iconSvg: ICON_TAB_TOOLS,      iconBg: '#FF9F0A',
+    keywords: 'mcp permission shell code path tool server 权限 服务器 执行 白名单 路径 内置工具 免确认 超时 allowed trusted shell timeout 安全 扩展' },
+  { id: 'knowledge',  label: '知识库', iconSvg: ICON_TAB_KNOWLEDGE,  iconBg: '#34C759',
+    keywords: 'knowledge rag document import vector jina tavily 文档 导入 向量 知识 检索 RAG 搜索 API key' },
+  { id: 'automation', label: '自动化', iconSvg: ICON_TAB_AUTOMATION, iconBg: '#32ADE6',
+    keywords: 'cron schedule proactive reminder followup 定时 任务 计划 提醒 待触发 follow-up 自动' },
+  { id: 'lark',       label: '飞书',   iconSvg: ICON_TAB_LARK,       iconBg: '#00C7BE',
+    keywords: 'lark feishu cli command 飞书 命令 lark-cli' },
+  { id: 'sms',        label: '短信',   iconSvg: ICON_TAB_SMS,        iconBg: '#30D158',
+    keywords: 'sms message verification code imessage chat.db 短信 验证码 监听 iMessage 短信监听' },
+  { id: 'about',      label: '关于',   iconSvg: ICON_TAB_ABOUT,      iconBg: '#5856D6',
+    keywords: 'version update about github release 版本 更新 关于 下载' },
 ].map(t => ({ ...t, _haystack: (t.label + ' ' + t.keywords).toLowerCase() }))
 
 const searchNeedle = computed(() => searchQuery.value.trim().toLowerCase())
@@ -1087,6 +1100,47 @@ async function toggleAutoLaunch(val) {
   }
 }
 
+// ── 头像管理 ──────────────────────────────────────────────
+
+const aiAvatarInput = ref(null)
+const userAvatarInput = ref(null)
+
+/** uploadAvatar triggers the hidden file input for the given role. */
+function uploadAvatar(role) {
+  if (role === 'ai') aiAvatarInput.value?.click()
+  else userAvatarInput.value?.click()
+}
+
+/** onAvatarFileChange reads the selected image file and saves it as the avatar. */
+async function onAvatarFileChange(role, event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  event.target.value = ''  // reset so the same file can be re-selected
+  const reader = new FileReader()
+  reader.onload = async (e) => {
+    const dataURL = e.target.result
+    try {
+      await SetAvatar(role, dataURL)
+      if (role === 'ai') cfg.value.AIAvatar = dataURL
+      else cfg.value.UserAvatar = dataURL
+    } catch (err) {
+      console.error('SetAvatar failed:', err)
+    }
+  }
+  reader.readAsDataURL(file)
+}
+
+/** resetAvatar resets the avatar for the given role to its built-in default. */
+async function resetAvatar(role) {
+  try {
+    await ResetAvatar(role)
+    if (role === 'ai') cfg.value.AIAvatar = ''
+    else cfg.value.UserAvatar = ''
+  } catch (e) {
+    console.error('ResetAvatar failed:', e)
+  }
+}
+
 // ── 提醒事项 ──────────────────────────────────────────────
 const proactiveItems = ref([])
 const proactiveError = ref('')
@@ -1147,54 +1201,64 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
     class="settings-win"
     :style="{ left: pos.x + 'px', top: pos.y + 'px', width: winSize.w + 'px', height: winSize.h + 'px' }"
   >
-    <!-- Draggable title bar (macOS style) -->
-    <div class="win-titlebar" @mousedown="onHeaderMouseDown">
-      <div class="traffic-lights" @mousedown.stop>
-        <button class="traffic-btn tl-close" aria-label="关闭设置" @click.stop="$emit('close')">
-          <svg viewBox="0 0 10 10" width="7" height="7"><path d="M2 2 L8 8 M8 2 L2 8" stroke="#4c0519" stroke-width="1.3" stroke-linecap="round"/></svg>
-        </button>
-        <span class="traffic-btn tl-min" aria-hidden="true" />
-        <span class="traffic-btn tl-max" aria-hidden="true" />
-      </div>
-      <span class="win-title">设置</span>
-      <div class="titlebar-search">
-        <svg class="search-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
-        </svg>
-        <input
-          v-model="searchQuery"
-          type="search"
-          placeholder="搜索设置..."
-          class="search-input"
-          spellcheck="false"
-          autocorrect="off"
-          autocomplete="off"
-          @mousedown.stop
-        />
-      </div>
-    </div>
-
-    <!-- Sidebar + content -->
+    <!-- Sidebar + content — no separate titlebar; sidebar owns traffic lights + title + search -->
     <div class="win-body">
       <nav class="win-sidebar" aria-label="设置分类">
-        <button
-          v-for="tab in filteredTabs"
-          :key="tab.id"
-          :class="['nav-item', { active: activeTab === tab.id, match: isSearchMatch(tab) }]"
-          @click="activeTab = tab.id"
-        >
-          <span class="nav-icon-wrap" v-html="tab.iconSvg" />
-          <span class="nav-label">{{ tab.label }}</span>
-        </button>
-        <div v-if="filteredTabs.length === 0" class="nav-empty">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <!-- Traffic lights + drag handle at the very top of the sidebar -->
+        <div class="sidebar-drag" @mousedown="onHeaderMouseDown">
+          <div class="traffic-lights" @mousedown.stop>
+            <button class="traffic-btn tl-close" aria-label="关闭设置" @click.stop="$emit('close')">
+              <svg viewBox="0 0 10 10" width="7" height="7"><path d="M2 2 L8 8 M8 2 L2 8" stroke="#4c0519" stroke-width="1.3" stroke-linecap="round"/></svg>
+            </button>
+            <span class="traffic-btn tl-min" aria-hidden="true" />
+            <span class="traffic-btn tl-max" aria-hidden="true" />
+          </div>
+        </div>
+
+        <!-- Sidebar title -->
+        <div class="sidebar-heading">设置</div>
+
+        <!-- Search field -->
+        <div class="sidebar-search" @mousedown.stop>
+          <svg class="search-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
           </svg>
-          <span>无匹配结果</span>
+          <input
+            v-model="searchQuery"
+            type="search"
+            placeholder="搜索"
+            class="search-input"
+            spellcheck="false"
+            autocorrect="off"
+            autocomplete="off"
+          />
+        </div>
+
+        <!-- Nav items -->
+        <div class="sidebar-nav-list">
+          <button
+            v-for="tab in filteredTabs"
+            :key="tab.id"
+            :class="['nav-item', { active: activeTab === tab.id, match: isSearchMatch(tab) }]"
+            @click="activeTab = tab.id"
+          >
+            <span class="nav-icon-wrap" :style="{ background: tab.iconBg }" v-html="tab.iconSvg" />
+            <span class="nav-label">{{ tab.label }}</span>
+          </button>
+          <div v-if="filteredTabs.length === 0" class="nav-empty">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
+            </svg>
+            <span>无匹配结果</span>
+          </div>
         </div>
       </nav>
 
-      <div class="win-content" ref="winContentEl">
+      <div class="win-content-wrap">
+        <!-- Invisible drag strip at the top of the content area, matching sidebar-drag height -->
+        <div class="content-drag" @mousedown="onHeaderMouseDown" />
+
+        <div class="win-content" ref="winContentEl">
         <!-- 模型设置 -->
         <div v-if="activeTab === 'model'" class="tab-pane">
           <div class="profile-header">
@@ -1345,79 +1409,129 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
         <!-- 对话设置 -->
         <div v-if="activeTab === 'ai'" class="tab-pane">
-          <label>系统提示词<textarea v-model="cfg.SystemPrompt" rows="5" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
-          <label>上下文记忆轮数（1–100）<span class="field-hint">保留最近 N 轮对话作为上下文，越大记得越多但消耗 token 也越多</span><input type="number" v-model.number="cfg.ShortTermLimit" min="1" max="100" /></label>
-          <label>自我成长触发间隔（轮）<span class="field-hint">每隔 N 轮对话，AI 自动整理用户画像与记忆；设为 0 可关闭</span><input type="number" v-model.number="cfg.NudgeInterval" min="1" max="100" /></label>
-          <label>技能目录<span class="field-hint">每行一个路径，AI 可调用目录内的 YAML 自定义技能</span><textarea v-model="cfg.SkillsDirs" rows="3" placeholder="~/.aiko/auto-skills" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
+
+          <!-- 系统提示词 -->
+          <div class="group-label">系统指令</div>
+          <div class="settings-group">
+            <div class="settings-field">
+              <div class="field-label">系统提示词</div>
+              <textarea v-model="cfg.SystemPrompt" rows="5" spellcheck="false" autocorrect="off" autocomplete="off" />
+            </div>
+          </div>
+
+          <!-- 记忆与成长 -->
+          <div class="group-label">记忆与成长</div>
+          <div class="settings-group">
+            <div class="settings-row">
+              <div class="row-body">
+                <div class="row-title">上下文记忆轮数</div>
+                <div class="row-desc">保留最近 N 轮对话作为上下文，越大记得越多但消耗 token 也越多（1–100）</div>
+              </div>
+              <input type="number" v-model.number="cfg.ShortTermLimit" min="1" max="100" style="width:72px;text-align:center" />
+            </div>
+            <div class="settings-row">
+              <div class="row-body">
+                <div class="row-title">自我成长触发间隔</div>
+                <div class="row-desc">每隔 N 轮对话，AI 自动整理用户画像与记忆；设为 0 可关闭</div>
+              </div>
+              <input type="number" v-model.number="cfg.NudgeInterval" min="0" max="100" style="width:72px;text-align:center" />
+            </div>
+          </div>
+
+          <!-- 技能扩展 -->
+          <div class="group-label">技能与扩展</div>
+          <div class="settings-group">
+            <div class="settings-field">
+              <div class="field-label">技能目录 <span class="field-hint-inline">每行一个路径，AI 可调用目录内的 YAML 自定义技能</span></div>
+              <textarea v-model="cfg.SkillsDirs" rows="3" placeholder="~/.aiko/auto-skills" spellcheck="false" autocorrect="off" autocomplete="off" />
+            </div>
+          </div>
         </div>
 
         <!-- 通用 -->
         <div v-if="activeTab === 'general'" class="tab-pane">
-          <div class="settings-section-title">系统</div>
-          <div class="sms-toggle-row" style="margin-top:8px">
-            <span class="sms-status-label" style="flex:1">登录时自动启动</span>
-            <label class="toggle">
-              <input type="checkbox" :checked="autoLaunch" @change="toggleAutoLaunch($event.target.checked)" />
-              <span class="toggle-track" />
-            </label>
+
+          <!-- 系统 -->
+          <div class="group-label">系统</div>
+          <div class="settings-group">
+            <div class="settings-row">
+              <div class="row-body">
+                <div class="row-title">登录时自动启动</div>
+                <div class="row-desc">开机登录 macOS 后自动运行 Aiko</div>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" :checked="autoLaunch" @change="toggleAutoLaunch($event.target.checked)" />
+                <span class="toggle-track" />
+              </label>
+            </div>
           </div>
-          <p class="sms-desc" style="margin-top:4px;margin-bottom:20px">开机登录 macOS 后自动运行 Aiko</p>
 
-          <div class="settings-section-title">界面主题</div>
-          <label style="margin-top:8px">风格
-            <div class="backend-toggle">
-              <button
-                :class="['backend-btn', cfg.ThemeStyle !== 'frosted' ? 'active' : '']"
-                @click="setThemeStyle('liquid-glass')"
-              >液态玻璃</button>
-              <button
-                :class="['backend-btn', cfg.ThemeStyle === 'frosted' ? 'active' : '']"
-                @click="setThemeStyle('frosted')"
-              >毛玻璃</button>
+          <!-- 界面主题 -->
+          <div class="group-label">界面主题</div>
+          <div class="settings-group">
+            <div class="settings-row">
+              <div class="row-body">
+                <div class="row-title">风格</div>
+                <div class="row-desc">液态玻璃：近透明折射光影；毛玻璃：经典深色质感</div>
+              </div>
+              <div class="row-ctrl">
+                <div class="backend-toggle">
+                  <button
+                    :class="['backend-btn', cfg.ThemeStyle !== 'frosted' ? 'active' : '']"
+                    @click="setThemeStyle('liquid-glass')"
+                  >液态玻璃</button>
+                  <button
+                    :class="['backend-btn', cfg.ThemeStyle === 'frosted' ? 'active' : '']"
+                    @click="setThemeStyle('frosted')"
+                  >毛玻璃</button>
+                </div>
+              </div>
             </div>
-          </label>
-          <p class="sms-desc" style="margin-top:4px">液态玻璃：近透明折射光影；毛玻璃：经典深色质感。切换后点击「保存」持久化。</p>
+          </div>
 
-          <div class="settings-section-title" style="margin-top:24px">快捷键</div>
-          <div class="shortcut-list">
-            <div class="shortcut-row">
-              <div class="shortcut-keys"><kbd>⌥</kbd><kbd>⌥</kbd></div>
-              <span class="shortcut-desc">双击 Option — 显示 / 隐藏聊天框</span>
-            </div>
-            <div class="shortcut-row">
-              <div class="shortcut-keys"><kbd>⌥</kbd><span class="shortcut-hold">长按 1s</span></div>
-              <span class="shortcut-desc">按住 Option 1 秒 — 开始语音输入</span>
-            </div>
-            <div class="shortcut-row">
-              <div class="shortcut-keys"><span class="shortcut-release">松开 ⌥</span></div>
-              <span class="shortcut-desc">松开 Option — 停止录音，等待识别</span>
-            </div>
-            <div class="shortcut-row">
-              <div class="shortcut-keys"><kbd>↵</kbd></div>
-              <span class="shortcut-desc">发送消息</span>
-            </div>
-            <div class="shortcut-row">
-              <div class="shortcut-keys"><kbd>⌘</kbd><kbd>↵</kbd></div>
-              <span class="shortcut-desc">消息框内换行</span>
-            </div>
-            <div class="shortcut-row">
-              <div class="shortcut-keys"><kbd>⌘</kbd><kbd>V</kbd></div>
-              <span class="shortcut-desc">粘贴图片到消息框（支持截图直接粘贴）</span>
-            </div>
-            <div class="shortcut-row">
-              <div class="shortcut-keys"><span class="shortcut-drag">拖拽</span></div>
-              <span class="shortcut-desc">拖动悬浮球 — 重新定位桌宠</span>
-            </div>
-            <div class="shortcut-row">
-              <div class="shortcut-keys"><span class="shortcut-rc">右键</span></div>
-              <span class="shortcut-desc">右键聊天框 — 导出记录、清空历史、打开设置</span>
+          <!-- 快捷键 -->
+          <div class="group-label">快捷键</div>
+          <div class="settings-group">
+            <div class="shortcut-list">
+              <div class="shortcut-row">
+                <div class="shortcut-keys"><kbd>⌥</kbd><kbd>⌥</kbd></div>
+                <span class="shortcut-desc">双击 Option — 显示 / 隐藏聊天框</span>
+              </div>
+              <div class="shortcut-row">
+                <div class="shortcut-keys"><kbd>⌥</kbd><span class="shortcut-hold">长按 1s</span></div>
+                <span class="shortcut-desc">按住 Option 1 秒 — 开始语音输入</span>
+              </div>
+              <div class="shortcut-row">
+                <div class="shortcut-keys"><span class="shortcut-release">松开 ⌥</span></div>
+                <span class="shortcut-desc">松开 Option — 停止录音，等待识别</span>
+              </div>
+              <div class="shortcut-row">
+                <div class="shortcut-keys"><kbd>↵</kbd></div>
+                <span class="shortcut-desc">发送消息</span>
+              </div>
+              <div class="shortcut-row">
+                <div class="shortcut-keys"><kbd>⌘</kbd><kbd>↵</kbd></div>
+                <span class="shortcut-desc">消息框内换行</span>
+              </div>
+              <div class="shortcut-row">
+                <div class="shortcut-keys"><kbd>⌘</kbd><kbd>V</kbd></div>
+                <span class="shortcut-desc">粘贴图片到消息框（支持截图直接粘贴）</span>
+              </div>
+              <div class="shortcut-row">
+                <div class="shortcut-keys"><span class="shortcut-drag">拖拽</span></div>
+                <span class="shortcut-desc">拖动悬浮球 — 重新定位桌宠</span>
+              </div>
+              <div class="shortcut-row">
+                <div class="shortcut-keys"><span class="shortcut-rc">右键</span></div>
+                <span class="shortcut-desc">右键聊天框 — 导出记录、清空历史、打开设置</span>
+              </div>
             </div>
           </div>
         </div>
 
         <!-- 外观 -->
         <div v-if="activeTab === 'appearance'" class="tab-pane">
-          <div class="settings-section-title">桌宠模型</div>
+          <div class="group-label">桌宠模型</div>
           <!-- 渲染后端 -->
           <label style="margin-top:8px">渲染模式
             <div class="backend-toggle">
@@ -1484,7 +1598,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               </select>
             </div>
           </label>
-          <div class="settings-section-title" style="margin-top:16px">大小与位置</div>
+          <div class="group-label">大小与位置</div>
           <label style="margin-top:8px">桌宠大小
             <div class="screen-label" v-if="props.activeScreen.width > 0">
               当前屏幕：{{ props.activeScreen.width }}×{{ props.activeScreen.height }}
@@ -1522,36 +1636,76 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             </div>
             <button class="btn-neutral-sm" @click="resetChatSize">重置为默认</button>
           </label>
-          <div class="settings-section-title" style="margin-top:20px">语音与音效</div>
-          <div class="sms-toggle-row" style="margin-top:8px">
-            <span class="sms-status-label" style="flex:1">语音识别后自动发送</span>
-            <label class="toggle">
-              <input type="checkbox" v-model="cfg.VoiceAutoSend" @change="toggleVoiceAutoSend" />
-              <span class="toggle-track" />
-            </label>
+          <!-- 语音与音效 -->
+          <div class="group-label">语音与音效</div>
+          <div class="settings-group">
+            <div class="settings-row">
+              <div class="row-body">
+                <div class="row-title">语音识别后自动发送</div>
+                <div class="row-desc">松开 Option 键后，识别完成时自动发送消息，无需手动确认</div>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" v-model="cfg.VoiceAutoSend" @change="toggleVoiceAutoSend" />
+                <span class="toggle-track" />
+              </label>
+            </div>
+            <div class="settings-row">
+              <div class="row-body">
+                <div class="row-title">界面提示音</div>
+                <div class="row-desc">发送、收到消息或出错时播放轻柔提示音</div>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" v-model="cfg.SoundsEnabled" @change="toggleSoundsEnabled" />
+                <span class="toggle-track" />
+              </label>
+            </div>
+            <div class="settings-row">
+              <div class="row-body">
+                <div class="row-title">AI 回复自动朗读</div>
+                <div class="row-desc">收到 AI 回复后自动语音播放（需在模型配置中选择语音合成引擎）</div>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" v-model="cfg.TTSAutoPlay" @change="toggleTTSAutoPlay" />
+                <span class="toggle-track" />
+              </label>
+            </div>
           </div>
-          <p class="sms-desc" style="margin-top:4px">松开 Option 键后，识别完成时自动发送消息，无需手动确认</p>
-          <div class="sms-toggle-row" style="margin-top:16px">
-            <span class="sms-status-label" style="flex:1">界面提示音</span>
-            <label class="toggle">
-              <input type="checkbox" v-model="cfg.SoundsEnabled" @change="toggleSoundsEnabled" />
-              <span class="toggle-track" />
-            </label>
+
+          <!-- 头像 -->
+          <input ref="aiAvatarInput" type="file" accept="image/*" style="display:none" @change="onAvatarFileChange('ai', $event)" />
+          <input ref="userAvatarInput" type="file" accept="image/*" style="display:none" @change="onAvatarFileChange('user', $event)" />
+          <div class="group-label">聊天头像</div>
+          <div class="avatar-settings-row">
+            <div class="avatar-item">
+              <div class="avatar-preview-wrap" @click="uploadAvatar('ai')" title="点击上传">
+                <img v-if="cfg.AIAvatar" :src="cfg.AIAvatar" class="avatar-preview" alt="AI 头像" draggable="false" />
+                <img v-else src="/logo.png" class="avatar-preview" alt="AI 头像（默认）" draggable="false" />
+                <div class="avatar-overlay">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                </div>
+              </div>
+              <div class="avatar-label">AI 助手</div>
+              <button v-if="cfg.AIAvatar" class="avatar-reset-btn" @click="resetAvatar('ai')">恢复默认</button>
+            </div>
+            <div class="avatar-item">
+              <div class="avatar-preview-wrap" @click="uploadAvatar('user')" title="点击上传">
+                <div v-if="!cfg.UserAvatar" class="avatar-preview avatar-default-user">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
+                </div>
+                <img v-else :src="cfg.UserAvatar" class="avatar-preview" alt="用户头像" draggable="false" />
+                <div class="avatar-overlay">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                </div>
+              </div>
+              <div class="avatar-label">用户</div>
+              <button v-if="cfg.UserAvatar" class="avatar-reset-btn" @click="resetAvatar('user')">恢复默认</button>
+            </div>
           </div>
-          <p class="sms-desc" style="margin-top:4px">发送、收到消息或出错时播放轻柔提示音</p>
-          <div class="sms-toggle-row" style="margin-top:16px">
-            <span class="sms-status-label" style="flex:1">AI 回复自动朗读</span>
-            <label class="toggle">
-              <input type="checkbox" v-model="cfg.TTSAutoPlay" @change="toggleTTSAutoPlay" />
-              <span class="toggle-track" />
-            </label>
-          </div>
-          <p class="sms-desc" style="margin-top:4px">收到 AI 回复后自动语音播放（需在模型配置中选择语音合成引擎）</p>
         </div>
 
         <!-- 工具 -->
         <div v-if="activeTab === 'tools'" class="tab-pane">
-          <div class="sub-tab-bar">
+          <div class="sub-tab-bar" :style="{ '--active-idx': toolsSubTabIndex, '--tab-count': 3 }">
             <button :class="{ active: toolsSubTab === 'permissions' }" @click="toolsSubTab = 'permissions'">内置工具</button>
             <button :class="{ active: toolsSubTab === 'mcp' }" @click="toolsSubTab = 'mcp'">MCP 扩展</button>
             <button :class="{ active: toolsSubTab === 'settings' }" @click="toolsSubTab = 'settings'">执行安全</button>
@@ -1749,7 +1903,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
         <!-- 自动化 -->
         <div v-if="activeTab === 'automation'" class="tab-pane">
-          <div class="sub-tab-bar">
+          <div class="sub-tab-bar" :style="{ '--active-idx': automationSubTabIndex, '--tab-count': 2 }">
             <button :class="{ active: automationSubTab === 'cron' }" @click="automationSubTab = 'cron'">定时任务</button>
             <button :class="{ active: automationSubTab === 'proactive' }" @click="automationSubTab = 'proactive'">待触发提醒</button>
           </div>
@@ -2030,7 +2184,8 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
         </div>
 
       </div>
-    </div>
+      </div><!-- /win-content-wrap -->
+    </div><!-- /win-body -->
 
     <!-- Footer -->
     <div class="win-footer">
@@ -2112,20 +2267,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   -webkit-user-select: none;
 }
 
-/* Titlebar — traffic lights + title + global search */
-.win-titlebar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 0 12px;
-  height: 48px;
-  cursor: move;
-  flex-shrink: 0;
-  user-select: none;
-  border-bottom: 1px solid var(--lg-border-subtle);
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0));
-}
-
+/* Traffic lights — live inside sidebar-drag */
 .traffic-lights {
   display: flex;
   align-items: center;
@@ -2160,31 +2302,77 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 .tl-min { background: #febc2e; cursor: default; opacity: 0.55; }
 .tl-max { background: #28c840; cursor: default; opacity: 0.55; }
 
-.win-title {
-  font-weight: 600;
-  font-size: 13px;
-  letter-spacing: -0.01em;
-  color: var(--text-primary);
-  padding-left: 4px;
+/* Layout — win-body fills the entire window, padding gives sidebar room to float */
+.win-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  padding: 6px 0 6px 6px; /* sidebar floats with margin on three sides */
+  gap: 0;
 }
 
-.titlebar-search {
-  margin-left: auto;
+/* Sidebar — macOS 26 glass panel: floats as an inset card within the window.
+   Concentric radius: win=14px → panel inset 6px → panel r=14–6=8px → use 10px for comfort */
+.win-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  background: rgba(28, 30, 45, 0.72);
+  backdrop-filter: blur(40px) saturate(1.6) brightness(0.9);
+  -webkit-backdrop-filter: blur(40px) saturate(1.6) brightness(0.9);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 2px 16px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Drag handle at the top of the sidebar (holds traffic lights).
+   Extra top padding compensates for the panel's 6px float margin inside the window. */
+.sidebar-drag {
+  height: 46px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  width: 220px;
-  height: 28px;
-  padding: 0 10px;
-  background: var(--lg-surface-input);
-  border: 1px solid var(--lg-border);
-  border-radius: 7px;
-  transition: border-color 0.15s, background 0.15s;
+  padding: 0 14px;
+  cursor: move;
+  flex-shrink: 0;
+  user-select: none;
 }
-.titlebar-search:focus-within {
+
+/* Large "设置" heading below traffic lights — macOS System Settings style */
+.sidebar-heading {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+  padding: 0 16px 12px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* Search field — capsule pill, macOS System Settings style
+   Concentric-radius rule: outer window r=14px → inner pill is fully rounded (r=100px)
+   so both arcs are visible simultaneously and create depth hierarchy. */
+.sidebar-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 10px 12px;
+  padding: 0 11px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 100px;
+  flex-shrink: 0;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.sidebar-search:focus-within {
   border-color: var(--accent);
-  background: var(--lg-surface-input-h);
-  box-shadow: 0 0 0 3px var(--accent-alpha-20);
+  background: rgba(255, 255, 255, 0.10);
+  box-shadow: 0 0 0 3px var(--accent-alpha-12);
 }
 .search-icon { color: var(--text-tertiary); flex-shrink: 0; }
 .search-input {
@@ -2197,6 +2385,8 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   font-size: 12px;
   font-family: inherit;
   padding: 0;
+  line-height: 28px;
+  caret-color: var(--accent);
   box-shadow: none;
 }
 .search-input:focus,
@@ -2208,26 +2398,16 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 .search-input::placeholder { color: var(--text-tertiary); }
 .search-input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
 
-/* Layout — sidebar + content */
-.win-body { flex: 1; display: flex; overflow: hidden; }
-
-/* Sidebar */
-.win-sidebar {
-  width: 200px;
-  background: linear-gradient(
-    180deg,
-    var(--lg-surface-elevated) 0%,
-    color-mix(in srgb, var(--lg-surface-elevated) 92%, black) 100%
-  );
-  border-right: 1px solid var(--lg-border-subtle);
+/* Nav list — scrollable region below the search, fills remaining sidebar height */
+.sidebar-nav-list {
   display: flex;
   flex-direction: column;
-  padding: 10px 8px;
   gap: 1px;
-  flex-shrink: 0;
+  padding: 0 8px 8px;
+  flex: 1;
   overflow-y: auto;
 }
-.win-sidebar::-webkit-scrollbar { width: 0; }
+.sidebar-nav-list::-webkit-scrollbar { width: 0; }
 
 .nav-item {
   position: relative;
@@ -2235,43 +2415,58 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   appearance: none;
   background: transparent;
   border: none;
-  color: var(--text-secondary);
-  padding: 7px 12px 7px 14px;
+  color: var(--text-primary);
+  padding: 0 8px;
   cursor: pointer;
   font-size: 13px;
   font-weight: 400;
   font-family: inherit;
   text-align: left;
-  border-radius: 6px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   width: 100%;
-  height: 32px;
-  transition: background 0.16s, color 0.16s, box-shadow 0.16s;
-  box-shadow: none;
-  letter-spacing: -0.01em;
+  height: 38px;
+  transition: background 0.12s;
+  letter-spacing: -0.015em;
 }
-.nav-item:hover { background: rgba(255, 255, 255, 0.05); color: var(--text-primary); }
+.nav-item:hover { background: rgba(255, 255, 255, 0.07); }
 .nav-item.active {
-  background: var(--accent);
-  color: #fff;
-  font-weight: 500;
-  box-shadow: 0 2px 10px var(--accent-alpha-20), inset 0 1px 0 rgba(255,255,255,0.15);
+  background: rgba(50, 130, 255, 0.15);
 }
-.nav-item.active .nav-svg { color: #fff; }
-.nav-item.match { box-shadow: inset 0 0 0 1px var(--accent-alpha-20); }
+/* Left accent bar on active nav item */
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 18%;
+  height: 64%;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: rgba(70, 150, 255, 0.9);
+}
+.nav-item.match { outline: 1px solid var(--accent-alpha-20); }
 .nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+/* Icon container — colored square like iOS app icons */
 .nav-icon-wrap {
-  width: 18px;
-  height: 18px;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  /* background set via inline :style from iconBg */
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35), inset 0 0.5px 0 rgba(255, 255, 255, 0.22);
+  transition: opacity 0.12s, transform 0.12s;
 }
-.nav-icon-wrap :deep(svg) { width: 16px; height: 16px; color: currentColor; }
+.nav-item:hover .nav-icon-wrap { opacity: 0.9; }
+.nav-item.active .nav-icon-wrap { opacity: 1; }
+.nav-item:active .nav-icon-wrap { transform: scale(0.93); }
+.nav-icon-wrap :deep(svg) { width: 14px; height: 14px; color: #fff; }
 .nav-label { font-size: 13px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .nav-empty {
@@ -2284,61 +2479,72 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   font-size: 11px;
 }
 
+/* Content area wrapper — takes remaining horizontal space, provides stacked layout */
+.win-content-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* Invisible drag strip above the content area.
+   sidebar-drag=46px + win-body padding-top=6px = 52px total offset. */
+.content-drag {
+  height: 52px;
+  flex-shrink: 0;
+  cursor: move;
+  user-select: none;
+}
+
 /* Content area — section-card pattern */
 .win-content {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 28px 32px;
+  padding: 8px 32px 40px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
-.win-content::-webkit-scrollbar { width: 10px; }
+.win-content::-webkit-scrollbar { width: 6px; }
 .win-content::-webkit-scrollbar-track { background: transparent; }
 .win-content::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border: 3px solid transparent;
-  background-clip: padding-box;
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.10);
+  border-radius: 6px;
 }
-.win-content::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.22); background-clip: padding-box; }
+.win-content::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.18); }
 
-/* Tab pane — macOS "card of rows" pattern: each top-level label / .settings-section
-   / .sms-toggle-row renders as a row inside a card container. */
+/* Tab pane — macOS "card of rows" pattern */
 @keyframes tabPaneEnter {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(5px); }
   to   { opacity: 1; transform: translateY(0);   }
 }
 .tab-pane {
-  display: flex; flex-direction: column; gap: 18px; max-width: 720px;
-  animation: tabPaneEnter 0.26s cubic-bezier(0.34, 1.2, 0.64, 1);
+  display: flex; flex-direction: column; gap: 20px; max-width: 680px;
+  /* expo.out — recommended by design system for app transitions */
+  animation: tabPaneEnter 0.26s cubic-bezier(0.16, 1, 0.3, 1);
 }
 @media (prefers-reduced-motion: reduce) { .tab-pane { animation: none; } }
 .tab-pane > label,
 .tab-pane > .settings-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 14px 16px;
-  background: var(--surface-card);
-  border: 1px solid var(--lg-border-subtle);
-  border-radius: var(--r-card);
+  gap: 10px;
+  padding: 16px 18px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
   font-size: 13px;
   color: var(--text-secondary);
   font-weight: 400;
   letter-spacing: -0.01em;
-  transition: border-color 0.18s, box-shadow 0.18s, transform 0.22s cubic-bezier(0.34, 1.2, 0.64, 1);
+  transition: border-color 0.18s, background 0.18s;
 }
-.tab-pane > .settings-section:hover {
-  border-color: var(--lg-border);
-  transform: translateY(-1px);
-  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.18);
+.tab-pane > .settings-section:hover,
+.tab-pane > label:hover {
+  background: rgba(255, 255, 255, 0.062);
+  border-color: rgba(255, 255, 255, 0.11);
 }
-.tab-pane > label:hover { border-color: var(--lg-border); }
-@media (prefers-reduced-motion: reduce) {
-  .tab-pane > label, .tab-pane > .settings-section { transition: border-color 0.15s; }
-  .tab-pane > .settings-section:hover { transform: none; box-shadow: none; }
-}
-.tab-pane > label { font-size: 12px; font-weight: 500; color: var(--text-primary); }
+.tab-pane > label { font-size: 13px; font-weight: 500; color: var(--text-primary); }
 .tab-pane > label > input,
 .tab-pane > label > textarea,
 .tab-pane > label > select { margin-top: 2px; }
@@ -3443,33 +3649,57 @@ ul { list-style: none; padding: 0; margin: 0; }
   text-overflow: ellipsis;
 }
 
-/* Sub-tab bar (MCP / permissions / settings; cron / proactive) */
+/* Sub-tab bar — iOS/macOS style segment control with animated sliding pill */
 .sub-tab-bar {
-  display: inline-flex;
-  gap: 2px;
+  position: relative;
+  display: flex;
+  align-self: flex-start;
   margin-bottom: 18px;
   padding: 3px;
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.28);
   border: 1px solid var(--lg-border-subtle);
   border-radius: 8px;
 }
-.sub-tab-bar button {
-  padding: 5px 14px;
+
+/* Sliding pill indicator — moves via CSS custom property set by Vue */
+.sub-tab-bar::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  bottom: 3px;
+  width: calc((100% - 6px) / var(--tab-count, 3));
+  transform: translateX(calc(var(--active-idx, 0) * 100%));
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  background: rgba(255, 255, 255, 0.11);
   border-radius: 5px;
-  border: 1px solid transparent;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28), inset 0 0.5px 0 rgba(255, 255, 255, 0.10);
+  pointer-events: none;
+}
+
+.sub-tab-bar button {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  padding: 5px 14px;
+  border: none;
+  border-radius: 5px;
   background: transparent;
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 500;
+  font-family: inherit;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
-  box-shadow: none;
+  white-space: nowrap;
+  transition: color 0.15s;
 }
-.sub-tab-bar button:hover { background: rgba(255, 255, 255, 0.04); color: var(--text-primary); }
+.sub-tab-bar button:hover { color: var(--text-primary); }
 .sub-tab-bar button.active {
-  background: var(--lg-surface-input-h);
   color: var(--text-primary);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  font-weight: 600;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sub-tab-bar::before { transition: none; }
 }
 
 /* Tools / path white-list */
@@ -3607,23 +3837,178 @@ ul { list-style: none; padding: 0; margin: 0; }
   }
 }
 
+/* ── macOS 26 grouped card pattern ─────────────────────── */
+
+/* Label above a card group — uppercase, small gray text.
+ * -12px bottom margin offsets tab-pane's 20px flex gap → net ~8px visual space */
+.group-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 0 4px;
+  margin-bottom: -12px;
+}
+
+/* Avatar settings */
+.avatar-settings-row {
+  display: flex;
+  gap: 24px;
+  padding: 16px 0 4px;
+}
+.avatar-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.avatar-preview-wrap {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  cursor: pointer;
+  overflow: hidden;
+  border: 2px solid var(--lg-border-subtle);
+  transition: border-color 0.15s;
+}
+.avatar-preview-wrap:hover { border-color: var(--accent); }
+.avatar-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.avatar-default-user {
+  background: rgba(255, 255, 255, 0.10);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.5);
+}
+.avatar-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.avatar-preview-wrap:hover .avatar-overlay { opacity: 1; }
+.avatar-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.avatar-reset-btn {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.12s, background 0.12s;
+}
+.avatar-reset-btn:hover {
+  color: var(--danger);
+  background: rgba(255, 69, 58, 0.10);
+}
+
+/* Card that groups multiple rows together */
+.settings-group {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.settings-group:hover {
+  background: rgba(255, 255, 255, 0.062);
+  border-color: rgba(255, 255, 255, 0.11);
+}
+
+/* Horizontal row inside a card */
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 18px;
+  min-height: 50px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.settings-row:last-child { border-bottom: none; }
+
+/* Left side — stacked label + description */
+.row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.row-title {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+.row-desc {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  line-height: 1.45;
+}
+/* Right side control */
+.row-ctrl {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Full-width field row (label on top, input below) inside a settings-group */
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.settings-field:last-child { border-bottom: none; }
+.field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.field-hint-inline {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-weight: 400;
+  margin-left: 6px;
+}
+
 /* ── Keyboard shortcuts reference ──────────────────────── */
 .shortcut-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin-top: 10px;
+  gap: 0;
+  margin-top: 0;
 }
 .shortcut-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 7px 10px;
-  border-radius: var(--r-card);
+  padding: 9px 18px;
+  border-radius: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   transition: background 0.12s;
 }
+.shortcut-row:last-child { border-bottom: none; }
 .shortcut-row:hover {
-  background: var(--surface-card);
+  background: rgba(255, 255, 255, 0.04);
 }
 .shortcut-keys {
   display: flex;

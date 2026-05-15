@@ -385,6 +385,15 @@ defineExpose({ focusInput, scrollToBottom })
     @mouseleave="resetIdleTimer()"
   >
     <div class="title-bar">
+      <svg class="title-logo" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <!-- large bubble (top-left) -->
+        <rect x="1.5" y="2" width="14" height="10" rx="3.5" fill="currentColor"/>
+        <path d="M5 12 L4 15.5 L8.5 12.5" fill="currentColor"/>
+        <!-- small bubble (bottom-right), cut out from large with white backing -->
+        <rect x="9" y="10.5" width="13" height="9" rx="3" fill="var(--lg-surface)"/>
+        <rect x="9.5" y="11" width="12" height="8" rx="2.8" fill="currentColor" opacity="0.72"/>
+        <path d="M19.5 19 L20.5 22 L16.5 19.5" fill="currentColor" opacity="0.72"/>
+      </svg>
       <span class="title">聊天</span>
       <div class="title-spacer"></div>
       <div class="title-tags">
@@ -459,12 +468,19 @@ defineExpose({ focusInput, scrollToBottom })
   border-bottom: 1px solid var(--lg-border-subtle);
   background: linear-gradient(to bottom, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0));
 }
+.title-logo {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-left: 4px;
+  color: var(--text-primary);
+}
 .title {
   color: var(--text-primary);
   font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.01em;
-  margin-left: 4px;
+  margin-left: 2px;
 }
 .title-spacer { flex: 1; }
 
@@ -556,9 +572,12 @@ defineExpose({ focusInput, scrollToBottom })
   position: absolute;
   z-index: 10;
   user-select: none;
+  transition: opacity 0.2s ease;
 }
 .resize-e  { right: 0;  top: 6px; bottom: 6px; width: 6px; cursor: ew-resize; }
 .resize-w  { left: 0;   top: 6px; bottom: 6px; width: 6px; cursor: ew-resize; }
 .resize-s  { bottom: 0; left: 6px; right: 6px; height: 6px; cursor: ns-resize; }
 .resize-se { right: 0;  bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; }
+/* Hide resize handles gracefully when in fullscreen */
+.chat-bubble.fullscreen .resize-handle { opacity: 0; pointer-events: none; }
 </style>

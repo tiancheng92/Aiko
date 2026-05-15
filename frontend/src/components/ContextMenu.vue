@@ -130,7 +130,7 @@ defineExpose({ show, hide })
   text-align: left;
   border-radius: 6px;
   box-shadow: none;
-  transition: background 0.08s, color 0.08s;
+  transition: background 0.08s, color 0.08s, transform 0.1s cubic-bezier(0.16, 1, 0.3, 1);
   -webkit-appearance: none;
   appearance: none;
 }
@@ -139,7 +139,9 @@ defineExpose({ show, hide })
   background: var(--accent);
   color: #fff;
   outline: none;
+  transform: translateX(2px);
 }
+.ctx-item:active { transform: translateX(1px) scale(0.98); }
 .ctx-item:hover .ctx-icon-wrap,
 .ctx-item:focus-visible .ctx-icon-wrap { color: #fff; }
 
