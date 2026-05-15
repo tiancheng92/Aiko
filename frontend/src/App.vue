@@ -5,7 +5,7 @@ import VRMPet from './components/VRMPet.vue'
 import ChatBubble from './components/ChatBubble.vue'
 import SettingsWindow from './components/SettingsWindow.vue'
 import NotificationBubble from './components/NotificationBubble.vue'
-import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize, GetConfig, SetChatVisible, CloseSettingsPanel } from '../wailsjs/go/main/App'
+import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize, GetConfig, SetChatVisible, CloseSettingsPanel, OpenSettingsPanel } from '../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../wailsjs/runtime/runtime'
 import { springAnimate } from './composables/useSpring'
 
@@ -359,7 +359,7 @@ onMounted(async () => {
       })
     }
   })
-  offSettings  = EventsOn('settings:open', () => { settingsOpen.value = true })
+  offSettings  = EventsOn('settings:open', () => { OpenSettingsPanel().catch(() => { settingsOpen.value = true }) })
   offRenderBackend = EventsOn('config:render:backend:changed', (backend) => {
     renderBackend.value = backend
   })
@@ -419,9 +419,9 @@ function toggleBubble() {
   }
 }
 
-/** openSettings opens the settings window. */
+/** openSettings opens the settings NSPanel; falls back to in-app modal on error. */
 function openSettings() {
-  settingsOpen.value = true
+  OpenSettingsPanel().catch(() => { settingsOpen.value = true })
 }
 
 // ── Spring transition helpers ─────────────────────────────────────────────────
