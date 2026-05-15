@@ -946,6 +946,9 @@ onMounted(async () => {
     isUpdating.value = true
     updateProgress.value = data.pct ?? 0
     updateProgressMsg.value = data.msg ?? ''
+    if ((data.pct ?? 0) >= 100) {
+      setTimeout(() => { isUpdating.value = false }, 2000)
+    }
   })
 
   // Observe message container width for code block max-width.
@@ -1628,12 +1631,21 @@ defineExpose({ focusInput, scrollToBottom })
         </button>
       </div>
     </div>
-    <div v-if="isUpdating" class="update-progress-bar-wrap">
-      <div class="update-progress-bar">
-        <div class="update-progress-fill" :style="{ width: updateProgress + '%' }"></div>
+    <Transition name="update-bar">
+      <div v-if="isUpdating" class="update-progress-bar-wrap">
+        <div
+          class="update-progress-bar"
+          role="progressbar"
+          :aria-valuenow="updateProgress"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          :aria-label="`更新进度 ${updateProgress}%`"
+        >
+          <div class="update-progress-fill" :style="{ width: updateProgress + '%' }"></div>
+        </div>
+        <span class="update-progress-msg">{{ updateProgressMsg || '准备中…' }}（{{ updateProgress }}%）</span>
       </div>
-      <span class="update-progress-msg">{{ updateProgressMsg || '准备中…' }}（{{ updateProgress }}%）</span>
-    </div>
+    </Transition>
 
     <div class="input-area">
       <input
@@ -2552,6 +2564,23 @@ defineExpose({ focusInput, scrollToBottom })
 .update-progress-bar-wrap {
   margin: 0 12px 6px;
   flex-shrink: 0;
+  overflow: hidden;
+}
+.update-bar-enter-active {
+  transition: max-height 0.25s ease, opacity 0.25s ease;
+}
+.update-bar-leave-active {
+  transition: max-height 0.2s ease, opacity 0.15s ease;
+}
+.update-bar-enter-from,
+.update-bar-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+.update-bar-enter-to,
+.update-bar-leave-from {
+  max-height: 40px;
+  opacity: 1;
 }
 .update-progress-bar {
   height: 4px;

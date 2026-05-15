@@ -5,11 +5,12 @@ import VRMPet from './components/VRMPet.vue'
 import ChatBubble from './components/ChatBubble.vue'
 import SettingsWindow from './components/SettingsWindow.vue'
 import NotificationBubble from './components/NotificationBubble.vue'
-import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize, GetConfig } from '../wailsjs/go/main/App'
+import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize, GetConfig, SetChatVisible } from '../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../wailsjs/runtime/runtime'
 import { springAnimate } from './composables/useSpring'
 
 const bubbleOpen = ref(false)
+watch(bubbleOpen, (v) => { SetChatVisible(v) })
 const renderBackend = ref('live2d')
 const settingsOpen = ref(false)
 const ballPos  = ref({ x: -1, y: -1 })

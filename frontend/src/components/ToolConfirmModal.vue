@@ -8,6 +8,7 @@ import { useEscapeKey } from '../composables/useEscapeKey'
 const visible = ref(false)
 const request = ref(null) // ToolConfirmRequest
 const editedContent = ref('')
+const submitting = ref(false)
 
 /** Human-readable label for the tool type / language. */
 const languageLabel = computed(() => {
@@ -39,14 +40,20 @@ function onConfirmEvent(req) {
 
 /** approve — send edited content back to the backend. */
 async function approve() {
+  if (submitting.value) return
+  submitting.value = true
   visible.value = false
   await ConfirmToolExecution(request.value.id, true, editedContent.value)
+  submitting.value = false
 }
 
 /** reject — cancel the pending execution. */
 async function reject() {
+  if (submitting.value) return
+  submitting.value = true
   visible.value = false
   await ConfirmToolExecution(request.value.id, false, '')
+  submitting.value = false
 }
 
 // EventsOff(name) removes all listeners for that name, so always invoke the
@@ -127,8 +134,8 @@ useEscapeKey(reject, visible)
       </div>
 
       <div class="modal-actions">
-        <button class="btn-reject" @click="reject">拒绝</button>
-        <button class="btn-approve" @click="approve">{{ request?.tool_type === 'update' ? '安装更新' : '批准执行' }}</button>
+        <button class="btn-reject" :disabled="submitting" @click="reject">拒绝</button>
+        <button class="btn-approve" :disabled="submitting" @click="approve">{{ request?.tool_type === 'update' ? '安装更新' : '批准执行' }}</button>
       </div>
     </div>
   </div>
@@ -326,13 +333,14 @@ useEscapeKey(reject, visible)
 .btn-reject,
 .btn-approve {
   padding: 7px 18px;
+  min-height: 36px;
   border-radius: 7px;
   font-size: 13px;
   font-weight: 500;
   font-family: inherit;
   letter-spacing: -0.01em;
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s, transform 0.08s;
+  transition: background 0.12s, border-color 0.12s, transform 0.08s, opacity 0.12s;
   -webkit-appearance: none;
   appearance: none;
 }
@@ -340,6 +348,8 @@ useEscapeKey(reject, visible)
 .btn-approve:active { transform: scale(0.97); }
 .btn-reject:focus-visible,
 .btn-approve:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn-reject:disabled,
+.btn-approve:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 
 .btn-reject {
   background: var(--lg-surface-input);
@@ -364,9 +374,11 @@ useEscapeKey(reject, visible)
 
 .tool-confirm-pop-enter-active .modal-box {
   transition: transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: center bottom;
 }
 .tool-confirm-pop-leave-active .modal-box {
   transition: transform 0.14s ease-in;
+  transform-origin: center bottom;
 }
 .tool-confirm-pop-enter-from .modal-box { transform: scale(0.92); }
 .tool-confirm-pop-leave-to .modal-box { transform: scale(0.96); }
