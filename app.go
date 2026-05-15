@@ -9,7 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -89,6 +91,7 @@ type App struct {
 	watcherWG            sync.WaitGroup     // tracks background watchers started in startup
 	cancelWatcher        context.CancelFunc // cancels the screen-watcher goroutine on shutdown
 	pendingUpdateVersion string             // non-empty when a successful update marker was found on startup
+	settingsLn           net.Listener       // local HTTP listener serving frontend assets to the settings NSPanel
 }
 
 // NewApp creates a new App instance.
@@ -129,6 +132,21 @@ func (a *App) SetChatVisible(visible bool) {
 	a.mu.Lock()
 	a.isChatVisible = visible
 	a.mu.Unlock()
+}
+
+// OpenSettingsPanel opens the settings NSPanel (macOS only).
+// Falls back to emitting settings:open if the asset server is not ready.
+func (a *App) OpenSettingsPanel() {
+	if settingsServerAddr == "" {
+		wailsruntime.EventsEmit(a.ctx, "settings:open")
+		return
+	}
+	openSettingsPanel("http://" + settingsServerAddr)
+}
+
+// CloseSettingsPanel hides the settings NSPanel.
+func (a *App) CloseSettingsPanel() {
+	closeSettingsPanel()
 }
 
 // AcquireKeyWindow makes the Aiko window the key window so CSS :hover states
@@ -446,6 +464,32 @@ func (a *App) startup(ctx context.Context) {
 	// Register global hotkey Shift+Cmd+P to toggle the chat bubble.
 	globalAppCtx = ctx
 	registerGlobalHotkey()
+
+	// Start a local HTTP server to serve frontend assets to the settings NSPanel.
+	// Wails' internal asset server port is not accessible, so we start a dedicated server.
+	if settingsServerAddr == "" {
+		sub, fserr := fs.Sub(assets, "frontend/dist")
+		if fserr != nil {
+			slog.Error("settings panel: fs.Sub failed", "err", fserr)
+		} else {
+			ln, lnerr := net.Listen("tcp", "127.0.0.1:0")
+			if lnerr != nil {
+				slog.Error("settings panel: listen failed", "err", lnerr)
+			} else {
+				settingsServerAddr = ln.Addr().String()
+				a.settingsLn = ln
+				go http.Serve(ln, http.FileServer(http.FS(sub))) //nolint:errcheck
+				slog.Info("settings panel: asset server started", "addr", settingsServerAddr)
+			}
+		}
+	}
+
+	// When settings:open is emitted from frontend, open the native panel.
+	wailsruntime.EventsOn(ctx, "settings:open", func(_ ...interface{}) {
+		if settingsServerAddr != "" {
+			openSettingsPanel("http://" + settingsServerAddr)
+		}
+	})
 
 	// Watch for mouse moving to a different screen and migrate the window.
 	a.startScreenWatcher()
@@ -2020,6 +2064,9 @@ func (a *App) shutdown(_ context.Context) {
 		if err := c.Close(); err != nil {
 			slog.Warn("mcp client close failed", "err", err)
 		}
+	}
+	if a.settingsLn != nil {
+		a.settingsLn.Close()
 	}
 	// Wait for background watchers to exit (screen watcher exits promptly because
 	// cancelWatcher was called above).

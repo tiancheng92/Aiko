@@ -76,7 +76,7 @@ func main() {
 	// 设置菜单
 	settingsMenu := appMenu.AddSubmenu("Settings")
 	settingsMenu.AddText("Preferences...", keys.CmdOrCtrl(","), func(_ *menu.CallbackData) {
-		wailsruntime.EventsEmit(app.ctx, "settings:open")
+		app.OpenSettingsPanel()
 	})
 
 	err := wails.Run(&options.App{

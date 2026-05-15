@@ -41,6 +41,7 @@ const emit = defineEmits(['close'])
 
 const props = defineProps({
   activeScreen: { type: Object, default: () => ({ width: 0, height: 0 }) },
+  panelMode: { type: Boolean, default: false },
 })
 
 const cfg = ref({
@@ -1201,6 +1202,14 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
     class="settings-win"
     :style="{ left: pos.x + 'px', top: pos.y + 'px', width: winSize.w + 'px', height: winSize.h + 'px' }"
   >
+    <!-- Panel mode close button — shown when running in a dedicated NSPanel -->
+    <button v-if="props.panelMode" class="panel-close-btn" aria-label="关闭设置" @click="emit('close')">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+
     <!-- Sidebar + content — no separate titlebar; sidebar owns traffic lights + title + search -->
     <div class="win-body">
       <nav class="win-sidebar" aria-label="设置分类">
@@ -4057,5 +4066,29 @@ kbd {
   font-size: 12px;
   color: var(--text-secondary);
   line-height: 1.4;
+}
+
+/* ── Panel mode close button ────────────────────────────────── */
+.panel-close-btn {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 10;
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s;
+}
+.panel-close-btn:hover {
+  background: rgba(255, 69, 58, 0.16);
+  color: var(--danger);
 }
 </style>
