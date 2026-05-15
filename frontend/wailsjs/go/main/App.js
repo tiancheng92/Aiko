@@ -30,10 +30,6 @@ export function ClearChatHistory() {
   return window['go']['main']['App']['ClearChatHistory']();
 }
 
-export function CloseSettingsPanel() {
-  return window['go']['main']['App']['CloseSettingsPanel']();
-}
-
 export function ConfirmToolExecution(arg1, arg2, arg3) {
   return window['go']['main']['App']['ConfirmToolExecution'](arg1, arg2, arg3);
 }
@@ -232,10 +228,6 @@ export function OpenDirectoryDialog(arg1) {
 
 export function OpenFileDialog(arg1, arg2) {
   return window['go']['main']['App']['OpenFileDialog'](arg1, arg2);
-}
-
-export function OpenSettingsPanel() {
-  return window['go']['main']['App']['OpenSettingsPanel']();
 }
 
 export function PingLLM() {

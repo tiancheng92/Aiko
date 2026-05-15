@@ -24,8 +24,6 @@ export function CheckUpdate():Promise<main.UpdateInfo>;
 
 export function ClearChatHistory():Promise<void>;
 
-export function CloseSettingsPanel():Promise<void>;
-
 export function ConfirmToolExecution(arg1:string,arg2:boolean,arg3:string):Promise<void>;
 
 export function CreateCronJob(arg1:string,arg2:string,arg3:string,arg4:string,arg5:boolean,arg6:boolean):Promise<scheduler.Job>;
@@ -125,8 +123,6 @@ export function MissingRequiredConfig():Promise<Array<string>>;
 export function OpenDirectoryDialog(arg1:string):Promise<string>;
 
 export function OpenFileDialog(arg1:string,arg2:Array<frontend.FileFilter>):Promise<string>;
-
-export function OpenSettingsPanel():Promise<void>;
 
 export function PingLLM():Promise<number>;
 

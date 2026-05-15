@@ -5,17 +5,9 @@ import VRMPet from './components/VRMPet.vue'
 import ChatBubble from './components/ChatBubble.vue'
 import SettingsWindow from './components/SettingsWindow.vue'
 import NotificationBubble from './components/NotificationBubble.vue'
-import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize, GetConfig, SetChatVisible, CloseSettingsPanel, OpenSettingsPanel } from '../wailsjs/go/main/App'
+import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize, GetConfig, SetChatVisible } from '../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../wailsjs/runtime/runtime'
 import { springAnimate } from './composables/useSpring'
-
-// isPanelMode is true when this WebView is running inside the settings NSPanel.
-const isPanelMode = new URLSearchParams(window.location.search).get('panel') === 'settings'
-
-/** onPanelClose closes the native settings panel window. */
-function onPanelClose() {
-  CloseSettingsPanel().catch(e => console.warn('CloseSettingsPanel failed', e))
-}
 
 const bubbleOpen = ref(false)
 watch(bubbleOpen, (v) => { SetChatVisible(v) })
@@ -359,7 +351,7 @@ onMounted(async () => {
       })
     }
   })
-  offSettings  = EventsOn('settings:open', () => { OpenSettingsPanel().catch(() => { settingsOpen.value = true }) })
+  offSettings  = EventsOn('settings:open', () => { settingsOpen.value = true })
   offRenderBackend = EventsOn('config:render:backend:changed', (backend) => {
     renderBackend.value = backend
   })
@@ -419,9 +411,9 @@ function toggleBubble() {
   }
 }
 
-/** openSettings opens the settings NSPanel; falls back to in-app modal on error. */
+/** openSettings opens the settings window. */
 function openSettings() {
-  OpenSettingsPanel().catch(() => { settingsOpen.value = true })
+  settingsOpen.value = true
 }
 
 // ── Spring transition helpers ─────────────────────────────────────────────────
@@ -523,79 +515,63 @@ function onSettingsLeave(el, done) {
 </script>
 
 <template>
-  <!-- Settings panel mode: render only settings UI -->
-  <div v-if="isPanelMode" class="settings-panel-root">
-    <SettingsWindow :panel-mode="true" @close="onPanelClose" />
+  <Live2DPet
+    v-if="renderBackend === 'live2d'"
+    :active-screen="activeScreen"
+    @click="toggleBubble"
+    @position="p => ballPos = p"
+    @ball-size="s => ballSize = s"
+    @open-settings="openSettings"
+  />
+  <VRMPet
+    v-else-if="renderBackend === 'vrm'"
+    :active-screen="activeScreen"
+    @click="toggleBubble"
+    @position="p => ballPos = p"
+    @ball-size="s => ballSize = s"
+    @open-settings="openSettings"
+  />
+  <Transition :css="false" @enter="onBubbleEnter" @leave="onBubbleLeave">
+    <ChatBubble
+      ref="chatBubbleRef"
+      v-show="bubbleOpen"
+      :visible="bubbleOpen"
+      :ball-pos="ballPos"
+      :ball-size="ballSize"
+      :active-screen="activeScreen"
+      @close="bubbleOpen = false"
+      @open-settings="openSettings"
+    />
+  </Transition>
+  <Transition :css="false" @enter="onSettingsEnter" @leave="onSettingsLeave">
+    <SettingsWindow
+      v-if="settingsOpen"
+      :active-screen="activeScreen"
+      @close="settingsOpen = false"
+    />
+  </Transition>
+  <NotificationBubble
+    :pet-pos="ballPos"
+    :pet-size="ballSize"
+  />
+
+  <!--
+    Apple Intelligence glow border — 4 canvas elements, each with its own CSS blur.
+    CSS filter on the element itself is the most reliable blur in all WebViews.
+    Each layer's gradient morphs independently (different interval/duration) → organic drift.
+  -->
+  <div v-if="siriMounted" class="siri-wrapper">
+    <canvas :ref="siriCanvases[0]" class="siri-canvas" style="filter: blur(30px); opacity: 0.65;" />
+    <canvas :ref="siriCanvases[1]" class="siri-canvas" style="filter: blur(14px); opacity: 0.80;" />
+    <canvas :ref="siriCanvases[2]" class="siri-canvas" style="filter: blur(6px);  opacity: 0.90;" />
+    <canvas :ref="siriCanvases[3]" class="siri-canvas" style="filter: blur(2px);  opacity: 1.0;" />
   </div>
 
-  <!-- Normal pet mode -->
-  <template v-else>
-    <Live2DPet
-      v-if="renderBackend === 'live2d'"
-      :active-screen="activeScreen"
-      @click="toggleBubble"
-      @position="p => ballPos = p"
-      @ball-size="s => ballSize = s"
-      @open-settings="openSettings"
-    />
-    <VRMPet
-      v-else-if="renderBackend === 'vrm'"
-      :active-screen="activeScreen"
-      @click="toggleBubble"
-      @position="p => ballPos = p"
-      @ball-size="s => ballSize = s"
-      @open-settings="openSettings"
-    />
-    <Transition :css="false" @enter="onBubbleEnter" @leave="onBubbleLeave">
-      <ChatBubble
-        ref="chatBubbleRef"
-        v-show="bubbleOpen"
-        :visible="bubbleOpen"
-        :ball-pos="ballPos"
-        :ball-size="ballSize"
-        :active-screen="activeScreen"
-        @close="bubbleOpen = false"
-        @open-settings="openSettings"
-      />
-    </Transition>
-    <Transition :css="false" @enter="onSettingsEnter" @leave="onSettingsLeave">
-      <SettingsWindow
-        v-if="settingsOpen"
-        :active-screen="activeScreen"
-        @close="settingsOpen = false"
-      />
-    </Transition>
-    <NotificationBubble
-      :pet-pos="ballPos"
-      :pet-size="ballSize"
-    />
-
-    <!--
-      Apple Intelligence glow border — 4 canvas elements, each with its own CSS blur.
-      CSS filter on the element itself is the most reliable blur in all WebViews.
-      Each layer's gradient morphs independently (different interval/duration) → organic drift.
-    -->
-    <div v-if="siriMounted" class="siri-wrapper">
-      <canvas :ref="siriCanvases[0]" class="siri-canvas" style="filter: blur(30px); opacity: 0.65;" />
-      <canvas :ref="siriCanvases[1]" class="siri-canvas" style="filter: blur(14px); opacity: 0.80;" />
-      <canvas :ref="siriCanvases[2]" class="siri-canvas" style="filter: blur(6px);  opacity: 0.90;" />
-      <canvas :ref="siriCanvases[3]" class="siri-canvas" style="filter: blur(2px);  opacity: 1.0;" />
-    </div>
-
-    <!-- Water ripple canvas — realistic radial ripples drawn per-frame -->
-    <canvas v-if="siriMounted" ref="rippleCanvas" class="ripple-canvas" />
-  </template>
+  <!-- Water ripple canvas — realistic radial ripples drawn per-frame -->
+  <canvas v-if="siriMounted" ref="rippleCanvas" class="ripple-canvas" />
 </template>
 
 <style scoped>
-
-/* ── Settings panel mode root ───────────────────────────────── */
-.settings-panel-root {
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
-  background: transparent;
-}
 
 /* ── Siri wrapper ───────────────────────────────────────────── */
 .siri-wrapper {
