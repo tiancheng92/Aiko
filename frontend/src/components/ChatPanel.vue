@@ -648,6 +648,11 @@ let offToken, offDone, offError, offClear, offProactiveStart, offProactiveMessag
 let offTTSDone, offTTSError, offTTSAudio
 let offSoundsChanged
 let offVoiceStart, offVoiceTranscript, offVoiceEnd, offVoiceFinal, offVoiceError, offVoiceAutoSend
+let offUpdateProgress
+
+const updateProgress = ref(0)
+const updateProgressMsg = ref('')
+const isUpdating = ref(false)
 /** @type {HTMLAudioElement|null} 当前正在播放的 TTS Audio 实例，用于暂停 */
 let currentTTSAudio = null
 let resizeObserver = null
@@ -813,6 +818,22 @@ onMounted(async () => {
     isStreaming.value = false
     proactiveStarted = false
     EventsEmit('pet:state:change', 'idle')
+    // Check if the newly completed message is tall enough to collapse.
+    if (idx >= 0) {
+      const m = messages.value[idx]
+      const k = msgKey(m, idx)
+      nextTick(() => {
+        const bubbleEl = messagesEl.value?.querySelector(`[data-msg-key="${CSS.escape(k)}"]`)
+        if (bubbleEl && bubbleEl.scrollHeight > COLLAPSE_HEIGHT) {
+          const nextC = new Set(collapsedIds.value)
+          nextC.add(k)
+          collapsedIds.value = nextC
+          const nextE = new Set(expandedIds.value)
+          nextE.add(k)
+          expandedIds.value = nextE
+        }
+      })
+    }
     // Auto-play TTS if enabled and this is not a voice-triggered response
     if (cfg.value?.TTSAutoPlay && lastMsg?.content && !isRecording.value) {
       activeTTSMsgId.value = idx
@@ -921,6 +942,12 @@ onMounted(async () => {
     voiceAutoSend.value = val
   })
 
+  offUpdateProgress = EventsOn('update:progress', (data) => {
+    isUpdating.value = true
+    updateProgress.value = data.pct ?? 0
+    updateProgressMsg.value = data.msg ?? ''
+  })
+
   // Observe message container width for code block max-width.
   if (messagesEl.value) {
     resizeObserver = new ResizeObserver(([entry]) => {
@@ -942,6 +969,7 @@ onUnmounted(() => {
   offTTSDone?.(); offTTSError?.(); offTTSAudio?.()
   offSoundsChanged?.()
   offVoiceStart?.(); offVoiceTranscript?.(); offVoiceEnd?.(); offVoiceFinal?.(); offVoiceError?.(); offVoiceAutoSend?.()
+  offUpdateProgress?.()
   document.removeEventListener('click', closeColDrops)
   sentinelObserver?.disconnect()
   sentinelObserver = null
@@ -1600,6 +1628,13 @@ defineExpose({ focusInput, scrollToBottom })
         </button>
       </div>
     </div>
+    <div v-if="isUpdating" class="update-progress-bar-wrap">
+      <div class="update-progress-bar">
+        <div class="update-progress-fill" :style="{ width: updateProgress + '%' }"></div>
+      </div>
+      <span class="update-progress-msg">{{ updateProgressMsg || '准备中…' }}（{{ updateProgress }}%）</span>
+    </div>
+
     <div class="input-area">
       <input
         ref="fileInputEl"
@@ -2514,6 +2549,30 @@ defineExpose({ focusInput, scrollToBottom })
 .bubble.markdown :deep(.katex-html) { color: #e2e8f0; }
 
 /* ── Composer card ─────────────────────────────────────────── */
+.update-progress-bar-wrap {
+  margin: 0 12px 6px;
+  flex-shrink: 0;
+}
+.update-progress-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--lg-border-subtle);
+  overflow: hidden;
+}
+.update-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+.update-progress-msg {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
 .input-area {
   margin: 10px 12px;
   background: var(--lg-surface-input);

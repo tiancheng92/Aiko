@@ -346,6 +346,19 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 			return
 		}
 
+		// Inject flush callback so check_and_update can persist before restart.
+		flushFn := func(assistantSummary string) {
+			if a.shortMem == nil {
+				return
+			}
+			if _, _, stripped, ok := parseEmotionTag(assistantSummary); ok {
+				assistantSummary = stripped
+			}
+			_, _ = a.shortMem.AddWithImagesAndFiles("user", userInput, nil, nil)
+			_, _ = a.shortMem.AddFull("assistant", assistantSummary, "", nil, nil)
+		}
+		ctx = context.WithValue(ctx, internaltools.PersistBeforeRestartKey{}, flushFn)
+
 		content := userInput
 
 		msgs := append(ctxMsgs, &schema.Message{Role: schema.User, Content: content})
