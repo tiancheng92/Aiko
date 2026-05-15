@@ -22,6 +22,7 @@ const emit = defineEmits(['close'])
 const menuRef = ref(null)
 const pos = ref({ x: 0, y: 0 })
 const visible = ref(false)
+const hoveredIndex = ref(null)
 
 /**
  * show displays the menu anchored near (x, y), adjusted to stay within viewport.
@@ -29,6 +30,10 @@ const visible = ref(false)
 function show(x, y) {
   pos.value = { x, y }
   visible.value = true
+  hoveredIndex.value = null
+  // Expose a hook so the Go-side mouse tracker can update hovered index directly,
+  // bypassing WKWebView's key-window restriction on tracking areas / CSS :hover.
+  window.__aikoCtxHover = (i) => { hoveredIndex.value = i }
   nextTick(() => {
     if (!menuRef.value) return
     const rect = menuRef.value.getBoundingClientRect()
@@ -42,6 +47,7 @@ function show(x, y) {
 /** hide closes the menu and emits close. */
 function hide() {
   visible.value = false
+  delete window.__aikoCtxHover
   emit('close')
 }
 
@@ -74,7 +80,8 @@ defineExpose({ show, hide })
         <button
           v-else
           role="menuitem"
-          :class="['ctx-item', { danger: item.danger }]"
+          :class="['ctx-item', { danger: item.danger, hovered: hoveredIndex === i }]"
+          :data-idx="i"
           @click="() => { item.action(); hide() }"
         >
           <span class="ctx-icon-wrap">
@@ -135,7 +142,8 @@ defineExpose({ show, hide })
   appearance: none;
 }
 .ctx-item:hover,
-.ctx-item:focus-visible {
+.ctx-item:focus-visible,
+.ctx-item.hovered {
   background: var(--accent);
   color: #fff;
   outline: none;
@@ -143,11 +151,13 @@ defineExpose({ show, hide })
 }
 .ctx-item:active { transform: translateX(1px) scale(0.98); }
 .ctx-item:hover .ctx-icon-wrap,
-.ctx-item:focus-visible .ctx-icon-wrap { color: #fff; }
+.ctx-item:focus-visible .ctx-icon-wrap,
+.ctx-item.hovered .ctx-icon-wrap { color: #fff; }
 
 .ctx-item.danger { color: var(--danger); }
 .ctx-item.danger:hover,
-.ctx-item.danger:focus-visible {
+.ctx-item.danger:focus-visible,
+.ctx-item.danger.hovered {
   background: var(--danger);
   color: #fff;
 }

@@ -319,9 +319,20 @@ static void hitTestPoint(CGFloat cssX, CGFloat cssY) {
 
     NSString *js = [NSString stringWithFormat:
         @"(function(x,y){"
-         // While any context menu is open, capture all clicks so the
-         // existing mousedown-outside handler can dismiss it.
-         "if(document.querySelector('.ctx-menu'))return true;"
+         // While the context menu is open: update hovered item via the
+         // __aikoCtxHover hook (bypasses WKWebView key-window restriction on
+         // tracking areas that prevents CSS :hover and JS mouseenter from firing).
+         "var _cm=document.querySelector('.ctx-menu');"
+         "if(_cm){"
+         "  var _items=_cm.querySelectorAll('.ctx-item[data-idx]');"
+         "  var _hi=-1;"
+         "  _items.forEach(function(el){"
+         "    var r=el.getBoundingClientRect();"
+         "    if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom)_hi=parseInt(el.dataset.idx);"
+         "  });"
+         "  if(window.__aikoCtxHover)window.__aikoCtxHover(_hi);"
+         "  return true;"
+         "}"
          "var e=document.elementFromPoint(x,y);"
          "if(!e)return false;"
          // For canvas-based pets (.vrm-pet, .live2d-pet): only treat as
@@ -462,6 +473,23 @@ static void moveWindowToScreen(int n) {
 
 // hasWindow returns 1 if gWindow is initialized.
 static int hasWindow() { return gWindow != nil ? 1 : 0; }
+
+// aikoAcquireKeyWindow makes gWindow the key window so that WKWebView CSS :hover
+// states activate even when another app is the frontmost application.
+// Called when a context menu opens.
+static void aikoAcquireKeyWindow() {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (gWindow) [gWindow makeKeyWindow];
+    });
+}
+
+// aikoReleaseKeyWindow resigns key-window status so the previous app regains focus.
+// Called when the context menu closes.
+static void aikoReleaseKeyWindow() {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (gWindow) [gWindow resignKeyWindow];
+    });
+}
 
 // startVoiceRecognition_SpeechAnalyzer starts STT using the macOS 26+ SpeechAnalyzer API.
 // Results are written to gVoicePipeFd in the same format as the SFSpeechRecognizer path:
@@ -1158,6 +1186,13 @@ func getScreenFrame(n int) ScreenFrame {
 // moveWindowToScreen moves the main window to cover the nth NSScreen exactly.
 // This bypasses Wails' WindowSetPosition which is relative to the current screen.
 func moveWindowToScreen(n int) { C.moveWindowToScreen(C.int(n)) }
+
+// acquireKeyWindow makes the main window the key window so CSS :hover works
+// when Aiko is not the frontmost app (e.g. while a context menu is open).
+func acquireKeyWindow() { C.aikoAcquireKeyWindow() }
+
+// releaseKeyWindow resigns key-window status, restoring focus to the previous app.
+func releaseKeyWindow() { C.aikoReleaseKeyWindow() }
 
 // getMouseX returns the current mouse cursor X in macOS screen coordinates.
 func getMouseX() float64 { return float64(C.getMouseScreenX()) }

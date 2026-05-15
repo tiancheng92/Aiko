@@ -10,6 +10,8 @@ import {tools} from '../models';
 import {proactive} from '../models';
 import {frontend} from '../models';
 
+export function AcquireKeyWindow():Promise<void>;
+
 export function ActivateModelProfile(arg1:number):Promise<void>;
 
 export function AddMCPServer(arg1:mcp.ServerConfig):Promise<mcp.ServerConfig>;
@@ -125,6 +127,8 @@ export function OpenFileDialog(arg1:string,arg2:Array<frontend.FileFilter>):Prom
 export function PingLLM():Promise<number>;
 
 export function RegenerateLastReply():Promise<void>;
+
+export function ReleaseKeyWindow():Promise<void>;
 
 export function ResetAvatar(arg1:string):Promise<void>;
 

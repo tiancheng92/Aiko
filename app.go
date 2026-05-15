@@ -131,6 +131,13 @@ func (a *App) SetChatVisible(visible bool) {
 	a.mu.Unlock()
 }
 
+// AcquireKeyWindow makes the Aiko window the key window so CSS :hover states
+// work while a context menu is open and another app is frontmost.
+func (a *App) AcquireKeyWindow() { acquireKeyWindow() }
+
+// ReleaseKeyWindow resigns key-window status, restoring focus to the previous app.
+func (a *App) ReleaseKeyWindow() { releaseKeyWindow() }
+
 // ConfirmToolExecution is called by the frontend when the user approves or rejects
 // a pending tool execution request.
 func (a *App) ConfirmToolExecution(id string, approved bool, editedContent string) {
