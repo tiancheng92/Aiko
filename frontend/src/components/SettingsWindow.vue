@@ -3702,9 +3702,7 @@ ul { list-style: none; padding: 0; margin: 0; }
   font-family: inherit;
   cursor: pointer;
   white-space: nowrap;
-  transition: color 0.15s;
 }
-.sub-tab-bar button:hover { color: inherit; }
 .sub-tab-bar button.active {
   color: var(--text-primary);
   font-weight: 600;
