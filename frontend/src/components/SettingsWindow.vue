@@ -3703,6 +3703,10 @@ ul { list-style: none; padding: 0; margin: 0; }
   cursor: pointer;
   white-space: nowrap;
 }
+.sub-tab-bar button:not(.active):hover {
+  color: var(--text-secondary);
+  background: transparent;
+}
 .sub-tab-bar button.active {
   color: var(--text-primary);
   font-weight: 600;
