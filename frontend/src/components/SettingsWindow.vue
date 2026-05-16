@@ -1,6 +1,6 @@
 <!-- frontend/src/components/SettingsWindow.vue -->
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { springAnimate } from '../composables/useSpring.js'
 import {
   GetConfig, SaveConfig,
@@ -280,12 +280,12 @@ function isSearchMatch(tab) {
 
 
 onMounted(async () => {
-  // Re-center panel after mount to handle cases where window.innerWidth/Height
-  // was not yet accurate at ref() initialization time (e.g. standalone OS window).
+  // Re-center panel after DOM paint so window.innerWidth/Height are accurate.
   if (props.standalone) {
+    await nextTick()
     pos.value = {
-      x: Math.round((window.innerWidth - DEFAULT_W) / 2),
-      y: Math.round((window.innerHeight - DEFAULT_H) / 2),
+      x: Math.max(0, Math.round((window.innerWidth - DEFAULT_W) / 2)),
+      y: Math.max(0, Math.round((window.innerHeight - DEFAULT_H) / 2)),
     }
   }
 

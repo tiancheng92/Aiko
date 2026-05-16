@@ -18,29 +18,22 @@ type WindowService struct{ s *sharedState }
 // NewWindowService creates a WindowService backed by the given shared state.
 func NewWindowService(s *sharedState) *WindowService { return &WindowService{s: s} }
 
-// OpenSettings shows the settings window. The main window's always-on-top is
-// lowered and the settings window is promoted to always-on-top so it stays
-// visible above other apps. Both are restored in CloseSettings.
+// OpenSettings shows the settings window above all other windows.
+// Both main and settings keep AlwaysOnTop; Focus() brings settings to front.
 func (w *WindowService) OpenSettings() {
 	settingsWin, ok := w.s.app.Window.GetByName("settings")
 	if !ok {
 		return
-	}
-	if mainWin, ok := w.s.app.Window.GetByName("main"); ok {
-		mainWin.SetAlwaysOnTop(false)
 	}
 	settingsWin.SetAlwaysOnTop(true)
 	settingsWin.Show()
 	settingsWin.Focus()
 }
 
-// CloseSettings hides the settings window and restores main always-on-top.
+// CloseSettings hides the settings window.
 func (w *WindowService) CloseSettings() {
 	if win, ok := w.s.app.Window.GetByName("settings"); ok {
 		win.Hide()
-	}
-	if mainWin, ok := w.s.app.Window.GetByName("main"); ok {
-		mainWin.SetAlwaysOnTop(true)
 	}
 }
 
