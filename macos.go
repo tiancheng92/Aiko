@@ -474,22 +474,6 @@ static void moveWindowToScreen(int n) {
 // hasWindow returns 1 if gWindow is initialized.
 static int hasWindow() { return gWindow != nil ? 1 : 0; }
 
-// aikoAcquireKeyWindow makes gWindow the key window so that WKWebView CSS :hover
-// states activate even when another app is the frontmost application.
-// Called when a context menu opens.
-static void aikoAcquireKeyWindow() {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if (gWindow) [gWindow makeKeyWindow];
-    });
-}
-
-// aikoReleaseKeyWindow resigns key-window status so the previous app regains focus.
-// Called when the context menu closes.
-static void aikoReleaseKeyWindow() {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if (gWindow) [gWindow resignKeyWindow];
-    });
-}
 
 // startVoiceRecognition_SpeechAnalyzer starts STT using the macOS 26+ SpeechAnalyzer API.
 // Results are written to gVoicePipeFd in the same format as the SFSpeechRecognizer path:
@@ -1184,13 +1168,6 @@ func getScreenFrame(n int) ScreenFrame {
 // moveWindowToScreen moves the main window to cover the nth NSScreen exactly.
 // This bypasses Wails' WindowSetPosition which is relative to the current screen.
 func moveWindowToScreen(n int) { C.moveWindowToScreen(C.int(n)) }
-
-// acquireKeyWindow makes the main window the key window so CSS :hover works
-// when Aiko is not the frontmost app (e.g. while a context menu is open).
-func acquireKeyWindow() { C.aikoAcquireKeyWindow() }
-
-// releaseKeyWindow resigns key-window status, restoring focus to the previous app.
-func releaseKeyWindow() { C.aikoReleaseKeyWindow() }
 
 // getMouseX returns the current mouse cursor X in macOS screen coordinates.
 func getMouseX() float64 { return float64(C.getMouseScreenX()) }

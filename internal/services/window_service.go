@@ -41,20 +41,11 @@ func (w *WindowService) SetChatVisible(visible bool) {
 	w.s.mu.Unlock()
 }
 
-// AcquireKeyWindow makes the Aiko window the key window so CSS :hover states
-// work while a context menu is open and another app is frontmost.
-func (w *WindowService) AcquireKeyWindow() {
-	if w.s.hooks.AcquireKeyWindow != nil {
-		w.s.hooks.AcquireKeyWindow()
-	}
-}
+// AcquireKeyWindow is a no-op under Wails v3 multi-window.
+func (w *WindowService) AcquireKeyWindow() {}
 
-// ReleaseKeyWindow resigns key-window status, restoring focus to the previous app.
-func (w *WindowService) ReleaseKeyWindow() {
-	if w.s.hooks.ReleaseKeyWindow != nil {
-		w.s.hooks.ReleaseKeyWindow()
-	}
-}
+// ReleaseKeyWindow is a no-op under Wails v3 multi-window.
+func (w *WindowService) ReleaseKeyWindow() {}
 
 // EmitEvent emits a Wails runtime event with the given name and payload.
 func (w *WindowService) EmitEvent(name string, data any) {
