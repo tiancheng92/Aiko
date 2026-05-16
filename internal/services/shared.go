@@ -158,6 +158,22 @@ func (s *sharedState) EmitEvent(name string, data any) {
 	s.app.Event.Emit(name, data)
 }
 
+// emitDirect dispatches a Wails event synchronously through the main window,
+// bypassing Event.Emit's internal goroutine. Event.Emit spawns a new goroutine
+// per emission, so rapid sequential calls (e.g. streaming tokens) can arrive
+// out-of-order at the JS layer. Calling DispatchWailsEvent inline on the
+// current goroutine and letting InvokeSync queue them on the macOS main thread
+// preserves emission order.
+func (s *sharedState) emitDirect(name string, data any) {
+	win, ok := s.app.Window.GetByName("main")
+	if !ok {
+		// Fallback: best-effort via the normal async path.
+		s.app.Event.Emit(name, data)
+		return
+	}
+	win.DispatchWailsEvent(&application.CustomEvent{Name: name, Data: data})
+}
+
 // startup initialises all application state. It mirrors ServiceStartup from app.go.
 // Callers (individual service ServiceStartup implementations) must call this after
 // the Wails context is available.
@@ -433,37 +449,37 @@ func (s *sharedState) initLLMComponents(ctx context.Context) error {
 		for r := range ch {
 			if r.Err != nil {
 				if job.SaveToMemory {
-					s.app.Event.Emit("chat:done", "")
+					s.emitDirect("chat:done", "")
 				}
 				return "", r.Err
 			}
 			if job.SaveToMemory && len(r.Images) > 0 {
-				s.app.Event.Emit("chat:image", r.Images)
+				s.emitDirect("chat:image", r.Images)
 			}
 			if r.Done {
 				break
 			}
 			if r.ThinkingToken != "" {
 				if job.SaveToMemory {
-					s.app.Event.Emit("chat:thinking", r.ThinkingToken)
+					s.emitDirect("chat:thinking", r.ThinkingToken)
 				}
 				continue
 			}
 			text, _, _ := ep.Feed(r.Token)
 			sb.WriteString(text)
 			if job.SaveToMemory && text != "" {
-				s.app.Event.Emit("chat:token", text)
+				s.emitDirect("chat:token", text)
 			}
 		}
 		// Flush any buffered tail after the last token.
 		if tail := ep.Flush(); tail != "" {
 			sb.WriteString(tail)
 			if job.SaveToMemory {
-				s.app.Event.Emit("chat:token", tail)
+				s.emitDirect("chat:token", tail)
 			}
 		}
 		if job.SaveToMemory {
-			s.app.Event.Emit("chat:done", "")
+			s.emitDirect("chat:done", "")
 		}
 		return sb.String(), nil
 	}

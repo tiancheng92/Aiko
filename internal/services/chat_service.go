@@ -55,19 +55,19 @@ func (c *ChatService) ChatDirect(ctx context.Context, prompt string) error {
 	ch := ag.ChatDirect(ctx, prompt)
 	for r := range ch {
 		if r.Err != nil {
-			c.s.app.Event.Emit("chat:error", c.formatChatError(r.Err))
-			c.s.app.Event.Emit("chat:done", nil)
+			c.s.emitDirect("chat:error", c.formatChatError(r.Err))
+			c.s.emitDirect("chat:done", nil)
 			return r.Err
 		}
 		if len(r.Images) > 0 {
-			c.s.app.Event.Emit("chat:image", r.Images)
+			c.s.emitDirect("chat:image", r.Images)
 		}
 		if r.Done {
 			break
 		}
-		c.s.app.Event.Emit("chat:token", r.Token)
+		c.s.emitDirect("chat:token", r.Token)
 	}
-	c.s.app.Event.Emit("chat:done", nil)
+	c.s.emitDirect("chat:done", nil)
 	return nil
 }
 
@@ -127,22 +127,22 @@ func (c *ChatService) SendMessage(userInput string) error {
 				if errors.Is(result.Err, context.Canceled) {
 					return
 				}
-				c.s.app.Event.Emit("chat:error", c.formatChatError(result.Err))
+				c.s.emitDirect("chat:error", c.formatChatError(result.Err))
 				return
 			}
 			if result.Done {
 				if tail := ep.Flush(); tail != "" {
-					c.s.app.Event.Emit("chat:token", tail)
+					c.s.emitDirect("chat:token", tail)
 				}
-				c.s.app.Event.Emit("chat:done", "")
+				c.s.emitDirect("chat:done", "")
 				return
 			}
 			if result.ThinkingToken != "" {
-				c.s.app.Event.Emit("chat:thinking", result.ThinkingToken)
+				c.s.emitDirect("chat:thinking", result.ThinkingToken)
 				continue
 			}
 			if len(result.Images) > 0 {
-				c.s.app.Event.Emit("chat:image", result.Images)
+				c.s.emitDirect("chat:image", result.Images)
 			}
 			text, emotion, intensity := ep.Feed(result.Token)
 			if emotion != "" {
@@ -152,14 +152,14 @@ func (c *ChatService) SendMessage(userInput string) error {
 				})
 			}
 			if text != "" {
-				c.s.app.Event.Emit("chat:token", text)
+				c.s.emitDirect("chat:token", text)
 			}
 		}
 		// Fallback: ensure frontend unblocks if channel closes without a terminal result.
 		if tail := ep.Flush(); tail != "" {
-			c.s.app.Event.Emit("chat:token", tail)
+			c.s.emitDirect("chat:token", tail)
 		}
-		c.s.app.Event.Emit("chat:done", "")
+		c.s.emitDirect("chat:done", "")
 	}()
 	return nil
 }
@@ -261,22 +261,22 @@ func (c *ChatService) SendMessageWithImages(userInput string, images []string) e
 				if errors.Is(result.Err, context.Canceled) {
 					return
 				}
-				c.s.app.Event.Emit("chat:error", c.formatChatError(result.Err))
+				c.s.emitDirect("chat:error", c.formatChatError(result.Err))
 				return
 			}
 			if result.Done {
 				if tail := ep.Flush(); tail != "" {
-					c.s.app.Event.Emit("chat:token", tail)
+					c.s.emitDirect("chat:token", tail)
 				}
-				c.s.app.Event.Emit("chat:done", "")
+				c.s.emitDirect("chat:done", "")
 				return
 			}
 			if result.ThinkingToken != "" {
-				c.s.app.Event.Emit("chat:thinking", result.ThinkingToken)
+				c.s.emitDirect("chat:thinking", result.ThinkingToken)
 				continue
 			}
 			if len(result.Images) > 0 {
-				c.s.app.Event.Emit("chat:image", result.Images)
+				c.s.emitDirect("chat:image", result.Images)
 			}
 			text, emotion, intensity := ep.Feed(result.Token)
 			if emotion != "" {
@@ -286,13 +286,13 @@ func (c *ChatService) SendMessageWithImages(userInput string, images []string) e
 				})
 			}
 			if text != "" {
-				c.s.app.Event.Emit("chat:token", text)
+				c.s.emitDirect("chat:token", text)
 			}
 		}
 		if tail := ep.Flush(); tail != "" {
-			c.s.app.Event.Emit("chat:token", tail)
+			c.s.emitDirect("chat:token", tail)
 		}
-		c.s.app.Event.Emit("chat:done", "")
+		c.s.emitDirect("chat:done", "")
 	}()
 	return nil
 }
@@ -384,22 +384,22 @@ func (c *ChatService) SendMessageWithFiles(userInput string, images []string, fi
 				if errors.Is(result.Err, context.Canceled) {
 					return
 				}
-				c.s.app.Event.Emit("chat:error", c.formatChatError(result.Err))
+				c.s.emitDirect("chat:error", c.formatChatError(result.Err))
 				return
 			}
 			if result.Done {
 				if tail := ep.Flush(); tail != "" {
-					c.s.app.Event.Emit("chat:token", tail)
+					c.s.emitDirect("chat:token", tail)
 				}
-				c.s.app.Event.Emit("chat:done", "")
+				c.s.emitDirect("chat:done", "")
 				return
 			}
 			if result.ThinkingToken != "" {
-				c.s.app.Event.Emit("chat:thinking", result.ThinkingToken)
+				c.s.emitDirect("chat:thinking", result.ThinkingToken)
 				continue
 			}
 			if len(result.Images) > 0 {
-				c.s.app.Event.Emit("chat:image", result.Images)
+				c.s.emitDirect("chat:image", result.Images)
 			}
 			text, emotion, intensity := ep.Feed(result.Token)
 			if emotion != "" {
@@ -409,13 +409,13 @@ func (c *ChatService) SendMessageWithFiles(userInput string, images []string, fi
 				})
 			}
 			if text != "" {
-				c.s.app.Event.Emit("chat:token", text)
+				c.s.emitDirect("chat:token", text)
 			}
 		}
 		if tail := ep.Flush(); tail != "" {
-			c.s.app.Event.Emit("chat:token", tail)
+			c.s.emitDirect("chat:token", tail)
 		}
-		c.s.app.Event.Emit("chat:done", "")
+		c.s.emitDirect("chat:done", "")
 	}()
 	return nil
 }
