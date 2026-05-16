@@ -60,8 +60,10 @@ func main() {
 		},
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: false,
+			ActivationPolicy: application.ActivationPolicyAccessory,
 		},
 	})
+
 
 	setGlobalApp(app)
 	services.SetVersion(version)
@@ -73,6 +75,8 @@ func main() {
 		RegisterGlobalHotkey:              registerGlobalHotkey,
 		RequestPermissionsEarly:           requestPermissionsEarly,
 		HideNativeScrollbars:              hideNativeScrollbars,
+		ShowSettingsWindow:                showSettingsWindow,
+		DeactivateFromSettings:            deactivateFromSettings,
 		GetMouseX:                         getMouseX,
 		GetMouseY:                         getMouseY,
 		GetNumScreens:                     getNumScreens,

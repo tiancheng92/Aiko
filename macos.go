@@ -84,6 +84,48 @@ static void activateApp() {
     });
 }
 
+// showSettingsWindow finds the settings NSWindow (the only window that is not
+// gWindow), switches activation policy to Regular, activates, centers, shows,
+// and focuses — all in a single dispatch_async block so every step executes in
+// order on the main thread without risk of deadlocking callers on the main queue.
+static void showSettingsWindow() {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        // Find the settings window: any NSWindow that is not the main overlay.
+        NSWindow *settingsWin = nil;
+        for (NSWindow *w in [NSApp windows]) {
+            NSLog(@"[Aiko] window candidate: title=%@ visible=%d class=%@",
+                  [w title], (int)[w isVisible], NSStringFromClass([w class]));
+            if (w != gWindow) {
+                settingsWin = w;
+                break;
+            }
+        }
+        if (!settingsWin) {
+            NSLog(@"[Aiko] showSettingsWindow: settings NSWindow not found (gWindow=%@)", gWindow);
+            return;
+        }
+        NSLog(@"[Aiko] showSettingsWindow: found settings window %@", settingsWin);
+
+        // Activate without switching to Regular policy — avoids the white Dock
+        // icon flash that occurs when transitioning from Accessory to Regular.
+        // Accessory-policy apps can still receive keyboard focus via
+        // activateIgnoringOtherApps + makeKeyAndOrderFront.
+        [NSApp activateIgnoringOtherApps:YES];
+        [settingsWin setLevel:NSFloatingWindowLevel];
+        [settingsWin center];
+        [settingsWin makeKeyAndOrderFront:nil];
+    });
+}
+
+// deactivateFromSettings re-applies setIgnoresMouseEvents:YES to the main
+// overlay window after the settings window closes, because
+// activateIgnoringOtherApps resets that state.
+static void deactivateFromSettings() {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (gWindow) [gWindow setIgnoresMouseEvents:YES];
+    });
+}
+
 // aikoLogException writes exception info to /tmp/aiko_crash.log for diagnosis.
 static void aikoLogException(NSString *context, NSException *ex) {
     NSString *msg = [NSString stringWithFormat:@"[Aiko] EXCEPTION in %@: %@: %@\nStack: %@\n",
@@ -1026,6 +1068,18 @@ func postSystemNotification(title, body string) {
 // WKWebView scroll view is not yet initialized during startup.
 func hideNativeScrollbars() {
 	C.hideNativeScrollbarsC()
+}
+
+// showSettingsWindow finds the settings window by title and — all synchronously
+// on the main thread — switches activation policy, centers, shows, and focuses it.
+func showSettingsWindow() {
+	C.showSettingsWindow()
+}
+
+// deactivateFromSettings switches back to Accessory policy after the settings
+// window closes, removing the app from Cmd+Tab.
+func deactivateFromSettings() {
+	C.deactivateFromSettings()
 }
 
 // registerGlobalHotkey creates a pipe, passes the write-end to the ObjC monitor,

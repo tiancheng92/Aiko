@@ -12,6 +12,10 @@ build:
 		--entitlements build/darwin/Aiko.entitlements $(APP)
 	@test -f "$(BINARY)" || (echo "❌ Binary missing, aborting install"; exit 1)
 	rsync -a --delete $(APP)/ /Applications/Aiko.app/
+	@/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
+		-u $(APP) 2>/dev/null; true
+	@/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
+		/Applications/Aiko.app
 	@echo "✅ Build complete: $(APP)"
 
 ## run: build, install to /Applications, then launch

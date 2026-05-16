@@ -3,6 +3,8 @@
 package services
 
 import (
+	"log/slog"
+
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -19,21 +21,23 @@ type WindowService struct{ s *sharedState }
 func NewWindowService(s *sharedState) *WindowService { return &WindowService{s: s} }
 
 // OpenSettings shows the settings window above all other windows.
-// Both main and settings keep AlwaysOnTop; Focus() brings settings to front.
+// All steps (policy switch, activate, center, show, focus) are performed
+// on the main thread via showSettingsWindow to avoid races with Wails' async
+// dispatchOnMainThread.
 func (w *WindowService) OpenSettings() {
-	settingsWin, ok := w.s.app.Window.GetByName("settings")
-	if !ok {
-		return
+	slog.Debug("OpenSettings called", "hasHook", w.s.hooks.ShowSettingsWindow != nil)
+	if w.s.hooks.ShowSettingsWindow != nil {
+		w.s.hooks.ShowSettingsWindow()
 	}
-	settingsWin.SetAlwaysOnTop(true)
-	settingsWin.Show()
-	settingsWin.Focus()
 }
 
-// CloseSettings hides the settings window.
+// CloseSettings hides the settings window and switches back to Accessory policy.
 func (w *WindowService) CloseSettings() {
 	if win, ok := w.s.app.Window.GetByName("settings"); ok {
 		win.Hide()
+	}
+	if w.s.hooks.DeactivateFromSettings != nil {
+		w.s.hooks.DeactivateFromSettings()
 	}
 }
 

@@ -76,6 +76,8 @@ type PlatformHooks struct {
 	RegisterGlobalHotkey   func()
 	RequestPermissionsEarly func()
 	HideNativeScrollbars   func()
+	ShowSettingsWindow     func()
+	DeactivateFromSettings func()
 	// Screen
 	GetMouseX      func() float64
 	GetMouseY      func() float64
