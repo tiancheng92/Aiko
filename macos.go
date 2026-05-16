@@ -3,7 +3,7 @@
 package main
 
 /*
-#cgo CFLAGS: -x objective-c -mmacosx-version-min=10.15
+#cgo CFLAGS: -x objective-c
 #cgo LDFLAGS: -framework Cocoa -framework WebKit -framework ApplicationServices -framework AVFoundation -framework Speech -framework CoreLocation -framework UserNotifications
 
 #import <Cocoa/Cocoa.h>
