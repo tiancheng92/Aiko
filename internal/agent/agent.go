@@ -159,7 +159,7 @@ func New(
 		Description:            "A desktop pet AI assistant",
 		Instruction:            systemPrompt,
 		ChatModel:              chatModel,
-		MaxIteration:           30,
+		MaxIteration:           100,
 		Handlers:               handlers,
 		WithoutGeneralSubAgent: true, // Aiko is a single-agent; disable the Task tool and its misleading subagent prompt.
 		ModelRetryConfig: &adk.ModelRetryConfig{
