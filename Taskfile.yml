@@ -74,6 +74,7 @@ tasks:
       CGO_ENABLED: "1"
       GOARCH: '{{ARCH}}'
       MACOSX_DEPLOYMENT_TARGET: "26.0"
+      CGO_LDFLAGS: "-mmacosx-version-min=26.0"
 
   darwin:package:
     summary: Creates the .app bundle
