@@ -1,6 +1,7 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue'
-import { GetBallPosition, SaveBallPosition, GetScreenSize } from '../../bindings/aiko/app'
+import { GetBallPosition, SaveBallPosition } from '../../bindings/aiko/internal/services/configservice'
+import { GetScreenSize } from '../../bindings/aiko/internal/services/windowservice'
 import { Events } from '@wailsio/runtime'
 
 const emit = defineEmits(['click', 'position', 'ball-size'])

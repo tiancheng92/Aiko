@@ -10,13 +10,17 @@ import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import {
   GetBallPosition,
   GetConfig,
-  GetMousePosition,
   GetPetSize,
-  GetScreenSize,
-  ImportVRMFile,
   SaveBallPosition,
   SaveConfig,
-} from "../../bindings/aiko/app";
+} from "../../bindings/aiko/internal/services/configservice";
+import {
+  GetMousePosition,
+  GetScreenSize,
+} from "../../bindings/aiko/internal/services/windowservice";
+import {
+  ImportVRMFile,
+} from "../../bindings/aiko/internal/services/systemservice";
 import { Events, Application } from "@wailsio/runtime";
 import { useEmotionEvents } from "../composables/useEmotionEvents.js";
 import { usePetState } from "../composables/usePetState.js";

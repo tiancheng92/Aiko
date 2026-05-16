@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { GetConfig, GetAvailableModels } from '../../bindings/aiko/app'
+import { GetConfig, GetAvailableModels } from '../../bindings/aiko/internal/services/configservice'
 import { Events } from '@wailsio/runtime'
 
 const currentModel = ref('hiyori')

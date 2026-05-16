@@ -2,7 +2,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { Events } from '@wailsio/runtime'
-import { KillToolExecution } from '../../bindings/aiko/app'
+import { KillToolExecution } from '../../bindings/aiko/internal/services/toolservice'
 
 /** Currently running executions: [{ id, elapsed, intervalId }] */
 const executions = ref([])

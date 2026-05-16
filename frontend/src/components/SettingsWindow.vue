@@ -4,27 +4,24 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { springAnimate } from '../composables/useSpring.js'
 import {
   GetConfig, SaveConfig,
-  ImportKnowledge, ListKnowledgeSources, DeleteKnowledgeSource,
-  OpenFileDialog, GetToolPermissions, SetToolPermission,
   ListLLMModels,
-  ListMCPServers, AddMCPServer, UpdateMCPServer, DeleteMCPServer,
-  ListCronJobs, CreateCronJob, UpdateCronJob, DeleteCronJob, SetCronJobEnabled, RunCronJobNow,
-  LarkStatus, LarkRunCommand,
   ListModelProfiles, SaveModelProfile, DeleteModelProfile, ActivateModelProfile,
   ListOpenRouterModels,
   SavePetSize, SaveChatSize,
   GetPetSize, GetChatSize,
   ResetBallPosition,
-  StartSMSWatcher, StopSMSWatcher, IsSMSWatcherRunning,
   GetVoiceAutoSend, SetVoiceAutoSend,
   GetSoundsEnabled, SetSoundsEnabled,
   GetKokoroTTSVoices, SetTTSAutoPlay, SetupKokoroTTS,
-  GetVersion, CheckUpdate, InstallUpdate,
-  ListVRMModels, ImportVRMFile, DeleteVRMModel,
   GetAutoLaunch, SetAutoLaunch,
   SetAvatar, ResetAvatar,
-} from '../../bindings/aiko/app'
-import { ListProactiveItems, DeleteProactiveItem } from '../../bindings/aiko/app'
+} from '../../bindings/aiko/internal/services/configservice'
+import { ImportKnowledge, ListKnowledgeSources, DeleteKnowledgeSource } from '../../bindings/aiko/internal/services/knowledgeservice'
+import { OpenFileDialog } from '../../bindings/aiko/internal/services/windowservice'
+import { GetToolPermissions, SetToolPermission } from '../../bindings/aiko/internal/services/toolservice'
+import { ListMCPServers, AddMCPServer, UpdateMCPServer, DeleteMCPServer } from '../../bindings/aiko/internal/services/mcpservice'
+import { ListCronJobs, CreateCronJob, UpdateCronJob, DeleteCronJob, SetCronJobEnabled, RunCronJobNow, ListProactiveItems, DeleteProactiveItem } from '../../bindings/aiko/internal/services/schedulerservice'
+import { GetVersion, CheckUpdate, InstallUpdate, ListVRMModels, ImportVRMFile, DeleteVRMModel, LarkStatus, LarkRunCommand, StartSMSWatcher, StopSMSWatcher, IsSMSWatcherRunning } from '../../bindings/aiko/internal/services/systemservice'
 import { Events, Browser } from '@wailsio/runtime'
 import { useModelPath } from '../composables/useModelPath.js'
 import { useEscapeKey } from '../composables/useEscapeKey.js'

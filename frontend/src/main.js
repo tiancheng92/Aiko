@@ -2,7 +2,7 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import './styles/tokens.css'
 import './style.css'
-import { GetConfig } from '../bindings/aiko/app'
+import { GetConfig } from '../bindings/aiko/internal/services/configservice'
 
 GetConfig().then(cfg => {
   document.documentElement.dataset.theme = cfg.ThemeStyle || 'frosted'

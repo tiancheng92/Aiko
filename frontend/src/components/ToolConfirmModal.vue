@@ -2,7 +2,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Events } from '@wailsio/runtime'
-import { ConfirmToolExecution } from '../../bindings/aiko/app'
+import { ConfirmToolExecution } from '../../bindings/aiko/internal/services/toolservice'
 import { useEscapeKey } from '../composables/useEscapeKey'
 
 const visible = ref(false)

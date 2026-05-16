@@ -21,7 +21,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { FetchLinkPreview } from '../../bindings/aiko/app'
+import { FetchLinkPreview } from '../../bindings/aiko/internal/services/systemservice'
 import { Browser } from '@wailsio/runtime'
 
 const props = defineProps({

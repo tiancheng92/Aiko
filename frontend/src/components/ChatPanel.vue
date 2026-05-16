@@ -1,6 +1,8 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { SendMessage, SendMessageWithImages, SendMessageWithFiles, GetMessages, GetMessagesBeforeID, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig, RegenerateLastReply, GetSoundsEnabled } from '../../bindings/aiko/app'
+import { SendMessage, SendMessageWithImages, SendMessageWithFiles, GetMessages, GetMessagesBeforeID, ClearChatHistory, StopGeneration, RegenerateLastReply } from '../../bindings/aiko/internal/services/chatservice'
+import { GetConfig, GetVoiceAutoSend, SpeakText, StopTTS, GetSoundsEnabled } from '../../bindings/aiko/internal/services/configservice'
+import { IsFirstLaunch, MarkWelcomeShown } from '../../bindings/aiko/internal/services/systemservice'
 import { Events, Browser } from '@wailsio/runtime'
 import { marked, Renderer } from 'marked'
 import markedKatex from 'marked-katex-extension'

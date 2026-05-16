@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
-import { GetConfig, ListVRMModels } from '../../bindings/aiko/app'
+import { GetConfig } from '../../bindings/aiko/internal/services/configservice'
+import { ListVRMModels } from '../../bindings/aiko/internal/services/systemservice'
 import { Events } from '@wailsio/runtime'
 
 const currentVRMModel = ref('')
