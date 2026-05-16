@@ -245,23 +245,6 @@ func (s *sharedState) startup(ctx context.Context, _ application.ServiceOptions)
 		}
 	}
 
-	// Resize window to cover the full primary screen so position:fixed
-	// coordinates in the WebView map to real screen coordinates.
-	for _, sc := range s.app.Screen.GetAll() {
-		if sc.IsPrimary {
-			if win, ok := s.app.Window.GetByName("main"); ok {
-				win.SetSize(sc.Size.Width, sc.Size.Height)
-				win.SetPosition(0, 0)
-			}
-			break
-		}
-	}
-
-	// Allow mouse events to pass through transparent window regions.
-	if s.hooks.EnableClickThrough != nil {
-		s.hooks.EnableClickThrough()
-	}
-
 	// Register global hotkey Shift+Cmd+P to toggle the chat bubble.
 	if s.hooks.RegisterGlobalHotkey != nil {
 		s.hooks.RegisterGlobalHotkey()
@@ -295,9 +278,24 @@ func (s *sharedState) startup(ctx context.Context, _ application.ServiceOptions)
 		}
 	}
 
-	// domReady logic: runs after window has loaded
+	// WindowRuntimeReady fires after the window impl is created and the webview
+	// has loaded. Window operations like SetSize and EnableClickThrough require
+	// the impl to be non-nil, so they must run here, not at ServiceStartup time.
 	if win, ok := s.app.Window.GetByName("main"); ok {
 		win.OnWindowEvent(events.Common.WindowRuntimeReady, func(_ *application.WindowEvent) {
+			// Resize to cover the full primary screen so position:fixed coordinates
+			// in the WebView map to real screen coordinates.
+			for _, sc := range s.app.Screen.GetAll() {
+				if sc.IsPrimary {
+					win.SetSize(sc.Size.Width, sc.Size.Height)
+					win.SetPosition(0, 0)
+					break
+				}
+			}
+			// Allow mouse events to pass through transparent window regions.
+			if s.hooks.EnableClickThrough != nil {
+				s.hooks.EnableClickThrough()
+			}
 			if s.hooks.RequestPermissionsEarly != nil {
 				s.hooks.RequestPermissionsEarly()
 			}
