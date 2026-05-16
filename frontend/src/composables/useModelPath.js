@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
-import { GetConfig, GetAvailableModels } from '../../wailsjs/go/main/App'
-import { EventsOn } from '../../wailsjs/runtime/runtime'
+import { GetConfig, GetAvailableModels } from '../../bindings/aiko/app'
+import { Events } from '@wailsio/runtime'
 
 const currentModel = ref('hiyori')
 const availableModels = ref([])
@@ -16,8 +16,8 @@ function capitalize(s) {
 export function useModelPath() {
   if (!listenerRegistered) {
     listenerRegistered = true
-    EventsOn('config:model:changed', (name) => {
-      currentModel.value = name
+    Events.On('config:model:changed', (event) => {
+      currentModel.value = event.data
     })
   }
   /** modelPath is the full URL path to the model3.json file. */

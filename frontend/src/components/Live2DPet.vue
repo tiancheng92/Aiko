@@ -2,8 +2,8 @@
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import * as PIXI from 'pixi.js'
 import { Live2DModel, MotionPriority } from 'pixi-live2d-display/cubism4'
-import { GetBallPosition, SaveBallPosition, GetScreenSize, GetConfig, SaveConfig, GetMousePosition, GetPetSize } from '../../wailsjs/go/main/App'
-import { Quit, EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
+import { GetBallPosition, SaveBallPosition, GetScreenSize, GetConfig, SaveConfig, GetMousePosition, GetPetSize } from '../../bindings/aiko/app'
+import { Events, Application } from '@wailsio/runtime'
 import { usePetState } from '../composables/usePetState.js'
 import { useModelPath } from '../composables/useModelPath.js'
 import ContextMenu from './ContextMenu.vue'
@@ -47,8 +47,8 @@ async function switchToNextModel() {
   if (models.length <= 1) return
   const idx = models.indexOf(currentModel.value)
   const next = models[(idx + 1) % models.length]
-  // Emit immediately for instant visual feedback via the composable's EventsOn listener.
-  EventsEmit('config:model:changed', next)
+  // Emit immediately for instant visual feedback via the composable's Events.On listener.
+  Events.Emit('config:model:changed', next)
   try {
     const cfg = await GetConfig()
     if (cfg) {
@@ -66,7 +66,7 @@ const petMenuItems = [
   { divider: true },
   { iconSvg: ICON_SETTING, label: '打开设置', action: () => emit('open-settings') },
   { divider: true },
-  { iconSvg: ICON_POWER,   label: '退出程序', action: () => Quit(), danger: true },
+  { iconSvg: ICON_POWER,   label: '退出程序', action: () => Application.Quit(), danger: true },
 ]
 
 /** onContextMenu shows the pet right-click menu. */
@@ -211,17 +211,16 @@ onMounted(async () => {
   }
 
   // Listen for real-time pet size changes from settings.
-  offSizeChange = EventsOn('config:pet:size:changed', (size) => {
-    applySize(size)
+  offSizeChange = Events.On('config:pet:size:changed', (event) => {
+    applySize(event.data)
   })
 
-  offPositionReset = EventsOn('ball:position:reset', () => {
+  offPositionReset = Events.On('ball:position:reset', () => {
     pos.value = { x: sw.value - petSize.value - 40, y: sh.value - petSize.value - 40 }
   })
 
-  offScreenChanged = EventsOn('screen:active:changed', async (info) => {
-    const w = info.width
-    const h = info.height
+  offScreenChanged = Events.On('screen:active:changed', async (event) => {
+    const { width: w, height: h } = event.data
     sw.value = w
     sh.value = h
 

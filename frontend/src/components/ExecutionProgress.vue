@@ -1,14 +1,15 @@
 <!-- ExecutionProgress.vue — in-chat indicator shown while a tool command is running -->
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { EventsOn } from '../../wailsjs/runtime/runtime'
-import { KillToolExecution } from '../../wailsjs/go/main/App'
+import { Events } from '@wailsio/runtime'
+import { KillToolExecution } from '../../bindings/aiko/app'
 
 /** Currently running executions: [{ id, elapsed, intervalId }] */
 const executions = ref([])
 
 /** Starts tracking a new execution when backend emits tool:executing. */
-function onExecuting({ id }) {
+function onExecuting(event) {
+  const { id } = event.data
   const startTime = Date.now()
   const intervalId = setInterval(() => {
     const item = executions.value.find(e => e.id === id)
@@ -18,7 +19,8 @@ function onExecuting({ id }) {
 }
 
 /** Removes the execution entry when backend emits tool:executed. */
-function onExecuted({ id }) {
+function onExecuted(event) {
+  const { id } = event.data
   const idx = executions.value.findIndex(e => e.id === id)
   if (idx !== -1) {
     clearInterval(executions.value[idx].intervalId)
@@ -36,8 +38,8 @@ async function kill(id) {
 let offExecuting = null
 let offExecuted = null
 onMounted(() => {
-  offExecuting = EventsOn('tool:executing', onExecuting)
-  offExecuted = EventsOn('tool:executed', onExecuted)
+  offExecuting = Events.On('tool:executing', onExecuting)
+  offExecuted = Events.On('tool:executed', onExecuted)
 })
 onUnmounted(() => {
   offExecuting?.()

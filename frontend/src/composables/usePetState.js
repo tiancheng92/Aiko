@@ -1,6 +1,6 @@
 // frontend/src/composables/usePetState.js
 import { ref, onMounted, onUnmounted } from 'vue'
-import { EventsOn } from '../../wailsjs/runtime/runtime'
+import { Events } from '@wailsio/runtime'
 
 /**
  * usePetState provides reactive pet state management driven by backend events.
@@ -12,7 +12,8 @@ export function usePetState() {
   let errorTimer = null
 
   onMounted(() => {
-    offState = EventsOn('pet:state:change', (state) => {
+    offState = Events.On('pet:state:change', (event) => {
+      const state = event.data
       // Clear any pending error-reset timer
       if (errorTimer) {
         clearTimeout(errorTimer)

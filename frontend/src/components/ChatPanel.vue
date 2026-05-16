@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { SendMessage, SendMessageWithImages, SendMessageWithFiles, GetMessages, GetMessagesBeforeID, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig, RegenerateLastReply, GetSoundsEnabled } from '../../wailsjs/go/main/App'
-import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
+import { SendMessage, SendMessageWithImages, SendMessageWithFiles, GetMessages, GetMessagesBeforeID, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig, RegenerateLastReply, GetSoundsEnabled } from '../../bindings/aiko/app'
+import { Events, Browser } from '@wailsio/runtime'
 import { marked, Renderer } from 'marked'
 import markedKatex from 'marked-katex-extension'
 import 'katex/dist/katex.min.css'
@@ -627,7 +627,7 @@ function applyToken(token) {
     last.content += token  // direct mutation — Vue Proxy tracks this, no object copy needed
   } else {
     messages.value.push({ role: 'assistant', content: token, streaming: true, isProactive: proactiveStarted, thinkingContent: '', thinkingExpanded: false })
-    EventsEmit('pet:state:change', 'speaking')
+    Events.Emit('pet:state:change', 'speaking')
   }
   scrollToBottom()
 }
@@ -759,43 +759,46 @@ onMounted(async () => {
     }
   }
 
-  offSystemInject = EventsOn('chat:system:inject', (msg) => {
+  offSystemInject = Events.On('chat:system:inject', (event) => {
     loading.value = false
     isStreaming.value = false
-    messages.value.push({ role: 'system', content: msg, isInfo: true })
+    messages.value.push({ role: 'system', content: event.data, isInfo: true })
     nextTick(scrollToBottom)
   })
 
-  offClear = EventsOn('chat:clear', () => {
+  offClear = Events.On('chat:clear', () => {
     showClearConfirm.value = true
   })
 
-  offProactiveStart = EventsOn('chat:proactive:start', () => {
+  offProactiveStart = Events.On('chat:proactive:start', () => {
     proactiveStarted = true
     messages.value.push({ role: 'assistant', content: '', streaming: true, isProactive: true, thinkingContent: '', thinkingExpanded: false })
-    EventsEmit('pet:state:change', 'speaking')
+    Events.Emit('pet:state:change', 'speaking')
     scrollToBottom()
   })
 
-  offProactiveMessage = EventsOn('chat:proactive:message', (text) => {
+  offProactiveMessage = Events.On('chat:proactive:message', (event) => {
+    const text = event.data
     messages.value.push({ role: 'assistant', content: text, isProactive: true, thinkingContent: '', thinkingExpanded: false })
-    EventsEmit('pet:state:change', 'speaking')
+    Events.Emit('pet:state:change', 'speaking')
     scrollToBottom()
-    setTimeout(() => EventsEmit('pet:state:change', 'idle'), 2000)
+    setTimeout(() => Events.Emit('pet:state:change', 'idle'), 2000)
   })
 
-  offCronStart = EventsOn('chat:cron:start', ({ name, prompt }) => {
+  offCronStart = Events.On('chat:cron:start', (event) => {
+    const { name, prompt } = event.data
     // Push a user-side trigger label followed by a streaming assistant placeholder.
     messages.value.push({ role: 'user', content: `⏰ **${name}**\n${prompt}`, isCron: true })
     messages.value.push({ role: 'assistant', content: '', streaming: true, thinking: true, isCron: true, thinkingContent: '', thinkingExpanded: false })
     loading.value = true
     isStreaming.value = true
     firstTokenThisTurn = true
-    EventsEmit('pet:state:change', 'thinking')
+    Events.Emit('pet:state:change', 'thinking')
     scrollToBottom()
   })
 
-  offThinking = EventsOn('chat:thinking', (token) => {
+  offThinking = Events.On('chat:thinking', (event) => {
+    const token = event.data
     const last = messages.value[messages.value.length - 1]
     if (last && last.role === 'assistant') {
       if (last.thinkingContent === undefined) last.thinkingContent = ''
@@ -804,7 +807,8 @@ onMounted(async () => {
     }
   })
 
-  offToken = EventsOn('chat:token', (token) => {
+  offToken = Events.On('chat:token', (event) => {
+    const token = event.data
     if (firstTokenThisTurn) {
       firstTokenThisTurn = false
       if (soundsEnabled) playReceive()
@@ -812,7 +816,7 @@ onMounted(async () => {
     typingScheduler.enqueue(token)
   })
 
-  offDone = EventsOn('chat:done', () => {
+  offDone = Events.On('chat:done', () => {
     typingScheduler.flush()
     const idx = messages.value.length - 1
     const lastMsg = messages.value[idx]
@@ -820,7 +824,7 @@ onMounted(async () => {
     loading.value = false
     isStreaming.value = false
     proactiveStarted = false
-    EventsEmit('pet:state:change', 'idle')
+    Events.Emit('pet:state:change', 'idle')
     // Check if the newly completed message is tall enough to collapse.
     if (idx >= 0) {
       const m = messages.value[idx]
@@ -844,7 +848,8 @@ onMounted(async () => {
     }
   })
 
-  offError = EventsOn('chat:error', (err) => {
+  offError = Events.On('chat:error', (event) => {
+    const err = event.data
     typingScheduler.clear()
     const thinkIdx = messages.value.findLastIndex(m => m.thinking)
     if (thinkIdx >= 0) messages.value.splice(thinkIdx, 1)
@@ -853,10 +858,11 @@ onMounted(async () => {
     isStreaming.value = false
     proactiveStarted = false
     if (soundsEnabled) playError()
-    EventsEmit('pet:state:change', 'error')
+    Events.Emit('pet:state:change', 'error')
   })
 
-  offImage = EventsOn('chat:image', (imgs) => {
+  offImage = Events.On('chat:image', (event) => {
+    const imgs = event.data
     const idx = messages.value.findLastIndex(m => m.role === 'assistant')
     if (idx < 0 || !Array.isArray(imgs)) return
     const existing = messages.value[idx].images || []
@@ -871,26 +877,28 @@ onMounted(async () => {
     userAvatar.value = cfg.value?.UserAvatar || ''
   } catch {}
 
-  offAvatarChanged = EventsOn('config:avatar:changed', ({ role, dataURL }) => {
+  offAvatarChanged = Events.On('config:avatar:changed', (event) => {
+    const { role, dataURL } = event.data
     if (role === 'ai') aiAvatar.value = dataURL || ''
     else if (role === 'user') userAvatar.value = dataURL || ''
   })
 
-  offSoundsChanged = EventsOn('config:sounds:changed', (val) => {
-    soundsEnabled = val
+  offSoundsChanged = Events.On('config:sounds:changed', (event) => {
+    soundsEnabled = event.data
   })
 
   // tts:done 表示 Go 端处理完毕。
   // 对于有 audio bytes 的后端（kokoro），activeTTSMsgId 由 audio.onended 清除。
   // 对于 SystemSpeaker（say），没有 tts:audio 事件，直接在 tts:done 里清除状态。
-  offTTSDone  = EventsOn('tts:done',  () => {
+  offTTSDone  = Events.On('tts:done',  () => {
     if (!currentTTSAudio) activeTTSMsgId.value = null
   })
-  offTTSError = EventsOn('tts:error', () => {
+  offTTSError = Events.On('tts:error', () => {
     activeTTSMsgId.value = null
     if (currentTTSAudio) { currentTTSAudio.pause(); currentTTSAudio = null }
   })
-  offTTSAudio = EventsOn('tts:audio', ({ data, format }) => {
+  offTTSAudio = Events.On('tts:audio', (event) => {
+    const { data, format } = event.data
     // 停止上一段（若有）再播新的
     if (currentTTSAudio) {
       currentTTSAudio.pause()
@@ -911,24 +919,26 @@ onMounted(async () => {
     }
   })
 
-  offVoiceStart = EventsOn('voice:start', () => {
+  offVoiceStart = Events.On('voice:start', () => {
     isRecording.value = true
     voiceHint.value = ''
     setInputDOM('')
     nextTick(() => textareaEl.value?.focus())
   })
 
-  offVoiceTranscript = EventsOn('voice:transcript', (text) => {
+  offVoiceTranscript = Events.On('voice:transcript', (event) => {
+    const text = event.data
     setInputDOM(text)
     voiceHint.value = text
   })
 
-  offVoiceEnd = EventsOn('voice:end', () => {
+  offVoiceEnd = Events.On('voice:end', () => {
     isRecording.value = false
     voiceHint.value = ''
   })
 
-  offVoiceFinal = EventsOn('voice:final', (text) => {
+  offVoiceFinal = Events.On('voice:final', (event) => {
+    const text = event.data
     setInputDOM(text)
     voiceHint.value = ''
     if (voiceAutoSend.value && text.trim()) {
@@ -936,11 +946,12 @@ onMounted(async () => {
     }
   })
 
-  offVoiceError = EventsOn('voice:error', (errMsg) => {
+  offVoiceError = Events.On('voice:error', (event) => {
+    const errMsg = event.data
     isRecording.value = false
     voiceHint.value = ''
     setInputDOM('')
-    EventsEmit('notification:show', {
+    Events.Emit('notification:show', {
       title: '🎙️ 语音识别失败',
       message: errMsg === 'mic_denied'
         ? '请在系统偏好设置中允许 Aiko 使用麦克风。'
@@ -950,11 +961,12 @@ onMounted(async () => {
     })
   })
 
-  offVoiceAutoSend = EventsOn('config:voice:auto-send:changed', (val) => {
-    voiceAutoSend.value = val
+  offVoiceAutoSend = Events.On('config:voice:auto-send:changed', (event) => {
+    voiceAutoSend.value = event.data
   })
 
-  offUpdateProgress = EventsOn('update:progress', (data) => {
+  offUpdateProgress = Events.On('update:progress', (event) => {
+    const data = event.data
     isUpdating.value = true
     updateProgress.value = data.pct ?? 0
     updateProgressMsg.value = data.msg ?? ''
@@ -1117,7 +1129,7 @@ async function regenLastReply(assistantIdx) {
   firstTokenThisTurn = true
   messages.value.push({ role: 'assistant', content: '', streaming: true, thinking: true, thinkingContent: '', thinkingExpanded: false })
   scrollToBottom()
-  EventsEmit('pet:state:change', 'thinking')
+  Events.Emit('pet:state:change', 'thinking')
   try {
     await RegenerateLastReply()
   } catch (e) {
@@ -1126,7 +1138,7 @@ async function regenLastReply(assistantIdx) {
     messages.value.push({ role: 'system', content: '重新生成失败: ' + e })
     loading.value = false
     isStreaming.value = false
-    EventsEmit('pet:state:change', 'error')
+    Events.Emit('pet:state:change', 'error')
   }
 }
 
@@ -1266,7 +1278,7 @@ async function send() {
   messages.value.push({ role: 'user', content: text, images: imgs, files: fileNames, time: new Date() })
   messages.value.push({ role: 'assistant', content: '', streaming: true, thinking: true, thinkingContent: '', thinkingExpanded: false })
   scrollToBottom()
-  EventsEmit('pet:state:change', 'thinking')
+  Events.Emit('pet:state:change', 'thinking')
   try {
     if (imgs.length > 0 || fileAttachments.length > 0) {
       await SendMessageWithFiles(text, imgs, fileAttachments)
@@ -1279,7 +1291,7 @@ async function send() {
     messages.value.push({ role: 'system', content: '发送失败: ' + e })
     loading.value = false
     isStreaming.value = false
-    EventsEmit('pet:state:change', 'error')
+    Events.Emit('pet:state:change', 'error')
   }
 }
 
@@ -1309,7 +1321,7 @@ async function stopGeneration() {
       thinking: false,
     }
   }
-  EventsEmit('pet:state:change', 'idle')
+  Events.Emit('pet:state:change', 'idle')
 }
 
 /** onMessagesClick intercepts link clicks and opens them in the system browser. */
@@ -1318,7 +1330,7 @@ function onMessagesClick(e) {
   if (!a) return
   e.preventDefault()
   const href = a.getAttribute('href')
-  if (href) BrowserOpenURL(href)
+  if (href) Browser.OpenURL(href)
 }
 let _scrollRafPending = false
 /** scrollToBottom scrolls to the latest message; coalesced via rAF to avoid redundant layout reads. */

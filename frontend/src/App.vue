@@ -5,8 +5,8 @@ import VRMPet from './components/VRMPet.vue'
 import ChatBubble from './components/ChatBubble.vue'
 import SettingsWindow from './components/SettingsWindow.vue'
 import NotificationBubble from './components/NotificationBubble.vue'
-import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize, GetConfig, SetChatVisible } from '../wailsjs/go/main/App'
-import { EventsOn, EventsEmit } from '../wailsjs/runtime/runtime'
+import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize, GetConfig, SetChatVisible } from '../bindings/aiko/app'
+import { Events } from '@wailsio/runtime'
 import { springAnimate } from './composables/useSpring'
 
 const bubbleOpen = ref(false)
@@ -311,9 +311,9 @@ watch(voiceActive, async (active) => {
   }
 })
 
-/** waitForRuntime polls until the Wails Go bridge is available. */
+/** waitForRuntime polls until the Wails v3 runtime bridge is available. */
 async function waitForRuntime() {
-  while (!window.go?.main?.App) {
+  while (!window._wails?.invoke) {
     await new Promise(r => setTimeout(r, 20))
   }
 }
@@ -336,12 +336,12 @@ onMounted(async () => {
   const firstLaunch = await IsFirstLaunch()
   if (firstLaunch) {
     await MarkWelcomeShown()
-    EventsEmit('notification:show', {
+    Events.Emit('notification:show', {
       title: '你好！我是你的桌面宠物 ✨',
       message: '请先在设置中配置 LLM 接口，然后就可以开始聊天了~',
     })
   }
-  offToggle = EventsOn('bubble:toggle', () => {
+  offToggle = Events.On('bubble:toggle', () => {
     bubbleOpen.value = !bubbleOpen.value
     if (bubbleOpen.value) {
       pendingTokens = ''
@@ -351,11 +351,11 @@ onMounted(async () => {
       })
     }
   })
-  offSettings  = EventsOn('settings:open', () => { settingsOpen.value = true })
-  offRenderBackend = EventsOn('config:render:backend:changed', (backend) => {
-    renderBackend.value = backend
+  offSettings  = Events.On('settings:open', () => { settingsOpen.value = true })
+  offRenderBackend = Events.On('config:render:backend:changed', (event) => {
+    renderBackend.value = event.data
   })
-  offVoiceStart = EventsOn('voice:start', () => {
+  offVoiceStart = Events.On('voice:start', () => {
     if (!bubbleOpen.value) {
       bubbleOpen.value = true
       nextTick(() => {
@@ -365,25 +365,26 @@ onMounted(async () => {
     }
     voiceActive.value = true
   })
-  offVoiceEnd   = EventsOn('voice:end',   () => { voiceActive.value = false })
-  offVoiceError = EventsOn('voice:error', () => { voiceActive.value = false })
-  offScreenChanged = EventsOn('screen:changed', (info) => {
+  offVoiceEnd   = Events.On('voice:end',   () => { voiceActive.value = false })
+  offVoiceError = Events.On('voice:error', () => { voiceActive.value = false })
+  offScreenChanged = Events.On('screen:changed', (event) => {
+    const info = event.data
     activeScreen.value = { width: info.width, height: info.height }
-    EventsEmit('screen:active:changed', info)
+    Events.Emit('screen:active:changed', info)
   })
-  offToken = EventsOn('chat:token', (token) => {
-    if (!bubbleOpen.value) pendingTokens += token
+  offToken = Events.On('chat:token', (event) => {
+    if (!bubbleOpen.value) pendingTokens += event.data
   })
-  offDone = EventsOn('chat:done', () => {
+  offDone = Events.On('chat:done', () => {
     if (!bubbleOpen.value && pendingTokens.trim()) {
-      EventsEmit('notification:show', { title: '✨ (=^･ω･^=)', message: pendingTokens.trim() })
+      Events.Emit('notification:show', { title: '✨ (=^･ω･^=)', message: pendingTokens.trim() })
     }
     pendingTokens = ''
   })
-  offError = EventsOn('chat:error', (err) => {
+  offError = Events.On('chat:error', (event) => {
     if (!bubbleOpen.value) {
       pendingTokens = ''
-      EventsEmit('notification:show', { title: '😿 出错了', message: err })
+      Events.Emit('notification:show', { title: '😿 出错了', message: event.data })
     }
   })
 })

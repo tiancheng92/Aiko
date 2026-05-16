@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
-import { GetConfig, ListVRMModels } from '../../wailsjs/go/main/App'
-import { EventsOn } from '../../wailsjs/runtime/runtime'
+import { GetConfig, ListVRMModels } from '../../bindings/aiko/app'
+import { Events } from '@wailsio/runtime'
 
 const currentVRMModel = ref('')
 const availableVRMModels = ref([])
@@ -10,7 +10,8 @@ let listenerRegistered = false
 export function useVRMModel() {
   if (!listenerRegistered) {
     listenerRegistered = true
-    EventsOn('config:vrm:model:changed', async (name) => {
+    Events.On('config:vrm:model:changed', async (event) => {
+      const name = event.data
       // Refresh available list first so vrmModelURL can resolve the new model's URL.
       try {
         const models = await ListVRMModels()

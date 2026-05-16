@@ -23,9 +23,9 @@ import {
   ListVRMModels, ImportVRMFile, DeleteVRMModel,
   GetAutoLaunch, SetAutoLaunch,
   SetAvatar, ResetAvatar,
-} from '../../wailsjs/go/main/App'
-import { ListProactiveItems, DeleteProactiveItem } from '../../wailsjs/go/main/App'
-import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
+} from '../../bindings/aiko/app'
+import { ListProactiveItems, DeleteProactiveItem } from '../../bindings/aiko/app'
+import { Events, Browser } from '@wailsio/runtime'
 import { useModelPath } from '../composables/useModelPath.js'
 import { useEscapeKey } from '../composables/useEscapeKey.js'
 import { useConfirm } from '../composables/useConfirm.js'
@@ -338,9 +338,10 @@ onMounted(async () => {
     console.warn('GetAutoLaunch failed:', e)
   }
   fetchLarkStatus()
-  offProgress = EventsOn('knowledge:progress', (p) => { importProgress.value = p })
+  offProgress = Events.On('knowledge:progress', (event) => { importProgress.value = event.data })
   // Refresh per-screen sizes when the user moves the mouse to a different screen.
-  offScreen = EventsOn('screen:active:changed', async (info) => {
+  offScreen = Events.On('screen:active:changed', async (event) => {
+    const info = event.data
     try {
       const petSize = await GetPetSize(info.width, info.height)
       if (petSize > 0) cfg.value.PetSize = petSize
@@ -354,12 +355,12 @@ onMounted(async () => {
   // Auto-fetch model list if URL is already configured.
   if (cfg.value.LLMBaseURL) fetchLLMModels()
 
-  offUpdateProgress = EventsOn('update:progress', (data) => {
-    updateProgress.value = data.pct
-    updateProgressMsg.value = data.msg
+  offUpdateProgress = Events.On('update:progress', (event) => {
+    updateProgress.value = event.data.pct
+    updateProgressMsg.value = event.data.msg
   })
 
-  offCronJobDone = EventsOn('cron:job:done', () => { fetchCronJobs() })
+  offCronJobDone = Events.On('cron:job:done', () => { fetchCronJobs() })
 
   // Enable auto-save watcher only after all initial data has been loaded.
   mountedReady.value = true
@@ -550,7 +551,7 @@ async function deleteProfile(id) {
 /** setRenderBackend updates config and emits backend change event. */
 function setRenderBackend(backend) {
   cfg.value.RenderBackend = backend
-  EventsEmit('config:render:backend:changed', backend)
+  Events.Emit('config:render:backend:changed', backend)
 }
 
 /** setThemeStyle updates the UI theme and applies it immediately to the document root. */
@@ -576,17 +577,17 @@ const VRM_PREVIEW_ANIMS = [
 
 /** previewVRMAnim sends a preview event to VRMPet to play the animation once. */
 function previewVRMAnim(file) {
-  EventsEmit('vrm:preview:anim', `/vrm/${file}`)
+  Events.Emit('vrm:preview:anim', `/vrm/${file}`)
 }
 
 /** onVRMModelChange emits hot-reload event when VRM model is changed in settings. */
 function onVRMModelChange() {
-  EventsEmit('config:vrm:model:changed', cfg.value.VRMModel)
+  Events.Emit('config:vrm:model:changed', cfg.value.VRMModel)
 }
 
 /** onLive2DModelChange emits hot-reload event when Live2D model is changed in settings. */
 function onLive2DModelChange() {
-  EventsEmit('config:model:changed', cfg.value.Live2DModel)
+  Events.Emit('config:model:changed', cfg.value.Live2DModel)
 }
 
 const vrmUploading = ref(false)
@@ -639,7 +640,7 @@ async function deleteVRMModel(name) {
 function previewPetSize(e) {
   const size = Number(e.target.value)
   cfg.value.PetSize = size
-  EventsEmit('config:pet:size:changed', size)
+  Events.Emit('config:pet:size:changed', size)
   const { width: sw, height: sh } = props.activeScreen
   if (sw > 0 && sh > 0) {
     SavePetSize(size, sw, sh).catch(err => console.warn('SavePetSize failed', err))
@@ -650,7 +651,7 @@ function previewPetSize(e) {
 function previewChatSize(field, e) {
   const val = Number(e.target.value)
   cfg.value[field] = val
-  EventsEmit('config:chat:size:changed', { width: cfg.value.ChatWidth, height: cfg.value.ChatHeight })
+  Events.Emit('config:chat:size:changed', { width: cfg.value.ChatWidth, height: cfg.value.ChatHeight })
   const { width: sw, height: sh } = props.activeScreen
   if (sw > 0 && sh > 0 && cfg.value.ChatWidth > 0 && cfg.value.ChatHeight > 0) {
     SaveChatSize(cfg.value.ChatWidth, cfg.value.ChatHeight, sw, sh)
@@ -664,14 +665,14 @@ async function resetBallPosition() {
   if (sw > 0 && sh > 0) {
     await ResetBallPosition(sw, sh).catch(err => console.warn('ResetBallPosition failed', err))
   }
-  EventsEmit('ball:position:reset')
+  Events.Emit('ball:position:reset')
 }
 
 /** resetChatSize restores default chat bubble dimensions for the active screen. */
 function resetChatSize() {
   cfg.value.ChatWidth  = 0
   cfg.value.ChatHeight = 0
-  EventsEmit('config:chat:size:changed', { width: 0, height: 0 })
+  Events.Emit('config:chat:size:changed', { width: 0, height: 0 })
   const { width: sw, height: sh } = props.activeScreen
   if (sw > 0 && sh > 0) {
     SaveChatSize(0, 0, sw, sh).catch(err => console.warn('SaveChatSize failed', err))
@@ -1043,7 +1044,7 @@ async function toggleSMSWatcher() {
 async function toggleVoiceAutoSend() {
   try {
     await SetVoiceAutoSend(cfg.value.VoiceAutoSend)
-    EventsEmit('config:voice:auto-send:changed', cfg.value.VoiceAutoSend)
+    Events.Emit('config:voice:auto-send:changed', cfg.value.VoiceAutoSend)
   } catch (e) {
     console.warn('toggleVoiceAutoSend failed:', e)
   }
@@ -1053,7 +1054,7 @@ async function toggleVoiceAutoSend() {
 async function toggleSoundsEnabled() {
   try {
     await SetSoundsEnabled(cfg.value.SoundsEnabled)
-    EventsEmit('config:sounds:changed', cfg.value.SoundsEnabled)
+    Events.Emit('config:sounds:changed', cfg.value.SoundsEnabled)
   } catch (e) {
     console.warn('toggleSoundsEnabled failed:', e)
   }
@@ -1612,7 +1613,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               <span class="size-val">{{ cfg.PetSize || '自动' }}{{ cfg.PetSize ? 'px' : '' }}</span>
             </div>
             <div class="size-hint">设为 0 时自动根据屏幕高度缩放；拖动滑块可实时预览</div>
-            <button class="btn-neutral-sm" @click="cfg.PetSize = 0; EventsEmit('config:pet:size:changed', 0)">重置为自动</button>
+            <button class="btn-neutral-sm" @click="cfg.PetSize = 0; Events.Emit('config:pet:size:changed', 0)">重置为自动</button>
             <button class="btn-neutral-sm" @click="resetBallPosition" style="margin-top:6px">重置桌宠位置</button>
           </label>
           <label>聊天框宽度
@@ -2156,7 +2157,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               <span>发现新版本 <strong>v{{ updateInfo.latest_version }}</strong></span>
               <button
                 class="about-changelog-link"
-                @click="BrowserOpenURL(`https://github.com/tiancheng92/Aiko/releases/tag/v${updateInfo.latest_version}`)"
+                @click="Browser.OpenURL(`https://github.com/tiancheng92/Aiko/releases/tag/v${updateInfo.latest_version}`)"
               >更新内容</button>
               <button class="fetch-btn fetch-btn--primary" @click="installUpdate"
                 :disabled="!updateInfo.download_url">

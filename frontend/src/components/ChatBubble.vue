@@ -2,8 +2,8 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import ChatPanel from './ChatPanel.vue'
 import ContextMenu from './ContextMenu.vue'
-import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
-import { ExportChatHistory, GetChatSize, PingLLM, SaveChatSize, GetConfig, ListModelProfiles } from '../../wailsjs/go/main/App'
+import { Events } from '@wailsio/runtime'
+import { ExportChatHistory, GetChatSize, PingLLM, SaveChatSize, GetConfig, ListModelProfiles } from '../../bindings/aiko/app'
 import { ICON_EXPORT, ICON_TRASH, ICON_SETTING } from '../utils/icons'
 import { springAnimate } from '../composables/useSpring.js'
 
@@ -91,7 +91,7 @@ onMounted(async () => {
   } catch (e) {
     console.error('load chat size failed:', e)
   }
-  offSizeChange = EventsOn('config:chat:size:changed', applySize)
+  offSizeChange = Events.On('config:chat:size:changed', (event) => applySize(event.data))
   /** refreshProfileInfo fetches the active profile name and model id for the title bar tags. */
   async function refreshProfileInfo() {
     try {
@@ -108,8 +108,9 @@ onMounted(async () => {
   pingOnce()
   refreshProfileInfo()
   latencyTimer = setInterval(pingOnce, 5000)
-  offModelChangedLatency = EventsOn('config:model:changed', () => { pingOnce(); refreshProfileInfo() })
-  offScreenChanged = EventsOn('screen:active:changed', async (info) => {
+  offModelChangedLatency = Events.On('config:model:changed', () => { pingOnce(); refreshProfileInfo() })
+  offScreenChanged = Events.On('screen:active:changed', async (event) => {
+    const info = event.data
     try {
       const [w, h] = await GetChatSize(info.width, info.height)
       applySize({ width: w, height: h })
@@ -118,15 +119,15 @@ onMounted(async () => {
     }
   })
 
-  offToken = EventsOn('chat:token', () => {
+  offToken = Events.On('chat:token', () => {
     isLLMActive.value = true
     clearTimeout(idleTimer)
   })
-  offDone = EventsOn('chat:done', () => {
+  offDone = Events.On('chat:done', () => {
     isLLMActive.value = false
     resetIdleTimer()
   })
-  offChatError = EventsOn('chat:error', () => {
+  offChatError = Events.On('chat:error', () => {
     isLLMActive.value = false
     resetIdleTimer()
   })
@@ -342,7 +343,7 @@ const chatMenuItems = computed(() => [
 
 /** clearHistory broadcasts a clear event to ChatPanel. */
 function clearHistory() {
-  EventsEmit('chat:clear')
+  Events.Emit('chat:clear')
 }
 
 /** exportHistory opens a native save dialog and writes chat history to a file. */

@@ -1,8 +1,8 @@
 <!-- ToolConfirmModal.vue — confirmation dialog for shell/code tool execution requests -->
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
-import { ConfirmToolExecution } from '../../wailsjs/go/main/App'
+import { Events } from '@wailsio/runtime'
+import { ConfirmToolExecution } from '../../bindings/aiko/app'
 import { useEscapeKey } from '../composables/useEscapeKey'
 
 const visible = ref(false)
@@ -28,7 +28,8 @@ const riskText = computed(() => {
 })
 
 /** Called when the backend emits a tool:confirm event. */
-function onConfirmEvent(req) {
+function onConfirmEvent(event) {
+  const req = event.data
   request.value = req
   if (req.tool_type === 'update') {
     editedContent.value = ''
@@ -61,10 +62,11 @@ async function reject() {
 let offConfirm = null
 let offRestarting = null
 onMounted(() => {
-  offConfirm = EventsOn('tool:confirm', onConfirmEvent)
-  offRestarting = EventsOn('app:restarting', ({ version }) => {
+  offConfirm = Events.On('tool:confirm', onConfirmEvent)
+  offRestarting = Events.On('app:restarting', (event) => {
+    const { version } = event.data
     visible.value = false
-    EventsEmit('chat:system:inject', `正在安装更新 v${version}，应用即将重启…`)
+    Events.Emit('chat:system:inject', `正在安装更新 v${version}，应用即将重启…`)
   })
 })
 onUnmounted(() => {

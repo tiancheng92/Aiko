@@ -1,7 +1,7 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue'
-import { GetBallPosition, SaveBallPosition, GetScreenSize } from '../../wailsjs/go/main/App'
-import { EventsOn } from '../../wailsjs/runtime/runtime'
+import { GetBallPosition, SaveBallPosition, GetScreenSize } from '../../bindings/aiko/app'
+import { Events } from '@wailsio/runtime'
 
 const emit = defineEmits(['click', 'position', 'ball-size'])
 const pos = ref(null)
@@ -13,9 +13,9 @@ let isDragging = false
 
 watch(pos, (p) => { if (p) emit('position', { ...p }) })
 
-/** waitForRuntime polls until the Wails Go bridge is available. */
+/** waitForRuntime polls until the Wails v3 runtime bridge is available. */
 async function waitForRuntime() {
-  while (!window.go?.main?.App) {
+  while (!window._wails?.invoke) {
     await new Promise(r => setTimeout(r, 20))
   }
 }
@@ -45,7 +45,8 @@ onMounted(async () => {
     pos.value = { x: window.innerWidth - bs - 40, y: window.innerHeight - bs - 40 }
   }
 
-  offScreenChanged = EventsOn('screen:active:changed', async (info) => {
+  offScreenChanged = Events.On('screen:active:changed', async (event) => {
+    const info = event.data
     try {
       await loadPosition(info.width, info.height)
     } catch (err) {

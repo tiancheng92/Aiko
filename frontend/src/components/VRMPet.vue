@@ -16,8 +16,8 @@ import {
   ImportVRMFile,
   SaveBallPosition,
   SaveConfig,
-} from "../../wailsjs/go/main/App";
-import { EventsEmit, EventsOn, Quit } from "../../wailsjs/runtime/runtime";
+} from "../../bindings/aiko/app";
+import { Events, Application } from "@wailsio/runtime";
 import { useEmotionEvents } from "../composables/useEmotionEvents.js";
 import { usePetState } from "../composables/usePetState.js";
 import { useVRMModel } from "../composables/useVRMModel.js";
@@ -438,7 +438,7 @@ async function switchToNextVRMModel() {
   if (models.length <= 1) return;
   const idx = models.findIndex((m) => m.name === currentVRMModel.value);
   const next = models[(idx + 1) % models.length];
-  EventsEmit("config:vrm:model:changed", next.name);
+  Events.Emit("config:vrm:model:changed", next.name);
   try {
     const cfg = await GetConfig();
     if (cfg) {
@@ -468,7 +468,7 @@ const petMenuItems = [
   {
     iconSvg: ICON_POWER,
     label: "退出程序",
-    action: () => Quit(),
+    action: () => Application.Quit(),
     danger: true,
   },
 ];
@@ -564,7 +564,7 @@ async function onDrop(e) {
     const b64 = btoa(binary);
     await ImportVRMFile(file.name, b64);
     await loadVRMModels();
-    EventsEmit("config:vrm:model:changed", file.name);
+    Events.Emit("config:vrm:model:changed", file.name);
     const cfg = await GetConfig();
     if (cfg) {
       cfg.VRMModel = file.name;
@@ -669,7 +669,8 @@ onMounted(async () => {
     console.error("VRMPet init failed:", err);
   }
 
-  offPreviewAnim = EventsOn("vrm:preview:anim", async (url) => {
+  offPreviewAnim = Events.On("vrm:preview:anim", async (event) => {
+    const url = event.data
     if (!idleMixer || !vrm) return;
     const returnAnim = STATE_ANIMS[petState.value] ?? STATE_ANIMS.idle;
     await playAnimation(url, { loop: false, fadeTime: 0.3 });
@@ -685,14 +686,15 @@ onMounted(async () => {
     idleMixer.addEventListener("finished", onFinished);
     setTimeout(doReturn, 15000);
   });
-  offSizeChange = EventsOn("config:pet:size:changed", (size) => setSize(size));
-  offPositionReset = EventsOn("ball:position:reset", () => {
+  offSizeChange = Events.On("config:pet:size:changed", (event) => setSize(event.data));
+  offPositionReset = Events.On("ball:position:reset", () => {
     pos.value = {
       x: sw.value - petSize.value - 40,
       y: sh.value - petSize.value - 40,
     };
   });
-  offScreenChanged = EventsOn("screen:active:changed", async (info) => {
+  offScreenChanged = Events.On("screen:active:changed", async (event) => {
+    const info = event.data
     sw.value = info.width;
     sh.value = info.height;
     try {

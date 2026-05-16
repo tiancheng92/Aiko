@@ -1,7 +1,7 @@
 <!-- frontend/src/components/NotificationBubble.vue -->
 <script setup>
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
-import { EventsOn } from '../../wailsjs/runtime/runtime'
+import { Events } from '@wailsio/runtime'
 import { marked } from 'marked'
 
 const props = defineProps({
@@ -64,7 +64,8 @@ function dismiss() {
 }
 
 onMounted(() => {
-  offShow = EventsOn('notification:show', (data) => {
+  offShow = Events.On('notification:show', (event) => {
+    const data = event.data
     notification.value = { title: data.title || '通知', message: data.message, ts: new Date() }
     nextTick(() => {
       if (bubbleEl.value) bubbleH.value = bubbleEl.value.offsetHeight

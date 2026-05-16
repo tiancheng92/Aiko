@@ -21,8 +21,8 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { FetchLinkPreview } from '../../wailsjs/go/main/App'
-import { BrowserOpenURL } from '../../wailsjs/runtime/runtime'
+import { FetchLinkPreview } from '../../bindings/aiko/app'
+import { Browser } from '@wailsio/runtime'
 
 const props = defineProps({
   url: { type: String, required: true },
@@ -68,7 +68,7 @@ onMounted(async () => {
 
 /** open navigates to the URL in the default system browser via Wails. */
 function open() {
-  BrowserOpenURL(props.url)
+  Browser.OpenURL(props.url)
 }
 
 /** hideFavicon hides the favicon if it fails to load. */
