@@ -73,6 +73,7 @@ tasks:
       GOOS: darwin
       CGO_ENABLED: "1"
       GOARCH: '{{ARCH}}'
+      MACOSX_DEPLOYMENT_TARGET: "15.0"
 
   darwin:package:
     summary: Creates the .app bundle
