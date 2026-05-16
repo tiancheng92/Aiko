@@ -12,13 +12,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/menu"
-	"github.com/wailsapp/wails/v2/pkg/menu/keys"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/options/mac"
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // version is injected at build time via -ldflags "-X main.version=x.y.z".
@@ -57,53 +51,86 @@ func main() {
 		}
 	}
 
-	app := NewApp()
+	appInstance := NewApp()
 
-	appMenu := menu.NewMenu()
-
-	// Aiko 应用菜单（macOS 自动放在最左侧）
-	appMenu.Append(menu.AppMenu())
-
-	// 编辑菜单（提供剪切/复制/粘贴等标准快捷键）
-	appMenu.Append(menu.EditMenu())
-
-	// 视图菜单
-	viewMenu := appMenu.AddSubmenu("View")
-	viewMenu.AddText("Toggle Chat", keys.Combo("p", keys.CmdOrCtrlKey, keys.ShiftKey), func(_ *menu.CallbackData) {
-		wailsruntime.EventsEmit(app.ctx, "bubble:toggle")
+	app := application.New(application.Options{
+		Name: "Aiko",
+		Services: []application.Service{
+			application.NewService(appInstance),
+		},
+		Assets: application.AssetOptions{
+			Handler: newAssetHandler(assets),
+		},
+		Mac: application.MacOptions{
+			ApplicationShouldTerminateAfterLastWindowClosed: false,
+		},
 	})
 
-	// 设置菜单
-	settingsMenu := appMenu.AddSubmenu("Settings")
-	settingsMenu.AddText("Preferences...", keys.CmdOrCtrl(","), func(_ *menu.CallbackData) {
-		wailsruntime.EventsEmit(app.ctx, "settings:open")
-	})
+	setGlobalApp(app)
 
-	err := wails.Run(&options.App{
-		Title:            "Aiko",
+	mainWin := app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Name:             "main",
 		Width:            1440,
 		Height:           900,
 		Frameless:        true,
 		AlwaysOnTop:      true,
-		BackgroundColour: &options.RGBA{R: 0, G: 0, B: 0, A: 0},
-		Menu:             appMenu,
-		AssetServer:      &assetserver.Options{Assets: assets, Handler: userVRMHandler{}},
-		OnStartup:        app.startup,
-		OnDomReady:       app.domReady,
-		OnShutdown:       app.shutdown,
-		Bind:             []any{app},
-		Mac: &mac.Options{
-			WebviewIsTransparent: true,
-			WindowIsTranslucent:  false,
-			About: &mac.AboutInfo{
-				Title:   "Aiko",
-				Message: "Version " + version + "\n\nYour AI companion on the desktop.\n\nPowered by eino · Built with Wails",
-			},
+		BackgroundColour: application.NewRGBA(0, 0, 0, 0),
+		Mac: application.MacWindow{
+			Backdrop: application.MacBackdropTransparent,
 		},
 	})
-	if err != nil {
+	_ = mainWin
+
+	settingsWin := app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Name:   "settings",
+		Width:  900,
+		Height: 680,
+		Title:  "Aiko Settings",
+		Hidden: true,
+		URL:    "/?settings=1",
+	})
+	_ = settingsWin
+
+	appMenu := app.Menu.New()
+	appMenu.AddRole(application.AppMenu)
+	appMenu.AddRole(application.EditMenu)
+
+	viewMenu := appMenu.AddSubmenu("View")
+	viewMenu.Add("Toggle Chat").
+		SetAccelerator("CmdOrCtrl+Shift+P").
+		OnClick(func(_ *application.Context) {
+			app.Event.Emit("bubble:toggle")
+		})
+
+	settingsMenu := appMenu.AddSubmenu("Settings")
+	settingsMenu.Add("Preferences...").
+		SetAccelerator("CmdOrCtrl+,").
+		OnClick(func(_ *application.Context) {
+			if win, ok := app.Window.GetByName("settings"); ok {
+				win.Show()
+				win.Focus()
+			}
+		})
+
+	app.Menu.SetApplicationMenu(appMenu)
+
+	if err := app.Run(); err != nil {
 		panic(err)
 	}
+}
+
+// newAssetHandler returns an http.Handler that serves the embedded frontend
+// assets and also handles /user-vrm/ requests from the filesystem.
+func newAssetHandler(assets embed.FS) http.Handler {
+	bundled := application.BundledAssetFileServer(assets)
+	vrm := userVRMHandler{}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/user-vrm/") {
+			vrm.ServeHTTP(w, r)
+			return
+		}
+		bundled.ServeHTTP(w, r)
+	})
 }
 
 // userVRMHandler serves .vrm files from ~/.aiko/vrm/ at /user-vrm/<name>.
