@@ -13,16 +13,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: "24"
           cache: "yarn"
@@ -31,9 +31,6 @@ jobs:
       - name: Enable Corepack (yarn)
         run: corepack enable
 
-      - name: Install Wails
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
-
       - name: Install frontend deps
         working-directory: frontend
         run: yarn install --frozen-lockfile
@@ -41,10 +38,31 @@ jobs:
       - name: Install create-dmg
         run: brew install create-dmg
 
+      - name: Build frontend
+        working-directory: frontend
+        run: yarn build
+
       - name: Build Aiko.app
+        env:
+          CGO_ENABLED: "1"
+          MACOSX_DEPLOYMENT_TARGET: "26.0"
+          CGO_LDFLAGS: "-mmacosx-version-min=26.0"
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          wails build -trimpath -ldflags="-s -w -X main.version=${VERSION}"
+          go mod tidy
+          go build -tags production -trimpath -buildvcs=false \
+            -ldflags="-w -s -X main.version=${VERSION}" \
+            -o build/bin/Aiko
+
+      - name: Package Aiko.app bundle
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p build/bin/Aiko.app/Contents/MacOS
+          mkdir -p build/bin/Aiko.app/Contents/Resources
+          cp build/darwin/icons.icns build/bin/Aiko.app/Contents/Resources/
+          cp build/bin/Aiko build/bin/Aiko.app/Contents/MacOS/
+          sed "s/APP_VERSION_PLACEHOLDER/${VERSION}/g" build/darwin/Info.plist \
+            > build/bin/Aiko.app/Contents/Info.plist
 
       # Ad-hoc sign with entitlements (network + microphone).
       # Sign frameworks first, then the app bundle — avoids deprecated --deep flag.
