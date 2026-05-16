@@ -13,6 +13,8 @@ import (
 	"syscall"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+
+	"aiko/internal/services"
 )
 
 // version is injected at build time via -ldflags "-X main.version=x.y.z".
@@ -51,13 +53,8 @@ func main() {
 		}
 	}
 
-	appInstance := NewApp()
-
 	app := application.New(application.Options{
 		Name: "Aiko",
-		Services: []application.Service{
-			application.NewService(appInstance),
-		},
 		Assets: application.AssetOptions{
 			Handler: newAssetHandler(assets),
 		},
@@ -67,6 +64,55 @@ func main() {
 	})
 
 	setGlobalApp(app)
+
+	hooks := services.PlatformHooks{
+		PostSystemNotification:            postSystemNotification,
+		RequestNotificationAuthorization:  requestNotificationAuthorization,
+		EnableClickThrough:                enableClickThrough,
+		RegisterGlobalHotkey:              registerGlobalHotkey,
+		RequestPermissionsEarly:           requestPermissionsEarly,
+		HideNativeScrollbars:              hideNativeScrollbars,
+		AcquireKeyWindow:                  acquireKeyWindow,
+		ReleaseKeyWindow:                  releaseKeyWindow,
+		GetMouseX:                         getMouseX,
+		GetMouseY:                         getMouseY,
+		GetNumScreens:                     getNumScreens,
+		GetScreenFrame: func(n int) services.ScreenFrame {
+			f := getScreenFrame(n)
+			return services.ScreenFrame{
+				OriginX: f.OriginX,
+				OriginY: f.OriginY,
+				Width:   f.Width,
+				Height:  f.Height,
+				Valid:   f.Valid,
+			}
+		},
+		MoveWindowToScreen:                moveWindowToScreen,
+		RegisterSystemWakeObserver:        registerSystemWakeObserver,
+		GetAutoLaunch:                     GetAutoLaunchEnabled,
+		SetAutoLaunch:                     SetAutoLaunchEnabled,
+	}
+
+	state := services.NewSharedState(app, hooks)
+	state.SetAssetsFS(assets)
+
+	chat   := services.NewChatService(state)
+	cfg    := services.NewConfigService(state)
+	tool   := services.NewToolService(state)
+	know   := services.NewKnowledgeService(state)
+	mcpSvc := services.NewMCPService(state)
+	sched  := services.NewSchedulerService(state)
+	winSvc := services.NewWindowService(state)
+	sysSvc := services.NewSystemService(state)
+
+	app.RegisterService(application.NewService(chat))
+	app.RegisterService(application.NewService(cfg))
+	app.RegisterService(application.NewService(tool))
+	app.RegisterService(application.NewService(know))
+	app.RegisterService(application.NewService(mcpSvc))
+	app.RegisterService(application.NewService(sched))
+	app.RegisterService(application.NewService(winSvc))
+	app.RegisterService(application.NewService(sysSvc))
 
 	mainWin := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:             "main",
