@@ -72,8 +72,6 @@ func main() {
 		RegisterGlobalHotkey:              registerGlobalHotkey,
 		RequestPermissionsEarly:           requestPermissionsEarly,
 		HideNativeScrollbars:              hideNativeScrollbars,
-		AcquireKeyWindow:                  acquireKeyWindow,
-		ReleaseKeyWindow:                  releaseKeyWindow,
 		GetMouseX:                         getMouseX,
 		GetMouseY:                         getMouseY,
 		GetNumScreens:                     getNumScreens,
@@ -133,7 +131,7 @@ func main() {
 		Height: 680,
 		Title:  "Aiko Settings",
 		Hidden: true,
-		URL:    "/?settings=1",
+		URL:    "/settings.html",
 	})
 	_ = settingsWin
 
