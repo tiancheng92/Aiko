@@ -2297,11 +2297,16 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   -webkit-user-select: none;
 }
 
-/* Standalone mode: the component IS the OS window — the transparent window
-   background lets the CSS border-radius show through as real round corners.
-   Remove the z-index stacking context; keep border/shadow for the glass look. */
+/* Standalone mode: the component IS the OS window.
+   backdrop-filter blurs what's behind the WebView, but in a standalone OS
+   window there is nothing behind it — so the filter produces a blank white
+   haze.  Use a solid near-opaque dark surface instead, and rely on CSS
+   border-radius + the transparent OS window background for real round corners. */
 .settings-win--standalone {
   z-index: 0;
+  background: rgba(28, 29, 40, 0.97);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 .settings-win--standalone .sidebar-drag,
 .settings-win--standalone .content-drag {
