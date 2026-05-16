@@ -14,7 +14,7 @@
         <key>CFBundleShortVersionString</key>
         <string>APP_VERSION_PLACEHOLDER</string>
         <key>CFBundleIconFile</key>
-        <string>iconfile</string>
+        <string>icons</string>
         <key>LSMinimumSystemVersion</key>
         <string>10.13.0</string>
         <key>NSHighResolutionCapable</key>
