@@ -2,7 +2,12 @@
 
 package main
 
-import "context"
+import "github.com/wailsapp/wails/v3/pkg/application"
 
-// globalAppCtx holds the Wails app context after startup, used by registerGlobalHotkey.
-var globalAppCtx context.Context
+// globalApp holds the Wails v3 app instance after startup, used by registerGlobalHotkey.
+var globalApp *application.App
+
+// setGlobalApp stores the app reference for use by macos.go CGO callbacks.
+func setGlobalApp(app *application.App) {
+	globalApp = app
+}
