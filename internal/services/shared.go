@@ -321,7 +321,7 @@ func (s *sharedState) startup(ctx context.Context, _ application.ServiceOptions)
 			if s.pendingUpdateVersion != "" {
 				s.app.Event.Emit("notification:show", map[string]any{
 					"title":   "✅ 更新成功",
-					"message": "Aiko 已更新至 v" + s.pendingUpdateVersion,
+					"message": "Aiko 已更新至 " + s.pendingUpdateVersion,
 				})
 				s.pendingUpdateVersion = ""
 			}
