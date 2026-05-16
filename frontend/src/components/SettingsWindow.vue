@@ -280,6 +280,15 @@ function isSearchMatch(tab) {
 
 
 onMounted(async () => {
+  // Re-center panel after mount to handle cases where window.innerWidth/Height
+  // was not yet accurate at ref() initialization time (e.g. standalone OS window).
+  if (props.standalone) {
+    pos.value = {
+      x: Math.round((window.innerWidth - DEFAULT_W) / 2),
+      y: Math.round((window.innerHeight - DEFAULT_H) / 2),
+    }
+  }
+
   loadModels()
   const [loaded, version] = await Promise.all([
     GetConfig().catch(() => null),
