@@ -64,6 +64,7 @@ func main() {
 	})
 
 	setGlobalApp(app)
+	services.SetVersion(version)
 
 	hooks := services.PlatformHooks{
 		PostSystemNotification:            postSystemNotification,
