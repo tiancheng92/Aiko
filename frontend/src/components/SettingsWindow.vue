@@ -2282,6 +2282,14 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 .settings-win--standalone .sidebar-nav-list {
   --wails-draggable: no-drag;
 }
+.settings-win--standalone .sidebar-search,
+.settings-win--standalone .sidebar-search:hover,
+.settings-win--standalone .sidebar-search:focus-within {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow: none;
+  transition: none;
+}
 
 /* Traffic lights — live inside sidebar-drag */
 .traffic-lights {
