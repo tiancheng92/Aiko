@@ -990,8 +990,6 @@ import (
 	"strings"
 	"syscall"
 	"unsafe"
-
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // SetAutoLaunchEnabled installs or removes the Aiko LaunchAgent plist so
@@ -1067,24 +1065,24 @@ func registerGlobalHotkey() {
 			if err != nil || n == 0 {
 				return
 			}
-			if globalAppCtx == nil {
+			if globalApp == nil {
 				continue
 			}
 			C.activateApp()
 			switch buf[0] {
 			case 1:
 				// 双击 Option — 切换气泡（现有行为）
-				wailsruntime.EventsEmit(globalAppCtx, "bubble:toggle")
+				globalApp.Event.Emit( "bubble:toggle")
 			case 2:
 				// 长按 Option ≥1s — 开始录音，同时启动 voice pipe 监听
-				wailsruntime.EventsEmit(globalAppCtx, "voice:start")
+				globalApp.Event.Emit( "voice:start")
 				C.startVoiceRecognition()
 			case 3:
 				// Option 释放 — 请求停止录音；voice:end 在引擎真正停止后由 case 4 发出
 				C.stopVoiceRecognition()
 			case 4:
 				// AVAudioEngine 已完全停止 — 现在才通知前端结束录音
-				wailsruntime.EventsEmit(globalAppCtx, "voice:end")
+				globalApp.Event.Emit( "voice:end")
 			}
 		}
 	}()
@@ -1113,16 +1111,16 @@ func registerGlobalHotkey() {
 			if _, err := readFull(vReadFd, textBuf); err != nil {
 				return
 			}
-			if globalAppCtx == nil {
+			if globalApp == nil {
 				continue
 			}
 			text := string(textBuf)
 			if strings.HasPrefix(text, "FINAL:") {
-				wailsruntime.EventsEmit(globalAppCtx, "voice:final", text[6:])
+				globalApp.Event.Emit( "voice:final", text[6:])
 			} else if len(text) > 6 && text[:6] == "ERROR:" {
-				wailsruntime.EventsEmit(globalAppCtx, "voice:error", text[6:])
+				globalApp.Event.Emit( "voice:error", text[6:])
 			} else {
-				wailsruntime.EventsEmit(globalAppCtx, "voice:transcript", text)
+				globalApp.Event.Emit( "voice:transcript", text)
 			}
 		}
 	}()
