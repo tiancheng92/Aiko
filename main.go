@@ -159,10 +159,7 @@ func main() {
 	settingsMenu.Add("Preferences...").
 		SetAccelerator("CmdOrCtrl+,").
 		OnClick(func(_ *application.Context) {
-			if win, ok := app.Window.GetByName("settings"); ok {
-				win.Show()
-				win.Focus()
-			}
+			winSvc.OpenSettings()
 		})
 
 	app.Menu.SetApplicationMenu(appMenu)
