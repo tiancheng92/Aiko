@@ -38,6 +38,7 @@ const emit = defineEmits(['close'])
 
 const props = defineProps({
   activeScreen: { type: Object, default: () => ({ width: 0, height: 0 }) },
+  standalone: { type: Boolean, default: false },
 })
 
 const cfg = ref({

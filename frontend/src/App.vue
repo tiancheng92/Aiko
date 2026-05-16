@@ -3,18 +3,16 @@ import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import Live2DPet from './components/Live2DPet.vue'
 import VRMPet from './components/VRMPet.vue'
 import ChatBubble from './components/ChatBubble.vue'
-import SettingsWindow from './components/SettingsWindow.vue'
 import NotificationBubble from './components/NotificationBubble.vue'
 import { MissingRequiredConfig, GetConfig } from '../bindings/aiko/internal/services/configservice'
 import { IsFirstLaunch, MarkWelcomeShown } from '../bindings/aiko/internal/services/systemservice'
-import { GetScreenSize, SetChatVisible } from '../bindings/aiko/internal/services/windowservice'
+import { GetScreenSize, SetChatVisible, OpenSettings } from '../bindings/aiko/internal/services/windowservice'
 import { Events } from '@wailsio/runtime'
 import { springAnimate } from './composables/useSpring'
 
 const bubbleOpen = ref(false)
 watch(bubbleOpen, (v) => { SetChatVisible(v) })
 const renderBackend = ref('live2d')
-const settingsOpen = ref(false)
 const ballPos  = ref({ x: -1, y: -1 })
 const ballSize = ref(160)
 const chatBubbleRef = ref(null)
@@ -353,7 +351,7 @@ onMounted(async () => {
       })
     }
   })
-  offSettings  = Events.On('settings:open', () => { settingsOpen.value = true })
+  offSettings  = Events.On('settings:open', () => { OpenSettings() })
   offRenderBackend = Events.On('config:render:backend:changed', (event) => {
     renderBackend.value = event.data
   })
@@ -399,7 +397,6 @@ onUnmounted(() => {
   stopRippleAnim?.()
   if (siriHideTimer) clearTimeout(siriHideTimer)
   cancelBubble?.()
-  cancelSettings?.()
 })
 
 /** toggleBubble flips the chat bubble open/close state. */
@@ -414,18 +411,12 @@ function toggleBubble() {
   }
 }
 
-/** openSettings opens the settings window. */
-function openSettings() {
-  settingsOpen.value = true
-}
-
 // ── Spring transition helpers ─────────────────────────────────────────────────
 // Shared options for normalized progress [0..1] space.
 const SPRING_OPTS = { restDelta: 0.005, restVelocity: 0.04 }
 
 // In-flight cancel fns so rapid open→close→open doesn't stack animations.
 let cancelBubble = null
-let cancelSettings = null
 
 /** applyBubbleStyle writes transform + opacity from a spring progress value p ∈ [0..1].
  *  transform-origin is bottom-center so the bubble grows from the pet position. */
@@ -433,12 +424,6 @@ function applyBubbleStyle(el, p) {
   el.style.opacity        = Math.min(1, Math.max(0, p * 2)).toString()
   el.style.transform      = `scale(${0.82 + 0.18 * p}) translateY(${20 * (1 - p)}px)`
   el.style.transformOrigin = 'bottom center'
-}
-
-/** applySettingsStyle writes transform + opacity from spring progress p ∈ [0..1]. */
-function applySettingsStyle(el, p) {
-  el.style.opacity   = Math.min(1, Math.max(0, p * 1.8)).toString()
-  el.style.transform = `scale(${0.90 + 0.10 * p}) translateY(${10 * (1 - p)}px)`
 }
 
 // ── ChatBubble JS transition hooks ───────────────────────────────────────────
@@ -479,42 +464,6 @@ function onBubbleLeave(el, done) {
   })
 }
 
-// ── SettingsWindow JS transition hooks ───────────────────────────────────────
-/** onSettingsEnter: spring from 0 → 1, slightly underdamped (ζ ≈ 0.72) — refined pop. */
-function onSettingsEnter(el, done) {
-  cancelSettings?.()
-  applySettingsStyle(el, 0)
-  // ζ = 26/(2·√260) ≈ 0.806 — subtle overshoot on scale for a glass-card feel.
-  cancelSettings = springAnimate({
-    from: 0, to: 1,
-    stiffness: 260, damping: 26,
-    ...SPRING_OPTS,
-    onUpdate: (p) => applySettingsStyle(el, p),
-    onDone: () => {
-      el.style.opacity = ''
-      el.style.transform = ''
-      cancelSettings = null
-      done()
-    },
-  })
-}
-
-/** onSettingsLeave: spring from 1 → 0, overdamped (ζ ≈ 1.1) — fast, authoritative close. */
-function onSettingsLeave(el, done) {
-  cancelSettings?.()
-  applySettingsStyle(el, 1)
-  // ζ = 40/(2·√260) ≈ 1.24 — slightly overdamped: snappy close without any bounce.
-  cancelSettings = springAnimate({
-    from: 1, to: 0,
-    stiffness: 260, damping: 40,
-    ...SPRING_OPTS,
-    onUpdate: (p) => applySettingsStyle(el, p),
-    onDone: () => {
-      cancelSettings = null
-      done()
-    },
-  })
-}
 </script>
 
 <template>
@@ -524,7 +473,7 @@ function onSettingsLeave(el, done) {
     @click="toggleBubble"
     @position="p => ballPos = p"
     @ball-size="s => ballSize = s"
-    @open-settings="openSettings"
+    @open-settings="OpenSettings"
   />
   <VRMPet
     v-else-if="renderBackend === 'vrm'"
@@ -532,7 +481,7 @@ function onSettingsLeave(el, done) {
     @click="toggleBubble"
     @position="p => ballPos = p"
     @ball-size="s => ballSize = s"
-    @open-settings="openSettings"
+    @open-settings="OpenSettings"
   />
   <Transition :css="false" @enter="onBubbleEnter" @leave="onBubbleLeave">
     <ChatBubble
@@ -543,14 +492,7 @@ function onSettingsLeave(el, done) {
       :ball-size="ballSize"
       :active-screen="activeScreen"
       @close="bubbleOpen = false"
-      @open-settings="openSettings"
-    />
-  </Transition>
-  <Transition :css="false" @enter="onSettingsEnter" @leave="onSettingsLeave">
-    <SettingsWindow
-      v-if="settingsOpen"
-      :active-screen="activeScreen"
-      @close="settingsOpen = false"
+      @open-settings="OpenSettings"
     />
   </Transition>
   <NotificationBubble
