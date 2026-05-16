@@ -1,6 +1,6 @@
 <!-- frontend/src/components/SettingsWindow.vue -->
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { springAnimate } from '../composables/useSpring.js'
 import {
   GetConfig, SaveConfig,
@@ -152,12 +152,12 @@ function applyConfig(loaded) {
 // Draggable window state
 const DEFAULT_W = 900
 const DEFAULT_H = 680
-// In standalone mode the component fills the OS window (viewport = window).
-// In overlay mode it floats centered over the main desktop window.
-// In standalone mode the OS window is slightly larger than the panel to leave
-// room for the box-shadow to render. Center the panel within the viewport.
+// OS window is fixed at 920×700; panel is 900×680 — offset is always (10, 10).
+// Using constants avoids timing issues where window.innerWidth is 0 on first paint.
+const STANDALONE_OS_W = 920
+const STANDALONE_OS_H = 700
 const pos = ref(props.standalone
-  ? { x: Math.round((window.innerWidth - DEFAULT_W) / 2), y: Math.round((window.innerHeight - DEFAULT_H) / 2) }
+  ? { x: Math.round((STANDALONE_OS_W - DEFAULT_W) / 2), y: Math.round((STANDALONE_OS_H - DEFAULT_H) / 2) }
   : { x: Math.round(window.innerWidth / 2 - DEFAULT_W / 2), y: Math.round(window.innerHeight / 2 - DEFAULT_H / 2) }
 )
 const winSize = ref({ w: DEFAULT_W, h: DEFAULT_H })
@@ -280,15 +280,6 @@ function isSearchMatch(tab) {
 
 
 onMounted(async () => {
-  // Re-center panel after DOM paint so window.innerWidth/Height are accurate.
-  if (props.standalone) {
-    await nextTick()
-    pos.value = {
-      x: Math.max(0, Math.round((window.innerWidth - DEFAULT_W) / 2)),
-      y: Math.max(0, Math.round((window.innerHeight - DEFAULT_H) / 2)),
-    }
-  }
-
   loadModels()
   const [loaded, version] = await Promise.all([
     GetConfig().catch(() => null),
