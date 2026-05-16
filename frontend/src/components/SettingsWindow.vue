@@ -2123,7 +2123,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
           <div class="about-version-row">
             <span class="about-label">当前版本</span>
-            <span class="about-version">v{{ currentVersion }}</span>
+            <span class="about-version">{{ currentVersion === 'dev' || currentVersion === '…' ? currentVersion : 'v' + currentVersion }}</span>
           </div>
 
           <div class="about-update-area">
