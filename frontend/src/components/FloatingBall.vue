@@ -14,12 +14,6 @@ let isDragging = false
 
 watch(pos, (p) => { if (p) emit('position', { ...p }) })
 
-/** waitForRuntime polls until the Wails v3 runtime bridge is available. */
-async function waitForRuntime() {
-  while (!window._wails?.invoke) {
-    await new Promise(r => setTimeout(r, 20))
-  }
-}
 
 /** loadPosition fetches the saved ball position for the given screen size. */
 async function loadPosition(screenW, screenH) {
@@ -37,7 +31,6 @@ let offScreenChanged = null
 
 onMounted(async () => {
   try {
-    await waitForRuntime()
     const [screenW, screenH] = await GetScreenSize()
     await loadPosition(screenW, screenH)
   } catch (err) {

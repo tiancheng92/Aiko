@@ -91,12 +91,6 @@ let offScreenChanged = null
 
 watch(pos, (p) => { if (p) emit('position', { ...p }) })
 
-/** waitForRuntime polls until the Wails Go bridge is available. */
-async function waitForRuntime() {
-  while (!window.go?.main?.App) {
-    await new Promise(r => setTimeout(r, 20))
-  }
-}
 
 /** attachModel loads a Live2D model from path, scales it, and wires up interactions. */
 async function attachModel(path) {
@@ -166,7 +160,6 @@ onMounted(async () => {
 
   // Phase 1: load position — isolated so PixiJS errors can't reset a successfully loaded position.
   try {
-    await waitForRuntime()
     // Fallback to window dimensions so sw/sh are never 0 if the Go call fails.
     sw.value = window.innerWidth
     sh.value = window.innerHeight

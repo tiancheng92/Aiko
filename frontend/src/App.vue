@@ -311,15 +311,7 @@ watch(voiceActive, async (active) => {
   }
 })
 
-/** waitForRuntime polls until the Wails v3 runtime bridge is available. */
-async function waitForRuntime() {
-  while (!window._wails?.invoke) {
-    await new Promise(r => setTimeout(r, 20))
-  }
-}
-
 onMounted(async () => {
-  await waitForRuntime()
   try {
     const [w, h] = await GetScreenSize()
     if (w > 0 && h > 0) activeScreen.value = { width: w, height: h }
