@@ -2270,6 +2270,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   background: rgba(28, 29, 40, 0.97);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  box-shadow: none;
 }
 .settings-win--standalone .sidebar-drag,
 .settings-win--standalone .content-drag {
