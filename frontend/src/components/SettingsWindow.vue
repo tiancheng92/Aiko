@@ -150,8 +150,8 @@ function applyConfig(loaded) {
 }
 
 // Draggable window state
-const DEFAULT_W = 960
-const DEFAULT_H = 720
+const DEFAULT_W = 900
+const DEFAULT_H = 680
 const MIN_W = 760
 const MIN_H = 560
 // In standalone mode the component fills the OS window (viewport = window).
