@@ -1,0 +1,95 @@
+version: '3'
+
+vars:
+  APP_NAME: "Aiko"
+  BIN_DIR: "build/bin"
+  VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
+  PACKAGE_MANAGER: "yarn"
+
+tasks:
+  build:
+    summary: Builds the application
+    cmds:
+      - task: darwin:build
+
+  package:
+    summary: Packages the application
+    cmds:
+      - task: darwin:package
+
+  run:
+    summary: Runs the application
+    cmds:
+      - task: darwin:run
+
+  dev:
+    summary: Runs in development mode
+    cmds:
+      - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
+
+  # Common tasks (inlined from Taskfile.tmpl.yml)
+  common:go:mod:tidy:
+    internal: true
+    cmds:
+      - go mod tidy
+
+  common:build:frontend:
+    internal: true
+    dir: frontend
+    cmds:
+      - yarn build
+
+  common:generate:icons:
+    internal: true
+    dir: build
+    sources:
+      - appicon.png
+    generates:
+      - darwin/icons.icns
+    cmds:
+      - wails3 generate icons -input appicon.png -macfilename darwin/icons.icns -windowsfilename windows/icon.ico
+    status:
+      - test -f darwin/icons.icns
+
+  generate:bindings:
+    summary: Regenerates frontend bindings
+    cmds:
+      - wails3 generate bindings -f . -clean=true
+
+  # Darwin tasks
+  darwin:build:
+    summary: Builds the Go binary for macOS
+    deps:
+      - task: common:go:mod:tidy
+      - task: common:build:frontend
+      - task: common:generate:icons
+    cmds:
+      - go build -tags production -trimpath -buildvcs=false
+          -ldflags="-w -s -X main.version={{.APP_VERSION}}"
+          -o "{{.BIN_DIR}}/{{.APP_NAME}}"
+    vars:
+      APP_VERSION: '{{.APP_VERSION | default "dev"}}'
+    env:
+      GOOS: darwin
+      CGO_ENABLED: "1"
+      GOARCH: '{{ARCH}}'
+
+  darwin:package:
+    summary: Creates the .app bundle
+    deps:
+      - task: darwin:build
+        vars:
+          APP_VERSION: '{{.APP_VERSION | default "dev"}}'
+    cmds:
+      - mkdir -p "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS"
+      - mkdir -p "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Resources"
+      - cp build/darwin/icons.icns "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Resources"
+      - cp "{{.BIN_DIR}}/{{.APP_NAME}}" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS"
+      - sed 's/APP_VERSION_PLACEHOLDER/{{.APP_VERSION | default "dev"}}/g' build/darwin/Info.plist > "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Info.plist"
+
+  darwin:run:
+    summary: Builds and runs the .app bundle
+    deps:
+      - task: darwin:package
+    cmds:
+      - open "{{.BIN_DIR}}/{{.APP_NAME}}.app"
