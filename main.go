@@ -132,8 +132,11 @@ func main() {
 		Title:            "Aiko Settings",
 		Hidden:           true,
 		Frameless:        true,
-		BackgroundColour: application.NewRGBA(24, 25, 38, 255),
-		URL:              "/settings.html",
+		BackgroundColour: application.NewRGBA(0, 0, 0, 0),
+		Mac: application.MacWindow{
+			Backdrop: application.MacBackdropTransparent,
+		},
+		URL: "/settings.html",
 	})
 	_ = settingsWin
 

@@ -20,12 +20,19 @@ import * as application$0 from "../../../github.com/wailsapp/wails/v3/pkg/applic
 import * as $models from "./models.js";
 
 /**
- * AcquireKeyWindow makes the Aiko window the key window so CSS :hover states
- * work while a context menu is open and another app is frontmost.
+ * AcquireKeyWindow is a no-op under Wails v3 multi-window.
  * @returns {$CancellablePromise<void>}
  */
 export function AcquireKeyWindow() {
     return $Call.ByID(1448292570);
+}
+
+/**
+ * CloseSettings hides the settings window and restores main always-on-top.
+ * @returns {$CancellablePromise<void>}
+ */
+export function CloseSettings() {
+    return $Call.ByID(1047030506);
 }
 
 /**
@@ -97,7 +104,9 @@ export function OpenFileDialog(title, filters) {
 }
 
 /**
- * OpenSettings shows and focuses the settings window.
+ * OpenSettings shows the settings window and temporarily lowers the main
+ * window out of always-on-top so the settings panel is not occluded.
+ * Always-on-top is restored the first time the settings window loses focus.
  * @returns {$CancellablePromise<void>}
  */
 export function OpenSettings() {
@@ -105,7 +114,7 @@ export function OpenSettings() {
 }
 
 /**
- * ReleaseKeyWindow resigns key-window status, restoring focus to the previous app.
+ * ReleaseKeyWindow is a no-op under Wails v3 multi-window.
  * @returns {$CancellablePromise<void>}
  */
 export function ReleaseKeyWindow() {

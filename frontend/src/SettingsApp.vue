@@ -15,5 +15,8 @@ html, body, #settings-app, .settings-root {
   margin: 0;
   padding: 0;
   overflow: hidden;
+  /* Transparent so the CSS border-radius on .settings-win cuts through to the
+     transparent OS window background, producing real rounded corners. */
+  background: transparent;
 }
 </style>

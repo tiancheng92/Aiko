@@ -45,6 +45,16 @@ func (w *WindowService) OpenSettings() {
 	settingsWin.Focus()
 }
 
+// CloseSettings hides the settings window and restores main always-on-top.
+func (w *WindowService) CloseSettings() {
+	if win, ok := w.s.app.Window.GetByName("settings"); ok {
+		win.Hide()
+	}
+	if mainWin, ok := w.s.app.Window.GetByName("main"); ok {
+		mainWin.SetAlwaysOnTop(true)
+	}
+}
+
 // IsChatVisible reports whether the chat panel is currently open.
 func (w *WindowService) IsChatVisible() bool {
 	w.s.mu.RLock()

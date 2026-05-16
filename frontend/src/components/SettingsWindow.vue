@@ -17,7 +17,7 @@ import {
   SetAvatar, ResetAvatar,
 } from '../../bindings/aiko/internal/services/configservice'
 import { ImportKnowledge, ListKnowledgeSources, DeleteKnowledgeSource } from '../../bindings/aiko/internal/services/knowledgeservice'
-import { OpenFileDialog } from '../../bindings/aiko/internal/services/windowservice'
+import { OpenFileDialog, CloseSettings } from '../../bindings/aiko/internal/services/windowservice'
 import { GetToolPermissions, SetToolPermission } from '../../bindings/aiko/internal/services/toolservice'
 import { ListMCPServers, AddMCPServer, UpdateMCPServer, DeleteMCPServer } from '../../bindings/aiko/internal/services/mcpservice'
 import { ListCronJobs, CreateCronJob, UpdateCronJob, DeleteCronJob, SetCronJobEnabled, RunCronJobNow, ListProactiveItems, DeleteProactiveItem } from '../../bindings/aiko/internal/services/schedulerservice'
@@ -766,6 +766,16 @@ async function deleteSource(src) {
   }
 }
 
+/** closeWindow hides the settings window. In standalone mode it calls the
+ *  Go binding to hide the OS window; in overlay mode it emits 'close' to the parent. */
+function closeWindow() {
+  if (props.standalone) {
+    CloseSettings()
+  } else {
+    emit('close')
+  }
+}
+
 /** onHeaderMouseDown begins dragging the settings window.
  *  In standalone mode the window is an OS window — JS cannot reposition it,
  *  so we skip the drag (the sidebar-drag area uses CSS -webkit-app-region instead). */
@@ -1227,7 +1237,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
         <!-- Traffic lights + drag handle at the very top of the sidebar -->
         <div class="sidebar-drag" @mousedown="onHeaderMouseDown">
           <div class="traffic-lights" @mousedown.stop>
-            <button class="traffic-btn tl-close" aria-label="关闭设置" @click.stop="$emit('close')">
+            <button class="traffic-btn tl-close" aria-label="关闭设置" @click.stop="closeWindow()">
               <svg viewBox="0 0 10 10" width="7" height="7"><path d="M2 2 L8 8 M8 2 L2 8" stroke="#4c0519" stroke-width="1.3" stroke-linecap="round"/></svg>
             </button>
             <span class="traffic-btn tl-min" aria-hidden="true" />
@@ -2213,7 +2223,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
         <template v-if="statusMsg">{{ statusMsg }}</template>
         <template v-else-if="saving">保存中…</template>
       </span>
-      <button class="btn-done" @click="$emit('close')">完成</button>
+      <button class="btn-done" @click="closeWindow()">完成</button>
     </div>
 
     <!-- Resize handle (bottom-right corner) -->
@@ -2287,19 +2297,20 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   -webkit-user-select: none;
 }
 
-/* Standalone mode: the component IS the OS window — no outer rounding/shadow,
-   no resize handle, and the sidebar drag area natively drags the OS window. */
+/* Standalone mode: the component IS the OS window — the transparent window
+   background lets the CSS border-radius show through as real round corners.
+   Remove the z-index stacking context; keep border/shadow for the glass look. */
 .settings-win--standalone {
-  border-radius: 0;
-  border: none;
-  box-shadow: none;
   z-index: 0;
 }
-.settings-win--standalone .sidebar-drag {
+.settings-win--standalone .sidebar-drag,
+.settings-win--standalone .content-drag {
   -webkit-app-region: drag;
   cursor: default;
 }
-.settings-win--standalone .traffic-lights {
+.settings-win--standalone .traffic-lights,
+.settings-win--standalone .sidebar-search,
+.settings-win--standalone .sidebar-nav-list {
   -webkit-app-region: no-drag;
 }
 .settings-win--standalone .win-resize-handle {
