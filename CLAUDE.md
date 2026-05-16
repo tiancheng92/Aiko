@@ -4,14 +4,14 @@ AI 编码助手指引，供 Claude Code 在此项目中使用。
 
 ## 项目概览
 
-**Aiko** 是一个 macOS 原生 AI 桌面宠物应用，采用 Wails v2 架构。Go 后端通过 `app.go` 暴露绑定方法给 Vue 3 前端；前端资源 embed 进 Go 二进制。核心特色是点击穿透（通过 `macos.go` 的 Objective-C cgo 实现）和基于 eino ReAct Agent 的智能对话系统。
+**Aiko** 是一个 macOS 原生 AI 桌面宠物应用，采用 Wails v3 架构。Go 后端通过 `internal/services/` 暴露绑定方法给 Vue 3 前端；前端资源 embed 进 Go 二进制。核心特色是点击穿透（通过 `macos.go` 的 Objective-C cgo 实现）和基于 eino ReAct Agent 的智能对话系统。
 
 > **平台支持**：当前仅支持 macOS，**短期内不计划支持 Windows 或 Linux**。macOS 专属 API（Objective-C CGO、AVAudioEngine、SFSpeechRecognizer、osascript 等）是核心功能的基础，跨平台移植工作量巨大且不在近期路线图内。
 
 ### 核心依赖
 
 **后端技术栈：**
-- [Wails v2](https://wails.io/) - 跨平台桌面应用框架
+- [Wails v3](https://wails.io/) - 跨平台桌面应用框架
 - [eino](https://github.com/cloudwego/eino) - 字节跳动 Agent Development Kit
 - [chromem-go](https://github.com/philippgille/chromem-go) - 纯 Go 向量数据库
 - [robfig/cron/v3](https://pkg.go.dev/github.com/robfig/cron/v3) - Cron 任务调度器
@@ -32,7 +32,7 @@ AI 编码助手指引，供 Claude Code 在此项目中使用。
 ## 架构设计
 
 ```
-main.go → app.go (Wails bindings)
+main.go → internal/services/       # Wails v3 绑定层
               ↓
     internal/agent/agent.go        # eino ReAct Agent 核心
     internal/agent/middleware/     # 日志/重试/错误恢复中间件
@@ -69,7 +69,7 @@ frontend/src/
 │   ├── ContextMenu.vue         # 右键上下文菜单
 │   └── LinkPreview.vue         # 链接预览卡片
 ├── composables/       # 可复用逻辑 (useModelPath.js 等)
-└── wailsjs/          # Wails 自动生成的 Go 绑定
+└── bindings/         # Wails v3 自动生成的 Go 绑定
 ```
 
 ## 开发规范
@@ -80,17 +80,17 @@ frontend/src/
 - 错误处理用 `fmt.Errorf("context: %w", err)` 包装上下文
 - 涉及 `a.cfg` / `a.petAgent` / `a.longMem` / `a.knowledgeSt` / `a.ttsSpeaker` / `a.mcpClosers` 的字段读写必须持有 `a.mu`（`RLock` 读，`Lock` 写）；`GetConfig` 返回 `*a.cfg` 的值拷贝，不返回原指针
 - `sched.Start(a.ctx)` 与 `engine.Start(a.ctx)` 必须在 `a.mu.Unlock()` 之后调用——cron 回调会 `EventsEmit` 触发 Wails cgo，持锁时 emit 可能死锁
-- 新增 Wails 绑定方法写在 `app.go`，签名遵循已有模式
-- 新增内置工具：实现 `internaltools.Tool` 接口，在 `registry.go` 的 `All()` 中注册；运行时依赖工具加到 `AllContextual`；无需再在 `app.go startup` 里硬编码权限行——统一走 `internaltools.AllPermissionDeclarations()`
+- 新增 Wails 绑定方法写在 `internal/services/` 下，签名遵循已有模式
+- 新增内置工具：实现 `internaltools.Tool` 接口，在 `registry.go` 的 `All()` 中注册；运行时依赖工具加到 `AllContextual`；无需再在服务启动里硬编码权限行——统一走 `internaltools.AllPermissionDeclarations()`
 - `execute_shell` / `execute_code` 的 `working_dir` 参数必须经 `checkPath(workingDir, t.Cfg.AllowedPaths)` 白名单校验，并在 `t.Cfg == nil` 时直接返回错误提示（避免 nil deref）
-- **Wails 绑定结构体中禁止使用 `time.Time`**，改用 RFC3339 字符串（`string`）——Wails TS 绑定生成器不识别 `time.Time`
+- **Wails 绑定结构体中禁止使用 `time.Time`**，改用 RFC3339 字符串（`string`）——Wails v3 TS 绑定生成器不识别 `time.Time`
 
 ### Vue 前端规范
 
 - 全部使用 `<script setup>` 语法
 - 包管理用 `yarn`，不用 npm
-- 调用后端方法从 `../../wailsjs/go/main/App` import
-- 监听 Wails 事件用 `EventsOn`，emit 用 `EventsEmit`（from `../../wailsjs/runtime/runtime`）
+- 调用后端方法从 `../../bindings/aiko/internal/services/[ServiceName]` import
+- 监听 Wails 事件用 `EventsOn`，emit 用 `EventsEmit`（from `@wailsio/runtime`）
 - **`EventsOn(event, handler)` 返回的 off 函数必须存到组件作用域变量**，在 `onUnmounted` 中统一 `off?.()` 解绑；禁止用 `EventsOff('event-name')` 传字符串（它会移除同事件所有监听器，影响其他组件）
 - 拖拽类交互（mousedown → mousemove/mouseup）必须同时监听 `window.blur` 作为兜底解绑路径，防止鼠标拖出窗口后监听器悬空
 - composable 里的 `setTimeout` / `setInterval` 必须通过 `onScopeDispose` 清理，避免卸载后回调仍作用于已销毁组件
@@ -137,10 +137,10 @@ frontend/src/
 ```bash
 make run               # 构建 + ad-hoc 签名 + 启动（推荐，权限持久化）
 make build             # 仅构建 + 签名
-wails dev              # 开发模式（前端热重载，权限每次重置）
+wails3 dev             # 开发模式（前端热重载，权限每次重置）
 go build ./...         # 仅检查 Go 编译
 cd frontend && yarn build   # 仅构建前端资源
-wails generate module  # 重新生成 Wails bindings
+wails3 generate bindings   # 重新生成 Wails bindings
 ```
 
 > **权限说明**：使用 `make run` 构建会自动 ad-hoc 签名（`codesign --sign -`），配合 `wails.json` 中固定的 `bundleidentifier: com.xutiancheng.aiko`，macOS TCC 权限授权后跨重新编译持久有效。`wails dev` 不签名，每次重启可能重新弹权限窗。
@@ -159,7 +159,7 @@ wails generate module  # 重新生成 Wails bindings
 ### macOS 平台特定
 - `macos.go` 中的 Objective-C 代码负责按像素判断鼠标事件响应，实现点击穿透功能
 - **⚠️ 不要随意修改 hitTest 逻辑**，容易破坏点击穿透机制
-- hitTest JS 选择器：`.live2d-pet,.chat-bubble,.settings-win,.ctx-menu,.notif-bubble,.lightbox,.tool-confirm-modal,.execution-progress`——新增可交互的全屏覆盖层时必须加入此列表，否则鼠标事件会穿透到桌面
+- hitTest JS 选择器：`.live2d-pet,.chat-bubble,.ctx-menu,.notif-bubble,.lightbox,.tool-confirm-modal,.execution-progress`——新增可交互的全屏覆盖层时必须加入此列表，否则鼠标事件会穿透到桌面
 - `macos.go` 同时包含全局 Option 键监控：双击切换气泡，长按 ≥1s 触发语音录音（`startVoiceRecognition` / `stopVoiceRecognition`）
 - 语音识别使用 `AVAudioEngine` + `SFSpeechRecognizer`，partial 结果通过 voice pipe 推送 `voice:transcript` Wails 事件；`isFinal` 结果推送 `FINAL:<text>` → Go goroutine 转为 `voice:final` 事件
 - **voice:final vs voice:end**：`voice:end` 在 Option 释放时立即触发（停止 UI 动画）；`voice:final` 在 SFSpeechRecognition 异步完成后触发（携带最终文字）。若 `VoiceAutoSend` 开启，ChatPanel 收到 `voice:final` 后自动调用 `send()`
@@ -168,10 +168,10 @@ wails generate module  # 重新生成 Wails bindings
 ### 工具系统
 - 普通工具实现 `Tool` 接口（`InvokableRun(ctx, string) (string, error)`），在 `All()` 中注册，`AllEino()` 自动用 `ToEino()` 包装
 - **有运行时依赖**（知识库、调度器、长期记忆、config 等）的工具在 `AllContextual()` 中注册
-- **多模态工具**（返回图片等）实现 `EnhancedTool` 接口，在 `AllEino()` 中用 `ToEinoEnhanced()` 单独注册（**不**放入 `All()`）；同时在 `app.go` 启动时手动调用 `permStore.EnsureRow()` 注册权限行
+- **多模态工具**（返回图片等）实现 `EnhancedTool` 接口，在 `AllEino()` 中用 `ToEinoEnhanced()` 单独注册（**不**放入 `All()`）；同时在服务启动时手动调用 `permStore.EnsureRow()` 注册权限行
 - **需要 eino interrupt/resume 的工具**（如 execute_shell / execute_code）：调用 `tool.Interrupt(ctx, info)` 触发中断，info 类型必须用 `gob.Register` 提前注册；`ErrorRecovery` 中间件会放行 `compose.IsInterruptRerunError` 的 error
 - macOS 专属工具用 `//go:build darwin` / `//go:build !darwin` 分平台实现（non-darwin 提供 stub）
-- **新工具需在 `app.go` 启动时调用 `permStore.EnsureRow()`**，否则不会出现在工具权限列表
+- **新工具需在服务启动时调用 `permStore.EnsureRow()`**，否则不会出现在工具权限列表
 
 ### eino interrupt/resume 流程
 - 工具调用 `tool.Interrupt(ctx, ShellConfirmInfo{...})` → eino 保存 checkpoint，返回 interrupt error
@@ -183,7 +183,7 @@ wails generate module  # 重新生成 Wails bindings
 - 工具被 resume，`tool.GetResumeContext[ConfirmResult](ctx)` 返回确认结果，执行实际命令
 
 ### 多模态对话
-- `app.go` 的 `SendMessageWithImages(userInput string, images []string)` 接收前端传来的 data URL 数组，解析后构造含图片 part 的 `*schema.Message`，调用 `agent.ChatWithMessage()`
+- `internal/services/` 中的 `SendMessageWithImages(userInput string, images []string)` 接收前端传来的 data URL 数组，解析后构造含图片 part 的 `*schema.Message`，调用 `agent.ChatWithMessage()`
 - `SendMessageWithFiles(userInput string, images []string, files []FileAttachment)` 同时支持图片和文本文件附件（`FileAttachment{Name, Content string}`），文本文件内联为消息文本块
 - eino acl/openai 会将 `Base64Data` 序列化为 `data:<mime>;base64,<data>` 格式的 image_url，与 OpenAI 多模态 API 规范一致
 
@@ -218,19 +218,19 @@ wails generate module  # 重新生成 Wails bindings
 - `GetScreenList()` 返回所有连接显示器的分辨率和位置信息，前端据此重新定位宠物和聊天框
 
 ### MCP 热重载
-- `app.go` 的 `AddMCPServer`、`UpdateMCPServer`、`DeleteMCPServer` 在 DB 操作完成后会立即调用 `initLLMComponents` 重建 Agent，使新配置立即生效，无需重启应用
+- `internal/services/` 中的 `AddMCPServer`、`UpdateMCPServer`、`DeleteMCPServer` 在 DB 操作完成后会立即调用 `initLLMComponents` 重建 Agent，使新配置立即生效，无需重启应用
 
 ### 自我成长系统
 - `NudgeInterval`（配置项）控制 Agent 每隔 N 轮对话后自动触发沉淀提示
 - 相关工具：`save_memory`、`update_user_profile`、`save_skill`——在 `AllContextual()` 中注册
 
 ### 并发安全
-- `app.go` 的 `initLLMComponents` 可能并发调用（SaveConfig 触发配置变更时）
+- `internal/services/` 中的 `initLLMComponents` 可能并发调用（SaveConfig 触发配置变更时）
 - 所有涉及 `a.petAgent`、`a.longMem`、`a.knowledgeSt` 字段的更新必须在 `a.mu.Lock()` 保护下完成
 
 ### Wails 绑定
-- 前端 Wails bindings（`wailsjs/`）由 `wails dev/build` 自动生成，**不要手动编辑**
-- 修改 Go 方法签名后需要重新运行 `wails generate module`
+- 前端 Wails bindings（`bindings/`）由 `wails3 dev/build` 自动生成，**不要手动编辑**
+- 修改 Go 方法签名后需要重新运行 `wails3 generate bindings`
 
 ## 项目特色
 
