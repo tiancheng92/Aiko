@@ -2375,6 +2375,10 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   flex-shrink: 0;
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
 }
+.sidebar-search:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.10);
+}
 .sidebar-search:focus-within {
   border-color: var(--accent);
   background: rgba(255, 255, 255, 0.10);
@@ -2395,6 +2399,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   caret-color: var(--accent);
   box-shadow: none;
 }
+.search-input:hover,
 .search-input:focus,
 .search-input:focus-visible {
   outline: none;
