@@ -128,14 +128,15 @@ func main() {
 
 	settingsWin := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:             "settings",
-		Width:            900,
-		Height:           680,
+		Width:            920,
+		Height:           700,
 		Title:            "Aiko Settings",
 		Hidden:           true,
 		Frameless:        true,
 		BackgroundColour: application.NewRGBA(0, 0, 0, 0),
 		Mac: application.MacWindow{
-			Backdrop: application.MacBackdropTransparent,
+			Backdrop:      application.MacBackdropTransparent,
+			DisableShadow: true,
 		},
 		URL: "/settings.html",
 	})

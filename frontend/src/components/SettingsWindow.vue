@@ -156,14 +156,13 @@ const MIN_W = 760
 const MIN_H = 560
 // In standalone mode the component fills the OS window (viewport = window).
 // In overlay mode it floats centered over the main desktop window.
+// In standalone mode the OS window is slightly larger than the panel to leave
+// room for the box-shadow to render. Center the panel within the viewport.
 const pos = ref(props.standalone
-  ? { x: 0, y: 0 }
+  ? { x: Math.round((window.innerWidth - DEFAULT_W) / 2), y: Math.round((window.innerHeight - DEFAULT_H) / 2) }
   : { x: Math.round(window.innerWidth / 2 - DEFAULT_W / 2), y: Math.round(window.innerHeight / 2 - DEFAULT_H / 2) }
 )
-const winSize = ref(props.standalone
-  ? { w: window.innerWidth, h: window.innerHeight }
-  : { w: DEFAULT_W, h: DEFAULT_H }
-)
+const winSize = ref({ w: DEFAULT_W, h: DEFAULT_H })
 const searchQuery = ref('')
 let dragStart = null
 let resizeStart = null
@@ -371,14 +370,6 @@ onMounted(async () => {
   // Enable auto-save watcher only after all initial data has been loaded.
   mountedReady.value = true
 
-  // In standalone mode, keep winSize in sync with the OS window size.
-  if (props.standalone) {
-    const onViewportResize = () => {
-      winSize.value = { w: window.innerWidth, h: window.innerHeight }
-    }
-    window.addEventListener('resize', onViewportResize)
-    onUnmounted(() => window.removeEventListener('resize', onViewportResize))
-  }
 })
 
 onUnmounted(() => {
