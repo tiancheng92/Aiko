@@ -4,6 +4,7 @@ package services
 
 import (
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
 // MousePosition holds the CSS coordinates of the mouse cursor.
@@ -18,12 +19,30 @@ type WindowService struct{ s *sharedState }
 // NewWindowService creates a WindowService backed by the given shared state.
 func NewWindowService(s *sharedState) *WindowService { return &WindowService{s: s} }
 
-// OpenSettings shows and focuses the settings window.
+// OpenSettings shows the settings window and temporarily lowers the main
+// window out of always-on-top so the settings panel is not occluded.
+// Always-on-top is restored the first time the settings window loses focus.
 func (w *WindowService) OpenSettings() {
-	if win, ok := w.s.app.Window.GetByName("settings"); ok {
-		win.Show()
-		win.Focus()
+	settingsWin, ok := w.s.app.Window.GetByName("settings")
+	if !ok {
+		return
 	}
+	mainWin, hasMain := w.s.app.Window.GetByName("main")
+	if hasMain {
+		mainWin.SetAlwaysOnTop(false)
+		// Restore always-on-top once — unregister immediately so repeated
+		// OpenSettings calls don't accumulate handlers.
+		var off func()
+		off = settingsWin.OnWindowEvent(events.Common.WindowLostFocus, func(_ *application.WindowEvent) {
+			mainWin.SetAlwaysOnTop(true)
+			if off != nil {
+				off()
+				off = nil
+			}
+		})
+	}
+	settingsWin.Show()
+	settingsWin.Focus()
 }
 
 // IsChatVisible reports whether the chat panel is currently open.
