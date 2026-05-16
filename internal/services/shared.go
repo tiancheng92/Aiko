@@ -14,6 +14,7 @@ import (
 	stdjson "encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -82,13 +83,17 @@ type PlatformHooks struct {
 	GetScreenFrame func(n int) ScreenFrame
 	MoveWindowToScreen func(n int)
 	RegisterSystemWakeObserver func(onWake func())
+	// AutoLaunch
+	GetAutoLaunch func() bool
+	SetAutoLaunch func(bool)
 }
 
 // sharedState holds all mutable application state that was previously on App.
 // All 8 services embed a pointer to a single sharedState instance.
 type sharedState struct {
-	app   *application.App
-	hooks PlatformHooks
+	app      *application.App
+	hooks    PlatformHooks
+	assetsFS fs.FS // embedded frontend assets; set by main via SetAssetsFS before startup
 
 	ctx          context.Context
 	cancel       context.CancelFunc
@@ -133,6 +138,11 @@ type sharedState struct {
 func NewSharedState(app *application.App, hooks PlatformHooks) *sharedState {
 	return &sharedState{app: app, hooks: hooks}
 }
+
+// SetAssetsFS provides the embedded frontend FS (go:embed all:frontend/dist)
+// so service methods that need to enumerate bundled assets can use it without
+// importing from package main.  Must be called before startup().
+func (s *sharedState) SetAssetsFS(f fs.FS) { s.assetsFS = f }
 
 // IsChatVisible reports whether the chat bubble is currently open.
 // Implements proactive.AppInterface.
