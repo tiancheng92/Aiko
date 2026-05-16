@@ -126,12 +126,13 @@ func main() {
 	_ = mainWin
 
 	settingsWin := app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:   "settings",
-		Width:  900,
-		Height: 680,
-		Title:  "Aiko Settings",
-		Hidden: true,
-		URL:    "/settings.html",
+		Name:      "settings",
+		Width:     900,
+		Height:    680,
+		Title:     "Aiko Settings",
+		Hidden:    true,
+		Frameless: true,
+		URL:       "/settings.html",
 	})
 	_ = settingsWin
 
