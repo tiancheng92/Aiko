@@ -154,8 +154,16 @@ const DEFAULT_W = 960
 const DEFAULT_H = 720
 const MIN_W = 760
 const MIN_H = 560
-const pos = ref({ x: Math.round(window.innerWidth / 2 - DEFAULT_W / 2), y: Math.round(window.innerHeight / 2 - DEFAULT_H / 2) })
-const winSize = ref({ w: DEFAULT_W, h: DEFAULT_H })
+// In standalone mode the component fills the OS window (viewport = window).
+// In overlay mode it floats centered over the main desktop window.
+const pos = ref(props.standalone
+  ? { x: 0, y: 0 }
+  : { x: Math.round(window.innerWidth / 2 - DEFAULT_W / 2), y: Math.round(window.innerHeight / 2 - DEFAULT_H / 2) }
+)
+const winSize = ref(props.standalone
+  ? { w: window.innerWidth, h: window.innerHeight }
+  : { w: DEFAULT_W, h: DEFAULT_H }
+)
 const searchQuery = ref('')
 let dragStart = null
 let resizeStart = null
@@ -362,6 +370,15 @@ onMounted(async () => {
 
   // Enable auto-save watcher only after all initial data has been loaded.
   mountedReady.value = true
+
+  // In standalone mode, keep winSize in sync with the OS window size.
+  if (props.standalone) {
+    const onViewportResize = () => {
+      winSize.value = { w: window.innerWidth, h: window.innerHeight }
+    }
+    window.addEventListener('resize', onViewportResize)
+    onUnmounted(() => window.removeEventListener('resize', onViewportResize))
+  }
 })
 
 onUnmounted(() => {
@@ -749,8 +766,11 @@ async function deleteSource(src) {
   }
 }
 
-/** onHeaderMouseDown begins dragging the settings window. */
+/** onHeaderMouseDown begins dragging the settings window.
+ *  In standalone mode the window is an OS window — JS cannot reposition it,
+ *  so we skip the drag (the sidebar-drag area uses CSS -webkit-app-region instead). */
 function onHeaderMouseDown(e) {
+  if (props.standalone) return
   dragStart = { mx: e.clientX - pos.value.x, my: e.clientY - pos.value.y }
   window.addEventListener('mousemove', onMouseMove)
   window.addEventListener('mouseup', onMouseUp)
@@ -1198,6 +1218,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 <template>
   <div
     class="settings-win"
+    :class="{ 'settings-win--standalone': standalone }"
     :style="{ left: pos.x + 'px', top: pos.y + 'px', width: winSize.w + 'px', height: winSize.h + 'px' }"
   >
     <!-- Sidebar + content — no separate titlebar; sidebar owns traffic lights + title + search -->
@@ -2264,6 +2285,25 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   -webkit-font-smoothing: antialiased;
   user-select: none;
   -webkit-user-select: none;
+}
+
+/* Standalone mode: the component IS the OS window — no outer rounding/shadow,
+   no resize handle, and the sidebar drag area natively drags the OS window. */
+.settings-win--standalone {
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  z-index: 0;
+}
+.settings-win--standalone .sidebar-drag {
+  -webkit-app-region: drag;
+  cursor: default;
+}
+.settings-win--standalone .traffic-lights {
+  -webkit-app-region: no-drag;
+}
+.settings-win--standalone .win-resize-handle {
+  display: none;
 }
 
 /* Traffic lights — live inside sidebar-drag */
