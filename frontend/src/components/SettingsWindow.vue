@@ -152,8 +152,6 @@ function applyConfig(loaded) {
 // Draggable window state
 const DEFAULT_W = 900
 const DEFAULT_H = 680
-const MIN_W = 760
-const MIN_H = 560
 // In standalone mode the component fills the OS window (viewport = window).
 // In overlay mode it floats centered over the main desktop window.
 // In standalone mode the OS window is slightly larger than the panel to leave
@@ -165,7 +163,6 @@ const pos = ref(props.standalone
 const winSize = ref({ w: DEFAULT_W, h: DEFAULT_H })
 const searchQuery = ref('')
 let dragStart = null
-let resizeStart = null
 let offProgress = null
 let offScreen = null
 let offUpdateProgress = null
@@ -281,31 +278,6 @@ function isSearchMatch(tab) {
   return !!q && tab._haystack.includes(q)
 }
 
-/** onResizeStart begins resizing the window from the bottom-right corner. */
-function onResizeStart(e) {
-  e.preventDefault()
-  e.stopPropagation()
-  resizeStart = { mx: e.clientX, my: e.clientY, w: winSize.value.w, h: winSize.value.h }
-  window.addEventListener('mousemove', onResizeMove)
-  window.addEventListener('mouseup', onResizeEnd)
-  window.addEventListener('blur', onResizeEnd)
-}
-
-/** onResizeMove updates window size during resize. */
-function onResizeMove(e) {
-  if (!resizeStart) return
-  const w = Math.max(MIN_W, resizeStart.w + (e.clientX - resizeStart.mx))
-  const h = Math.max(MIN_H, resizeStart.h + (e.clientY - resizeStart.my))
-  winSize.value = { w, h }
-}
-
-/** onResizeEnd releases resize listeners. */
-function onResizeEnd() {
-  resizeStart = null
-  window.removeEventListener('mousemove', onResizeMove)
-  window.removeEventListener('mouseup', onResizeEnd)
-  window.removeEventListener('blur', onResizeEnd)
-}
 
 onMounted(async () => {
   loadModels()
@@ -383,9 +355,6 @@ onUnmounted(() => {
   window.removeEventListener('mousemove', onMouseMove)
   window.removeEventListener('mouseup', onMouseUp)
   window.removeEventListener('blur', onMouseUp)
-  window.removeEventListener('mousemove', onResizeMove)
-  window.removeEventListener('mouseup', onResizeEnd)
-  window.removeEventListener('blur', onResizeEnd)
 })
 
 /** fetchLLMModels calls the backend with the current form values to list available models. */
@@ -2217,12 +2186,6 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
       <button class="btn-done" @click="closeWindow()">完成</button>
     </div>
 
-    <!-- Resize handle (bottom-right corner) -->
-    <div class="win-resize-handle" @mousedown="onResizeStart" aria-label="调整窗口大小">
-      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
-        <path d="M14 4 4 14M14 9 9 14M14 14l-.01 0"/>
-      </svg>
-    </div>
     <!-- Confirm dialog — reuses modal-overlay/modal-box pattern so it looks
          identical to the edit/add form modals and stays within .settings-win
          (no Teleport → no click-through issues on macOS). -->
@@ -2308,9 +2271,6 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 .settings-win--standalone .sidebar-search,
 .settings-win--standalone .sidebar-nav-list {
   --wails-draggable: no-drag;
-}
-.settings-win--standalone .win-resize-handle {
-  display: none;
 }
 
 /* Traffic lights — live inside sidebar-drag */
