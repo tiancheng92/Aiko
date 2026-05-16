@@ -119,9 +119,6 @@ func main() {
 		Frameless:        true,
 		AlwaysOnTop:      true,
 		BackgroundColour: application.NewRGBA(0, 0, 0, 0),
-		Mac: application.MacWindow{
-			Backdrop: application.MacBackdropTransparent,
-		},
 	})
 	_ = mainWin
 

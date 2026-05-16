@@ -2305,13 +2305,13 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 }
 .settings-win--standalone .sidebar-drag,
 .settings-win--standalone .content-drag {
-  -webkit-app-region: drag;
+  --wails-draggable: drag;
   cursor: default;
 }
 .settings-win--standalone .traffic-lights,
 .settings-win--standalone .sidebar-search,
 .settings-win--standalone .sidebar-nav-list {
-  -webkit-app-region: no-drag;
+  --wails-draggable: no-drag;
 }
 .settings-win--standalone .win-resize-handle {
   display: none;
