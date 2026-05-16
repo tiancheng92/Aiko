@@ -7,7 +7,7 @@ DMG     := $(shell pwd)/build/bin/Aiko-$(VERSION).dmg
 
 ## build: compile and sign Aiko.app with local self-signed cert (stable csreq = persistent TCC permissions)
 build:
-	wails build -trimpath -ldflags="-s -w -X main.version=$(VERSION)"
+	wails3 build -trimpath -ldflags="-s -w -X main.version=$(VERSION)"
 	codesign --force --sign - --identifier "com.xutiancheng.aiko" \
 		--entitlements build/darwin/Aiko.entitlements $(APP)
 	@test -f "$(BINARY)" || (echo "❌ Binary missing, aborting install"; exit 1)
@@ -20,7 +20,7 @@ run: build
 
 ## dev: start wails dev server (hot-reload, no signing needed)
 dev:
-	wails dev
+	wails3 dev
 
 ## dmg: build, sign, then package into a distributable DMG (requires: brew install create-dmg)
 dmg: build

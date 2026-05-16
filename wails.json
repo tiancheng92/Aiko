@@ -1,5 +1,5 @@
 {
-  "$schema": "https://wails.io/schemas/config.v2.json",
+  "$schema": "https://wails.io/schemas/config.v3.json",
   "name": "Aiko",
   "outputfilename": "Aiko",
   "info": {
@@ -18,7 +18,7 @@
   "frontend:build": "yarn build",
   "frontend:dev:watcher": "yarn dev",
   "frontend:dev:serverUrl": "auto",
-  "wailsjsdir": "frontend",
+  "wailsjsdir": "frontend/bindings",
   "mac": {
     "bundleIdentifier": "com.xutiancheng.aiko"
   }
