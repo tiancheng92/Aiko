@@ -240,7 +240,7 @@ export class UpdateInfo {
 }
 
 /**
- * VRMModelInfo describes a VRM model available to the frontend.
+ * VRMModelInfo holds display metadata for a single VRM model file.
  */
 export class VRMModelInfo {
     /**
