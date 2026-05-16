@@ -133,6 +133,7 @@ func main() {
 		Title:            "Aiko Settings",
 		Hidden:           true,
 		Frameless:        true,
+		DisableResize:    true,
 		BackgroundColour: application.NewRGBA(0, 0, 0, 0),
 		Mac: application.MacWindow{
 			Backdrop:      application.MacBackdropTransparent,
