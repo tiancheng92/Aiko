@@ -2383,6 +2383,16 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 100px;
   flex-shrink: 0;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.sidebar-search:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.10);
+}
+.sidebar-search:focus-within {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.10);
+  box-shadow: 0 0 0 3px var(--accent-alpha-12);
 }
 .search-icon { color: var(--text-tertiary); flex-shrink: 0; }
 .search-input {
