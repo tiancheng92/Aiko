@@ -31,7 +31,8 @@ import (
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 
 	"aiko/internal/agent"
 	"aiko/internal/agent/middleware"
@@ -55,6 +56,7 @@ import (
 // App is the main application struct. All exported methods are Wails bindings.
 type App struct {
 	ctx          context.Context
+	cancel       context.CancelFunc
 	sqlDB        *sql.DB
 	configStore  *config.Store
 	profileStore *config.ProfileStore
@@ -163,7 +165,7 @@ func (a *App) KillToolExecution(id string) {
 
 // EmitEvent emits a Wails runtime event with the given name and payload.
 func (a *App) EmitEvent(name string, data any) {
-	wailsruntime.EventsEmit(a.ctx, name, data)
+	globalApp.Event.Emit( name, data)
 }
 
 // LinkPreview holds the Open Graph / meta data extracted from a URL.
@@ -306,19 +308,19 @@ func (a *App) ChatDirect(ctx context.Context, prompt string) error {
 	ch := ag.ChatDirect(ctx, prompt)
 	for r := range ch {
 		if r.Err != nil {
-			wailsruntime.EventsEmit(a.ctx, "chat:error", a.formatChatError(r.Err))
-			wailsruntime.EventsEmit(a.ctx, "chat:done", nil)
+			globalApp.Event.Emit( "chat:error", a.formatChatError(r.Err))
+			globalApp.Event.Emit( "chat:done", nil)
 			return r.Err
 		}
 		if len(r.Images) > 0 {
-			wailsruntime.EventsEmit(a.ctx, "chat:image", r.Images)
+			globalApp.Event.Emit( "chat:image", r.Images)
 		}
 		if r.Done {
 			break
 		}
-		wailsruntime.EventsEmit(a.ctx, "chat:token", r.Token)
+		globalApp.Event.Emit( "chat:token", r.Token)
 	}
-	wailsruntime.EventsEmit(a.ctx, "chat:done", nil)
+	globalApp.Event.Emit( "chat:done", nil)
 	return nil
 }
 
@@ -347,8 +349,9 @@ type FileAttachment struct {
 	Content  string `json:"content"`
 }
 
-func (a *App) startup(ctx context.Context) {
-	a.ctx = ctx
+// ServiceStartup is called by Wails v3 when the application service starts.
+func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+	a.ctx, a.cancel = context.WithCancel(ctx)
 
 	// Register the macOS UserNotifications sender and kick off the
 	// authorization prompt *before* the scheduler/proactive engine start —
@@ -360,18 +363,18 @@ func (a *App) startup(ctx context.Context) {
 
 	home, err := os.UserHomeDir()
 	if err != nil {
-		panic(fmt.Errorf("get home dir: %w", err))
+		return fmt.Errorf("startup: get home dir: %w", err)
 	}
 	dataDir := filepath.Join(home, ".aiko")
 
 	a.sqlDB, err = db.Open(dataDir)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("startup: open db: %w", err)
 	}
 	a.configStore = config.NewStore(a.sqlDB)
 	a.cfg, err = a.configStore.Load()
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("startup: load config: %w", err)
 	}
 	// Apply active model profile if set.
 	profileStore := config.NewProfileStore(a.sqlDB)
@@ -418,25 +421,24 @@ func (a *App) startup(ctx context.Context) {
 	vectorPath := filepath.Join(dataDir, "vectors")
 	a.vectorDB, err = chromem.NewPersistentDB(vectorPath, false)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("startup: open vector db: %w", err)
 	}
 
 	if len(a.cfg.MissingRequired()) == 0 {
-		if err := a.initLLMComponents(ctx); err != nil {
+		if err := a.initLLMComponents(a.ctx); err != nil {
 			slog.Error("init llm components failed", "err", err)
 		}
 	}
 
 	// Resize window to cover the full primary screen so position:fixed
 	// coordinates in the WebView map to real screen coordinates.
-	screens, err := wailsruntime.ScreenGetAll(ctx)
-	if err == nil {
-		for _, s := range screens {
-			if s.IsPrimary {
-				wailsruntime.WindowSetSize(ctx, s.Size.Width, s.Size.Height)
-				wailsruntime.WindowSetPosition(ctx, 0, 0)
-				break
+	for _, s := range globalApp.Screen.GetAll() {
+		if s.IsPrimary {
+			if win, ok := globalApp.Window.GetByName("main"); ok {
+				win.SetSize(s.Size.Width, s.Size.Height)
+				win.SetPosition(0, 0)
 			}
+			break
 		}
 	}
 
@@ -444,7 +446,6 @@ func (a *App) startup(ctx context.Context) {
 	enableClickThrough()
 
 	// Register global hotkey Shift+Cmd+P to toggle the chat bubble.
-	globalAppCtx = ctx
 	registerGlobalHotkey()
 
 	// Watch for mouse moving to a different screen and migrate the window.
@@ -474,6 +475,22 @@ func (a *App) startup(ctx context.Context) {
 			slog.Warn("SMS watcher start failed", "err", err)
 		}
 	}
+
+	// domReady logic: runs after window has loaded
+	if win, ok := globalApp.Window.GetByName("main"); ok {
+		win.OnWindowEvent(events.Common.WindowRuntimeReady, func(_ *application.WindowEvent) {
+			requestPermissionsEarly()
+			hideNativeScrollbars()
+			if a.pendingUpdateVersion != "" {
+				globalApp.Event.Emit("notification:show", map[string]any{
+					"title":   "✅ 更新成功",
+					"message": "Aiko 已更新至 v" + a.pendingUpdateVersion,
+				})
+				a.pendingUpdateVersion = ""
+			}
+		})
+	}
+	return nil
 }
 
 // initLLMComponents initializes chat model, embedder, memory stores, skills, and agent.
@@ -540,7 +557,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		if job.SaveToMemory {
 			// Signal the chat panel to open a streaming assistant bubble and
 			// show the cron job prompt as the user-side trigger message.
-			wailsruntime.EventsEmit(a.ctx, "chat:cron:start", map[string]any{
+			globalApp.Event.Emit( "chat:cron:start", map[string]any{
 				"name":   job.Name,
 				"prompt": job.Prompt,
 			})
@@ -553,37 +570,37 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		for r := range ch {
 			if r.Err != nil {
 				if job.SaveToMemory {
-					wailsruntime.EventsEmit(a.ctx, "chat:done", "")
+					globalApp.Event.Emit( "chat:done", "")
 				}
 				return "", r.Err
 			}
 			if job.SaveToMemory && len(r.Images) > 0 {
-				wailsruntime.EventsEmit(a.ctx, "chat:image", r.Images)
+				globalApp.Event.Emit( "chat:image", r.Images)
 			}
 			if r.Done {
 				break
 			}
 			if r.ThinkingToken != "" {
 				if job.SaveToMemory {
-					wailsruntime.EventsEmit(a.ctx, "chat:thinking", r.ThinkingToken)
+					globalApp.Event.Emit( "chat:thinking", r.ThinkingToken)
 				}
 				continue
 			}
 			text, _, _ := ep.Feed(r.Token)
 			sb.WriteString(text)
 			if job.SaveToMemory && text != "" {
-				wailsruntime.EventsEmit(a.ctx, "chat:token", text)
+				globalApp.Event.Emit( "chat:token", text)
 			}
 		}
 		// Flush any buffered tail after the last token.
 		if tail := ep.Flush(); tail != "" {
 			sb.WriteString(tail)
 			if job.SaveToMemory {
-				wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
+				globalApp.Event.Emit( "chat:token", tail)
 			}
 		}
 		if job.SaveToMemory {
-			wailsruntime.EventsEmit(a.ctx, "chat:done", "")
+			globalApp.Event.Emit( "chat:done", "")
 		}
 		return sb.String(), nil
 	}
@@ -593,12 +610,12 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 			slog.Error("cron job failed", "job", job.Name, "err", err)
 			failMsg := "任务执行失败: " + err.Error()
 			// Always show in-app bubble for failures.
-			wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
+			globalApp.Event.Emit( "notification:show", map[string]any{
 				"title":   job.Name,
 				"message": failMsg,
 			})
 			go notify.System("⏰ "+job.Name, failMsg)
-			wailsruntime.EventsEmit(a.ctx, "cron:job:done", job.ID)
+			globalApp.Event.Emit( "cron:job:done", job.ID)
 			return
 		}
 		slog.Info("cron job completed", "job", job.Name, "result_len", len(result))
@@ -608,7 +625,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		if runes := []rune(result); len(runes) > bubbleMaxRunes {
 			bubbleMsg = string(runes[:bubbleMaxRunes]) + "…"
 		}
-		wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
+		globalApp.Event.Emit( "notification:show", map[string]any{
 			"title":   "⏰ " + job.Name,
 			"message": bubbleMsg,
 		})
@@ -619,7 +636,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		// When SaveToMemory is on, chatFn already used ag.Chat() (persistAndMigrate)
 		// and streamed tokens to the chat panel — nothing more to do here.
 		// Notify the settings window to refresh the job list so LastRun updates.
-		wailsruntime.EventsEmit(a.ctx, "cron:job:done", job.ID)
+		globalApp.Event.Emit( "cron:job:done", job.ID)
 	}
 
 	// NOTE: scheduler.Start is deferred until after a.mu is released below —
@@ -636,15 +653,15 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		a.cfg,
 		func(id string, cancel func()) {
 			a.runningCmds.Store(id, cancel)
-			wailsruntime.EventsEmit(a.ctx, "tool:executing", map[string]interface{}{"id": id})
+			globalApp.Event.Emit( "tool:executing", map[string]interface{}{"id": id})
 		},
 		func(id string) {
 			a.runningCmds.Delete(id)
-			wailsruntime.EventsEmit(a.ctx, "tool:executed", map[string]interface{}{"id": id})
+			globalApp.Event.Emit( "tool:executed", map[string]interface{}{"id": id})
 		},
 		func() { go a.initLLMComponents(a.ctx) },
 		a.InstallUpdate,
-		func(event string, data any) { wailsruntime.EventsEmit(a.ctx, event, data) },
+		func(event string, data any) { globalApp.Event.Emit( event, data) },
 		version,
 	)
 	proactiveStore := proactive.NewStore(a.sqlDB)
@@ -671,7 +688,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	newAgent, err := agent.New(ctx, chatModel, a.shortMem, longMem, allTools, a.cfg, mw, skillMW, dataDir,
 		&a.pendingConfirms,
 		func(event string, data ...any) {
-			wailsruntime.EventsEmit(a.ctx, event, data...)
+			globalApp.Event.Emit( event, data...)
 		},
 	)
 	if err != nil {
@@ -740,7 +757,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 			}
 			return
 		}
-		wailsruntime.EventsEmit(a.ctx, "mcp:ready", map[string]any{"count": len(mcpTools)})
+		globalApp.Event.Emit( "mcp:ready", map[string]any{"count": len(mcpTools)})
 		slog.Info("mcp async load: agent rebuilt with mcp tools", "count", len(mcpTools))
 	})
 	return nil
@@ -799,15 +816,15 @@ func (a *App) rebuildAgentTools(ctx context.Context, mcpTools []tool.BaseTool, c
 		a.cfg,
 		func(id string, cancel func()) {
 			a.runningCmds.Store(id, cancel)
-			wailsruntime.EventsEmit(a.ctx, "tool:executing", map[string]any{"id": id})
+			globalApp.Event.Emit( "tool:executing", map[string]any{"id": id})
 		},
 		func(id string) {
 			a.runningCmds.Delete(id)
-			wailsruntime.EventsEmit(a.ctx, "tool:executed", map[string]any{"id": id})
+			globalApp.Event.Emit( "tool:executed", map[string]any{"id": id})
 		},
 		func() { go a.initLLMComponents(a.ctx) },
 		a.InstallUpdate,
-		func(event string, data any) { wailsruntime.EventsEmit(a.ctx, event, data) },
+		func(event string, data any) { globalApp.Event.Emit( event, data) },
 		version,
 	)
 	proactiveStore := proactive.NewStore(a.sqlDB)
@@ -835,7 +852,7 @@ func (a *App) rebuildAgentTools(ctx context.Context, mcpTools []tool.BaseTool, c
 	newAgent, err := agent.New(ctx, chatModel, a.shortMem, longMem, allTools, a.cfg, mw, skillMW, dataDir,
 		&a.pendingConfirms,
 		func(event string, data ...any) {
-			wailsruntime.EventsEmit(a.ctx, event, data...)
+			globalApp.Event.Emit( event, data...)
 		},
 	)
 	if err != nil {
@@ -909,7 +926,7 @@ func (a *App) SaveConfig(cfg *config.Config) error {
 	if err := a.initLLMComponents(a.ctx); err != nil {
 		slog.Warn("SaveConfig: LLM reinit skipped", "err", err)
 	} else {
-		wailsruntime.EventsEmit(a.ctx, "config:model:changed", nil)
+		globalApp.Event.Emit( "config:model:changed", nil)
 	}
 	return nil
 }
@@ -933,7 +950,7 @@ func (a *App) SetAvatar(role string, dataURL string) error {
 	if err := a.configStore.Save(&cfgCopy); err != nil {
 		return err
 	}
-	wailsruntime.EventsEmit(a.ctx, "config:avatar:changed", map[string]string{"role": role, "dataURL": dataURL})
+	globalApp.Event.Emit( "config:avatar:changed", map[string]string{"role": role, "dataURL": dataURL})
 	return nil
 }
 
@@ -987,7 +1004,7 @@ func (a *App) SaveModelProfile(p config.ModelProfile) (config.ModelProfile, erro
 			if err := a.initLLMComponents(a.ctx); err != nil {
 				slog.Warn("SaveModelProfile: LLM reinit skipped", "err", err)
 			} else {
-				wailsruntime.EventsEmit(a.ctx, "config:model:changed", nil)
+				globalApp.Event.Emit( "config:model:changed", nil)
 			}
 		}
 	}
@@ -1019,7 +1036,7 @@ func (a *App) ActivateModelProfile(id int64) error {
 	if err := a.initLLMComponents(a.ctx); err != nil {
 		return err
 	}
-	wailsruntime.EventsEmit(a.ctx, "config:model:changed", nil)
+	globalApp.Event.Emit( "config:model:changed", nil)
 	return nil
 }
 
@@ -1063,11 +1080,7 @@ func (a *App) ResetBallPosition(screenW, screenH int) error {
 
 // GetScreenList returns all connected screens as ScreenInfo values.
 func (a *App) GetScreenList() []ScreenInfo {
-	screens, err := wailsruntime.ScreenGetAll(a.ctx)
-	if err != nil {
-		slog.Warn("GetScreenList: ScreenGetAll failed", "err", err)
-		return nil
-	}
+	screens := globalApp.Screen.GetAll()
 	result := make([]ScreenInfo, 0, len(screens))
 	for _, s := range screens {
 		result = append(result, ScreenInfo{Width: s.Size.Width, Height: s.Size.Height})
@@ -1144,7 +1157,7 @@ func (a *App) startScreenWatcher() {
 			a.activeScreen = current
 			a.mu.Unlock()
 
-			wailsruntime.EventsEmit(a.ctx, "screen:changed", current)
+			globalApp.Event.Emit( "screen:changed", current)
 			slog.Info("startScreenWatcher: screen changed", "width", current.Width, "height", current.Height, "numScreens", n)
 		}
 	}()
@@ -1266,39 +1279,39 @@ func (a *App) SendMessage(userInput string) error {
 				if errors.Is(result.Err, context.Canceled) {
 					return
 				}
-				wailsruntime.EventsEmit(a.ctx, "chat:error", a.formatChatError(result.Err))
+				globalApp.Event.Emit( "chat:error", a.formatChatError(result.Err))
 				return
 			}
 			if result.Done {
 				if tail := ep.Flush(); tail != "" {
-					wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
+					globalApp.Event.Emit( "chat:token", tail)
 				}
-				wailsruntime.EventsEmit(a.ctx, "chat:done", "")
+				globalApp.Event.Emit( "chat:done", "")
 				return
 			}
 			if result.ThinkingToken != "" {
-				wailsruntime.EventsEmit(a.ctx, "chat:thinking", result.ThinkingToken)
+				globalApp.Event.Emit( "chat:thinking", result.ThinkingToken)
 				continue
 			}
 			if len(result.Images) > 0 {
-				wailsruntime.EventsEmit(a.ctx, "chat:image", result.Images)
+				globalApp.Event.Emit( "chat:image", result.Images)
 			}
 			text, emotion, intensity := ep.Feed(result.Token)
 			if emotion != "" {
-				wailsruntime.EventsEmit(a.ctx, "chat:emotion", map[string]any{
+				globalApp.Event.Emit( "chat:emotion", map[string]any{
 					"emotion":   emotion,
 					"intensity": intensity,
 				})
 			}
 			if text != "" {
-				wailsruntime.EventsEmit(a.ctx, "chat:token", text)
+				globalApp.Event.Emit( "chat:token", text)
 			}
 		}
 		// Fallback: ensure frontend unblocks if channel closes without a terminal result.
 		if tail := ep.Flush(); tail != "" {
-			wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
+			globalApp.Event.Emit( "chat:token", tail)
 		}
-		wailsruntime.EventsEmit(a.ctx, "chat:done", "")
+		globalApp.Event.Emit( "chat:done", "")
 	}()
 	return nil
 }
@@ -1400,38 +1413,38 @@ func (a *App) SendMessageWithImages(userInput string, images []string) error {
 				if errors.Is(result.Err, context.Canceled) {
 					return
 				}
-				wailsruntime.EventsEmit(a.ctx, "chat:error", a.formatChatError(result.Err))
+				globalApp.Event.Emit( "chat:error", a.formatChatError(result.Err))
 				return
 			}
 			if result.Done {
 				if tail := ep.Flush(); tail != "" {
-					wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
+					globalApp.Event.Emit( "chat:token", tail)
 				}
-				wailsruntime.EventsEmit(a.ctx, "chat:done", "")
+				globalApp.Event.Emit( "chat:done", "")
 				return
 			}
 			if result.ThinkingToken != "" {
-				wailsruntime.EventsEmit(a.ctx, "chat:thinking", result.ThinkingToken)
+				globalApp.Event.Emit( "chat:thinking", result.ThinkingToken)
 				continue
 			}
 			if len(result.Images) > 0 {
-				wailsruntime.EventsEmit(a.ctx, "chat:image", result.Images)
+				globalApp.Event.Emit( "chat:image", result.Images)
 			}
 			text, emotion, intensity := ep.Feed(result.Token)
 			if emotion != "" {
-				wailsruntime.EventsEmit(a.ctx, "chat:emotion", map[string]any{
+				globalApp.Event.Emit( "chat:emotion", map[string]any{
 					"emotion":   emotion,
 					"intensity": intensity,
 				})
 			}
 			if text != "" {
-				wailsruntime.EventsEmit(a.ctx, "chat:token", text)
+				globalApp.Event.Emit( "chat:token", text)
 			}
 		}
 		if tail := ep.Flush(); tail != "" {
-			wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
+			globalApp.Event.Emit( "chat:token", tail)
 		}
-		wailsruntime.EventsEmit(a.ctx, "chat:done", "")
+		globalApp.Event.Emit( "chat:done", "")
 	}()
 	return nil
 }
@@ -1523,38 +1536,38 @@ func (a *App) SendMessageWithFiles(userInput string, images []string, files []Fi
 				if errors.Is(result.Err, context.Canceled) {
 					return
 				}
-				wailsruntime.EventsEmit(a.ctx, "chat:error", a.formatChatError(result.Err))
+				globalApp.Event.Emit( "chat:error", a.formatChatError(result.Err))
 				return
 			}
 			if result.Done {
 				if tail := ep.Flush(); tail != "" {
-					wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
+					globalApp.Event.Emit( "chat:token", tail)
 				}
-				wailsruntime.EventsEmit(a.ctx, "chat:done", "")
+				globalApp.Event.Emit( "chat:done", "")
 				return
 			}
 			if result.ThinkingToken != "" {
-				wailsruntime.EventsEmit(a.ctx, "chat:thinking", result.ThinkingToken)
+				globalApp.Event.Emit( "chat:thinking", result.ThinkingToken)
 				continue
 			}
 			if len(result.Images) > 0 {
-				wailsruntime.EventsEmit(a.ctx, "chat:image", result.Images)
+				globalApp.Event.Emit( "chat:image", result.Images)
 			}
 			text, emotion, intensity := ep.Feed(result.Token)
 			if emotion != "" {
-				wailsruntime.EventsEmit(a.ctx, "chat:emotion", map[string]any{
+				globalApp.Event.Emit( "chat:emotion", map[string]any{
 					"emotion":   emotion,
 					"intensity": intensity,
 				})
 			}
 			if text != "" {
-				wailsruntime.EventsEmit(a.ctx, "chat:token", text)
+				globalApp.Event.Emit( "chat:token", text)
 			}
 		}
 		if tail := ep.Flush(); tail != "" {
-			wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
+			globalApp.Event.Emit( "chat:token", tail)
 		}
-		wailsruntime.EventsEmit(a.ctx, "chat:done", "")
+		globalApp.Event.Emit( "chat:done", "")
 	}()
 	return nil
 }
@@ -1595,7 +1608,7 @@ func (a *App) ImportKnowledge(filePath string) error {
 		return fmt.Errorf("knowledge store not initialized: configure embedding model first")
 	}
 	return knowledge.Import(a.ctx, ks, filePath, func(p knowledge.ImportProgress) {
-		wailsruntime.EventsEmit(a.ctx, "knowledge:progress", p)
+		globalApp.Event.Emit( "knowledge:progress", p)
 	})
 }
 
@@ -1624,24 +1637,27 @@ func (a *App) DeleteKnowledgeSource(source string) error {
 }
 
 // OpenFileDialog opens a native file picker and returns the selected path.
-func (a *App) OpenFileDialog(title string, filters []wailsruntime.FileFilter) (string, error) {
-	return wailsruntime.OpenFileDialog(a.ctx, wailsruntime.OpenDialogOptions{
-		Title:   title,
-		Filters: filters,
-	})
+func (a *App) OpenFileDialog(title string, filters []application.FileFilter) (string, error) {
+	d := globalApp.Dialog.OpenFile().SetTitle(title)
+	for _, f := range filters {
+		d.AddFilter(f.DisplayName, f.Pattern)
+	}
+	return d.PromptForSingleSelection()
 }
 
 // OpenDirectoryDialog opens a native directory picker and returns the selected path.
 func (a *App) OpenDirectoryDialog(title string) (string, error) {
-	return wailsruntime.OpenDirectoryDialog(a.ctx, wailsruntime.OpenDialogOptions{
-		Title: title,
-	})
+	return globalApp.Dialog.OpenFile().
+		SetTitle(title).
+		CanChooseDirectories(true).
+		CanChooseFiles(false).
+		PromptForSingleSelection()
 }
 
 // GetScreenSize returns the primary screen's [width, height] in pixels.
 func (a *App) GetScreenSize() []int {
-	screens, err := wailsruntime.ScreenGetAll(a.ctx)
-	if err != nil || len(screens) == 0 {
+	screens := globalApp.Screen.GetAll()
+	if len(screens) == 0 {
 		return []int{1440, 900}
 	}
 	for _, s := range screens {
@@ -1803,13 +1819,11 @@ func (a *App) DeleteVRMModel(name string) error {
 // messages as plain text to the user-chosen file. Returns nil if the user
 // cancels without choosing a file.
 func (a *App) ExportChatHistory() error {
-	path, err := wailsruntime.SaveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
-		Title:           "导出聊天记录",
-		DefaultFilename: fmt.Sprintf("chat-export-%s.txt", time.Now().Format("20060102-150405")),
-		Filters: []wailsruntime.FileFilter{
-			{DisplayName: "文本文件", Pattern: "*.txt"},
-		},
-	})
+	path, err := globalApp.Dialog.SaveFile().
+		SetMessage("导出聊天记录").
+		SetFilename(fmt.Sprintf("chat-export-%s.txt", time.Now().Format("20060102-150405"))).
+		AddFilter("文本文件", "*.txt").
+		PromptForSingleSelection()
 	if err != nil {
 		return fmt.Errorf("save dialog: %w", err)
 	}
@@ -1971,27 +1985,12 @@ func (a *App) ListMCPServers() ([]mcp.ServerConfig, error) {
 	return a.mcpStore.List(a.ctx)
 }
 
-// shutdown is called by Wails when the application is closing.
-// domReady is called by Wails after the frontend DOM is fully loaded.
-// At this point the window is visible and the app is in the foreground,
-// so macOS will show proper permission dialogs instead of silent banners.
-func (a *App) domReady(_ context.Context) {
-	requestPermissionsEarly()
-	// Re-apply scrollbar suppression after DOM is ready — WKWebView's internal
-	// scroll view may not exist yet during startup(), so we call it again here.
-	hideNativeScrollbars()
-
-	// Emit update-success notification if a marker was found during startup.
-	if a.pendingUpdateVersion != "" {
-		wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
-			"title":   "✅ 更新成功",
-			"message": "Aiko 已更新至 v" + a.pendingUpdateVersion,
-		})
-		a.pendingUpdateVersion = ""
+// ServiceShutdown is called by Wails v3 when the application service stops.
+func (a *App) ServiceShutdown() error {
+	if a.cancel != nil {
+		a.cancel()
 	}
-}
 
-func (a *App) shutdown(_ context.Context) {
 	// Cancel the screen-watcher goroutine immediately so watcherWG.Wait() below
 	// doesn't block — the goroutine uses its own derived context, not a.ctx.
 	if a.cancelWatcher != nil {
@@ -2031,6 +2030,7 @@ func (a *App) shutdown(_ context.Context) {
 			slog.Warn("sqlite close failed", "err", err)
 		}
 	}
+	return nil
 }
 
 // startSMSWatcher creates and starts an SMS watcher, emitting verification code
@@ -2038,13 +2038,13 @@ func (a *App) shutdown(_ context.Context) {
 // Caller must NOT hold a.mu.
 func (a *App) startSMSWatcher() error {
 	w, err := sms.NewWatcher(func(evt sms.Event) {
-		wailsruntime.ClipboardSetText(a.ctx, evt.Code)
-		wailsruntime.EventsEmit(a.ctx, "sms:verification_code", map[string]any{
+		globalApp.Clipboard.SetText(evt.Code)
+		globalApp.Event.Emit( "sms:verification_code", map[string]any{
 			"code":   evt.Code,
 			"sender": evt.Sender,
 			"text":   evt.Text,
 		})
-		wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
+		globalApp.Event.Emit( "notification:show", map[string]any{
 			"title":   "📱 验证码：" + evt.Code,
 			"message": evt.Sender + "：" + evt.Text,
 		})
@@ -2404,7 +2404,7 @@ func (a *App) SpeakText(text string) error {
 		speaker = &tts.SystemSpeaker{}
 	}
 
-	wailsruntime.EventsEmit(a.ctx, "tts:start", nil)
+	globalApp.Event.Emit( "tts:start", nil)
 
 	go func() {
 		// Only nil out ttsCancel if this goroutine's generation is still current,
@@ -2432,22 +2432,22 @@ func (a *App) SpeakText(text string) error {
 		if err != nil {
 			slog.Warn("tts: Speak error", "err", err)
 			if ctx.Err() != nil {
-				wailsruntime.EventsEmit(a.ctx, "tts:done", nil)
+				globalApp.Event.Emit( "tts:done", nil)
 				return
 			}
-			wailsruntime.EventsEmit(a.ctx, "tts:error", err.Error())
+			globalApp.Event.Emit( "tts:error", err.Error())
 			return
 		}
 
 		slog.Info("tts: Speak done", "audio_bytes", len(audioBytes))
 		if len(audioBytes) > 0 {
 			encoded := base64.StdEncoding.EncodeToString(audioBytes)
-			wailsruntime.EventsEmit(a.ctx, "tts:audio", map[string]string{
+			globalApp.Event.Emit( "tts:audio", map[string]string{
 				"data":   encoded,
 				"format": "wav",
 			})
 		}
-		wailsruntime.EventsEmit(a.ctx, "tts:done", nil)
+		globalApp.Event.Emit( "tts:done", nil)
 	}()
 
 	return nil
@@ -2489,7 +2489,7 @@ func (a *App) SetTTSAutoPlay(enabled bool) error {
 func (a *App) SetupKokoroTTS() error {
 	go func() {
 		notify := func(title, msg string) {
-			wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
+			globalApp.Event.Emit( "notification:show", map[string]any{
 				"title": title, "message": msg,
 			})
 		}
@@ -2649,7 +2649,7 @@ func (a *App) CheckUpdate() (UpdateInfo, error) {
 // Progress is emitted as "update:progress" Wails events (0–100).
 func (a *App) InstallUpdate(downloadURL string) error {
 	emit := func(pct int, msg string) {
-		wailsruntime.EventsEmit(a.ctx, "update:progress", map[string]any{"pct": pct, "msg": msg})
+		globalApp.Event.Emit( "update:progress", map[string]any{"pct": pct, "msg": msg})
 	}
 
 	// Resolve the running .app bundle path from the executable.
@@ -2781,7 +2781,7 @@ func (a *App) InstallUpdate(downloadURL string) error {
 	emit(100, "正在重启…")
 	go func() {
 		time.Sleep(300 * time.Millisecond)
-		wailsruntime.Quit(a.ctx)
+		globalApp.Quit()
 	}()
 	return nil
 }
