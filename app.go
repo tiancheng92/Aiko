@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
-	stdjson "encoding/json"
+	json "github.com/bytedance/sonic"
 	"fmt"
 	"io"
 	"log/slog"
@@ -135,7 +135,7 @@ func (a *App) startup(ctx context.Context) {
 		var m struct {
 			Version string `json:"version"`
 		}
-		if stdjson.Unmarshal(markerData, &m) == nil && m.Version != "" {
+		if json.Unmarshal(markerData, &m) == nil && m.Version != "" {
 			_ = os.Remove(markerPath) // best-effort: marker has already been read; removal failure is harmless
 			a.pendingUpdateVersion = m.Version
 		}

@@ -4,7 +4,7 @@ package web
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	json "github.com/bytedance/sonic"
 	"fmt"
 	"io"
 	"net/http"

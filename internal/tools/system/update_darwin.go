@@ -4,8 +4,9 @@ package system
 
 import (
 	"context"
-	"encoding/json"
+	json "github.com/bytedance/sonic"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -53,7 +54,11 @@ func checkLatestRelease(currentVersion string) (updateCheckResult, error) {
 			BrowserDownloadURL string `json:"browser_download_url"`
 		} `json:"assets"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return updateCheckResult{}, fmt.Errorf("读取响应失败: %w", err)
+	}
+	if err := json.Unmarshal(body, &rel); err != nil {
 		return updateCheckResult{}, fmt.Errorf("解析响应失败: %w", err)
 	}
 

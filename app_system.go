@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
-	stdjson "encoding/json"
+	json "github.com/bytedance/sonic"
 	"fmt"
 	"io"
 	"log/slog"
@@ -326,7 +326,11 @@ func (a *App) CheckUpdate() (UpdateInfo, error) {
 	}
 
 	var rel ghRelease
-	if err := stdjson.NewDecoder(resp.Body).Decode(&rel); err != nil {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return info, fmt.Errorf("读取响应失败: %w", err)
+	}
+	if err := json.Unmarshal(body, &rel); err != nil {
 		return info, fmt.Errorf("解析响应失败: %w", err)
 	}
 
