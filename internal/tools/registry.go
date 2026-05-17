@@ -14,6 +14,7 @@ import (
 	"aiko/internal/scheduler"
 	toolcron "aiko/internal/tools/cron"
 	toolcontext "aiko/internal/tools/context"
+	tooldev "aiko/internal/tools/dev"
 	exectools "aiko/internal/tools/exec"
 	toolfs "aiko/internal/tools/fs"
 	toolgrowth "aiko/internal/tools/growth"
@@ -135,18 +136,18 @@ func All() []Tool {
 		&GetCalendarEventsTool{},
 		&CreateCalendarEventTool{},
 		// Developer utility tools
-		&FormatJSONTool{},
-		&JSONToStructTool{},
-		&YAMLJSONConvertTool{},
-		&EncodeDecodeTool{},
-		&HashTextTool{},
-		&GenerateUUIDTool{},
-		&ConvertTimestampTool{},
-		&RegexTestTool{},
-		&NumberBaseConvertTool{},
-		&ConvertUnitsTool{},
-		&GetExchangeRateTool{},
-		&ConvertColorTool{},
+		&tooldev.FormatJSONTool{},
+		&tooldev.JSONToStructTool{},
+		&tooldev.YAMLJSONConvertTool{},
+		&tooldev.EncodeDecodeTool{},
+		&tooldev.HashTextTool{},
+		&tooldev.GenerateUUIDTool{},
+		&tooldev.ConvertTimestampTool{},
+		&tooldev.RegexTestTool{},
+		&tooldev.NumberBaseConvertTool{},
+		&tooldev.ConvertUnitsTool{},
+		&tooldev.GetExchangeRateTool{},
+		&tooldev.ConvertColorTool{},
 	}
 }
 

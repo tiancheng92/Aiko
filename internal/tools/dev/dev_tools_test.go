@@ -1,17 +1,20 @@
-package tools
+package dev_test
 
 import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"aiko/internal/tools/base"
+	"aiko/internal/tools/dev"
 )
 
 func TestFormatJSON(t *testing.T) {
-	tool := &FormatJSONTool{}
+	tool := &dev.FormatJSONTool{}
 	if tool.Name() != "format_json" {
 		t.Fatalf("unexpected name: %s", tool.Name())
 	}
-	if tool.Permission() != PermPublic {
+	if tool.Permission() != base.PermPublic {
 		t.Fatalf("expected PermPublic")
 	}
 
@@ -57,7 +60,7 @@ func TestFormatJSON(t *testing.T) {
 }
 
 func TestJSONToStruct(t *testing.T) {
-	tool := &JSONToStructTool{}
+	tool := &dev.JSONToStructTool{}
 	if tool.Name() != "json_to_struct" {
 		t.Fatalf("unexpected name: %s", tool.Name())
 	}
@@ -126,7 +129,7 @@ func TestJSONToStruct(t *testing.T) {
 }
 
 func TestYAMLJSONConvert(t *testing.T) {
-	tool := &YAMLJSONConvertTool{}
+	tool := &dev.YAMLJSONConvertTool{}
 	if tool.Name() != "yaml_json_convert" {
 		t.Fatalf("unexpected name: %s", tool.Name())
 	}
@@ -154,7 +157,7 @@ func TestYAMLJSONConvert(t *testing.T) {
 }
 
 func TestEncodeDecode(t *testing.T) {
-	tool := &EncodeDecodeTool{}
+	tool := &dev.EncodeDecodeTool{}
 
 	t.Run("base64_roundtrip", func(t *testing.T) {
 		enc, err := tool.InvokableRun(nil, `{"text":"Hello, 世界","format":"base64","action":"encode"}`)
@@ -192,7 +195,7 @@ func TestEncodeDecode(t *testing.T) {
 }
 
 func TestHashText(t *testing.T) {
-	tool := &HashTextTool{}
+	tool := &dev.HashTextTool{}
 	// SHA256 of "hello" is a well-known value.
 	out, err := tool.InvokableRun(nil, `{"text":"hello","algorithm":"sha256","encoding":"hex"}`)
 	if err != nil {
@@ -214,7 +217,7 @@ func TestHashText(t *testing.T) {
 }
 
 func TestGenerateUUID(t *testing.T) {
-	tool := &GenerateUUIDTool{}
+	tool := &dev.GenerateUUIDTool{}
 
 	t.Run("single_standard", func(t *testing.T) {
 		out, err := tool.InvokableRun(nil, `{"count":1,"format":"standard"}`)
@@ -249,7 +252,7 @@ func TestGenerateUUID(t *testing.T) {
 }
 
 func TestConvertTimestamp(t *testing.T) {
-	tool := &ConvertTimestampTool{}
+	tool := &dev.ConvertTimestampTool{}
 
 	t.Run("unix_to_datetime", func(t *testing.T) {
 		out, err := tool.InvokableRun(nil, `{"value":"0","direction":"unix_to_datetime","timezone":"UTC"}`)
@@ -273,7 +276,7 @@ func TestConvertTimestamp(t *testing.T) {
 }
 
 func TestRegexTest(t *testing.T) {
-	tool := &RegexTestTool{}
+	tool := &dev.RegexTestTool{}
 
 	t.Run("match", func(t *testing.T) {
 		out, err := tool.InvokableRun(nil, `{"pattern":"\\d+","text":"abc 123 def"}`)
@@ -310,7 +313,7 @@ func TestRegexTest(t *testing.T) {
 }
 
 func TestNumberBaseConvert(t *testing.T) {
-	tool := &NumberBaseConvertTool{}
+	tool := &dev.NumberBaseConvertTool{}
 
 	cases := []struct {
 		value, from, to, wantContains string
@@ -333,7 +336,7 @@ func TestNumberBaseConvert(t *testing.T) {
 }
 
 func TestConvertUnits(t *testing.T) {
-	tool := &ConvertUnitsTool{}
+	tool := &dev.ConvertUnitsTool{}
 
 	t.Run("km_to_miles", func(t *testing.T) {
 		out, err := tool.InvokableRun(nil, `{"value":1,"from_unit":"km","to_unit":"mile"}`)
@@ -367,7 +370,7 @@ func TestConvertUnits(t *testing.T) {
 }
 
 func TestConvertColor(t *testing.T) {
-	tool := &ConvertColorTool{}
+	tool := &dev.ConvertColorTool{}
 
 	t.Run("hex_to_all", func(t *testing.T) {
 		out, err := tool.InvokableRun(nil, `{"input":"#FF0000","output":"all"}`)
