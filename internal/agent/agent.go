@@ -879,16 +879,17 @@ func readUserProfile(dataDir string) string {
 	return userProfileCache.content
 }
 
-// buildContext fetches user profile, long-term memories (summaries and raws separately),
-// and recent short-term history concurrently, then returns a message list ready for
-// runner.Run. Errors from individual sources are logged and skipped — a partial context
-// is better than no response.
-func (a *Agent) buildContext(ctx context.Context, userInput string) ([]adk.Message, error) {
-	var profile string
-	var memResult memory.MemorySearchResult
-	var recentMsgs []*schema.Message
-	var location string
-
+// gatherContextSources fetches the four context inputs concurrently:
+// user profile, long-term memory search results, recent short-term messages,
+// and current location. Errors from individual sources are logged and treated
+// as empty (non-fatal) to avoid blocking the chat turn.
+func (a *Agent) gatherContextSources(ctx context.Context, userInput string) (
+	profile string,
+	memResult memory.MemorySearchResult,
+	recentMsgs []*schema.Message,
+	location string,
+	err error,
+) {
 	g, gctx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
@@ -927,7 +928,17 @@ func (a *Agent) buildContext(ctx context.Context, userInput string) ([]adk.Messa
 		return nil
 	})
 
-	if err := g.Wait(); err != nil {
+	err = g.Wait()
+	return
+}
+
+// buildContext fetches user profile, long-term memories (summaries and raws separately),
+// and recent short-term history concurrently, then returns a message list ready for
+// runner.Run. Errors from individual sources are logged and skipped — a partial context
+// is better than no response.
+func (a *Agent) buildContext(ctx context.Context, userInput string) ([]adk.Message, error) {
+	profile, memResult, recentMsgs, location, err := a.gatherContextSources(ctx, userInput)
+	if err != nil {
 		return nil, err
 	}
 
