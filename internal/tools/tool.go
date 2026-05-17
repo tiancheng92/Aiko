@@ -46,7 +46,7 @@ func parseArgs(input string) map[string]any {
 		return args
 	}
 	if err := json.Unmarshal([]byte(input), &args); err != nil {
-		slog.Warn("tool: unmarshal args", "input", input, "err", err)
+		slog.Warn("tool: unmarshal args", "err", err)
 	}
 	return args
 }

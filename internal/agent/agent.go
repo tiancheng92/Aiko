@@ -970,6 +970,7 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userIma
 
 	if _, err := a.shortMem.AddWithImagesAndFiles("user", userInput, userImages, userFiles); err != nil {
 		slog.Warn("short memory: add user message", "err", err)
+		return
 	}
 	// Strip the leading emotion tag before persisting so it never appears in
 	// chat history or long-term memory.
@@ -978,6 +979,7 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userIma
 	}
 	if _, err := a.shortMem.AddFull("assistant", assistantReply, thinkingContent, assistantImages, nil); err != nil {
 		slog.Warn("short memory: add assistant message", "err", err)
+		return
 	}
 
 	// Trigger async self-growth reflection if warranted.
