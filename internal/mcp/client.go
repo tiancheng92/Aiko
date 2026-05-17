@@ -130,7 +130,9 @@ func connectAndDiscover(ctx context.Context, cfg ServerConfig) ([]tool.BaseTool,
 	// NewStdioMCPClient auto-starts for backward compatibility; SSE and HTTP do not.
 	if cfg.Transport != "stdio" {
 		if err := client.Start(ctx); err != nil {
-			_ = client.Close()
+			if cerr := client.Close(); cerr != nil {
+				slog.Warn("mcp: close client after start failure", "err", cerr)
+			}
 			return nil, nil, fmt.Errorf("mcp transport start: %w", err)
 		}
 	}
@@ -142,13 +144,17 @@ func connectAndDiscover(ctx context.Context, cfg ServerConfig) ([]tool.BaseTool,
 		Version: "1.0.0",
 	}
 	if _, err := client.Initialize(ctx, initRequest); err != nil {
-		_ = client.Close()
+		if cerr := client.Close(); cerr != nil {
+			slog.Warn("mcp: close client after initialize failure", "err", cerr)
+		}
 		return nil, nil, fmt.Errorf("mcp initialize: %w", err)
 	}
 
 	resp, err := client.ListTools(ctx, mcp.ListToolsRequest{})
 	if err != nil {
-		_ = client.Close()
+		if cerr := client.Close(); cerr != nil {
+			slog.Warn("mcp: close client after list tools failure", "err", cerr)
+		}
 		return nil, nil, fmt.Errorf("mcp list tools: %w", err)
 	}
 
