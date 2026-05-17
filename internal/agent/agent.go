@@ -359,8 +359,12 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 			if _, _, stripped, ok := parseEmotionTag(assistantSummary); ok {
 				assistantSummary = stripped
 			}
-			_, _ = a.shortMem.AddWithImagesAndFiles("user", userInput, nil, nil)
-			_, _ = a.shortMem.AddFull("assistant", assistantSummary, "", nil, nil)
+			if _, err := a.shortMem.AddWithImagesAndFiles("user", userInput, nil, nil); err != nil {
+				slog.Warn("short memory: add user message", "err", err)
+			}
+			if _, err := a.shortMem.AddFull("assistant", assistantSummary, "", nil, nil); err != nil {
+				slog.Warn("short memory: add assistant message", "err", err)
+			}
 		}
 		ctx = context.WithValue(ctx, internaltools.PersistBeforeRestartKey{}, flushFn)
 
@@ -799,11 +803,15 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 			if a.shortMem == nil {
 				return
 			}
-			_, _ = a.shortMem.AddWithImagesAndFiles("user", userMemory, userImages, userFiles)
+			if _, err := a.shortMem.AddWithImagesAndFiles("user", userMemory, userImages, userFiles); err != nil {
+				slog.Warn("short memory: add user message", "err", err)
+			}
 			if _, _, stripped, ok := parseEmotionTag(assistantSummary); ok {
 				assistantSummary = stripped
 			}
-			_, _ = a.shortMem.AddFull("assistant", assistantSummary, "", nil, nil)
+			if _, err := a.shortMem.AddFull("assistant", assistantSummary, "", nil, nil); err != nil {
+				slog.Warn("short memory: add assistant message", "err", err)
+			}
 		}
 		ctx = context.WithValue(ctx, internaltools.PersistBeforeRestartKey{}, flushFn)
 
