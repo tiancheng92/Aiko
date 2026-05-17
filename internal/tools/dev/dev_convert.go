@@ -306,7 +306,7 @@ func (t *GetExchangeRateTool) InvokableRun(_ context.Context, input string, _ ..
 
 	var targets []string
 	if v, ok := args["targets"].(string); ok && v != "" {
-		_ = json.Unmarshal([]byte(v), &targets) // best-effort: fall back to comma-split if JSON parse fails
+		_ = json.UnmarshalString(v, &targets) // best-effort: fall back to comma-split if JSON parse fails
 		if len(targets) == 0 {
 			for _, c := range strings.Split(v, ",") {
 				c = strings.TrimSpace(strings.ToUpper(c))

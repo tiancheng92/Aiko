@@ -49,7 +49,7 @@ func (t *FormatJSONTool) InvokableRun(_ context.Context, input string, _ ...tool
 	}
 
 	var raw any
-	if err := json.Unmarshal([]byte(jsonStr), &raw); err != nil {
+	if err := json.UnmarshalString(jsonStr, &raw); err != nil {
 		if action == "validate" {
 			return fmt.Sprintf("invalid JSON — error: %s", err.Error()), nil
 		}
@@ -103,7 +103,7 @@ func (t *JSONToStructTool) InvokableRun(_ context.Context, input string, _ ...to
 	}
 
 	var raw any
-	if err := json.Unmarshal([]byte(jsonStr), &raw); err != nil {
+	if err := json.UnmarshalString(jsonStr, &raw); err != nil {
 		return "", fmt.Errorf("invalid JSON: %w", err)
 	}
 
@@ -479,7 +479,7 @@ func (t *YAMLJSONConvertTool) InvokableRun(_ context.Context, input string, _ ..
 
 	case "json_to_yaml":
 		var node any
-		if err := json.Unmarshal([]byte(src), &node); err != nil {
+		if err := json.UnmarshalString(src, &node); err != nil {
 			return "", fmt.Errorf("JSON parse error: %w", err)
 		}
 		b, err := yaml.Marshal(node)

@@ -93,7 +93,7 @@ func parseToolArgs(input string) map[string]any {
 	if input == "" || input == "{}" {
 		return args
 	}
-	if err := json.Unmarshal([]byte(input), &args); err != nil {
+	if err := json.UnmarshalString(input, &args); err != nil {
 		slog.Warn("proactive: unmarshal args", "err", err)
 	}
 	return args

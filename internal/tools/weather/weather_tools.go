@@ -69,7 +69,7 @@ func (t *GetWeatherTool) InvokableRun(_ context.Context, input string, _ ...tool
 	var params struct {
 		Location string `json:"location"`
 	}
-	if err := json.Unmarshal([]byte(input), &params); err != nil {
+	if err := json.UnmarshalString(input, &params); err != nil {
 		slog.Warn("weather: unmarshal input", "err", err)
 	}
 

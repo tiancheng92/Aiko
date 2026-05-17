@@ -8,6 +8,8 @@ import (
 
 	json "github.com/bytedance/sonic"
 	"github.com/cloudwego/eino/schema"
+
+	"aiko/internal/bytesconv"
 )
 
 // Message is a single conversation turn stored in SQLite.
@@ -35,12 +37,12 @@ func scanMessage(scan func(...any) error) (Message, error) {
 		return m, err
 	}
 	if imagesJSON != "" {
-		if err := json.Unmarshal([]byte(imagesJSON), &m.Images); err != nil {
+		if err := json.UnmarshalString(imagesJSON, &m.Images); err != nil {
 			slog.Warn("short memory: images JSON unmarshal", "id", m.ID, "err", err)
 		}
 	}
 	if filesJSON != "" {
-		if err := json.Unmarshal([]byte(filesJSON), &m.Files); err != nil {
+		if err := json.UnmarshalString(filesJSON, &m.Files); err != nil {
 			slog.Warn("short memory: files JSON unmarshal", "id", m.ID, "err", err)
 		}
 	}
@@ -95,7 +97,7 @@ func (s *ShortStore) AddFull(role, content, thinkingContent string, images []str
 		if err != nil {
 			slog.Warn("short memory: images JSON marshal", "err", err)
 		} else {
-			imagesJSON = string(b)
+			imagesJSON = bytesconv.BytesToString(b)
 		}
 	}
 	filesJSON := ""
@@ -104,7 +106,7 @@ func (s *ShortStore) AddFull(role, content, thinkingContent string, images []str
 		if err != nil {
 			slog.Warn("short memory: files JSON marshal", "err", err)
 		} else {
-			filesJSON = string(b)
+			filesJSON = bytesconv.BytesToString(b)
 		}
 	}
 	res, err := s.db.Exec(

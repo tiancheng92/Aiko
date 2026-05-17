@@ -266,7 +266,7 @@ func (a *mcpToolAdapter) InvokableRun(ctx context.Context, input string, _ ...to
 	// Parse the input JSON into a map.
 	var args map[string]any
 	if strings.TrimSpace(input) != "" && input != "{}" {
-		if err := json.Unmarshal([]byte(input), &args); err != nil {
+		if err := json.UnmarshalString(input, &args); err != nil {
 			return "", fmt.Errorf("parse mcp tool args: %w", err)
 		}
 	}

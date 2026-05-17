@@ -17,6 +17,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"golang.org/x/net/html"
 
+	"aiko/internal/bytesconv"
 	"aiko/internal/config"
 	"aiko/internal/tools/base"
 )
@@ -137,7 +138,7 @@ func ddgSearch(ctx context.Context, query string, numResults int) (string, error
 		return "", fmt.Errorf("read search response: %w", err)
 	}
 
-	results := parseDDGResults(string(body), numResults)
+	results := parseDDGResults(bytesconv.BytesToString(body), numResults)
 	if len(results) == 0 {
 		return "未找到搜索结果", nil
 	}
@@ -206,7 +207,7 @@ func tavilySearch(ctx context.Context, query string, numResults int, apiKey, tim
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Sprintf("Tavily 请求失败（%d）: %s", resp.StatusCode, string(b)), nil
+		return fmt.Sprintf("Tavily 请求失败（%d）: %s", resp.StatusCode, bytesconv.BytesToString(b)), nil
 	}
 
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
@@ -488,7 +489,7 @@ func jinaFetch(ctx context.Context, targetURL, jinaKey string) (string, error) {
 	if err != nil {
 		return "", nil
 	}
-	return strings.TrimSpace(string(body)), nil
+	return strings.TrimSpace(bytesconv.BytesToString(body)), nil
 }
 
 // localDOMFetch fetches a URL and extracts plain text using DOM parsing.
@@ -514,7 +515,7 @@ func localDOMFetch(ctx context.Context, targetURL string) (string, error) {
 		return "", fmt.Errorf("read response: %w", err)
 	}
 
-	return extractTextFromDOM(string(body)), nil
+	return extractTextFromDOM(bytesconv.BytesToString(body)), nil
 }
 
 // extractTextFromDOM parses HTML and returns plain text, preferring <main>/<article> content.

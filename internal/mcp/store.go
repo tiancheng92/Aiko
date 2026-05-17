@@ -9,6 +9,8 @@ import (
 	"time"
 
 	json "github.com/bytedance/sonic"
+
+	"aiko/internal/bytesconv"
 )
 
 // ServerConfig holds the persisted configuration for one MCP server.
@@ -54,10 +56,10 @@ func (s *ServerStore) List(ctx context.Context) ([]ServerConfig, error) {
 			&argsJSON, &c.URL, &headersJSON, &c.Enabled, &createdAt); err != nil {
 			return nil, fmt.Errorf("scan mcp_server row: %w", err)
 		}
-		if err := json.Unmarshal([]byte(argsJSON), &c.Args); err != nil {
+		if err := json.UnmarshalString(argsJSON, &c.Args); err != nil {
 			slog.Warn("mcp store: args JSON unmarshal", "id", c.ID, "err", err)
 		}
-		if err := json.Unmarshal([]byte(headersJSON), &c.Headers); err != nil {
+		if err := json.UnmarshalString(headersJSON, &c.Headers); err != nil {
 			slog.Warn("mcp store: headers JSON unmarshal", "id", c.ID, "err", err)
 		}
 		c.CreatedAt = createdAt.Format(time.RFC3339)
@@ -78,7 +80,7 @@ func (s *ServerStore) Add(ctx context.Context, c ServerConfig) (ServerConfig, er
 	}
 	res, err := s.db.ExecContext(ctx,
 		`INSERT INTO mcp_servers(name, transport, command, args, url, headers, enabled) VALUES(?,?,?,?,?,?,?)`,
-		c.Name, c.Transport, c.Command, string(argsJSON), c.URL, string(headersJSON), c.Enabled)
+		c.Name, c.Transport, c.Command, bytesconv.BytesToString(argsJSON), c.URL, bytesconv.BytesToString(headersJSON), c.Enabled)
 	if err != nil {
 		return ServerConfig{}, fmt.Errorf("insert mcp_server: %w", err)
 	}
@@ -102,7 +104,7 @@ func (s *ServerStore) Update(ctx context.Context, c ServerConfig) error {
 	}
 	if _, err := s.db.ExecContext(ctx,
 		`UPDATE mcp_servers SET name=?, transport=?, command=?, args=?, url=?, headers=?, enabled=? WHERE id=?`,
-		c.Name, c.Transport, c.Command, string(argsJSON), c.URL, string(headersJSON), c.Enabled, c.ID); err != nil {
+		c.Name, c.Transport, c.Command, bytesconv.BytesToString(argsJSON), c.URL, bytesconv.BytesToString(headersJSON), c.Enabled, c.ID); err != nil {
 		return fmt.Errorf("update mcp_server: %w", err)
 	}
 	return nil
