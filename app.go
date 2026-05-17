@@ -365,6 +365,7 @@ func (a *App) startup(ctx context.Context) {
 		panic(fmt.Errorf("get home dir: %w", err))
 	}
 	dataDir := filepath.Join(home, ".aiko")
+	a.dataDir = dataDir
 
 	a.sqlDB, err = db.Open(dataDir)
 	if err != nil {
@@ -486,11 +487,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	a.mu.RUnlock()
 	cfg := &cfgSnapshot
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("get home dir: %w", err)
-	}
-	dataDir := filepath.Join(home, ".aiko")
+	dataDir := a.dataDir
 
 	chatModel, transport, err := llm.NewChatModel(ctx, cfg)
 	if err != nil {
@@ -765,11 +762,7 @@ func (a *App) rebuildAgentTools(ctx context.Context, mcpTools []tool.BaseTool, c
 		return fmt.Errorf("rebuildAgentTools: chatModel not initialised")
 	}
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("get home dir: %w", err)
-	}
-	dataDir := filepath.Join(home, ".aiko")
+	dataDir := a.dataDir
 
 	builtinTools := internaltools.AllEino(a.permStore)
 	chatFn := func(ctx context.Context, prompt string) (string, error) {
