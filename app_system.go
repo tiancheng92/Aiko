@@ -326,11 +326,7 @@ func (a *App) CheckUpdate() (UpdateInfo, error) {
 	}
 
 	var rel ghRelease
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return info, fmt.Errorf("读取响应失败: %w", err)
-	}
-	if err := json.Unmarshal(body, &rel); err != nil {
+	if err := json.ConfigDefault.NewDecoder(resp.Body).Decode(&rel); err != nil {
 		return info, fmt.Errorf("解析响应失败: %w", err)
 	}
 
