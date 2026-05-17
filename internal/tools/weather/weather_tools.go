@@ -1,5 +1,5 @@
-// internal/tools/weather_tools.go
-package tools
+// internal/tools/weather/weather_tools.go
+package weather
 
 import (
 	"context"
@@ -13,6 +13,8 @@ import (
 	json "github.com/bytedance/sonic"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
+
+	"aiko/internal/tools/base"
 )
 
 const weatherTimeout = 10 * time.Second
@@ -45,7 +47,7 @@ type GetWeatherTool struct{}
 func (t *GetWeatherTool) Name() string { return "get_weather" }
 
 // Permission marks the tool as protected.
-func (t *GetWeatherTool) Permission() PermissionLevel { return PermProtected }
+func (t *GetWeatherTool) Permission() base.PermissionLevel { return base.PermProtected }
 
 // Info returns the eino tool schema.
 func (t *GetWeatherTool) Info(_ context.Context) (*schema.ToolInfo, error) {

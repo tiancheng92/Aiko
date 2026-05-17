@@ -7,6 +7,8 @@ import (
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
+
+	toolweb "aiko/internal/tools/web"
 )
 
 // GetBrowserURLTool reads the URL currently displayed in the frontmost browser
@@ -37,7 +39,7 @@ func (t *GetBrowserURLTool) InvokableRun(ctx context.Context, _ string, opts ...
 		return fmt.Sprintf("无法获取浏览器 URL：%s\n\n请确认已在「系统设置 → 隐私与安全性 → 辅助功能」中授权 Aiko，且浏览器当前有打开的标签页。", err.Error()), nil
 	}
 
-	fetcher := &WebFetchTool{}
+	fetcher := &toolweb.WebFetchTool{}
 	input := fmt.Sprintf(`{"url":%q}`, url)
 	content, err := fetcher.InvokableRun(ctx, input, opts...)
 	if err != nil {

@@ -1,5 +1,5 @@
-// internal/tools/web_tools.go
-package tools
+// internal/tools/web/web_tools.go
+package web
 
 import (
 	"bytes"
@@ -18,6 +18,7 @@ import (
 	"golang.org/x/net/html"
 
 	"aiko/internal/config"
+	"aiko/internal/tools/base"
 )
 
 const (
@@ -43,11 +44,11 @@ type WebSearchTool struct {
 }
 
 func (t *WebSearchTool) Name() string                { return "web_search" }
-func (t *WebSearchTool) Permission() PermissionLevel { return PermProtected }
+func (t *WebSearchTool) Permission() base.PermissionLevel { return base.PermProtected }
 
 // Info returns the eino tool schema for web_search.
 func (t *WebSearchTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "搜索互联网，返回结果标题、URL 和摘要。配置 Tavily API Key 后使用 Tavily（更准确，支持时效过滤）；未配置时自动退回 DuckDuckGo。若已知具体页面 URL，直接用 web_fetch 更精准。",
+	return base.InfoFromSchema(t.Name(), "搜索互联网，返回结果标题、URL 和摘要。配置 Tavily API Key 后使用 Tavily（更准确，支持时效过滤）；未配置时自动退回 DuckDuckGo。若已知具体页面 URL，直接用 web_fetch 更精准。",
 		map[string]*schema.ParameterInfo{
 			"query": {
 				Type:     schema.String,
@@ -76,7 +77,7 @@ func (t *WebSearchTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 
 // InvokableRun routes to Tavily (if key configured) or DuckDuckGo.
 func (t *WebSearchTool) InvokableRun(ctx context.Context, input string, _ ...tool.Option) (string, error) {
-	args := parseArgs(input)
+	args := base.ParseArgs(input)
 	query, _ := args["query"].(string)
 	if query == "" {
 		return "请提供搜索词", nil
@@ -389,11 +390,11 @@ type WebFetchTool struct {
 }
 
 func (t *WebFetchTool) Name() string                { return "web_fetch" }
-func (t *WebFetchTool) Permission() PermissionLevel { return PermProtected }
+func (t *WebFetchTool) Permission() base.PermissionLevel { return base.PermProtected }
 
 // Info returns the eino tool schema for web_fetch.
 func (t *WebFetchTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "抓取指定 URL 的网页纯文本内容（去除 HTML/JS/CSS）。已知 URL 时直接使用；不知道 URL 时先用 web_search 搜索再调此工具读取详情。",
+	return base.InfoFromSchema(t.Name(), "抓取指定 URL 的网页纯文本内容（去除 HTML/JS/CSS）。已知 URL 时直接使用；不知道 URL 时先用 web_search 搜索再调此工具读取详情。",
 		map[string]*schema.ParameterInfo{
 			"url": {
 				Type:     schema.String,
@@ -410,7 +411,7 @@ func (t *WebFetchTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 
 // InvokableRun fetches the given URL via Jina Reader (primary) or local DOM parsing (fallback).
 func (t *WebFetchTool) InvokableRun(ctx context.Context, input string, _ ...tool.Option) (string, error) {
-	args := parseArgs(input)
+	args := base.ParseArgs(input)
 	targetURL, _ := args["url"].(string)
 	if targetURL == "" {
 		return "请提供 URL", nil

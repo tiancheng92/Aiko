@@ -18,6 +18,9 @@ import (
 	exectools "aiko/internal/tools/exec"
 	toolfs "aiko/internal/tools/fs"
 	toolgrowth "aiko/internal/tools/growth"
+	"aiko/internal/tools/timeutil"
+	toolweb "aiko/internal/tools/web"
+	"aiko/internal/tools/weather"
 )
 
 // permGate wraps a Tool with permission enforcement.
@@ -115,15 +118,15 @@ func (g *enhancedPermGate) InvokableRun(ctx context.Context, arg *schema.ToolArg
 // All returns all stateless built-in Tool instances in registration order.
 func All() []Tool {
 	return []Tool{
-		&GetCurrentTimeTool{},
-		&GetTimezoneTool{},
-		&FormatTimeTool{},
+		&timeutil.GetCurrentTimeTool{},
+		&timeutil.GetTimezoneTool{},
+		&timeutil.FormatTimeTool{},
 		&GetOSInfoTool{},
 		&GetHardwareInfoTool{},
 		&GetSystemStatsTool{},
 		&GetNetworkStatusTool{},
 		&GetLocationTool{},
-		&GetWeatherTool{},
+		&weather.GetWeatherTool{},
 		&GetBrowserURLTool{},
 		&GetRemindersTool{},
 		&CompleteReminderTool{},
@@ -180,8 +183,8 @@ func AllPermissionDeclarations() []namedPermDecl {
 	// Contextual tools: we instantiate zero-value structs purely to read their
 	// declared Name/Permission. Runtime dependencies are not required here.
 	ctxPrototypes := []Tool{
-		&WebSearchTool{},
-		&WebFetchTool{},
+		&toolweb.WebSearchTool{},
+		&toolweb.WebFetchTool{},
 		&toolcontext.SearchKnowledgeTool{},
 		&toolcron.CronTool{},
 		&toolgrowth.SaveMemoryTool{},
@@ -245,8 +248,8 @@ func AllContextual(
 	currentVersion string,
 ) []tool.BaseTool {
 	contextTools := []Tool{
-		&WebSearchTool{Cfg: cfg},
-		&WebFetchTool{Cfg: cfg},
+		&toolweb.WebSearchTool{Cfg: cfg},
+		&toolweb.WebFetchTool{Cfg: cfg},
 		&toolcontext.SearchKnowledgeTool{KnowledgeSt: knowledgeSt},
 		&toolcron.CronTool{Scheduler: sched},
 		&toolgrowth.SaveMemoryTool{LongMem: longMem},
