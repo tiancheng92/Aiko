@@ -12,6 +12,7 @@ import (
 	"aiko/internal/knowledge"
 	"aiko/internal/memory"
 	"aiko/internal/scheduler"
+	exectools "aiko/internal/tools/exec"
 )
 
 // permGate wraps a Tool with permission enforcement.
@@ -189,8 +190,8 @@ func AllPermissionDeclarations() []namedPermDecl {
 		&DeleteFileTool{},
 		&MakeDirectoryTool{},
 		&MoveFileTool{},
-		&ExecuteShellTool{},
-		&ExecuteCodeTool{},
+		&exectools.ExecuteShellTool{},
+		&exectools.ExecuteCodeTool{},
 		&ReadImageTool{},
 		&SaveImageTool{},
 		&CheckAndUpdateTool{},
@@ -256,8 +257,8 @@ func AllContextual(
 		&MakeDirectoryTool{Cfg: cfg},
 		&MoveFileTool{Cfg: cfg},
 		// Execution tools
-		&ExecuteShellTool{Cfg: cfg, RegisterCmd: registerCmd, UnregisterCmd: unregisterCmd},
-		&ExecuteCodeTool{Cfg: cfg, RegisterCmd: registerCmd, UnregisterCmd: unregisterCmd},
+		&exectools.ExecuteShellTool{Cfg: cfg, RegisterCmd: registerCmd, UnregisterCmd: unregisterCmd},
+		&exectools.ExecuteCodeTool{Cfg: cfg, RegisterCmd: registerCmd, UnregisterCmd: unregisterCmd},
 		// Image tools
 		&ReadImageTool{Cfg: cfg},
 		&SaveImageTool{Cfg: cfg},

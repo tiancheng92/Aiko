@@ -1,7 +1,9 @@
-package tools
+package exec_test
 
 import (
 	"testing"
+
+	exectools "aiko/internal/tools/exec"
 )
 
 func TestIsTrustedCommand(t *testing.T) {
@@ -20,9 +22,9 @@ func TestIsTrustedCommand(t *testing.T) {
 		{"cat /etc/passwd", []string{"cat"}, true},
 	}
 	for _, c := range cases {
-		got := isTrustedCommand(c.command, c.trusted)
+		got := exectools.IsTrustedCommand(c.command, c.trusted)
 		if got != c.want {
-			t.Errorf("isTrustedCommand(%q, %v) = %v, want %v", c.command, c.trusted, got, c.want)
+			t.Errorf("IsTrustedCommand(%q, %v) = %v, want %v", c.command, c.trusted, got, c.want)
 		}
 	}
 }

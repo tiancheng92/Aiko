@@ -1,16 +1,17 @@
-// internal/tools/shell.go
-package tools
+// internal/tools/exec/shell.go
+package exec
 
 import (
 	"bytes"
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
+	goexec "os/exec"
 	"strings"
 	"time"
 
 	"aiko/internal/execenv"
+	"aiko/internal/tools/base"
 
 	einotool "github.com/cloudwego/eino/components/tool"
 )
@@ -22,7 +23,7 @@ func (t *ExecuteShellTool) InvokableRun(ctx context.Context, input string, opts 
 	if t.Cfg == nil {
 		return "execute_shell 配置缺失，请在设置中完成初始化", nil
 	}
-	args := parseArgs(input)
+	args := base.ParseArgs(input)
 	command, _ := args["command"].(string)
 	workingDir, _ := args["working_dir"].(string)
 	if command == "" {
@@ -36,7 +37,7 @@ func (t *ExecuteShellTool) InvokableRun(ctx context.Context, input string, opts 
 	// cannot escape sandbox boundaries via an unexpected cwd, even when the
 	// user has marked a command as trusted.
 	if len(t.Cfg.AllowedPaths) > 0 {
-		if abs, err := checkPath(workingDir, t.Cfg.AllowedPaths); err != nil {
+		if abs, err := base.CheckPath(workingDir, t.Cfg.AllowedPaths); err != nil {
 			return err.Error(), nil
 		} else {
 			workingDir = abs
@@ -44,12 +45,12 @@ func (t *ExecuteShellTool) InvokableRun(ctx context.Context, input string, opts 
 	}
 
 	// Bypass confirmation for trusted commands.
-	if isTrustedCommand(command, t.Cfg.ShellTrustedCommands) {
+	if IsTrustedCommand(command, t.Cfg.ShellTrustedCommands) {
 		return runShellCommand(ctx, command, workingDir, t.Cfg.ShellTimeout, t.RegisterCmd, t.UnregisterCmd)
 	}
 
 	// Check if this is a resume (user has already confirmed).
-	isTarget, hasData, confirmResult := einotool.GetResumeContext[ConfirmResult](ctx)
+	isTarget, hasData, confirmResult := einotool.GetResumeContext[base.ConfirmResult](ctx)
 	if isTarget && hasData {
 		if !confirmResult.Approved {
 			return "用户已拒绝执行该命令", nil
@@ -63,16 +64,16 @@ func (t *ExecuteShellTool) InvokableRun(ctx context.Context, input string, opts 
 
 	// First call — interrupt to ask for confirmation.
 	id := fmt.Sprintf("shell-%d", time.Now().UnixNano())
-	return "", einotool.Interrupt(ctx, ShellConfirmInfo{
+	return "", einotool.Interrupt(ctx, base.ShellConfirmInfo{
 		ID:         id,
 		Command:    command,
 		WorkingDir: workingDir,
 	})
 }
 
-// isTrustedCommand reports whether command matches any trusted prefix.
+// IsTrustedCommand reports whether command matches any trusted prefix.
 // It checks exact equality or prefix + space to avoid "gitk" matching "git".
-func isTrustedCommand(command string, trusted []string) bool {
+func IsTrustedCommand(command string, trusted []string) bool {
 	cmd := strings.TrimLeft(command, " \t")
 	for _, entry := range trusted {
 		e := strings.TrimSpace(entry)
@@ -93,7 +94,7 @@ func runShellCommand(ctx context.Context, command, workingDir string, timeoutSec
 	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(cmdCtx, "bash", "-c", command)
+	cmd := goexec.CommandContext(cmdCtx, "bash", "-c", command)
 	cmd.Env = execenv.AugmentedEnv()
 	cmd.Dir = workingDir
 

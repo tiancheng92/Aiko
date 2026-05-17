@@ -1,16 +1,17 @@
-// internal/tools/code.go
-package tools
+// internal/tools/exec/code.go
+package exec
 
 import (
 	"bytes"
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
+	goexec "os/exec"
 	"path/filepath"
 	"time"
 
 	"aiko/internal/execenv"
+	"aiko/internal/tools/base"
 
 	einotool "github.com/cloudwego/eino/components/tool"
 )
@@ -38,7 +39,7 @@ func (t *ExecuteCodeTool) InvokableRun(ctx context.Context, input string, opts .
 	if t.Cfg == nil {
 		return "execute_code 配置缺失，请在设置中完成初始化", nil
 	}
-	args := parseArgs(input)
+	args := base.ParseArgs(input)
 	language, _ := args["language"].(string)
 	code, _ := args["code"].(string)
 	workingDir, _ := args["working_dir"].(string)
@@ -57,7 +58,7 @@ func (t *ExecuteCodeTool) InvokableRun(ctx context.Context, input string, opts .
 	// is gated by user confirmation, but the Agent may still pick a workingDir
 	// outside allowed paths; catching it early produces a clearer error.
 	if len(t.Cfg.AllowedPaths) > 0 {
-		if abs, err := checkPath(workingDir, t.Cfg.AllowedPaths); err != nil {
+		if abs, err := base.CheckPath(workingDir, t.Cfg.AllowedPaths); err != nil {
 			return err.Error(), nil
 		} else {
 			workingDir = abs
@@ -65,7 +66,7 @@ func (t *ExecuteCodeTool) InvokableRun(ctx context.Context, input string, opts .
 	}
 
 	// Check if this is a resume.
-	isTarget, hasData, confirmResult := einotool.GetResumeContext[ConfirmResult](ctx)
+	isTarget, hasData, confirmResult := einotool.GetResumeContext[base.ConfirmResult](ctx)
 	if isTarget && hasData {
 		if !confirmResult.Approved {
 			return "用户已拒绝执行该代码", nil
@@ -78,7 +79,7 @@ func (t *ExecuteCodeTool) InvokableRun(ctx context.Context, input string, opts .
 
 	// First call — interrupt.
 	id := fmt.Sprintf("code-%d", time.Now().UnixNano())
-	return "", einotool.Interrupt(ctx, CodeConfirmInfo{
+	return "", einotool.Interrupt(ctx, base.CodeConfirmInfo{
 		ID:         id,
 		Language:   language,
 		Code:       code,
@@ -112,7 +113,7 @@ func runCodeExecution(ctx context.Context, language, code, workingDir string, ti
 		os.Chmod(tmpPath, 0o755)
 	}
 
-	cmd := exec.CommandContext(cmdCtx, binary, tmpPath)
+	cmd := goexec.CommandContext(cmdCtx, binary, tmpPath)
 	cmd.Env = execenv.AugmentedEnv()
 	cmd.Dir = filepath.Clean(workingDir)
 
