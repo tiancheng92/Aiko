@@ -136,7 +136,7 @@ func (a *App) startup(ctx context.Context) {
 			Version string `json:"version"`
 		}
 		if stdjson.Unmarshal(markerData, &m) == nil && m.Version != "" {
-			_ = os.Remove(markerPath)
+			_ = os.Remove(markerPath) // best-effort: marker has already been read; removal failure is harmless
 			a.pendingUpdateVersion = m.Version
 		}
 	}
@@ -144,16 +144,22 @@ func (a *App) startup(ctx context.Context) {
 	a.permStore = internaltools.NewPermissionStore(a.sqlDB)
 	a.mcpStore = mcp.NewServerStore(a.sqlDB)
 	// Remove stale tool rows that no longer exist.
-	_, _ = a.sqlDB.Exec(`DELETE FROM tool_permissions WHERE tool_name = 'lark'`)
+	if _, err := a.sqlDB.Exec(`DELETE FROM tool_permissions WHERE tool_name = 'lark'`); err != nil {
+		slog.Warn("startup: remove stale lark permission row", "err", err)
+	}
 	// Ensure all built-in tools have rows in tool_permissions. The declarations
 	// live next to the tool registry so adding a tool only touches one place.
 	toolsCtx := context.Background()
 	for _, d := range internaltools.AllPermissionDeclarations() {
-		_ = a.permStore.EnsureRow(toolsCtx, d)
+		if err := a.permStore.EnsureRow(toolsCtx, d); err != nil {
+			slog.Warn("startup: ensure tool permission row", "tool", fmt.Sprintf("%T", d), "err", err)
+		}
 	}
 	// Proactive tool is declared outside internal/tools to avoid import cycles,
 	// so register its row here.
-	_ = a.permStore.EnsureRow(toolsCtx, &proactive.ScheduleFollowupTool{})
+	if err := a.permStore.EnsureRow(toolsCtx, &proactive.ScheduleFollowupTool{}); err != nil {
+		slog.Warn("startup: ensure proactive tool permission row", "err", err)
+	}
 
 	vectorPath := filepath.Join(dataDir, "vectors")
 	a.vectorDB, err = chromem.NewPersistentDB(vectorPath, false)
@@ -476,7 +482,9 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		// If initLLMComponents was called again while we were connecting, discard stale results.
 		if a.rebuildGen.Load() != gen {
 			for _, c := range closers {
-				_ = c.Close()
+				if err := c.Close(); err != nil {
+					slog.Warn("mcp: close stale closer", "err", err)
+				}
 			}
 			slog.Info("mcp async load: discarding stale results (gen mismatch)")
 			return
@@ -487,7 +495,9 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		if err := a.rebuildAgentTools(a.ctx, mcpTools, closers); err != nil {
 			slog.Error("mcp async load: rebuildAgentTools failed", "err", err)
 			for _, c := range closers {
-				_ = c.Close()
+				if err := c.Close(); err != nil {
+					slog.Warn("mcp: close closer after rebuild error", "err", err)
+				}
 			}
 			return
 		}
