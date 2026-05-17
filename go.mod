@@ -14,6 +14,7 @@ require (
 	github.com/mark3labs/mcp-go v0.54.0
 	github.com/philippgille/chromem-go v0.7.0
 	github.com/robfig/cron/v3 v3.0.1
+	github.com/rs/zerolog v1.35.1
 	github.com/wailsapp/wails/v2 v2.12.0
 	golang.org/x/net v0.54.0
 	golang.org/x/sync v0.20.0

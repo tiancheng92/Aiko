@@ -59,6 +59,7 @@ let offSizeChange = null
 let offScreenChanged = null
 let latencyTimer = null
 let offModelChangedLatency = null
+let offVisibilityLatency = null
 
 // ─── Idle auto-close ──────────────────────────────────────────────────────────
 
@@ -105,9 +106,20 @@ onMounted(async () => {
   }
 
   const pingOnce = () => PingLLM().then(ms => { latencyMs.value = ms }).catch(() => { latencyMs.value = -1 })
-  pingOnce()
+
+  function startLatencyTimer() {
+    if (latencyTimer) return
+    pingOnce()
+    latencyTimer = setInterval(pingOnce, 5000)
+  }
+  function stopLatencyTimer() {
+    if (latencyTimer) { clearInterval(latencyTimer); latencyTimer = null }
+  }
+
+  if (props.visible) startLatencyTimer()
+  offVisibilityLatency = watch(() => props.visible, (v) => { v ? startLatencyTimer() : stopLatencyTimer() })
+
   refreshProfileInfo()
-  latencyTimer = setInterval(pingOnce, 5000)
   offModelChangedLatency = EventsOn('config:model:changed', () => { pingOnce(); refreshProfileInfo() })
   offScreenChanged = EventsOn('screen:active:changed', async (info) => {
     try {
@@ -140,7 +152,8 @@ onUnmounted(() => {
   offToken?.()
   offDone?.()
   offChatError?.()
-  clearInterval(latencyTimer)
+  if (latencyTimer) { clearInterval(latencyTimer); latencyTimer = null }
+  offVisibilityLatency?.()
   clearTimeout(idleTimer)
   offModelChangedLatency?.()
   window.removeEventListener('mousemove', onResizeMove)

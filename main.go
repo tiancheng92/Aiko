@@ -4,14 +4,16 @@ import (
 	"embed"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/menu/keys"
@@ -39,18 +41,16 @@ func main() {
 			logOut = f
 		}
 	}
-	h := slog.NewTextHandler(logOut, &slog.HandlerOptions{
-		Level:     slog.LevelDebug,
-		AddSource: true,
-	})
-	slog.SetDefault(slog.New(h))
+	zerolog.TimeFieldFormat = time.RFC3339
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: logOut, TimeFormat: "15:04:05"}).With().Caller().Logger()
 
 	// 签名自修复：如果当前 bundle 是 ad-hoc 签名，自动生成 "Aiko" 自签证书
 	// 并重签后重启。这样 ad-hoc 发布的 DMG 装上后，第一次启动就能升级成稳定
 	// csreq，之后的 TCC 权限授权全部持久化。仅在生产模式且在 .app bundle 内生效。
 	if bundle, need := needsSigUpgrade(); need {
 		if err := upgradeSignatureAndRelaunch(bundle); err != nil {
-			slog.Error("signature upgrade failed; continuing with ad-hoc", "err", err)
+			log.Error().Err(err).Msg("signature upgrade failed; continuing with ad-hoc")
 		} else {
 			// 重启脚本已 detached 启动，退出自己让脚本接管
 			os.Exit(0)
@@ -102,7 +102,7 @@ func main() {
 		},
 	})
 	if err != nil {
-		slog.Error("wails run failed", "err", err)
+		log.Error().Err(err).Msg("wails run failed")
 		os.Exit(1)
 	}
 }
@@ -145,7 +145,7 @@ func needsSigUpgrade() (string, bool) {
 		return "", false
 	}
 	out, _ := exec.Command("codesign", "--display", "--verbose=2", bundle).CombinedOutput()
-	for _, line := range strings.Split(string(out), "\n") {
+	for line := range strings.SplitSeq(string(out), "\n") {
 		if strings.HasPrefix(line, "Authority=") {
 			return bundle, false // already has a real signing authority
 		}
@@ -159,7 +159,7 @@ func needsSigUpgrade() (string, bool) {
 // script that re-opens the app after this process exits. The caller must
 // os.Exit(0) afterwards so the script can take over cleanly.
 func upgradeSignatureAndRelaunch(bundle string) error {
-	slog.Info("upgrading signature on first launch", "bundle", bundle)
+	log.Info().Str("bundle", bundle).Msg("upgrading signature on first launch")
 	if err := ensureAikoCert(); err != nil {
 		return fmt.Errorf("ensure cert: %w", err)
 	}

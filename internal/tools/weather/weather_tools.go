@@ -5,8 +5,10 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
+	"strings"
+
+	"github.com/rs/zerolog/log"
 	"net/url"
 	"time"
 
@@ -70,7 +72,7 @@ func (t *GetWeatherTool) InvokableRun(_ context.Context, input string, _ ...tool
 		Location string `json:"location"`
 	}
 	if err := json.UnmarshalString(input, &params); err != nil {
-		slog.Warn("weather: unmarshal input", "err", err)
+		log.Warn().Err(err).Msg("weather: unmarshal input")
 	}
 
 	loc := params.Location
@@ -119,13 +121,15 @@ func (t *GetWeatherTool) InvokableRun(_ context.Context, input string, _ ...tool
 			parts = append(parts, a.Country[0].Value)
 		}
 		if len(parts) > 0 {
-			joined := parts[0]
+			var sb strings.Builder
+			sb.WriteString(parts[0])
 			for _, p := range parts[1:] {
 				if p != parts[0] {
-					joined += ", " + p
+					sb.WriteString(", ")
+					sb.WriteString(p)
 				}
 			}
-			place = joined
+			place = sb.String()
 		}
 	}
 

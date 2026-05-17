@@ -3,8 +3,9 @@ package middleware
 
 import (
 	"context"
-	"log/slog"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Logging returns a Middleware that logs each tool invocation with its duration,
@@ -13,13 +14,13 @@ func Logging() Middleware {
 	return func(name string, next Handler) Handler {
 		return func(ctx context.Context, input string) (string, error) {
 			start := time.Now()
-			slog.Debug("tool call", "tool", name, "args", input)
+			log.Debug().Str("tool", name).Str("args", input).Msg("tool call")
 			out, err := next(ctx, input)
 			elapsed := time.Since(start)
 			if err != nil {
-				slog.Error("tool invocation failed", "tool", name, "args", input, "err", err, "elapsed", elapsed)
+				log.Error().Str("tool", name).Str("args", input).Err(err).Dur("elapsed", elapsed).Msg("tool invocation failed")
 			} else {
-				slog.Debug("tool result", "tool", name, "result", out, "elapsed", elapsed)
+				log.Debug().Str("tool", name).Str("result", out).Dur("elapsed", elapsed).Msg("tool result")
 			}
 			return out, err
 		}

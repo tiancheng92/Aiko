@@ -5,8 +5,9 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"regexp"
+
+	"github.com/rs/zerolog/log"
 	"strings"
 	"sync"
 	"time"
@@ -46,7 +47,7 @@ func LoadToolsAsync(ctx context.Context, store *ServerStore, perServerTimeout ti
 	go func() {
 		cfgs, err := store.List(ctx)
 		if err != nil {
-			slog.Error("LoadToolsAsync: failed to list mcp_servers", "err", err)
+			log.Error().Err(err).Msg("LoadToolsAsync: failed to list mcp_servers")
 			done(nil, nil)
 			return
 		}
@@ -71,10 +72,10 @@ func LoadToolsAsync(ctx context.Context, store *ServerStore, perServerTimeout ti
 				}
 				serverTools, client, err := connectAndDiscover(sctx, cfg)
 				if err != nil {
-					slog.Warn("mcp server connect failed, skipping", "server", cfg.Name, "err", err)
+					log.Warn().Str("server", cfg.Name).Err(err).Msg("mcp server connect failed, skipping")
 					return
 				}
-				slog.Info("mcp server connected", "server", cfg.Name, "tools", len(serverTools))
+				log.Info().Str("server", cfg.Name).Int("tools", len(serverTools)).Msg("mcp server connected")
 				mu.Lock()
 				tools = append(tools, serverTools...)
 				if client != nil {
@@ -131,7 +132,7 @@ func connectAndDiscover(ctx context.Context, cfg ServerConfig) ([]tool.BaseTool,
 	if cfg.Transport != "stdio" {
 		if err := client.Start(ctx); err != nil {
 			if cerr := client.Close(); cerr != nil {
-				slog.Warn("mcp: close client after start failure", "err", cerr)
+				log.Warn().Err(cerr).Msg("mcp: close client after start failure")
 			}
 			return nil, nil, fmt.Errorf("mcp transport start: %w", err)
 		}
@@ -145,7 +146,7 @@ func connectAndDiscover(ctx context.Context, cfg ServerConfig) ([]tool.BaseTool,
 	}
 	if _, err := client.Initialize(ctx, initRequest); err != nil {
 		if cerr := client.Close(); cerr != nil {
-			slog.Warn("mcp: close client after initialize failure", "err", cerr)
+			log.Warn().Err(cerr).Msg("mcp: close client after initialize failure")
 		}
 		return nil, nil, fmt.Errorf("mcp initialize: %w", err)
 	}
@@ -153,7 +154,7 @@ func connectAndDiscover(ctx context.Context, cfg ServerConfig) ([]tool.BaseTool,
 	resp, err := client.ListTools(ctx, mcp.ListToolsRequest{})
 	if err != nil {
 		if cerr := client.Close(); cerr != nil {
-			slog.Warn("mcp: close client after list tools failure", "err", cerr)
+			log.Warn().Err(cerr).Msg("mcp: close client after list tools failure")
 		}
 		return nil, nil, fmt.Errorf("mcp list tools: %w", err)
 	}

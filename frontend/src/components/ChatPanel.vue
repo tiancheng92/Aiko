@@ -33,8 +33,14 @@ hljs.registerLanguage('json', json)
 hljs.registerLanguage('css', css)
 hljs.registerLanguage('xml', xml)
 
+const _codeCache = new Map()
+const _CODE_CACHE_MAX = 100
+
 const renderer = new Renderer()
 renderer.code = ({ text, lang }) => {
+  const cacheKey = lang + '\x00' + text
+  const cached = _codeCache.get(cacheKey)
+  if (cached !== undefined) return cached
   const language = lang && hljs.getLanguage(lang) ? lang : null
   const highlighted = language
     ? hljs.highlight(text, { language }).value
@@ -71,7 +77,10 @@ renderer.code = ({ text, lang }) => {
   const numbered = lineHtmls.map((line, i) =>
     `<span class="code-line"><span class="line-nr">${String(i + 1).padStart(digits)}</span><span class="line-code">${line || ' '}</span></span>`
   ).join('')
-  return `<div class="code-block"><div class="code-header"><span class="code-lang">${language || 'text'}</span><button class="code-copy" onclick="navigator.clipboard.writeText(decodeURIComponent(atob(this.dataset.code)));this.textContent='✓';setTimeout(()=>this.textContent='复制',2000)" data-code="${btoa(encodeURIComponent(text))}">复制</button></div><pre><code class="${cls}">${numbered}</code></pre></div>`
+  const result = `<div class="code-block"><div class="code-header"><span class="code-lang">${language || 'text'}</span><button class="code-copy" onclick="navigator.clipboard.writeText(decodeURIComponent(atob(this.dataset.code)));this.textContent='✓';setTimeout(()=>this.textContent='复制',2000)" data-code="${btoa(encodeURIComponent(text))}">复制</button></div><pre><code class="${cls}">${numbered}</code></pre></div>`
+  if (_codeCache.size >= _CODE_CACHE_MAX) _codeCache.delete(_codeCache.keys().next().value)
+  _codeCache.set(cacheKey, result)
+  return result
 }
 const TABLE_PAGE_SIZE = 10
 
@@ -994,6 +1003,8 @@ onUnmounted(() => {
   // Cancel any in-flight spring animations.
   springCancels.forEach(cancel => cancel())
   springCancels.clear()
+  // Release table state accumulated from rendered markdown tables.
+  window.__tableState = {}
 })
 
 // CommonMark flanking-delimiter rules break ** adjacent to CJK/fullwidth chars.

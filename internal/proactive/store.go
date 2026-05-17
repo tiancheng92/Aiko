@@ -6,8 +6,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log/slog"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Item is a single scheduled proactive message.
@@ -98,7 +99,7 @@ func scanItems(rows *sql.Rows) ([]Item, error) {
 		}
 		t, ok := parseDBTime(trigStr)
 		if !ok {
-			slog.Warn("proactive: unrecognised trigger_at format, skipping item", "id", it.ID, "trigger_at", trigStr)
+			log.Warn().Int64("id", it.ID).Str("trigger_at", trigStr).Msg("proactive: unrecognised trigger_at format, skipping item")
 			continue
 		}
 		it.TriggerAt = t.UTC().Format(time.RFC3339)

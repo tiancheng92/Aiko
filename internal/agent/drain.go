@@ -5,9 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"strings"
 	"sync"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/compose"
@@ -15,6 +16,27 @@ import (
 
 	internaltools "aiko/internal/tools"
 )
+
+// streamResultPool recycles StreamResult values to reduce allocations during streaming.
+var streamResultPool = sync.Pool{New: func() any { return &StreamResult{} }}
+
+// sendToken acquires a pooled StreamResult, sets Token, sends it, then returns it to the pool.
+func sendToken(ch chan<- StreamResult, token string) {
+	r := streamResultPool.Get().(*StreamResult)
+	r.Token = token
+	ch <- *r
+	r.Token = ""
+	streamResultPool.Put(r)
+}
+
+// sendThinkingToken acquires a pooled StreamResult, sets ThinkingToken, sends it, then returns it to the pool.
+func sendThinkingToken(ch chan<- StreamResult, token string) {
+	r := streamResultPool.Get().(*StreamResult)
+	r.ThinkingToken = token
+	ch <- *r
+	r.ThinkingToken = ""
+	streamResultPool.Put(r)
+}
 
 // drainRunner consumes all events from runner.Query, forwards tokens to ch,
 // and returns the accumulated response string, thinking content, tool images, and tool-call count.
@@ -98,13 +120,13 @@ func processStreamingMessage(mo *adk.MessageVariant, ch chan<- StreamResult,
 			*imgsBuf = append(*imgsBuf, imgs...)
 		}
 		if m.ReasoningContent != "" {
-			ch <- StreamResult{ThinkingToken: m.ReasoningContent}
+			sendThinkingToken(ch, m.ReasoningContent)
 			thinkingSb.WriteString(m.ReasoningContent)
 		}
 		if m.Content == "" {
 			continue
 		}
-		ch <- StreamResult{Token: m.Content}
+		sendToken(ch, m.Content)
 		sb.WriteString(m.Content)
 	}
 	return true
@@ -144,7 +166,7 @@ func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIter
 			}
 			// All other errors (tool failure, network glitch, etc.) are surfaced as
 			// a token so the LLM can acknowledge the problem and continue.
-			slog.Warn("agent: non-fatal event error, forwarding to LLM", "err", event.Err)
+			log.Warn().Err(event.Err).Msg("agent: non-fatal event error, forwarding to LLM")
 			errToken := fmt.Sprintf("\n\n[工具调用出错: %v]", event.Err)
 			ch <- StreamResult{Token: errToken}
 			sb.WriteString(errToken)
@@ -187,11 +209,11 @@ func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIter
 				*imgsBuf = append(*imgsBuf, imgs...)
 			}
 			if mo.Message.ReasoningContent != "" {
-				ch <- StreamResult{ThinkingToken: mo.Message.ReasoningContent}
+				sendThinkingToken(ch, mo.Message.ReasoningContent)
 				thinkingSb.WriteString(mo.Message.ReasoningContent)
 			}
 			if mo.Message.Content != "" {
-				ch <- StreamResult{Token: mo.Message.Content}
+				sendToken(ch, mo.Message.Content)
 				sb.WriteString(mo.Message.Content)
 			}
 		} else if mo.Message != nil && len(mo.Message.ToolCalls) > 0 {
@@ -304,8 +326,7 @@ func handleInterrupt(
 			LatestVersion:  info.LatestVersion,
 		}
 	default:
-		slog.Warn("handleInterrupt: unrecognized interrupt info type",
-			"type", fmt.Sprintf("%T", ictx.Info), "value", ictx.Info)
+		log.Warn().Str("type", fmt.Sprintf("%T", ictx.Info)).Interface("value", ictx.Info).Msg("handleInterrupt: unrecognized interrupt info type")
 		return nil, nil
 	}
 

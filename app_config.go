@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"sort"
 	"strings"
 	"time"
 
 	json "github.com/bytedance/sonic"
+	"github.com/rs/zerolog/log"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"aiko/internal/config"
@@ -67,7 +67,7 @@ func (a *App) SaveConfig(cfg *config.Config) error {
 	a.mu.Unlock()
 
 	if err := a.initLLMComponents(a.ctx); err != nil {
-		slog.Warn("SaveConfig: LLM reinit skipped", "err", err)
+		log.Warn().Err(err).Msg("SaveConfig: LLM reinit skipped")
 	} else {
 		wailsruntime.EventsEmit(a.ctx, "config:model:changed", nil)
 	}
@@ -115,7 +115,7 @@ func (a *App) SaveModelProfile(p config.ModelProfile) (config.ModelProfile, erro
 	a.mu.RLock()
 	activeID := a.cfg.ActiveProfileID
 	a.mu.RUnlock()
-	slog.Info("SaveModelProfile", "id", p.ID, "backend", p.TTSBackend, "voice", p.TTSVoice, "speed", p.TTSSpeed, "activeID", activeID)
+	log.Info().Int64("id", p.ID).Str("backend", p.TTSBackend).Str("voice", p.TTSVoice).Float64("speed", p.TTSSpeed).Int64("activeID", activeID).Msg("SaveModelProfile")
 	if err := a.profileStore.Save(&p); err != nil {
 		return p, err
 	}
@@ -132,20 +132,20 @@ func (a *App) SaveModelProfile(p config.ModelProfile) (config.ModelProfile, erro
 
 		a.mu.Lock()
 		a.cfg.ApplyProfile(&p)
-		slog.Info("SaveModelProfile: applied to cfg", "voice", a.cfg.TTSVoice)
+		log.Info().Str("voice", a.cfg.TTSVoice).Msg("SaveModelProfile: applied to cfg")
 		// 重建 TTS 实例，使 backend/voice/speed 变更立即生效。
 		newKey := a.cfg.TTSBackend + "|" + a.cfg.TTSModelDir
-		slog.Info("SaveModelProfile: tts rebuild check", "newKey", newKey, "oldKey", a.ttsBackendKey, "speakerNil", a.ttsSpeaker == nil)
+		log.Info().Str("newKey", newKey).Str("oldKey", a.ttsBackendKey).Bool("speakerNil", a.ttsSpeaker == nil).Msg("SaveModelProfile: tts rebuild check")
 		if a.ttsSpeaker == nil || newKey != a.ttsBackendKey {
 			a.ttsSpeaker = tts.New(a.cfg.TTSBackend, a.cfg.TTSModelDir)
 			a.ttsBackendKey = newKey
-			slog.Info("SaveModelProfile: tts rebuilt", "type", fmt.Sprintf("%T", a.ttsSpeaker))
+			log.Info().Str("type", fmt.Sprintf("%T", a.ttsSpeaker)).Msg("SaveModelProfile: tts rebuilt")
 		}
 		a.mu.Unlock()
 
 		if llmChanged {
 			if err := a.initLLMComponents(a.ctx); err != nil {
-				slog.Warn("SaveModelProfile: LLM reinit skipped", "err", err)
+				log.Warn().Err(err).Msg("SaveModelProfile: LLM reinit skipped")
 			} else {
 				wailsruntime.EventsEmit(a.ctx, "config:model:changed", nil)
 			}
@@ -171,7 +171,7 @@ func (a *App) ActivateModelProfile(id int64) error {
 	a.mu.Unlock()
 	// Persist any defaults written back to the profile (e.g. OpenRouter base URL).
 	if err := a.profileStore.Save(p); err != nil {
-		slog.Warn("ActivateModelProfile: save profile failed", "err", err)
+		log.Warn().Err(err).Msg("ActivateModelProfile: save profile failed")
 	}
 	if err := a.configStore.Save(&cfgCopy); err != nil {
 		return err

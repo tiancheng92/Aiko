@@ -986,10 +986,11 @@ static int getAutoLaunchEnabled(void) {
 import "C"
 import (
 	"encoding/binary"
-	"log/slog"
 	"strings"
 	"syscall"
 	"unsafe"
+
+	"github.com/rs/zerolog/log"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -1052,7 +1053,7 @@ func hideNativeScrollbars() {
 func registerGlobalHotkey() {
 	var fds [2]int
 	if err := syscall.Pipe(fds[:]); err != nil {
-		slog.Error("registerGlobalHotkey: pipe failed", "err", err)
+		log.Error().Err(err).Msg("registerGlobalHotkey: pipe failed")
 		return
 	}
 	readFd, writeFd := fds[0], fds[1]
@@ -1092,7 +1093,7 @@ func registerGlobalHotkey() {
 	// Voice transcript pipe: ObjC sends length-prefixed UTF-8 strings.
 	var vfds [2]int
 	if err := syscall.Pipe(vfds[:]); err != nil {
-		slog.Error("registerGlobalHotkey: voice pipe failed", "err", err)
+		log.Error().Err(err).Msg("registerGlobalHotkey: voice pipe failed")
 		return
 	}
 	vReadFd, vWriteFd := vfds[0], vfds[1]
@@ -1224,7 +1225,7 @@ func GetMousePosition() (x, y float64) {
 func registerSystemWakeObserver(onWake func()) {
 	var fds [2]int
 	if err := syscall.Pipe(fds[:]); err != nil {
-		slog.Error("registerSystemWakeObserver: pipe failed", "err", err)
+		log.Error().Err(err).Msg("registerSystemWakeObserver: pipe failed")
 		return
 	}
 	readFd, writeFd := fds[0], fds[1]

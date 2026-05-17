@@ -5,9 +5,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/robfig/cron/v3"
 )
@@ -74,17 +75,17 @@ func (s *Scheduler) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("load jobs: %w", err)
 	}
-	for _, j := range jobs {
-		if !j.Enabled {
+	for i := range jobs {
+		if !jobs[i].Enabled {
 			continue
 		}
 		// Re-initialise if next_run_at is absent or stored in a non-UTC format
 		// (legacy rows written with a local-timezone offset like +08:00).
-		needsInit := j.NextRunAt == nil ||
-			(len(*j.NextRunAt) > 0 && (*j.NextRunAt)[len(*j.NextRunAt)-1] != 'Z')
+		needsInit := jobs[i].NextRunAt == nil ||
+			(len(*jobs[i].NextRunAt) > 0 && (*jobs[i].NextRunAt)[len(*jobs[i].NextRunAt)-1] != 'Z')
 		if needsInit {
-			if err := s.initNextRun(ctx, j); err != nil {
-				slog.Warn("scheduler: init next_run_at", "job", j.Name, "err", err)
+			if err := s.initNextRun(ctx, jobs[i]); err != nil {
+				log.Warn().Str("job", jobs[i].Name).Err(err).Msg("scheduler: init next_run_at")
 			}
 		}
 	}
@@ -157,7 +158,7 @@ func (s *Scheduler) poll(ctx context.Context) {
 		WHERE enabled = 1 AND next_run_at IS NOT NULL AND next_run_at <= ?
 	`, now.UTC().Format(time.RFC3339))
 	if err != nil {
-		slog.Warn("scheduler poll: query", "err", err)
+		log.Warn().Err(err).Msg("scheduler poll: query")
 		return
 	}
 	defer rows.Close()
@@ -166,33 +167,33 @@ func (s *Scheduler) poll(ctx context.Context) {
 	for rows.Next() {
 		j, err := scanJob(rows)
 		if err != nil {
-			slog.Warn("scheduler poll: scan", "err", err)
+			log.Warn().Err(err).Msg("scheduler poll: scan")
 			continue
 		}
 		due = append(due, j)
 	}
 	if err := rows.Err(); err != nil {
-		slog.Warn("scheduler poll: rows", "err", err)
+		log.Warn().Err(err).Msg("scheduler poll: rows")
 		return
 	}
 
-	for _, j := range due {
+	for i := range due {
 		// Advance next_run_at before execution — ensures at-most-once delivery
 		// even if the process crashes mid-run (same pattern as Hermes Agent).
-		next, err := computeNextRun(j.Schedule, now)
+		next, err := computeNextRun(due[i].Schedule, now)
 		if err != nil {
-			slog.Warn("scheduler poll: compute next", "job", j.Name, "err", err)
+			log.Warn().Str("job", due[i].Name).Err(err).Msg("scheduler poll: compute next")
 			continue
 		}
 		nextStr := next.UTC().Format(time.RFC3339)
 		if _, err := s.db.ExecContext(ctx,
 			`UPDATE cron_jobs SET next_run_at = ? WHERE id = ?`,
-			nextStr, j.ID,
+			nextStr, due[i].ID,
 		); err != nil {
-			slog.Warn("scheduler poll: advance next_run_at", "job", j.Name, "err", err)
+			log.Warn().Str("job", due[i].Name).Err(err).Msg("scheduler poll: advance next_run_at")
 			continue
 		}
-		s.fireJob(j)
+		s.fireJob(due[i])
 	}
 }
 
@@ -203,13 +204,13 @@ func (s *Scheduler) fireJob(j Job) {
 		defer s.wg.Done()
 		ctx, cancel := context.WithTimeout(context.Background(), jobTimeout)
 		defer cancel()
-		slog.Info("cron job fired", "job", job.Name)
+		log.Info().Str("job", job.Name).Msg("cron job fired")
 		result, err := s.chatFn(ctx, job)
 		if _, dbErr := s.db.ExecContext(context.Background(),
 			`UPDATE cron_jobs SET last_run = ? WHERE id = ?`,
 			time.Now().UTC().Format(time.RFC3339), job.ID,
 		); dbErr != nil {
-			slog.Warn("scheduler: update last_run", "job", job.Name, "err", dbErr)
+			log.Warn().Str("job", job.Name).Err(dbErr).Msg("scheduler: update last_run")
 		}
 		if s.onResult != nil {
 			s.onResult(job, result, err)
@@ -272,9 +273,9 @@ func (s *Scheduler) UpdateJob(ctx context.Context, id int64, name, description, 
 	if err != nil {
 		return Job{}, err
 	}
-	for _, j := range jobs {
-		if j.ID == id {
-			return j, nil
+	for i := range jobs {
+		if jobs[i].ID == id {
+			return jobs[i], nil
 		}
 	}
 	return Job{}, fmt.Errorf("job %d not found after update", id)
@@ -291,9 +292,9 @@ func (s *Scheduler) SetJobEnabled(ctx context.Context, id int64, enabled bool) e
 		if err != nil {
 			return err
 		}
-		for _, j := range jobs {
-			if j.ID == id {
-				return s.initNextRun(ctx, j)
+		for i := range jobs {
+			if jobs[i].ID == id {
+				return s.initNextRun(ctx, jobs[i])
 			}
 		}
 	}

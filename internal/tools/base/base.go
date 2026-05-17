@@ -4,9 +4,9 @@ package base
 
 import (
 	"context"
-	"log/slog"
 
 	json "github.com/bytedance/sonic"
+	"github.com/rs/zerolog/log"
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
@@ -60,7 +60,7 @@ func ParseArgs(input string) map[string]any {
 		return args
 	}
 	if err := json.UnmarshalString(input, &args); err != nil {
-		slog.Warn("tool: unmarshal args", "err", err)
+		log.Warn().Err(err).Msg("tool: unmarshal args")
 	}
 	return args
 }

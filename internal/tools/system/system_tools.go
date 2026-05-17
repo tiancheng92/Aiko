@@ -2,6 +2,7 @@
 package system
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net"
@@ -162,7 +163,7 @@ func getHostname() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(bytesconv.BytesToString(out)), nil
+	return string(bytes.TrimSpace(out)), nil
 }
 
 func getMacOSVersion() (string, error) {
@@ -173,13 +174,13 @@ func getMacOSVersion() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	name := strings.TrimSpace(bytesconv.BytesToString(out))
+	name := string(bytes.TrimSpace(out))
 
 	out, err = exec.Command("sw_vers", "-productVersion").Output()
 	if err != nil {
 		return "", err
 	}
-	version := strings.TrimSpace(bytesconv.BytesToString(out))
+	version := string(bytes.TrimSpace(out))
 
 	return fmt.Sprintf("%s %s", name, version), nil
 }
@@ -191,7 +192,7 @@ func getUptime() (time.Duration, error) {
 			return 0, err
 		}
 		// Parse: { sec = 1735123456, usec = 123456 }
-		line := strings.TrimSpace(bytesconv.BytesToString(out))
+		line := string(bytes.TrimSpace(out))
 		parts := strings.Split(line, ",")
 		eqParts := strings.Split(parts[0], "=")
 		if len(eqParts) < 2 {
@@ -209,7 +210,7 @@ func getUptime() (time.Duration, error) {
 	if err != nil {
 		return 0, err
 	}
-	bootTimeStr := strings.TrimSpace(bytesconv.BytesToString(out))
+	bootTimeStr := string(bytes.TrimSpace(out))
 	bootTime, err := time.Parse("2006-01-02 15:04:05", bootTimeStr)
 	if err != nil {
 		return 0, err
@@ -223,7 +224,7 @@ func getTotalMemory() (uint64, error) {
 		if err != nil {
 			return 0, err
 		}
-		memSize, err := strconv.ParseUint(strings.TrimSpace(bytesconv.BytesToString(out)), 10, 64)
+		memSize, err := strconv.ParseUint(string(bytes.TrimSpace(out)), 10, 64)
 		if err != nil {
 			return 0, err
 		}
@@ -238,7 +239,7 @@ func getCPUModel() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return strings.TrimSpace(bytesconv.BytesToString(out)), nil
+		return string(bytes.TrimSpace(out)), nil
 	}
 	return "", fmt.Errorf("not supported on %s", runtime.GOOS)
 }

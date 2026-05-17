@@ -3,9 +3,10 @@ package agent
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/cloudwego/eino/schema"
 
@@ -108,12 +109,12 @@ func buildReflectionPrompt(userInput, assistantReply string, hints []string) str
 func (a *Agent) reflect(ctx context.Context, userInput, assistantReply string, hints []string) {
 	defer func() {
 		if r := recover(); r != nil {
-			slog.Warn("reflect panic recovered", "err", r)
+			log.Warn().Interface("err", r).Msg("reflect panic recovered")
 		}
 	}()
 	prompt := buildReflectionPrompt(userInput, assistantReply, hints)
 	if _, err := a.ChatDirectCollect(ctx, prompt); err != nil {
-		slog.Warn("self-growth reflection failed", "err", err)
+		log.Warn().Err(err).Msg("self-growth reflection failed")
 	}
 }
 
@@ -147,10 +148,10 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 				assistantSummary = stripped
 			}
 			if _, err := a.shortMem.AddWithImagesAndFiles("user", userInput, nil, nil); err != nil {
-				slog.Warn("short memory: add user message", "err", err)
+				log.Warn().Err(err).Msg("short memory: add user message")
 			}
 			if _, err := a.shortMem.AddFull("assistant", assistantSummary, "", nil, nil); err != nil {
-				slog.Warn("short memory: add assistant message", "err", err)
+				log.Warn().Err(err).Msg("short memory: add assistant message")
 			}
 		}
 		ctx = context.WithValue(ctx, internaltools.PersistBeforeRestartKey{}, flushFn)
@@ -281,13 +282,13 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 				return
 			}
 			if _, err := a.shortMem.AddWithImagesAndFiles("user", userMemory, userImages, userFiles); err != nil {
-				slog.Warn("short memory: add user message", "err", err)
+				log.Warn().Err(err).Msg("short memory: add user message")
 			}
 			if _, _, stripped, ok := parseEmotionTag(assistantSummary); ok {
 				assistantSummary = stripped
 			}
 			if _, err := a.shortMem.AddFull("assistant", assistantSummary, "", nil, nil); err != nil {
-				slog.Warn("short memory: add assistant message", "err", err)
+				log.Warn().Err(err).Msg("short memory: add assistant message")
 			}
 		}
 		ctx = context.WithValue(ctx, internaltools.PersistBeforeRestartKey{}, flushFn)

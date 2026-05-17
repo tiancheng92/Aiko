@@ -4,8 +4,9 @@ import (
 	"context"
 	json "github.com/bytedance/sonic"
 	"fmt"
-	"log/slog"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
@@ -94,7 +95,7 @@ func parseToolArgs(input string) map[string]any {
 		return args
 	}
 	if err := json.UnmarshalString(input, &args); err != nil {
-		slog.Warn("proactive: unmarshal args", "err", err)
+		log.Warn().Err(err).Msg("proactive: unmarshal args")
 	}
 	return args
 }

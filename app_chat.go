@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	openai "github.com/meguminnnnnnnnn/go-openai"
 	"github.com/cloudwego/eino/schema"
@@ -188,7 +189,7 @@ func (a *App) SendMessageWithImages(userInput string, images []string) error {
 	for _, dataURL := range images {
 		mimeType, b64data, ok := parseDataURL(dataURL)
 		if !ok {
-			slog.Warn("SendMessageWithImages: invalid data URL, skipping")
+			log.Warn().Msg("SendMessageWithImages: invalid data URL, skipping")
 			continue
 		}
 		parts = append(parts, schema.MessageInputPart{
@@ -234,7 +235,7 @@ func (a *App) SendMessageWithFiles(userInput string, images []string, files []Fi
 	for _, dataURL := range images {
 		mimeType, b64data, ok := parseDataURL(dataURL)
 		if !ok {
-			slog.Warn("SendMessageWithFiles: invalid data URL, skipping")
+			log.Warn().Msg("SendMessageWithFiles: invalid data URL, skipping")
 			continue
 		}
 		parts = append(parts, schema.MessageInputPart{
@@ -264,15 +265,12 @@ func (a *App) SendMessageWithFiles(userInput string, images []string, files []Fi
 // its MIME type and base64-encoded data string. Returns ok=false if the input
 // is not a valid base64 data URL.
 func parseDataURL(dataURL string) (mimeType, b64data string, ok bool) {
-	if !strings.HasPrefix(dataURL, "data:") {
+	rest, found := strings.CutPrefix(dataURL, "data:")
+	if !found {
 		return "", "", false
 	}
-	rest := dataURL[len("data:"):]
-	idx := strings.Index(rest, ";base64,")
-	if idx < 0 {
-		return "", "", false
-	}
-	return rest[:idx], rest[idx+len(";base64,"):], true
+	mimeType, b64data, ok = strings.Cut(rest, ";base64,")
+	return
 }
 
 // GetMessages returns recent chat history (up to limit messages).
@@ -297,12 +295,12 @@ func (a *App) ClearChatHistory() error {
 	if longMem != nil {
 		embedder, err := llm.NewEmbedder(a.ctx, a.cfg)
 		if err != nil {
-			slog.Warn("ClearChatHistory: embedder init failed, skipping long-term memory clear", "err", err)
+			log.Warn().Err(err).Msg("ClearChatHistory: embedder init failed, skipping long-term memory clear")
 		} else if err := longMem.DeleteAll(a.vectorDB, embedder); err != nil {
 			return fmt.Errorf("clear long-term memory: %w", err)
 		}
 	}
-	slog.Info("ClearChatHistory: done")
+	log.Info().Msg("ClearChatHistory: done")
 	return nil
 }
 
@@ -342,15 +340,15 @@ func (a *App) ExportChatHistory() error {
 
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "聊天记录导出 — %s\n\n", time.Now().Format("2006-01-02 15:04:05"))
-	for _, m := range msgs {
-		label := m.Role
-		switch m.Role {
+	for i := range msgs {
+		label := msgs[i].Role
+		switch msgs[i].Role {
 		case "user":
 			label = "用户"
 		case "assistant":
 			label = "宠物"
 		}
-		fmt.Fprintf(&sb, "[%s] %s\n%s\n\n", m.CreatedAt, label, m.Content)
+		fmt.Fprintf(&sb, "[%s] %s\n%s\n\n", msgs[i].CreatedAt, label, msgs[i].Content)
 	}
 	if err := os.WriteFile(path, []byte(sb.String()), 0o644); err != nil {
 		return fmt.Errorf("write file: %w", err)

@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
+	"github.com/rs/zerolog/log"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"aiko/internal/execenv"
@@ -90,7 +91,7 @@ func (a *App) SpeakText(text string) error {
 	cfg := a.cfg
 	a.mu.Unlock()
 
-	slog.Info("tts: SpeakText called", "backend", cfg.TTSBackend, "len", len([]rune(text)), "speaker", fmt.Sprintf("%T", speaker), "voice", cfg.TTSVoice)
+	log.Info().Str("backend", cfg.TTSBackend).Int("len", utf8.RuneCountInString(text)).Str("speaker", fmt.Sprintf("%T", speaker)).Str("voice", cfg.TTSVoice).Msg("tts: SpeakText called")
 
 	if speaker == nil {
 		speaker = &tts.SystemSpeaker{}
@@ -111,7 +112,7 @@ func (a *App) SpeakText(text string) error {
 
 		finalText := text
 		threshold := cfg.TTSSummarizeThreshold
-		if threshold > 0 && len([]rune(text)) > threshold {
+		if threshold > 0 && utf8.RuneCountInString(text) > threshold {
 			summary, err := a.ChatDirectCollect(ctx, "请用简洁的中文口语总结以下内容，控制在100字以内，适合朗读：\n"+text)
 			if err == nil && strings.TrimSpace(summary) != "" {
 				finalText = strings.TrimSpace(summary)
@@ -119,10 +120,10 @@ func (a *App) SpeakText(text string) error {
 		}
 
 		speakText := stripNonSpeech(finalText)
-		slog.Info("tts: calling Speak", "text_len", len([]rune(speakText)), "voice", cfg.TTSVoice, "speed", cfg.TTSSpeed)
+		log.Info().Int("text_len", utf8.RuneCountInString(speakText)).Str("voice", cfg.TTSVoice).Float64("speed", cfg.TTSSpeed).Msg("tts: calling Speak")
 		audioBytes, err := speaker.Speak(ctx, speakText, cfg.TTSVoice, cfg.TTSSpeed)
 		if err != nil {
-			slog.Warn("tts: Speak error", "err", err)
+			log.Warn().Err(err).Msg("tts: Speak error")
 			if ctx.Err() != nil {
 				wailsruntime.EventsEmit(a.ctx, "tts:done", nil)
 				return
@@ -131,7 +132,7 @@ func (a *App) SpeakText(text string) error {
 			return
 		}
 
-		slog.Info("tts: Speak done", "audio_bytes", len(audioBytes))
+		log.Info().Int("audio_bytes", len(audioBytes)).Msg("tts: Speak done")
 		if len(audioBytes) > 0 {
 			encoded := base64.StdEncoding.EncodeToString(audioBytes)
 			wailsruntime.EventsEmit(a.ctx, "tts:audio", map[string]string{

@@ -4,8 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log/slog"
 	"math"
+
+	"github.com/rs/zerolog/log"
 	"sort"
 	"strconv"
 	"sync"
@@ -90,7 +91,7 @@ func (l *LongStore) Store(ctx context.Context, text string) error {
 				"raw_id":     id,
 			},
 		}); err != nil {
-			slog.Warn("long memory: summary vector add failed", "id", id, "err", err)
+			log.Warn().Str("id", id).Err(err).Msg("long memory: summary vector add failed")
 		}
 	}
 
@@ -101,7 +102,7 @@ func (l *LongStore) Store(ctx context.Context, text string) error {
 		if _, err := l.db.ExecContext(ctx,
 			`INSERT INTO memory_segments(vector_id, raw_content, summary, created_at) VALUES(?,?,?,?)`,
 			id, text, summary, now); err != nil {
-			slog.Warn("long memory: sqlite metadata insert failed", "id", id, "err", err)
+			log.Warn().Str("id", id).Err(err).Msg("long memory: sqlite metadata insert failed")
 		}
 	}
 	return nil

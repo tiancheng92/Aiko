@@ -6,7 +6,6 @@ import (
 	json "github.com/bytedance/sonic"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -16,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"aiko/internal/agent"
@@ -180,7 +180,7 @@ func (a *App) ReleaseKeyWindow() { releaseKeyWindow() }
 func (a *App) ConfirmToolExecution(id string, approved bool, editedContent string) {
 	v, ok := a.pendingConfirms.Load(id)
 	if !ok {
-		slog.Warn("ConfirmToolExecution: unknown id", "id", id)
+		log.Warn().Str("id", id).Msg("ConfirmToolExecution: unknown id")
 		return
 	}
 	ch := v.(chan agent.ToolConfirmResponse)
@@ -191,7 +191,7 @@ func (a *App) ConfirmToolExecution(id string, approved bool, editedContent strin
 func (a *App) KillToolExecution(id string) {
 	v, ok := a.runningCmds.Load(id)
 	if !ok {
-		slog.Warn("KillToolExecution: unknown id", "id", id)
+		log.Warn().Str("id", id).Msg("KillToolExecution: unknown id")
 		return
 	}
 	cancel := v.(func())
@@ -340,9 +340,9 @@ func (a *App) CheckUpdate() (UpdateInfo, error) {
 	}
 
 	// Find the macOS DMG asset.
-	for _, a := range rel.Assets {
-		if strings.HasSuffix(a.Name, ".dmg") {
-			info.DownloadURL = a.BrowserDownloadURL
+	for i := range rel.Assets {
+		if strings.HasSuffix(rel.Assets[i].Name, ".dmg") {
+			info.DownloadURL = rel.Assets[i].BrowserDownloadURL
 			break
 		}
 	}
@@ -382,7 +382,7 @@ func (a *App) InstallUpdate(downloadURL string) error {
 	// to ad-hoc, producing a cdhash-based csreq that breaks TCC.
 	sigOut, _ := exec.Command("codesign", "--display", "--verbose=2", appBundle).CombinedOutput()
 	signID := "-" // default: ad-hoc
-	for _, line := range strings.Split(string(sigOut), "\n") {
+	for line := range strings.SplitSeq(string(sigOut), "\n") {
 		if after, ok := strings.CutPrefix(line, "Authority="); ok {
 			signID = strings.TrimSpace(after)
 			break
@@ -468,7 +468,7 @@ func (a *App) InstallUpdate(downloadURL string) error {
 			latestTag = "latest"
 		}
 		markerPath := filepath.Join(home, ".aiko", "update_success.json")
-		_ = os.WriteFile(markerPath, []byte(fmt.Sprintf(`{"version":%q}`, latestTag)), 0o644)
+		_ = os.WriteFile(markerPath, fmt.Appendf(nil, `{"version":%q}`, latestTag), 0o644)
 	}
 
 	// 7. Write a tiny restart script and run it detached.

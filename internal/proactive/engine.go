@@ -2,8 +2,9 @@ package proactive
 
 import (
 	"context"
-	"log/slog"
 	"sync"
+
+	"github.com/rs/zerolog/log"
 	"time"
 	"unicode/utf8"
 
@@ -65,11 +66,9 @@ func (e *ProactiveEngine) Start(ctx context.Context) {
 	}
 	e.done = make(chan struct{})
 	if e.store != nil {
-		e.wg.Add(1)
-		go func() {
-			defer e.wg.Done()
+		e.wg.Go(func() {
 			e.loop(ctx)
-		}()
+		})
 	}
 }
 
@@ -159,29 +158,28 @@ func (e *ProactiveEngine) Poll(ctx context.Context) {
 	}
 	items, err := e.store.DueItems(ctx, time.Now().UTC())
 	if err != nil {
-		slog.Warn("proactive poll: query due items", "err", err)
+		log.Warn().Err(err).Msg("proactive poll: query due items")
 		return
 	}
-	for _, item := range items {
+	for i := range items {
 		// Delete before Fire to prevent double-firing if Fire is slow.
-		if err := e.store.Delete(ctx, item.ID); err != nil {
-			slog.Warn("proactive poll: delete item", "id", item.ID, "err", err)
+		if err := e.store.Delete(ctx, items[i].ID); err != nil {
+			log.Warn().Int64("id", items[i].ID).Err(err).Msg("proactive poll: delete item")
 			continue
 		}
 		// Drop items that are more than fireDeadline past their trigger time.
 		// On parse failure we log and still fire — better to deliver a slightly
 		// late reminder than to silently drop a user-facing item because the DB
 		// row has an unexpected timestamp format.
-		triggerAt, parseErr := time.Parse(time.RFC3339, item.TriggerAt)
+		triggerAt, parseErr := time.Parse(time.RFC3339, items[i].TriggerAt)
 		if parseErr != nil {
-			slog.Warn("proactive poll: invalid trigger_at, firing anyway",
-				"id", item.ID, "trigger_at", item.TriggerAt, "err", parseErr)
+			log.Warn().Int64("id", items[i].ID).Str("trigger_at", items[i].TriggerAt).Err(parseErr).Msg("proactive poll: invalid trigger_at, firing anyway")
 		} else if time.Now().UTC().Sub(triggerAt) > fireDeadline {
-			slog.Info("proactive poll: item expired, dropped", "id", item.ID, "trigger_at", item.TriggerAt)
+			log.Info().Int64("id", items[i].ID).Str("trigger_at", items[i].TriggerAt).Msg("proactive poll: item expired, dropped")
 			continue
 		}
-		if err := e.Fire(ctx, item.Prompt); err != nil {
-			slog.Warn("proactive poll: fire failed", "id", item.ID, "err", err)
+		if err := e.Fire(ctx, items[i].Prompt); err != nil {
+			log.Warn().Int64("id", items[i].ID).Err(err).Msg("proactive poll: fire failed")
 		}
 	}
 }

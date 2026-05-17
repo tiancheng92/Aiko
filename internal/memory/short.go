@@ -3,8 +3,9 @@ package memory
 import (
 	"database/sql"
 	"fmt"
-	"log/slog"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 
 	json "github.com/bytedance/sonic"
 	"github.com/cloudwego/eino/schema"
@@ -38,12 +39,12 @@ func scanMessage(scan func(...any) error) (Message, error) {
 	}
 	if imagesJSON != "" {
 		if err := json.UnmarshalString(imagesJSON, &m.Images); err != nil {
-			slog.Warn("short memory: images JSON unmarshal", "id", m.ID, "err", err)
+			log.Warn().Int64("id", m.ID).Err(err).Msg("short memory: images JSON unmarshal")
 		}
 	}
 	if filesJSON != "" {
 		if err := json.UnmarshalString(filesJSON, &m.Files); err != nil {
-			slog.Warn("short memory: files JSON unmarshal", "id", m.ID, "err", err)
+			log.Warn().Int64("id", m.ID).Err(err).Msg("short memory: files JSON unmarshal")
 		}
 	}
 	return m, nil
@@ -95,7 +96,7 @@ func (s *ShortStore) AddFull(role, content, thinkingContent string, images []str
 	if len(images) > 0 {
 		b, err := json.Marshal(images)
 		if err != nil {
-			slog.Warn("short memory: images JSON marshal", "err", err)
+			log.Warn().Err(err).Msg("short memory: images JSON marshal")
 		} else {
 			imagesJSON = bytesconv.BytesToString(b)
 		}
@@ -104,7 +105,7 @@ func (s *ShortStore) AddFull(role, content, thinkingContent string, images []str
 	if len(files) > 0 {
 		b, err := json.Marshal(files)
 		if err != nil {
-			slog.Warn("short memory: files JSON marshal", "err", err)
+			log.Warn().Err(err).Msg("short memory: files JSON marshal")
 		} else {
 			filesJSON = bytesconv.BytesToString(b)
 		}
@@ -201,12 +202,12 @@ func (s *ShortStore) RecentMessages(n int) ([]*schema.Message, error) {
 		return nil, err
 	}
 	out := make([]*schema.Message, 0, len(msgs))
-	for _, m := range msgs {
+	for i := range msgs {
 		role := schema.User
-		if m.Role == "assistant" {
+		if msgs[i].Role == "assistant" {
 			role = schema.Assistant
 		}
-		out = append(out, &schema.Message{Role: role, Content: m.Content})
+		out = append(out, &schema.Message{Role: role, Content: msgs[i].Content})
 	}
 	return out, nil
 }
@@ -273,10 +274,10 @@ func (s *ShortStore) LastUserMessage() (Message, error) {
 // FormatBlock formats a slice of messages into a single text block for storage.
 func FormatBlock(msgs []Message) string {
 	var sb strings.Builder
-	for _, m := range msgs {
-		sb.WriteString(m.Role)
+	for i := range msgs {
+		sb.WriteString(msgs[i].Role)
 		sb.WriteString(": ")
-		sb.WriteString(m.Content)
+		sb.WriteString(msgs[i].Content)
 		sb.WriteString("\n")
 	}
 	return sb.String()

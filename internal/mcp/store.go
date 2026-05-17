@@ -5,8 +5,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log/slog"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	json "github.com/bytedance/sonic"
 
@@ -57,10 +58,10 @@ func (s *ServerStore) List(ctx context.Context) ([]ServerConfig, error) {
 			return nil, fmt.Errorf("scan mcp_server row: %w", err)
 		}
 		if err := json.UnmarshalString(argsJSON, &c.Args); err != nil {
-			slog.Warn("mcp store: args JSON unmarshal", "id", c.ID, "err", err)
+			log.Warn().Int64("id", c.ID).Err(err).Msg("mcp store: args JSON unmarshal")
 		}
 		if err := json.UnmarshalString(headersJSON, &c.Headers); err != nil {
-			slog.Warn("mcp store: headers JSON unmarshal", "id", c.ID, "err", err)
+			log.Warn().Int64("id", c.ID).Err(err).Msg("mcp store: headers JSON unmarshal")
 		}
 		c.CreatedAt = createdAt.Format(time.RFC3339)
 		cfgs = append(cfgs, c)

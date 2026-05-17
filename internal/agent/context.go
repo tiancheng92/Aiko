@@ -2,18 +2,20 @@ package agent
 
 import (
 	"context"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/schema"
 
 	"golang.org/x/sync/errgroup"
 
+	"aiko/internal/bytesconv"
 	"aiko/internal/memory"
 )
 
@@ -36,9 +38,9 @@ func readUserProfile(dataDir string) string {
 	}
 	data, err := os.ReadFile(filepath.Join(dataDir, "USER.md"))
 	if err != nil && !os.IsNotExist(err) {
-		slog.Warn("read USER.md failed", "err", err)
+		log.Warn().Err(err).Msg("read USER.md failed")
 	}
-	userProfileCache.content = string(data)
+	userProfileCache.content = bytesconv.BytesToString(data)
 	userProfileCache.expiresAt = time.Now().Add(30 * time.Second)
 	return userProfileCache.content
 }
@@ -67,7 +69,7 @@ func (a *Agent) gatherContextSources(ctx context.Context, userInput string) (
 		}
 		res, err := a.longMem.SearchSplit(gctx, userInput, 5)
 		if err != nil {
-			slog.Warn("longMem.SearchSplit failed", "err", err)
+			log.Warn().Err(err).Msg("longMem.SearchSplit failed")
 			return nil
 		}
 		memResult = res
@@ -80,7 +82,7 @@ func (a *Agent) gatherContextSources(ctx context.Context, userInput string) (
 		}
 		msgs, err := a.shortMem.RecentMessages(a.cfg.ShortTermLimit)
 		if err != nil {
-			slog.Warn("shortMem.RecentMessages error", "err", err)
+			log.Warn().Err(err).Msg("shortMem.RecentMessages error")
 			return nil
 		}
 		recentMsgs = msgs
@@ -168,7 +170,7 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userIma
 	a.turnCount.Add(1)
 
 	if _, err := a.shortMem.AddWithImagesAndFiles("user", userInput, userImages, userFiles); err != nil {
-		slog.Warn("short memory: add user message", "err", err)
+		log.Warn().Err(err).Msg("short memory: add user message")
 		return
 	}
 	// Strip the leading emotion tag before persisting so it never appears in
@@ -177,7 +179,7 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userIma
 		assistantReply = stripped
 	}
 	if _, err := a.shortMem.AddFull("assistant", assistantReply, thinkingContent, assistantImages, nil); err != nil {
-		slog.Warn("short memory: add assistant message", "err", err)
+		log.Warn().Err(err).Msg("short memory: add assistant message")
 		return
 	}
 
@@ -193,7 +195,7 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userIma
 
 	count, err := a.shortMem.Count()
 	if err != nil {
-		slog.Error("count messages failed", "err", err)
+		log.Error().Err(err).Msg("count messages failed")
 		return
 	}
 
@@ -204,7 +206,7 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userIma
 
 	oldest, err := a.shortMem.OldestN(excess)
 	if err != nil {
-		slog.Error("get oldest messages failed", "err", err)
+		log.Error().Err(err).Msg("get oldest messages failed")
 		return
 	}
 	if len(oldest) == 0 {
@@ -215,7 +217,7 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userIma
 	if a.longMem != nil {
 		block := memory.FormatBlock(oldest)
 		if err := a.longMem.Store(ctx, block); err != nil {
-			slog.Error("store long-term memory failed", "err", err)
+			log.Error().Err(err).Msg("store long-term memory failed")
 			// Don't return — still delete from short-term.
 		}
 	}
@@ -226,6 +228,6 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userIma
 		ids[i] = m.ID
 	}
 	if err := a.shortMem.DeleteByIDs(ids); err != nil {
-		slog.Error("delete migrated messages failed", "err", err)
+		log.Error().Err(err).Msg("delete migrated messages failed")
 	}
 }

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log/slog"
+	"github.com/rs/zerolog/log"
 
 	"aiko/internal/mcp"
 )
@@ -18,7 +18,7 @@ func (a *App) AddMCPServer(cfg mcp.ServerConfig) (mcp.ServerConfig, error) {
 		return result, err
 	}
 	if err := a.initLLMComponents(a.ctx); err != nil {
-		slog.Warn("AddMCPServer: LLM reinit skipped", "err", err)
+		log.Warn().Err(err).Msg("AddMCPServer: LLM reinit skipped")
 	}
 	return result, nil
 }
@@ -29,7 +29,7 @@ func (a *App) UpdateMCPServer(cfg mcp.ServerConfig) error {
 		return err
 	}
 	if err := a.initLLMComponents(a.ctx); err != nil {
-		slog.Warn("UpdateMCPServer: LLM reinit skipped", "err", err)
+		log.Warn().Err(err).Msg("UpdateMCPServer: LLM reinit skipped")
 	}
 	return nil
 }
@@ -40,7 +40,7 @@ func (a *App) DeleteMCPServer(id int64) error {
 		return err
 	}
 	if err := a.initLLMComponents(a.ctx); err != nil {
-		slog.Warn("DeleteMCPServer: LLM reinit skipped", "err", err)
+		log.Warn().Err(err).Msg("DeleteMCPServer: LLM reinit skipped")
 	}
 	return nil
 }

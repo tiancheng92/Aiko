@@ -16,6 +16,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 
+	"aiko/internal/bytesconv"
 	"aiko/internal/tools/base"
 )
 
@@ -47,7 +48,7 @@ func (t *EncodeDecodeTool) InvokableRun(_ context.Context, input string, _ ...to
 	switch format {
 	case "base64":
 		if action == "encode" {
-			return base64.StdEncoding.EncodeToString([]byte(text)), nil
+			return base64.StdEncoding.EncodeToString(bytesconv.StringToBytes(text)), nil
 		}
 		b, err := base64.StdEncoding.DecodeString(text)
 		if err != nil {
@@ -57,7 +58,7 @@ func (t *EncodeDecodeTool) InvokableRun(_ context.Context, input string, _ ...to
 
 	case "base64url":
 		if action == "encode" {
-			return base64.URLEncoding.EncodeToString([]byte(text)), nil
+			return base64.URLEncoding.EncodeToString(bytesconv.StringToBytes(text)), nil
 		}
 		b, err := base64.URLEncoding.DecodeString(text)
 		if err != nil {
@@ -117,16 +118,16 @@ func (t *HashTextTool) InvokableRun(_ context.Context, input string, _ ...tool.O
 	var h []byte
 	switch algorithm {
 	case "md5":
-		s := md5.Sum([]byte(text))
+		s := md5.Sum(bytesconv.StringToBytes(text))
 		h = s[:]
 	case "sha1":
-		s := sha1.Sum([]byte(text))
+		s := sha1.Sum(bytesconv.StringToBytes(text))
 		h = s[:]
 	case "sha256":
-		s := sha256.Sum256([]byte(text))
+		s := sha256.Sum256(bytesconv.StringToBytes(text))
 		h = s[:]
 	case "sha512":
-		s := sha512.Sum512([]byte(text))
+		s := sha512.Sum512(bytesconv.StringToBytes(text))
 		h = s[:]
 	default:
 		return "", fmt.Errorf("unsupported algorithm %q; use md5/sha1/sha256/sha512", algorithm)

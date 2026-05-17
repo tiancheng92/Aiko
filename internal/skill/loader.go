@@ -3,8 +3,9 @@ package skill
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"os"
+
+	"github.com/rs/zerolog/log"
 	"path/filepath"
 	"strings"
 
@@ -54,7 +55,7 @@ func backendForDir(ctx context.Context, dir string) (skill.Backend, error) {
 		BaseDir: dir,
 	})
 	if err != nil {
-		slog.Warn("skill: skipping directory", "dir", dir, "err", err)
+		log.Warn().Str("dir", dir).Err(err).Msg("skill: skipping directory")
 		return nil, nil
 	}
 	return backend, nil
@@ -74,13 +75,13 @@ func (m *multiBackend) List(ctx context.Context) ([]skill.FrontMatter, error) {
 		if err != nil {
 			return nil, err
 		}
-		for _, fm := range items {
-			if _, dup := seen[fm.Name]; dup {
-				slog.Warn("skill: duplicate skill name, skipping", "name", fm.Name)
+		for i := range items {
+			if _, dup := seen[items[i].Name]; dup {
+				log.Warn().Str("name", items[i].Name).Msg("skill: duplicate skill name, skipping")
 				continue
 			}
-			seen[fm.Name] = struct{}{}
-			all = append(all, fm)
+			seen[items[i].Name] = struct{}{}
+			all = append(all, items[i])
 		}
 	}
 	return all, nil
@@ -93,8 +94,8 @@ func (m *multiBackend) Get(ctx context.Context, name string) (skill.Skill, error
 		if err != nil {
 			return skill.Skill{}, err
 		}
-		for _, fm := range items {
-			if fm.Name == name {
+		for i := range items {
+			if items[i].Name == name {
 				return b.Get(ctx, name)
 			}
 		}

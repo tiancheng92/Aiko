@@ -5,8 +5,9 @@ import (
 	"context"
 	json "github.com/bytedance/sonic"
 	"fmt"
-	"log/slog"
 	"os"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/cloudwego/eino/components/tool"
 
@@ -40,7 +41,7 @@ func (t *ListDirectoryTool) InvokableRun(_ context.Context, input string, _ ...t
 	for _, e := range entries {
 		info, infoErr := e.Info()
 		if infoErr != nil {
-			slog.Warn("list_directory: DirEntry.Info failed", "path", abs, "name", e.Name(), "err", infoErr)
+			log.Warn().Str("path", abs).Str("name", e.Name()).Err(infoErr).Msg("list_directory: DirEntry.Info failed")
 		}
 		var size int64
 		if info != nil && !e.IsDir() {

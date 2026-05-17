@@ -6,7 +6,6 @@ import (
 	json "github.com/bytedance/sonic"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	chromem "github.com/philippgille/chromem-go"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
@@ -94,7 +94,7 @@ func (a *App) startup(ctx context.Context) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		a.startupErr = fmt.Sprintf("无法获取用户目录: %v", err)
-		slog.Error("startup: get home dir failed", "err", err)
+		log.Error().Err(err).Msg("startup: get home dir failed")
 		return
 	}
 	dataDir := filepath.Join(home, ".aiko")
@@ -103,14 +103,14 @@ func (a *App) startup(ctx context.Context) {
 	a.sqlDB, err = db.Open(dataDir)
 	if err != nil {
 		a.startupErr = fmt.Sprintf("数据库初始化失败: %v", err)
-		slog.Error("startup: db open failed", "err", err)
+		log.Error().Err(err).Msg("startup: db open failed")
 		return
 	}
 	a.configStore = config.NewStore(a.sqlDB)
 	a.cfg, err = a.configStore.Load()
 	if err != nil {
 		a.startupErr = fmt.Sprintf("配置加载失败: %v", err)
-		slog.Error("startup: config load failed", "err", err)
+		log.Error().Err(err).Msg("startup: config load failed")
 		return
 	}
 	// Apply active model profile if set.
@@ -119,10 +119,10 @@ func (a *App) startup(ctx context.Context) {
 	if a.cfg.ActiveProfileID > 0 {
 		if p, perr := profileStore.Get(a.cfg.ActiveProfileID); perr == nil {
 			a.cfg.ApplyProfile(p)
-			slog.Info("startup: applied profile", "provider", p.Provider, "base_url", a.cfg.LLMBaseURL)
+			log.Info().Str("provider", string(p.Provider)).Str("base_url", a.cfg.LLMBaseURL).Msg("startup: applied profile")
 			// Persist any defaults written back (e.g. OpenRouter base URL).
 			if perr2 := profileStore.Save(p); perr2 != nil {
-				slog.Warn("startup: save profile failed", "err", perr2)
+				log.Warn().Err(perr2).Msg("startup: save profile failed")
 			}
 		}
 	}
@@ -145,33 +145,33 @@ func (a *App) startup(ctx context.Context) {
 	a.mcpStore = mcp.NewServerStore(a.sqlDB)
 	// Remove stale tool rows that no longer exist.
 	if _, err := a.sqlDB.Exec(`DELETE FROM tool_permissions WHERE tool_name = 'lark'`); err != nil {
-		slog.Warn("startup: remove stale lark permission row", "err", err)
+		log.Warn().Err(err).Msg("startup: remove stale lark permission row")
 	}
 	// Ensure all built-in tools have rows in tool_permissions. The declarations
 	// live next to the tool registry so adding a tool only touches one place.
 	toolsCtx := context.Background()
 	for _, d := range internaltools.AllPermissionDeclarations() {
 		if err := a.permStore.EnsureRow(toolsCtx, d); err != nil {
-			slog.Warn("startup: ensure tool permission row", "tool", fmt.Sprintf("%T", d), "err", err)
+			log.Warn().Str("tool", fmt.Sprintf("%T", d)).Err(err).Msg("startup: ensure tool permission row")
 		}
 	}
 	// Proactive tool is declared outside internal/tools to avoid import cycles,
 	// so register its row here.
 	if err := a.permStore.EnsureRow(toolsCtx, &proactive.ScheduleFollowupTool{}); err != nil {
-		slog.Warn("startup: ensure proactive tool permission row", "err", err)
+		log.Warn().Err(err).Msg("startup: ensure proactive tool permission row")
 	}
 
 	vectorPath := filepath.Join(dataDir, "vectors")
 	a.vectorDB, err = chromem.NewPersistentDB(vectorPath, false)
 	if err != nil {
 		a.startupErr = fmt.Sprintf("向量库初始化失败: %v", err)
-		slog.Error("startup: vectordb open failed", "err", err)
+		log.Error().Err(err).Msg("startup: vectordb open failed")
 		return
 	}
 
 	if len(a.cfg.MissingRequired()) == 0 {
 		if err := a.initLLMComponents(ctx); err != nil {
-			slog.Error("init llm components failed", "err", err)
+			log.Error().Err(err).Msg("init llm components failed")
 		}
 	}
 
@@ -203,7 +203,7 @@ func (a *App) startup(ctx context.Context) {
 	// The poll-based schedulers already use wall-clock timestamps in the DB, so
 	// no restart is needed — a single extra tick is sufficient.
 	registerSystemWakeObserver(func() {
-		slog.Info("system wake detected: triggering immediate poll")
+		log.Info().Msg("system wake detected: triggering immediate poll")
 		a.mu.RLock()
 		sched := a.scheduler
 		engine := a.proactiveEngine
@@ -219,7 +219,7 @@ func (a *App) startup(ctx context.Context) {
 	// Start SMS watcher if enabled in config.
 	if a.cfg.SMSWatcherEnabled {
 		if err := a.startSMSWatcher(); err != nil {
-			slog.Warn("SMS watcher start failed", "err", err)
+			log.Warn().Err(err).Msg("SMS watcher start failed")
 		}
 	}
 }
@@ -303,7 +303,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	summarizer, err := llm.NewSummarizer(ctx, cfg)
 	if err != nil {
 		// Non-fatal: proceed without summarization.
-		slog.Warn("summarizer init failed, continuing without summarization", "err", err)
+		log.Warn().Err(err).Msg("summarizer init failed, continuing without summarization")
 		summarizer = nil
 	}
 
@@ -391,7 +391,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 
 	onResult := func(job scheduler.Job, result string, err error) {
 		if err != nil {
-			slog.Error("cron job failed", "job", job.Name, "err", err)
+			log.Error().Str("job", job.Name).Err(err).Msg("cron job failed")
 			failMsg := "任务执行失败: " + err.Error()
 			// Always show in-app bubble for failures.
 			wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
@@ -402,7 +402,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 			wailsruntime.EventsEmit(a.ctx, "cron:job:done", job.ID)
 			return
 		}
-		slog.Info("cron job completed", "job", job.Name, "result_len", len(result))
+		log.Info().Str("job", job.Name).Int("result_len", len(result)).Msg("cron job completed")
 		// Show in-app bubble. Truncate long results so the bubble stays readable.
 		bubbleMsg := result
 		const bubbleMaxRunes = 200
@@ -465,14 +465,14 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 
 	for _, c := range oldClosers {
 		if err := c.Close(); err != nil {
-			slog.Warn("mcp client close failed on reload", "err", err)
+			log.Warn().Err(err).Msg("mcp client close failed on reload")
 		}
 	}
 
 	// Start cron engines outside the mu critical section — callbacks emit
 	// Wails events and must not run with the mutex held.
 	if err := sched.Start(a.ctx); err != nil {
-		slog.Error("scheduler start failed", "err", err)
+		log.Error().Err(err).Msg("scheduler start failed")
 	}
 	engine.Start(a.ctx)
 
@@ -483,26 +483,26 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		if a.rebuildGen.Load() != gen {
 			for _, c := range closers {
 				if err := c.Close(); err != nil {
-					slog.Warn("mcp: close stale closer", "err", err)
+					log.Warn().Err(err).Msg("mcp: close stale closer")
 				}
 			}
-			slog.Info("mcp async load: discarding stale results (gen mismatch)")
+			log.Info().Msg("mcp async load: discarding stale results (gen mismatch)")
 			return
 		}
 		if len(mcpTools) == 0 {
 			return
 		}
 		if err := a.rebuildAgentTools(a.ctx, mcpTools, closers); err != nil {
-			slog.Error("mcp async load: rebuildAgentTools failed", "err", err)
+			log.Error().Err(err).Msg("mcp async load: rebuildAgentTools failed")
 			for _, c := range closers {
 				if err := c.Close(); err != nil {
-					slog.Warn("mcp: close closer after rebuild error", "err", err)
+					log.Warn().Err(err).Msg("mcp: close closer after rebuild error")
 				}
 			}
 			return
 		}
 		wailsruntime.EventsEmit(a.ctx, "mcp:ready", map[string]any{"count": len(mcpTools)})
-		slog.Info("mcp async load: agent rebuilt with mcp tools", "count", len(mcpTools))
+		log.Info().Int("count", len(mcpTools)).Msg("mcp async load: agent rebuilt with mcp tools")
 	})
 	return nil
 }
@@ -542,7 +542,7 @@ func (a *App) rebuildAgentTools(ctx context.Context, mcpTools []tool.BaseTool, c
 
 	for _, c := range oldClosers {
 		if err := c.Close(); err != nil {
-			slog.Warn("mcp client close failed on mcp inject", "err", err)
+			log.Warn().Err(err).Msg("mcp client close failed on mcp inject")
 		}
 	}
 	return nil
@@ -602,7 +602,7 @@ func (a *App) shutdown(_ context.Context) {
 	// Close MCP client connections accumulated across initLLMComponents calls.
 	for _, c := range closers {
 		if err := c.Close(); err != nil {
-			slog.Warn("mcp client close failed", "err", err)
+			log.Warn().Err(err).Msg("mcp client close failed")
 		}
 	}
 	// Wait for background watchers to exit (screen watcher exits promptly because
@@ -612,7 +612,7 @@ func (a *App) shutdown(_ context.Context) {
 	// writes and releases file handles before the process exits.
 	if a.sqlDB != nil {
 		if err := a.sqlDB.Close(); err != nil {
-			slog.Warn("sqlite close failed", "err", err)
+			log.Warn().Err(err).Msg("sqlite close failed")
 		}
 	}
 }

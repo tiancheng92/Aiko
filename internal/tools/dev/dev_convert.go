@@ -178,6 +178,11 @@ func (t *ConvertUnitsTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 		}), nil
 }
 
+var (
+	reRGB = regexp.MustCompile(`(?i)^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$`)
+	reHSL = regexp.MustCompile(`(?i)^hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*\)$`)
+)
+
 // unitToMeters maps length units to their equivalent in meters.
 var unitToMeters = map[string]float64{
 	"mm": 0.001, "cm": 0.01, "m": 1, "km": 1000,
@@ -428,7 +433,6 @@ func parseColor(s string) (r, g, b uint8, err error) {
 		return uint8(rgb >> 16), uint8((rgb >> 8) & 0xFF), uint8(rgb & 0xFF), nil
 	}
 
-	reRGB := regexp.MustCompile(`(?i)^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$`)
 	if m := reRGB.FindStringSubmatch(s); m != nil {
 		rv, _ := strconv.Atoi(m[1])
 		gv, _ := strconv.Atoi(m[2])
@@ -436,7 +440,6 @@ func parseColor(s string) (r, g, b uint8, err error) {
 		return uint8(rv), uint8(gv), uint8(bv), nil
 	}
 
-	reHSL := regexp.MustCompile(`(?i)^hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*\)$`)
 	if m := reHSL.FindStringSubmatch(s); m != nil {
 		h, _ := strconv.ParseFloat(m[1], 64)
 		sv, _ := strconv.ParseFloat(m[2], 64)

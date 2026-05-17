@@ -16,6 +16,8 @@
 package execenv
 
 import (
+	"bytes"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,8 +52,8 @@ func homeCandidateDirs() []string {
 // parseEnvOutput parses the output of env(1) into KEY=VALUE pairs.
 // Lines without '=' are skipped. Values may contain further '='.
 func parseEnvOutput(b []byte) map[string]string {
-	out := make(map[string]string)
-	for _, line := range strings.Split(string(b), "\n") {
+	out := make(map[string]string, bytes.Count(b, []byte{'\n'})+1)
+	for line := range strings.SplitSeq(string(b), "\n") {
 		line = strings.TrimRight(line, "\r")
 		if line == "" {
 			continue
@@ -68,13 +70,17 @@ func parseEnvOutput(b []byte) map[string]string {
 // mergePaths joins sources with ':' and deduplicates entries, preserving
 // first occurrence. Empty entries and empty sources are dropped.
 func mergePaths(sources ...string) string {
-	seen := make(map[string]struct{})
-	var out []string
+	total := 0
+	for _, src := range sources {
+		total += strings.Count(src, ":") + 1
+	}
+	seen := make(map[string]struct{}, total)
+	out := make([]string, 0, total)
 	for _, src := range sources {
 		if src == "" {
 			continue
 		}
-		for _, entry := range strings.Split(src, ":") {
+		for entry := range strings.SplitSeq(src, ":") {
 			if entry == "" {
 				continue
 			}
@@ -125,11 +131,10 @@ func AugmentedPATH() string {
 // os.Environ() over the login-shell env (os.Environ wins — HOME and TMPDIR
 // from launchd/Wails are authoritative), then forces PATH = AugmentedPATH().
 func AugmentedEnv() []string {
-	base := make(map[string]string)
-	for k, v := range getShellEnv() {
-		base[k] = v
-	}
-	for _, kv := range os.Environ() {
+	environ := os.Environ()
+	base := make(map[string]string, len(environ)+10)
+	maps.Copy(base, getShellEnv())
+	for _, kv := range environ {
 		if i := strings.IndexByte(kv, '='); i > 0 {
 			base[kv[:i]] = kv[i+1:]
 		}

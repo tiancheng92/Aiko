@@ -10,9 +10,10 @@
 package notify
 
 import (
-	"log/slog"
 	"sync/atomic"
 	"unicode/utf8"
+
+	"github.com/rs/zerolog/log"
 )
 
 // maxBodyRunes caps the notification body length. macOS truncates very long
@@ -45,7 +46,7 @@ func SetSender(s Sender) {
 func System(title, body string) {
 	v, _ := sender.Load().(*senderWrapper)
 	if v == nil || v.fn == nil {
-		slog.Debug("notify: no sender registered, dropping", "title", title)
+		log.Debug().Str("title", title).Msg("notify: no sender registered, dropping")
 		return
 	}
 	v.fn(title, truncate(body, maxBodyRunes))

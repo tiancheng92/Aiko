@@ -59,9 +59,9 @@ func checkLatestRelease(currentVersion string) (updateCheckResult, error) {
 
 	latest := strings.TrimPrefix(rel.TagName, "v")
 	result := updateCheckResult{latestVersion: latest}
-	for _, a := range rel.Assets {
-		if strings.HasSuffix(a.Name, ".dmg") {
-			result.downloadURL = a.BrowserDownloadURL
+	for i := range rel.Assets {
+		if strings.HasSuffix(rel.Assets[i].Name, ".dmg") {
+			result.downloadURL = rel.Assets[i].BrowserDownloadURL
 			break
 		}
 	}

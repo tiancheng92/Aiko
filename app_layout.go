@@ -3,11 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -65,7 +65,7 @@ func (a *App) ResetBallPosition(screenW, screenH int) error {
 func (a *App) GetScreenList() []ScreenInfo {
 	screens, err := wailsruntime.ScreenGetAll(a.ctx)
 	if err != nil {
-		slog.Warn("GetScreenList: ScreenGetAll failed", "err", err)
+		log.Warn().Err(err).Msg("GetScreenList: ScreenGetAll failed")
 		return nil
 	}
 	result := make([]ScreenInfo, 0, len(screens))
@@ -82,9 +82,7 @@ func (a *App) GetScreenList() []ScreenInfo {
 func (a *App) startScreenWatcher() {
 	ctx, cancel := context.WithCancel(a.ctx)
 	a.cancelWatcher = cancel
-	a.watcherWG.Add(1)
-	go func() {
-		defer a.watcherWG.Done()
+	a.watcherWG.Go(func() {
 		defer cancel()
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
@@ -104,7 +102,7 @@ func (a *App) startScreenWatcher() {
 			n := getNumScreens()
 
 			foundIdx := -1
-			for i := 0; i < n; i++ {
+			for i := range n {
 				frame := getScreenFrame(i)
 				if !frame.Valid {
 					continue
@@ -145,9 +143,9 @@ func (a *App) startScreenWatcher() {
 			a.mu.Unlock()
 
 			wailsruntime.EventsEmit(a.ctx, "screen:changed", current)
-			slog.Info("startScreenWatcher: screen changed", "width", current.Width, "height", current.Height, "numScreens", n)
+			log.Info().Int("width", current.Width).Int("height", current.Height).Int("numScreens", n).Msg("startScreenWatcher: screen changed")
 		}
-	}()
+	})
 }
 
 // GetPetSize returns the saved pet height for the given screen resolution, or 0 if not set or on error.

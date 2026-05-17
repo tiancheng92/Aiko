@@ -2,7 +2,8 @@ package tts
 
 import (
 	"context"
-	"log/slog"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Speaker 是统一的 TTS 抽象接口。
@@ -21,7 +22,7 @@ func New(backend, modelDir string) Speaker {
 	case "kokoro":
 		s, err := newKokoroSpeaker(modelDir)
 		if err != nil {
-			slog.Warn("tts: kokoro 初始化失败，降级为系统 say", "err", err)
+			log.Warn().Err(err).Msg("tts: kokoro 初始化失败，降级为系统 say")
 			return &SystemSpeaker{}
 		}
 		return s

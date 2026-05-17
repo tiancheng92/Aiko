@@ -8,8 +8,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log/slog"
 	"os"
+
+	"github.com/rs/zerolog/log"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -108,7 +109,7 @@ func (w *Watcher) Start(ctx context.Context) error {
 
 	w.wg.Add(1)
 	go w.loop(watchCtx, watcher)
-	slog.Info("sms watcher started", "db", w.dbPath, "seed_rowid", maxID)
+	log.Info().Str("db", w.dbPath).Int64("seed_rowid", maxID).Msg("sms watcher started")
 	return nil
 }
 
@@ -123,7 +124,7 @@ func (w *Watcher) Stop() {
 		cancel()
 		w.wg.Wait()
 	}
-	slog.Info("sms watcher stopped")
+	log.Info().Msg("sms watcher stopped")
 }
 
 // loop is the background goroutine driving the watcher.
@@ -167,7 +168,7 @@ func (w *Watcher) loop(ctx context.Context, fw *fsnotify.Watcher) {
 			if !ok {
 				return
 			}
-			slog.Warn("sms watcher: fsnotify error", "err", err)
+			log.Warn().Err(err).Msg("sms watcher: fsnotify error")
 
 		case <-debounce.C:
 			pending = false
@@ -184,7 +185,7 @@ func (w *Watcher) poll() {
 
 	db, err := openMessagesDB(w.dbPath)
 	if err != nil {
-		slog.Warn("sms watcher: poll open db", "err", err)
+		log.Warn().Err(err).Msg("sms watcher: poll open db")
 		return
 	}
 	defer db.Close()
@@ -198,7 +199,7 @@ func (w *Watcher) poll() {
 		  AND m.service = 'SMS'
 		ORDER BY m.ROWID ASC`, lastID)
 	if err != nil {
-		slog.Warn("sms watcher: poll query", "err", err)
+		log.Warn().Err(err).Msg("sms watcher: poll query")
 		return
 	}
 	defer rows.Close()
@@ -209,7 +210,7 @@ func (w *Watcher) poll() {
 		var text, sender string
 		var attributedBody []byte
 		if err := rows.Scan(&rowID, &text, &sender, &attributedBody); err != nil {
-			slog.Warn("sms watcher: scan row", "err", err)
+			log.Warn().Err(err).Msg("sms watcher: scan row")
 			continue
 		}
 		// Always advance newMax even if no code is found, so we don't re-scan rows.
@@ -224,11 +225,11 @@ func (w *Watcher) poll() {
 			continue
 		}
 		code := extractCode(text)
-		slog.Info("sms watcher: new message", "rowid", rowID, "sender", sender, "text", text, "code", code)
+		log.Info().Int64("rowid", rowID).Str("sender", sender).Str("text", text).Str("code", code).Msg("sms watcher: new message")
 		if code == "" {
 			continue
 		}
-		slog.Info("sms watcher: verification code detected", "sender", sender, "code", code)
+		log.Info().Str("sender", sender).Str("code", code).Msg("sms watcher: verification code detected")
 		w.handler(Event{Code: code, Sender: sender, Text: text})
 	}
 
@@ -356,7 +357,7 @@ func readTypedstreamString(data []byte, start int) (string, int) {
 		if pos+numExtra > len(data) {
 			return "", 0
 		}
-		for k := 0; k < numExtra; k++ {
+		for range numExtra {
 			length = (length << 8) | int(data[pos])
 			pos++
 		}
