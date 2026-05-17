@@ -52,6 +52,7 @@ type Config struct {
 	UserAvatar string
 }
 
+// Store provides persistent read/write access to application configuration in SQLite.
 type Store struct{ db *sql.DB }
 
 // NewStore creates a Config store backed by the given SQLite db.
