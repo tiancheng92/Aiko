@@ -6,7 +6,7 @@
 
 **你的 AI 伙伴，就在桌面上**
 
-[![Go Version](https://img.shields.io/badge/Go-1.22+-blue.svg)](https://golang.org/)
+[![Go Version](https://img.shields.io/badge/Go-1.26+-blue.svg)](https://golang.org/)
 [![Wails](https://img.shields.io/badge/Wails-v2-green.svg)](https://wails.io/)
 [![Vue](https://img.shields.io/badge/Vue-3-brightgreen.svg)](https://vuejs.org/)
 [![Platform](https://img.shields.io/badge/Platform-macOS%2011%2B-lightgrey.svg)](https://www.apple.com/macos/)
@@ -108,7 +108,7 @@
 
 ### 环境要求
 
-- **Go 1.22+**
+- **Go 1.26+**
 - **Node.js 18+**（推荐使用 yarn）
 - **macOS 11.0+**（仅支持 macOS）
 - **Wails CLI**：`go install github.com/wailsapp/wails/v2/cmd/wails@latest`

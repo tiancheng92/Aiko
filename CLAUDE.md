@@ -16,6 +16,7 @@ AI 编码助手指引，供 Claude Code 在此项目中使用。
 - [chromem-go](https://github.com/philippgille/chromem-go) - 纯 Go 向量数据库
 - [robfig/cron/v3](https://pkg.go.dev/github.com/robfig/cron/v3) - Cron 任务调度器
 - [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) - 纯 Go SQLite 驱动
+- [zerolog](https://github.com/rs/zerolog) - 零分配结构化日志库
 
 **前端技术栈：**
 - [Vue 3](https://vuejs.org/) + Composition API - 响应式前端框架
@@ -76,8 +77,20 @@ frontend/src/
 
 ### Go 后端规范
 
+- **Go 版本**：`go 1.26.3`，可用全部 1.26 新特性
 - 所有导出函数必须有 `// FuncName ...` doc comment
 - 错误处理用 `fmt.Errorf("context: %w", err)` 包装上下文
+- **日志**：统一使用 `github.com/rs/zerolog/log`，链式 API：`log.Info().Str("k", v).Err(err).Msg("msg")`；禁止使用 `log/slog`
+- **Go 1.26 新特性**：
+  - `errors.AsType[T](err)` 替代 `var t T; errors.As(err, &t)`（泛型、类型安全）
+  - `new(expr)` 创建表达式值的堆上副本指针（如 `new(s.Field)` 代替 `&s.Field`）
+- **性能惯用法**：
+  - 遍历大结构体切片用 `for i := range slice` + 索引访问，避免值拷贝
+  - 统计 Unicode 字符数用 `utf8.RuneCountInString(s)`，避免 `len([]rune(s))` 分配
+  - 预估容量建 map：`make(map[K]V, n)`；多 map 批量复制用 `maps.Copy(dst, src)`
+  - 按分隔符迭代字符串用 `strings.SplitSeq`，解析前缀/切割用 `strings.CutPrefix` / `strings.Cut`
+  - 启动 goroutine 用 `wg.Go(func() { ... })`（Go 1.25+），替代 `wg.Add(1); go func(){ defer wg.Done() }()`
+  - 固定次数循环用 `for range n`，构建 `[]byte` 格式化字符串用 `fmt.Appendf(nil, ...)`
 - 涉及 `a.cfg` / `a.petAgent` / `a.longMem` / `a.knowledgeSt` / `a.ttsSpeaker` / `a.mcpClosers` 的字段读写必须持有 `a.mu`（`RLock` 读，`Lock` 写）；`GetConfig` 返回 `*a.cfg` 的值拷贝，不返回原指针
 - `sched.Start(a.ctx)` 与 `engine.Start(a.ctx)` 必须在 `a.mu.Unlock()` 之后调用——cron 回调会 `EventsEmit` 触发 Wails cgo，持锁时 emit 可能死锁
 - 新增 Wails 绑定方法写在 `app.go`，签名遵循已有模式
@@ -297,7 +310,7 @@ wails generate module  # 重新生成 Wails bindings
 
 ---
 
-*最后更新：2026-05-10*
+*最后更新：2026-05-17*
 
 ## MCP Tools: code-review-graph
 

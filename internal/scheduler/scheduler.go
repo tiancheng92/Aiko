@@ -383,10 +383,10 @@ func scanJob(rows *sql.Rows) (Job, error) {
 	j.SaveToMemory = saveToMemory == 1
 	j.Notify = notify == 1
 	if lastRun.Valid && lastRun.String != "" {
-		j.LastRun = &lastRun.String
+		j.LastRun = new(lastRun.String)
 	}
 	if nextRunAt.Valid && nextRunAt.String != "" {
-		j.NextRunAt = &nextRunAt.String
+		j.NextRunAt = new(nextRunAt.String)
 	}
 	if createdAt.Valid {
 		j.CreatedAt = createdAt.String

@@ -361,8 +361,7 @@ func (a *App) ExportChatHistory() error {
 // to the raw HTTP response body captured by llmTransport (useful for OpenRouter
 // errors that embed the upstream provider detail in error.metadata.raw).
 func (a *App) formatChatError(err error) string {
-	var apiErr *openai.APIError
-	if errors.As(err, &apiErr) {
+	if apiErr, ok := errors.AsType[*openai.APIError](err); ok {
 		msg := apiErr.Error()
 		var extras []string
 		if apiErr.Type != "" {
