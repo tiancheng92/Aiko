@@ -4,6 +4,7 @@ import (
 	"context"
 	json "github.com/bytedance/sonic"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/cloudwego/eino/components/tool"
@@ -92,6 +93,8 @@ func parseToolArgs(input string) map[string]any {
 	if input == "" || input == "{}" {
 		return args
 	}
-	_ = json.Unmarshal([]byte(input), &args)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		slog.Warn("proactive: unmarshal args", "err", err)
+	}
 	return args
 }
