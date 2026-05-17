@@ -1224,11 +1224,9 @@ func (a *App) MissingRequiredConfig() []string {
 	return a.cfg.MissingRequired()
 }
 
-// SendMessage sends a user message and streams response tokens as Wails events.
-// Events emitted: "chat:token" (string), "chat:done" (""), "chat:error" (string).
-// Any in-flight request is cancelled before starting the new one.
-func (a *App) SendMessage(userInput string) error {
-	// Cancel any previous in-flight request.
+// streamChat cancels any in-flight request, acquires the agent, and launches
+// a goroutine that drains the channel returned by fetchCh and emits Wails events.
+func (a *App) streamChat(fetchCh func(*agent.Agent, context.Context) <-chan agent.StreamResult) error {
 	a.mu.Lock()
 	if a.chatCancel != nil {
 		a.chatCancel()
@@ -1249,11 +1247,11 @@ func (a *App) SendMessage(userInput string) error {
 		a.chatCancel = nil
 		a.mu.Unlock()
 		cancel()
-		slog.Error("SendMessage: petAgent is nil", "input", userInput)
 		return fmt.Errorf("agent not initialized: complete settings first")
 	}
+
 	go func() {
-		defer cancel() // ensure context is always released
+		defer cancel()
 		defer func() {
 			a.mu.Lock()
 			if a.chatGeneration == myGen {
@@ -1261,11 +1259,10 @@ func (a *App) SendMessage(userInput string) error {
 			}
 			a.mu.Unlock()
 		}()
-		ch := ag.Chat(chatCtx, userInput)
+		ch := fetchCh(ag, chatCtx)
 		ep := agent.NewEmotionParser()
 		for result := range ch {
 			if result.Err != nil {
-				// Ignore context cancellation — user triggered StopGeneration; frontend handles UI.
 				if errors.Is(result.Err, context.Canceled) {
 					return
 				}
@@ -1297,13 +1294,19 @@ func (a *App) SendMessage(userInput string) error {
 				wailsruntime.EventsEmit(a.ctx, "chat:token", text)
 			}
 		}
-		// Fallback: ensure frontend unblocks if channel closes without a terminal result.
 		if tail := ep.Flush(); tail != "" {
 			wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
 		}
 		wailsruntime.EventsEmit(a.ctx, "chat:done", "")
 	}()
 	return nil
+}
+
+// SendMessage streams an AI response for a plain-text user message.
+func (a *App) SendMessage(userInput string) error {
+	return a.streamChat(func(ag *agent.Agent, ctx context.Context) <-chan agent.StreamResult {
+		return ag.Chat(ctx, userInput)
+	})
 }
 
 // RegenerateLastReply deletes the last assistant message from history and
@@ -1333,30 +1336,6 @@ func (a *App) RegenerateLastReply() error {
 // one or more inline images encoded as data URLs ("data:image/png;base64,...").
 // Falls back to a plain text message if no valid images are provided.
 func (a *App) SendMessageWithImages(userInput string, images []string) error {
-	// Cancel any previous in-flight request.
-	a.mu.Lock()
-	if a.chatCancel != nil {
-		a.chatCancel()
-		a.chatCancel = nil
-	}
-	chatCtx, cancel := context.WithCancel(a.ctx)
-	a.chatCancel = cancel
-	a.chatGeneration++
-	myGen := a.chatGeneration
-	a.mu.Unlock()
-
-	a.mu.RLock()
-	ag := a.petAgent
-	a.mu.RUnlock()
-
-	if ag == nil {
-		a.mu.Lock()
-		a.chatCancel = nil
-		a.mu.Unlock()
-		cancel()
-		return fmt.Errorf("agent not initialized: complete settings first")
-	}
-
 	// Build UserInputMultiContent: text part first, then image parts.
 	parts := make([]schema.MessageInputPart, 0, 1+len(images))
 	if userInput != "" {
@@ -1381,62 +1360,13 @@ func (a *App) SendMessageWithImages(userInput string, images []string) error {
 			},
 		})
 	}
-
 	msg := &schema.Message{
 		Role:                  schema.User,
 		UserInputMultiContent: parts,
 	}
-
-	go func() {
-		defer cancel()
-		defer func() {
-			a.mu.Lock()
-			if a.chatGeneration == myGen {
-				a.chatCancel = nil
-			}
-			a.mu.Unlock()
-		}()
-		ch := ag.ChatWithMessage(chatCtx, msg)
-		ep := agent.NewEmotionParser()
-		for result := range ch {
-			if result.Err != nil {
-				if errors.Is(result.Err, context.Canceled) {
-					return
-				}
-				wailsruntime.EventsEmit(a.ctx, "chat:error", a.formatChatError(result.Err))
-				return
-			}
-			if result.Done {
-				if tail := ep.Flush(); tail != "" {
-					wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
-				}
-				wailsruntime.EventsEmit(a.ctx, "chat:done", "")
-				return
-			}
-			if result.ThinkingToken != "" {
-				wailsruntime.EventsEmit(a.ctx, "chat:thinking", result.ThinkingToken)
-				continue
-			}
-			if len(result.Images) > 0 {
-				wailsruntime.EventsEmit(a.ctx, "chat:image", result.Images)
-			}
-			text, emotion, intensity := ep.Feed(result.Token)
-			if emotion != "" {
-				wailsruntime.EventsEmit(a.ctx, "chat:emotion", map[string]any{
-					"emotion":   emotion,
-					"intensity": intensity,
-				})
-			}
-			if text != "" {
-				wailsruntime.EventsEmit(a.ctx, "chat:token", text)
-			}
-		}
-		if tail := ep.Flush(); tail != "" {
-			wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
-		}
-		wailsruntime.EventsEmit(a.ctx, "chat:done", "")
-	}()
-	return nil
+	return a.streamChat(func(ag *agent.Agent, ctx context.Context) <-chan agent.StreamResult {
+		return ag.ChatWithMessage(ctx, msg)
+	})
 }
 
 // SendMessageWithFiles streams an AI response for a user message that may include
@@ -1444,30 +1374,6 @@ func (a *App) SendMessageWithImages(userInput string, images []string) error {
 // File contents are appended to the user text before sending to the LLM.
 // Only file names are persisted in memory — not the content.
 func (a *App) SendMessageWithFiles(userInput string, images []string, files []FileAttachment) error {
-	// Cancel any previous in-flight request.
-	a.mu.Lock()
-	if a.chatCancel != nil {
-		a.chatCancel()
-		a.chatCancel = nil
-	}
-	chatCtx, cancel := context.WithCancel(a.ctx)
-	a.chatCancel = cancel
-	a.chatGeneration++
-	myGen := a.chatGeneration
-	a.mu.Unlock()
-
-	a.mu.RLock()
-	ag := a.petAgent
-	a.mu.RUnlock()
-
-	if ag == nil {
-		a.mu.Lock()
-		a.chatCancel = nil
-		a.mu.Unlock()
-		cancel()
-		return fmt.Errorf("agent not initialized: complete settings first")
-	}
-
 	// Build LLM text: original input + file contents appended.
 	var llmBuilder strings.Builder
 	llmBuilder.WriteString(userInput)
@@ -1500,7 +1406,6 @@ func (a *App) SendMessageWithFiles(userInput string, images []string, files []Fi
 			},
 		})
 	}
-
 	msg := &schema.Message{
 		Role:                  schema.User,
 		UserInputMultiContent: parts,
@@ -1509,57 +1414,9 @@ func (a *App) SendMessageWithFiles(userInput string, images []string, files []Fi
 			"_file_names": fileNames,
 		},
 	}
-
-	go func() {
-		defer cancel()
-		defer func() {
-			a.mu.Lock()
-			if a.chatGeneration == myGen {
-				a.chatCancel = nil
-			}
-			a.mu.Unlock()
-		}()
-		ch := ag.ChatWithMessage(chatCtx, msg)
-		ep := agent.NewEmotionParser()
-		for result := range ch {
-			if result.Err != nil {
-				if errors.Is(result.Err, context.Canceled) {
-					return
-				}
-				wailsruntime.EventsEmit(a.ctx, "chat:error", a.formatChatError(result.Err))
-				return
-			}
-			if result.Done {
-				if tail := ep.Flush(); tail != "" {
-					wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
-				}
-				wailsruntime.EventsEmit(a.ctx, "chat:done", "")
-				return
-			}
-			if result.ThinkingToken != "" {
-				wailsruntime.EventsEmit(a.ctx, "chat:thinking", result.ThinkingToken)
-				continue
-			}
-			if len(result.Images) > 0 {
-				wailsruntime.EventsEmit(a.ctx, "chat:image", result.Images)
-			}
-			text, emotion, intensity := ep.Feed(result.Token)
-			if emotion != "" {
-				wailsruntime.EventsEmit(a.ctx, "chat:emotion", map[string]any{
-					"emotion":   emotion,
-					"intensity": intensity,
-				})
-			}
-			if text != "" {
-				wailsruntime.EventsEmit(a.ctx, "chat:token", text)
-			}
-		}
-		if tail := ep.Flush(); tail != "" {
-			wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
-		}
-		wailsruntime.EventsEmit(a.ctx, "chat:done", "")
-	}()
-	return nil
+	return a.streamChat(func(ag *agent.Agent, ctx context.Context) <-chan agent.StreamResult {
+		return ag.ChatWithMessage(ctx, msg)
+	})
 }
 
 // parseDataURL splits a data URL of the form "data:<mime>;base64,<data>" into
