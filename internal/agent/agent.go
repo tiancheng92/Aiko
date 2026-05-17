@@ -472,6 +472,53 @@ func nextEvent(iter *adk.AsyncIterator[*adk.AgentEvent]) <-chan iterResult {
 	return c
 }
 
+// processStreamingMessage drains a streaming MessageVariant, forwarding tokens,
+// thinking content, images, and tool call names to ch and the accumulators.
+// Returns false if a receive error occurs (which is already sent to ch).
+func processStreamingMessage(mo *adk.MessageVariant, ch chan<- StreamResult,
+	uniqueTools map[string]struct{}, imgsBuf *[]string,
+	sb, thinkingSb *strings.Builder) bool {
+	for {
+		m, recvErr := mo.MessageStream.Recv()
+		if recvErr != nil {
+			if recvErr == io.EOF {
+				break
+			}
+			ch <- StreamResult{Err: recvErr}
+			return false
+		}
+		if m == nil {
+			continue
+		}
+		if m.Role == schema.Tool || len(m.ToolCalls) > 0 {
+			for _, tc := range m.ToolCalls {
+				uniqueTools[tc.Function.Name] = struct{}{}
+			}
+			if m.Role == schema.Tool {
+				if imgs := extractToolImages(m.Content); len(imgs) > 0 {
+					ch <- StreamResult{Images: imgs}
+					*imgsBuf = append(*imgsBuf, imgs...)
+				}
+			}
+			continue
+		}
+		if imgs := extractImages(m.AssistantGenMultiContent); len(imgs) > 0 {
+			ch <- StreamResult{Images: imgs}
+			*imgsBuf = append(*imgsBuf, imgs...)
+		}
+		if m.ReasoningContent != "" {
+			ch <- StreamResult{ThinkingToken: m.ReasoningContent}
+			thinkingSb.WriteString(m.ReasoningContent)
+		}
+		if m.Content == "" {
+			continue
+		}
+		ch <- StreamResult{Token: m.Content}
+		sb.WriteString(m.Content)
+	}
+	return true
+}
+
 // drainIterInner is the recursive core of drainIter; it accepts a shared uniqueTools
 // map so that distinct tool names are accumulated correctly across interrupt/resume cycles.
 // imgsBuf accumulates images produced by tool calls (e.g. read_image) across all
@@ -533,46 +580,8 @@ func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIter
 
 		mo := event.Output.MessageOutput
 		if mo.IsStreaming {
-			for {
-				m, recvErr := mo.MessageStream.Recv()
-				if recvErr != nil {
-					if recvErr == io.EOF {
-						break
-					}
-					ch <- StreamResult{Err: recvErr}
-					return "", "", false
-				}
-				if m == nil {
-					continue
-				}
-				if m.Role == schema.Tool || len(m.ToolCalls) > 0 {
-					for _, tc := range m.ToolCalls {
-						uniqueTools[tc.Function.Name] = struct{}{}
-					}
-					// Tool results that are image data URLs or image HTTP URLs
-					// (e.g. from read_image / generate_image) are forwarded as
-					// images; the raw text is intentionally suppressed.
-					if m.Role == schema.Tool {
-						if imgs := extractToolImages(m.Content); len(imgs) > 0 {
-							ch <- StreamResult{Images: imgs}
-							*imgsBuf = append(*imgsBuf, imgs...)
-						}
-					}
-					continue
-				}
-				if imgs := extractImages(m.AssistantGenMultiContent); len(imgs) > 0 {
-					ch <- StreamResult{Images: imgs}
-					*imgsBuf = append(*imgsBuf, imgs...)
-				}
-				if m.ReasoningContent != "" {
-					ch <- StreamResult{ThinkingToken: m.ReasoningContent}
-					thinkingSb.WriteString(m.ReasoningContent)
-				}
-				if m.Content == "" {
-					continue
-				}
-				ch <- StreamResult{Token: m.Content}
-				sb.WriteString(m.Content)
+			if !processStreamingMessage(mo, ch, uniqueTools, imgsBuf, &sb, &thinkingSb) {
+				return "", "", false
 			}
 		} else if mo.Message != nil && mo.Message.Role == schema.Tool {
 			// Tool result: forward image data URLs / HTTP image URLs to the frontend;
