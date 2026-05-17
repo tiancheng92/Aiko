@@ -121,7 +121,11 @@ func (s *ProfileStore) Save(p *ModelProfile) error {
 		if err != nil {
 			return err
 		}
-		p.ID, _ = res.LastInsertId()
+		id, err := res.LastInsertId()
+		if err != nil {
+			return fmt.Errorf("get last insert id: %w", err)
+		}
+		p.ID = id
 		return nil
 	}
 	_, err := s.db.Exec(`
