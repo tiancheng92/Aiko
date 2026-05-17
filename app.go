@@ -487,6 +487,67 @@ func (a *App) startup(ctx context.Context) {
 	}
 }
 
+// buildAgent assembles the full tool list and constructs a new eino Agent from
+// already-resolved components. extraTools is nil for the initial build and
+// contains MCP tools for subsequent rebuilds.
+func (a *App) buildAgent(
+	ctx context.Context,
+	chatModel model.ToolCallingChatModel,
+	longMem *memory.LongStore,
+	knowledgeSt *knowledge.Store,
+	sched *scheduler.Scheduler,
+	extraTools []tool.BaseTool,
+	cfgSkillsDirs []string,
+) (*agent.Agent, error) {
+	dataDir := a.dataDir
+	builtinTools := internaltools.AllEino(a.permStore)
+	contextTools := internaltools.AllContextual(
+		a.permStore,
+		knowledgeSt,
+		sched,
+		longMem,
+		dataDir,
+		a.cfg,
+		func(id string, cancel func()) {
+			a.runningCmds.Store(id, cancel)
+			wailsruntime.EventsEmit(a.ctx, "tool:executing", map[string]any{"id": id})
+		},
+		func(id string) {
+			a.runningCmds.Delete(id)
+			wailsruntime.EventsEmit(a.ctx, "tool:executed", map[string]any{"id": id})
+		},
+		func() { go a.initLLMComponents(a.ctx) },
+		a.InstallUpdate,
+		func(event string, data any) { wailsruntime.EventsEmit(a.ctx, event, data) },
+		version,
+	)
+	proactiveStore := proactive.NewStore(a.sqlDB)
+	followupTool := internaltools.ToEino(proactive.NewScheduleFollowupTool(proactiveStore), a.permStore)
+	allTools := append(builtinTools, contextTools...)
+	allTools = append(allTools, extraTools...)
+	allTools = append(allTools, followupTool)
+
+	autoSkillsDir := filepath.Join(dataDir, "auto-skills")
+	skillDirs := append(append([]string{}, cfgSkillsDirs...), autoSkillsDir)
+	skillMW, err := skill.NewMiddleware(ctx, skillDirs)
+	if err != nil {
+		return nil, fmt.Errorf("load skills: %w", err)
+	}
+
+	mw := middleware.Chain(
+		middleware.Logging(),
+		middleware.Retry(3, 200*time.Millisecond),
+		middleware.ErrorRecovery(),
+	)
+
+	return agent.New(ctx, chatModel, a.shortMem, longMem, allTools, a.cfg, mw, skillMW, dataDir,
+		&a.pendingConfirms,
+		func(event string, data ...any) {
+			wailsruntime.EventsEmit(a.ctx, event, data...)
+		},
+	)
+}
+
 // initLLMComponents initializes chat model, embedder, memory stores, skills, and agent.
 // Callers must NOT hold mu when calling this function.
 func (a *App) initLLMComponents(ctx context.Context) error {
@@ -494,8 +555,6 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	cfgSnapshot := *a.cfg
 	a.mu.RUnlock()
 	cfg := &cfgSnapshot
-
-	dataDir := a.dataDir
 
 	chatModel, transport, err := llm.NewChatModel(ctx, cfg)
 	if err != nil {
@@ -527,9 +586,6 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 			return fmt.Errorf("new knowledge store: %w", err)
 		}
 	}
-
-	// Built-in tools + context-aware tools (knowledge) + skill tools
-	builtinTools := internaltools.AllEino(a.permStore)
 
 	// Build a chat function for the scheduler.
 	// When SaveToMemory is true the job uses ag.Chat() so the exchange goes
@@ -634,55 +690,10 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	// holding a.mu can deadlock if the event handler calls an App method.
 	sched := scheduler.New(a.sqlDB, chatFn, onResult)
 
-	contextTools := internaltools.AllContextual(
-		a.permStore,
-		knowledgeSt,
-		sched,
-		longMem,
-		dataDir,
-		a.cfg,
-		func(id string, cancel func()) {
-			a.runningCmds.Store(id, cancel)
-			wailsruntime.EventsEmit(a.ctx, "tool:executing", map[string]interface{}{"id": id})
-		},
-		func(id string) {
-			a.runningCmds.Delete(id)
-			wailsruntime.EventsEmit(a.ctx, "tool:executed", map[string]interface{}{"id": id})
-		},
-		func() { go a.initLLMComponents(a.ctx) },
-		a.InstallUpdate,
-		func(event string, data any) { wailsruntime.EventsEmit(a.ctx, event, data) },
-		version,
-	)
-	proactiveStore := proactive.NewStore(a.sqlDB)
-	followupTool := internaltools.ToEino(proactive.NewScheduleFollowupTool(proactiveStore), a.permStore)
 	// MCP tools are loaded asynchronously after the agent is online (see below).
-	allTools := append(builtinTools, contextTools...)
-	allTools = append(allTools, followupTool)
-
-	// Build skill middleware from configured directories.
-	autoSkillsDir := filepath.Join(dataDir, "auto-skills")
-	skillDirs := append(append([]string{}, cfg.SkillsDirs...), autoSkillsDir)
-	skillMW, err := skill.NewMiddleware(ctx, skillDirs)
+	newAgent, err := a.buildAgent(ctx, chatModel, longMem, knowledgeSt, sched, nil, cfg.SkillsDirs)
 	if err != nil {
-		return fmt.Errorf("load skills: %w", err)
-	}
-
-	// Middleware chain: logging -> retry -> error recovery (outermost first)
-	mw := middleware.Chain(
-		middleware.Logging(),
-		middleware.Retry(3, 200*time.Millisecond),
-		middleware.ErrorRecovery(),
-	)
-
-	newAgent, err := agent.New(ctx, chatModel, a.shortMem, longMem, allTools, a.cfg, mw, skillMW, dataDir,
-		&a.pendingConfirms,
-		func(event string, data ...any) {
-			wailsruntime.EventsEmit(a.ctx, event, data...)
-		},
-	)
-	if err != nil {
-		return fmt.Errorf("new agent: %w", err)
+		return fmt.Errorf("build agent: %w", err)
 	}
 
 	a.mu.Lock()
@@ -707,6 +718,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		a.ttsSpeaker = tts.New(a.cfg.TTSBackend, a.cfg.TTSModelDir)
 		a.ttsBackendKey = newKey
 	}
+	proactiveStore := proactive.NewStore(a.sqlDB)
 	engine := proactive.NewEngine(a, proactiveStore)
 	a.proactiveEngine = engine
 	// Capture the current generation so the async MCP callback can detect stale results.
@@ -770,81 +782,14 @@ func (a *App) rebuildAgentTools(ctx context.Context, mcpTools []tool.BaseTool, c
 		return fmt.Errorf("rebuildAgentTools: chatModel not initialised")
 	}
 
-	dataDir := a.dataDir
-
-	builtinTools := internaltools.AllEino(a.permStore)
-	chatFn := func(ctx context.Context, prompt string) (string, error) {
-		a.mu.RLock()
-		ag := a.petAgent
-		a.mu.RUnlock()
-		if ag == nil {
-			return "", fmt.Errorf("agent not ready")
-		}
-		ch := ag.ChatDirect(ctx, prompt)
-		var sb strings.Builder
-		for r := range ch {
-			if r.Err != nil {
-				return "", r.Err
-			}
-			if r.Done {
-				break
-			}
-			sb.WriteString(r.Token)
-		}
-		return sb.String(), nil
-	}
-	contextTools := internaltools.AllContextual(
-		a.permStore,
-		knowledgeSt,
-		sched,
-		longMem,
-		dataDir,
-		a.cfg,
-		func(id string, cancel func()) {
-			a.runningCmds.Store(id, cancel)
-			wailsruntime.EventsEmit(a.ctx, "tool:executing", map[string]any{"id": id})
-		},
-		func(id string) {
-			a.runningCmds.Delete(id)
-			wailsruntime.EventsEmit(a.ctx, "tool:executed", map[string]any{"id": id})
-		},
-		func() { go a.initLLMComponents(a.ctx) },
-		a.InstallUpdate,
-		func(event string, data any) { wailsruntime.EventsEmit(a.ctx, event, data) },
-		version,
-	)
-	proactiveStore := proactive.NewStore(a.sqlDB)
-	followupTool := internaltools.ToEino(proactive.NewScheduleFollowupTool(proactiveStore), a.permStore)
-	allTools := append(builtinTools, contextTools...)
-	allTools = append(allTools, mcpTools...)
-	allTools = append(allTools, followupTool)
-
-	autoSkillsDir := filepath.Join(dataDir, "auto-skills")
 	a.mu.RLock()
 	cfgSnapshot := *a.cfg
 	a.mu.RUnlock()
-	skillDirs := append(append([]string{}, cfgSnapshot.SkillsDirs...), autoSkillsDir)
-	skillMW, err := skill.NewMiddleware(ctx, skillDirs)
-	if err != nil {
-		return fmt.Errorf("load skills: %w", err)
-	}
 
-	mw := middleware.Chain(
-		middleware.Logging(),
-		middleware.Retry(3, 200*time.Millisecond),
-		middleware.ErrorRecovery(),
-	)
-
-	newAgent, err := agent.New(ctx, chatModel, a.shortMem, longMem, allTools, a.cfg, mw, skillMW, dataDir,
-		&a.pendingConfirms,
-		func(event string, data ...any) {
-			wailsruntime.EventsEmit(a.ctx, event, data...)
-		},
-	)
+	newAgent, err := a.buildAgent(ctx, chatModel, longMem, knowledgeSt, sched, mcpTools, cfgSnapshot.SkillsDirs)
 	if err != nil {
-		return fmt.Errorf("new agent: %w", err)
+		return fmt.Errorf("build agent: %w", err)
 	}
-	_ = chatFn // used above via contextTools closure
 
 	a.mu.Lock()
 	oldClosers := a.mcpClosers
