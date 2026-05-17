@@ -44,7 +44,9 @@ jobs:
       - name: Build Aiko.app
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          wails build -trimpath -ldflags="-s -w -X main.version=${VERSION}"
+          wails build -trimpath \
+            -ldflags="-s -w -X main.version=${VERSION}" \
+            -gcflags="all=-l=4 -B"
 
       # Ad-hoc sign with entitlements (network + microphone).
       # Sign frameworks first, then the app bundle — avoids deprecated --deep flag.
