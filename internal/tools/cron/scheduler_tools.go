@@ -1,5 +1,5 @@
-// internal/tools/scheduler_tools.go
-package tools
+// internal/tools/cron/scheduler_tools.go
+package cron
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"aiko/internal/scheduler"
+	"aiko/internal/tools/base"
 )
 
 // CronTool manages scheduled tasks with add/list/remove actions.
@@ -18,11 +19,11 @@ type CronTool struct {
 }
 
 func (t *CronTool) Name() string             { return "cron" }
-func (t *CronTool) Permission() PermissionLevel { return PermProtected }
+func (t *CronTool) Permission() base.PermissionLevel { return base.PermProtected }
 
 // Info returns the eino tool schema for cron.
 func (t *CronTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "管理定时任务（cron）：创建、列出、修改、删除。任务触发时会将 prompt 作为消息发给 AI 并自动执行。",
+	return base.InfoFromSchema(t.Name(), "管理定时任务（cron）：创建、列出、修改、删除。任务触发时会将 prompt 作为消息发给 AI 并自动执行。",
 		map[string]*schema.ParameterInfo{
 			"action": {
 				Type:     schema.String,
@@ -59,7 +60,7 @@ func (t *CronTool) InvokableRun(ctx context.Context, input string, _ ...tool.Opt
 	if t.Scheduler == nil {
 		return "定时任务调度器未初始化", nil
 	}
-	args := parseArgs(input)
+	args := base.ParseArgs(input)
 	action, _ := args["action"].(string)
 	switch action {
 	case "add":

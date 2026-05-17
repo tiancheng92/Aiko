@@ -1,5 +1,5 @@
-// internal/tools/growth_tools.go
-package tools
+// internal/tools/growth/growth_tools.go
+package growth
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"aiko/internal/memory"
+	"aiko/internal/tools/base"
 )
 
 // SaveMemoryTool saves a single concrete fact or preference to long-term memory.
@@ -24,11 +25,11 @@ type SaveMemoryTool struct {
 func (t *SaveMemoryTool) Name() string { return "save_memory" }
 
 // Permission returns the required permission level.
-func (t *SaveMemoryTool) Permission() PermissionLevel { return PermPublic }
+func (t *SaveMemoryTool) Permission() base.PermissionLevel { return base.PermPublic }
 
 // Info returns the eino tool schema for save_memory.
 func (t *SaveMemoryTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(),
+	return base.InfoFromSchema(t.Name(),
 		"保存单条跨会话事实或临时结论到长期记忆（一两句话），如「用户今天提到了 X」。稳定的用户属性（偏好、习惯、背景）请用 update_user_profile。保存前先用 search_memory 确认尚未存储类似内容。对话历史由系统自动处理，无需摘要。",
 		map[string]*schema.ParameterInfo{
 			"content": {
@@ -45,7 +46,7 @@ func (t *SaveMemoryTool) InvokableRun(ctx context.Context, input string, _ ...to
 	if t.LongMem == nil {
 		return "长期记忆未启用（需配置 Embedding 模型）", nil
 	}
-	args := parseArgs(input)
+	args := base.ParseArgs(input)
 	content, _ := args["content"].(string)
 	if content == "" {
 		return "请提供要保存的内容", nil
@@ -65,11 +66,11 @@ type SearchMemoryTool struct {
 func (t *SearchMemoryTool) Name() string { return "search_memory" }
 
 // Permission returns the required permission level.
-func (t *SearchMemoryTool) Permission() PermissionLevel { return PermPublic }
+func (t *SearchMemoryTool) Permission() base.PermissionLevel { return base.PermPublic }
 
 // Info returns the eino tool schema for search_memory.
 func (t *SearchMemoryTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(),
+	return base.InfoFromSchema(t.Name(),
 		"在长期记忆中语义搜索，返回与查询最相关的历史片段。适合回答「我之前说过什么」、「我们讨论过 X 吗」等问题。",
 		map[string]*schema.ParameterInfo{
 			"query": {
@@ -90,7 +91,7 @@ func (t *SearchMemoryTool) InvokableRun(ctx context.Context, input string, _ ...
 	if t.LongMem == nil {
 		return "长期记忆未启用（需配置 Embedding 模型）", nil
 	}
-	args := parseArgs(input)
+	args := base.ParseArgs(input)
 	query, _ := args["query"].(string)
 	if query == "" {
 		return "请提供搜索关键词", nil
@@ -123,11 +124,11 @@ type UpdateUserProfileTool struct {
 func (t *UpdateUserProfileTool) Name() string { return "update_user_profile" }
 
 // Permission returns the required permission level.
-func (t *UpdateUserProfileTool) Permission() PermissionLevel { return PermPublic }
+func (t *UpdateUserProfileTool) Permission() base.PermissionLevel { return base.PermPublic }
 
 // Info returns the eino tool schema for update_user_profile.
 func (t *UpdateUserProfileTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(),
+	return base.InfoFromSchema(t.Name(),
 		"更新用户画像中的稳定属性（偏好、习惯、背景），如 preferred_language、timezone。已存在的 key 被覆盖，否则追加。临时事实或一次性结论请用 save_memory。",
 		map[string]*schema.ParameterInfo{
 			"key": {
@@ -146,7 +147,7 @@ func (t *UpdateUserProfileTool) Info(_ context.Context) (*schema.ToolInfo, error
 
 // InvokableRun reads ~/.aiko/USER.md, updates or appends the key-value line, and writes back atomically.
 func (t *UpdateUserProfileTool) InvokableRun(_ context.Context, input string, _ ...tool.Option) (string, error) {
-	args := parseArgs(input)
+	args := base.ParseArgs(input)
 	key, _ := args["key"].(string)
 	value, _ := args["value"].(string)
 	if key == "" {
@@ -175,11 +176,11 @@ type ListSkillsTool struct {
 func (t *ListSkillsTool) Name() string { return "list_skills" }
 
 // Permission returns the required permission level.
-func (t *ListSkillsTool) Permission() PermissionLevel { return PermPublic }
+func (t *ListSkillsTool) Permission() base.PermissionLevel { return base.PermPublic }
 
 // Info returns the eino tool schema for list_skill_names.
 func (t *ListSkillsTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(),
+	return base.InfoFromSchema(t.Name(),
 		"列出 AI 通过 save_skill 自主沉淀的技能名称与一句话描述。调用 save_skill 前先确认是否已存在同名或相似技能；需要重命名时先通过此工具查找旧技能名。",
 		map[string]*schema.ParameterInfo{},
 	), nil
@@ -258,11 +259,11 @@ type SaveSkillTool struct {
 func (t *SaveSkillTool) Name() string { return "save_skill" }
 
 // Permission returns the required permission level.
-func (t *SaveSkillTool) Permission() PermissionLevel { return PermPublic }
+func (t *SaveSkillTool) Permission() base.PermissionLevel { return base.PermPublic }
 
 // Info returns the eino tool schema for save_skill.
 func (t *SaveSkillTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(),
+	return base.InfoFromSchema(t.Name(),
 		"将当前解决的问题模式保存为可复用的技能文件。已存在的同名技能会被更新（自我改进）。改名时通过 old_name 传入旧技能名，旧目录会被自动删除。",
 		map[string]*schema.ParameterInfo{
 			"name": {
@@ -292,7 +293,7 @@ func (t *SaveSkillTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 // then calls OnSaved asynchronously so the caller can hot-reload the skill middleware.
 // If old_name is provided and differs from name, the old skill directory is removed.
 func (t *SaveSkillTool) InvokableRun(_ context.Context, input string, _ ...tool.Option) (string, error) {
-	args := parseArgs(input)
+	args := base.ParseArgs(input)
 	name, _ := args["name"].(string)
 	description, _ := args["description"].(string)
 	content, _ := args["content"].(string)

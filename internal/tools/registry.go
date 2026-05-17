@@ -12,7 +12,11 @@ import (
 	"aiko/internal/knowledge"
 	"aiko/internal/memory"
 	"aiko/internal/scheduler"
+	toolcron "aiko/internal/tools/cron"
+	toolcontext "aiko/internal/tools/context"
 	exectools "aiko/internal/tools/exec"
+	toolfs "aiko/internal/tools/fs"
+	toolgrowth "aiko/internal/tools/growth"
 )
 
 // permGate wraps a Tool with permission enforcement.
@@ -177,19 +181,19 @@ func AllPermissionDeclarations() []namedPermDecl {
 	ctxPrototypes := []Tool{
 		&WebSearchTool{},
 		&WebFetchTool{},
-		&SearchKnowledgeTool{},
-		&CronTool{},
-		&SaveMemoryTool{},
-		&SearchMemoryTool{},
-		&UpdateUserProfileTool{},
-		&ListSkillsTool{},
-		&SaveSkillTool{},
-		&ListDirectoryTool{},
-		&ReadFileTool{},
-		&WriteFileTool{},
-		&DeleteFileTool{},
-		&MakeDirectoryTool{},
-		&MoveFileTool{},
+		&toolcontext.SearchKnowledgeTool{},
+		&toolcron.CronTool{},
+		&toolgrowth.SaveMemoryTool{},
+		&toolgrowth.SearchMemoryTool{},
+		&toolgrowth.UpdateUserProfileTool{},
+		&toolgrowth.ListSkillsTool{},
+		&toolgrowth.SaveSkillTool{},
+		&toolfs.ListDirectoryTool{},
+		&toolfs.ReadFileTool{},
+		&toolfs.WriteFileTool{},
+		&toolfs.DeleteFileTool{},
+		&toolfs.MakeDirectoryTool{},
+		&toolfs.MoveFileTool{},
 		&exectools.ExecuteShellTool{},
 		&exectools.ExecuteCodeTool{},
 		&ReadImageTool{},
@@ -242,20 +246,20 @@ func AllContextual(
 	contextTools := []Tool{
 		&WebSearchTool{Cfg: cfg},
 		&WebFetchTool{Cfg: cfg},
-		&SearchKnowledgeTool{KnowledgeSt: knowledgeSt},
-		&CronTool{Scheduler: sched},
-		&SaveMemoryTool{LongMem: longMem},
-		&SearchMemoryTool{LongMem: longMem},
-		&UpdateUserProfileTool{DataDir: dataDir},
-		&ListSkillsTool{DataDir: dataDir},
-		&SaveSkillTool{DataDir: dataDir, OnSaved: onSkillSaved},
+		&toolcontext.SearchKnowledgeTool{KnowledgeSt: knowledgeSt},
+		&toolcron.CronTool{Scheduler: sched},
+		&toolgrowth.SaveMemoryTool{LongMem: longMem},
+		&toolgrowth.SearchMemoryTool{LongMem: longMem},
+		&toolgrowth.UpdateUserProfileTool{DataDir: dataDir},
+		&toolgrowth.ListSkillsTool{DataDir: dataDir},
+		&toolgrowth.SaveSkillTool{DataDir: dataDir, OnSaved: onSkillSaved},
 		// File system tools
-		&ListDirectoryTool{Cfg: cfg},
-		&ReadFileTool{Cfg: cfg},
-		&WriteFileTool{Cfg: cfg},
-		&DeleteFileTool{Cfg: cfg},
-		&MakeDirectoryTool{Cfg: cfg},
-		&MoveFileTool{Cfg: cfg},
+		&toolfs.ListDirectoryTool{Cfg: cfg},
+		&toolfs.ReadFileTool{Cfg: cfg},
+		&toolfs.WriteFileTool{Cfg: cfg},
+		&toolfs.DeleteFileTool{Cfg: cfg},
+		&toolfs.MakeDirectoryTool{Cfg: cfg},
+		&toolfs.MoveFileTool{Cfg: cfg},
 		// Execution tools
 		&exectools.ExecuteShellTool{Cfg: cfg, RegisterCmd: registerCmd, UnregisterCmd: unregisterCmd},
 		&exectools.ExecuteCodeTool{Cfg: cfg, RegisterCmd: registerCmd, UnregisterCmd: unregisterCmd},

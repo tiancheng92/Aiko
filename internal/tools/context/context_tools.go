@@ -1,5 +1,5 @@
-// internal/tools/context_tools.go
-package tools
+// internal/tools/context/context_tools.go
+package toolcontext
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"aiko/internal/knowledge"
+	"aiko/internal/tools/base"
 )
 
 // SearchKnowledgeTool searches the knowledge base for relevant document chunks.
@@ -18,11 +19,11 @@ type SearchKnowledgeTool struct {
 }
 
 func (t *SearchKnowledgeTool) Name() string             { return "search_knowledge" }
-func (t *SearchKnowledgeTool) Permission() PermissionLevel { return PermPublic }
+func (t *SearchKnowledgeTool) Permission() base.PermissionLevel { return base.PermPublic }
 
 // Info returns the eino tool schema for search_knowledge.
 func (t *SearchKnowledgeTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(), "在已导入的知识库文档中语义搜索，返回最相关的段落。当问题可能在用户上传的文件或文档中有答案时，优先调用此工具。",
+	return base.InfoFromSchema(t.Name(), "在已导入的知识库文档中语义搜索，返回最相关的段落。当问题可能在用户上传的文件或文档中有答案时，优先调用此工具。",
 		map[string]*schema.ParameterInfo{
 			"query": {
 				Type:     schema.String,
@@ -38,7 +39,7 @@ func (t *SearchKnowledgeTool) InvokableRun(ctx context.Context, input string, _ 
 	if t.KnowledgeSt == nil {
 		return "知识库未启用（需配置 Embedding 模型并导入文档）", nil
 	}
-	args := parseArgs(input)
+	args := base.ParseArgs(input)
 	query, _ := args["query"].(string)
 	if query == "" {
 		return "请提供搜索词", nil

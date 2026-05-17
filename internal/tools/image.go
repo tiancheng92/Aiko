@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino/components/tool"
+
+	"aiko/internal/tools/base"
 )
 
 // supportedImageExts maps file extensions to MIME types for read_image.
@@ -39,7 +41,7 @@ func (t *ReadImageTool) InvokableRun(_ context.Context, input string, _ ...tool.
 		return "参数 path 不能为空", nil
 	}
 
-	abs, err := checkPath(path, t.Cfg.AllowedPaths)
+	abs, err := base.CheckPath(path, t.Cfg.AllowedPaths)
 	if err != nil {
 		return err.Error(), nil
 	}
@@ -84,7 +86,7 @@ func (t *SaveImageTool) InvokableRun(ctx context.Context, input string, _ ...too
 		return "参数 path 不能为空", nil
 	}
 
-	abs, err := checkPath(destPath, t.Cfg.AllowedPaths)
+	abs, err := base.CheckPath(destPath, t.Cfg.AllowedPaths)
 	if err != nil {
 		return err.Error(), nil
 	}
