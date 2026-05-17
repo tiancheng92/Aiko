@@ -1730,7 +1730,7 @@ func (a *App) ListVRMModels() ([]VRMModelInfo, error) {
 			}
 		}
 	}
-	userDir := filepath.Join(os.Getenv("HOME"), ".aiko", "vrm")
+	userDir := filepath.Join(a.dataDir, "vrm")
 	uentries, err := os.ReadDir(userDir)
 	if err == nil {
 		for _, e := range uentries {
@@ -1757,7 +1757,7 @@ func (a *App) GetVRMPath(name string) (string, error) {
 	if _, err := assets.Open("frontend/dist/vrm/" + name); err == nil {
 		return "/vrm/" + name, nil
 	}
-	userPath := filepath.Join(os.Getenv("HOME"), ".aiko", "vrm", name)
+	userPath := filepath.Join(a.dataDir, "vrm", name)
 	if _, err := os.Stat(userPath); err == nil {
 		return "/user-vrm/" + name, nil
 	}
@@ -1777,7 +1777,7 @@ func (a *App) ImportVRMFile(name string, base64Data string) error {
 	if len(data) < 4 || string(data[:4]) != "glTF" {
 		return fmt.Errorf("not a valid glTF/VRM file")
 	}
-	userDir := filepath.Join(os.Getenv("HOME"), ".aiko", "vrm")
+	userDir := filepath.Join(a.dataDir, "vrm")
 	if err := os.MkdirAll(userDir, 0o755); err != nil {
 		return fmt.Errorf("create vrm dir: %w", err)
 	}
@@ -1787,7 +1787,7 @@ func (a *App) ImportVRMFile(name string, base64Data string) error {
 
 // DeleteVRMModel removes a user-imported VRM from ~/.aiko/vrm/.
 func (a *App) DeleteVRMModel(name string) error {
-	userPath := filepath.Join(os.Getenv("HOME"), ".aiko", "vrm", filepath.Base(name))
+	userPath := filepath.Join(a.dataDir, "vrm", filepath.Base(name))
 	if _, err := os.Stat(userPath); os.IsNotExist(err) {
 		return fmt.Errorf("user-imported model not found: %s", name)
 	}
