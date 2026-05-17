@@ -131,23 +131,16 @@ type Agent struct {
 	skillHintMu   sync.Mutex  // guards lastSkillHint
 }
 
-// New constructs an Agent with a ReAct runner backed by the given chat model,
-// memory stores, and optional tools. longMem may be nil when vector memory is
-// not configured. skillMW may be nil when no skills are configured.
-func New(
-	ctx context.Context,
+// buildAgentRunner constructs the eino deep agent and its runner from the given
+// chat model, tools, config, middleware, and skill middleware.
+// mw may be nil (no tool middleware); skillMW may be nil (no skills).
+func buildAgentRunner(ctx context.Context,
 	chatModel model.ToolCallingChatModel,
-	shortMem *memory.ShortStore,
-	longMem *memory.LongStore,
 	tools []tool.BaseTool,
 	cfg *config.Config,
 	mw middleware.Middleware,
 	skillMW adk.ChatModelAgentMiddleware,
-	dataDir string,
-	pendingConfirms *sync.Map,
-	emitEvent func(event string, data ...any),
-) (*Agent, error) {
-	// Apply middleware chain to all tools if provided.
+) (*adk.Runner, error) {
 	if mw != nil && len(tools) > 0 {
 		tools = middleware.WrapAll(tools, mw)
 	}
@@ -166,7 +159,7 @@ func New(
 		ChatModel:              chatModel,
 		MaxIteration:           100,
 		Handlers:               handlers,
-		WithoutGeneralSubAgent: true, // Aiko is a single-agent; disable the Task tool and its misleading subagent prompt.
+		WithoutGeneralSubAgent: true,
 		ModelRetryConfig: &adk.ModelRetryConfig{
 			MaxRetries: 5,
 			IsRetryAble: func(_ context.Context, err error) bool {
@@ -191,11 +184,33 @@ func New(
 		return nil, err
 	}
 
-	runner := adk.NewRunner(ctx, adk.RunnerConfig{
+	return adk.NewRunner(ctx, adk.RunnerConfig{
 		Agent:           agent,
-		EnableStreaming: true,
+		EnableStreaming:  true,
 		CheckPointStore: &memCheckPointStore{m: map[string][]byte{}},
-	})
+	}), nil
+}
+
+// New constructs an Agent with a ReAct runner backed by the given chat model,
+// memory stores, and optional tools. longMem may be nil when vector memory is
+// not configured. skillMW may be nil when no skills are configured.
+func New(
+	ctx context.Context,
+	chatModel model.ToolCallingChatModel,
+	shortMem *memory.ShortStore,
+	longMem *memory.LongStore,
+	tools []tool.BaseTool,
+	cfg *config.Config,
+	mw middleware.Middleware,
+	skillMW adk.ChatModelAgentMiddleware,
+	dataDir string,
+	pendingConfirms *sync.Map,
+	emitEvent func(event string, data ...any),
+) (*Agent, error) {
+	runner, err := buildAgentRunner(ctx, chatModel, tools, cfg, mw, skillMW)
+	if err != nil {
+		return nil, err
+	}
 
 	ni := cfg.NudgeInterval
 	if ni <= 0 {
