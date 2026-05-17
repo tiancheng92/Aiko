@@ -102,7 +102,8 @@ func main() {
 		},
 	})
 	if err != nil {
-		panic(err)
+		slog.Error("wails run failed", "err", err)
+		os.Exit(1)
 	}
 }
 
