@@ -1,9 +1,12 @@
-package tools
+// internal/tools/screenshot/screenshot_tools.go
+package screenshot
 
 import (
 	"context"
 
 	"github.com/cloudwego/eino/schema"
+
+	"aiko/internal/tools/base"
 )
 
 // TakeScreenshotTool captures the full screen and returns the image directly
@@ -14,7 +17,7 @@ type TakeScreenshotTool struct{}
 func (t *TakeScreenshotTool) Name() string { return "take_screenshot" }
 
 // Permission declares this tool as protected.
-func (t *TakeScreenshotTool) Permission() PermissionLevel { return PermProtected }
+func (t *TakeScreenshotTool) Permission() base.PermissionLevel { return base.PermProtected }
 
 // Info returns eino tool metadata.
 func (t *TakeScreenshotTool) Info(_ context.Context) (*schema.ToolInfo, error) {

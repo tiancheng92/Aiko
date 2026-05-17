@@ -1,13 +1,15 @@
 //go:build !darwin
 
-// internal/tools/mail_other.go
-package tools
+// internal/tools/mail/mail_other.go
+package mail
 
 import (
 	"context"
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
+
+	"aiko/internal/tools/base"
 )
 
 // GetMailsTool is a no-op stub on non-Darwin platforms.
@@ -17,11 +19,11 @@ type GetMailsTool struct{}
 func (t *GetMailsTool) Name() string { return "get_mails" }
 
 // Permission declares this tool as public.
-func (t *GetMailsTool) Permission() PermissionLevel { return PermPublic }
+func (t *GetMailsTool) Permission() base.PermissionLevel { return base.PermPublic }
 
 // Info returns eino tool metadata.
 func (t *GetMailsTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(),
+	return base.InfoFromSchema(t.Name(),
 		"获取邮件列表（仅支持 macOS）。",
 		map[string]*schema.ParameterInfo{},
 	), nil
@@ -39,11 +41,11 @@ type GetMailContentTool struct{}
 func (t *GetMailContentTool) Name() string { return "get_mail_content" }
 
 // Permission declares this tool as public.
-func (t *GetMailContentTool) Permission() PermissionLevel { return PermPublic }
+func (t *GetMailContentTool) Permission() base.PermissionLevel { return base.PermPublic }
 
 // Info returns eino tool metadata.
 func (t *GetMailContentTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(),
+	return base.InfoFromSchema(t.Name(),
 		"读取邮件正文（仅支持 macOS）。",
 		map[string]*schema.ParameterInfo{},
 	), nil

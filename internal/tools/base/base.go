@@ -3,6 +3,7 @@
 package base
 
 import (
+	"context"
 	"log/slog"
 
 	json "github.com/bytedance/sonic"
@@ -29,6 +30,18 @@ type Tool interface {
 	Name() string
 	// Permission returns the required permission level.
 	Permission() PermissionLevel
+}
+
+// EnhancedTool is a tool that may return multimodal (non-text) results.
+// It intentionally does NOT embed Tool (which carries the plain-string
+// InvokableRun) to avoid a duplicate-method conflict.
+type EnhancedTool interface {
+	tool.BaseTool
+	// Name returns the stable snake_case name used in permission storage.
+	Name() string
+	// Permission returns the required permission level.
+	Permission() PermissionLevel
+	InvokableRun(ctx context.Context, arg *schema.ToolArgument, opts ...tool.Option) (*schema.ToolResult, error)
 }
 
 // InfoFromSchema builds a *schema.ToolInfo from name, desc and params.

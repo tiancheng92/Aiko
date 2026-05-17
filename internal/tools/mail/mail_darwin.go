@@ -1,15 +1,29 @@
 //go:build darwin
 
-// internal/tools/mail_darwin.go
-package tools
+// internal/tools/mail/mail_darwin.go
+package mail
 
 import (
 	"context"
 	"fmt"
+	"os/exec"
+	"strings"
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
+
+	"aiko/internal/tools/base"
 )
+
+// runAppleScript executes an AppleScript and returns trimmed stdout or error.
+func runAppleScript(script string) (string, error) {
+	out, err := exec.Command("osascript", "-e", script).CombinedOutput()
+	result := strings.TrimSpace(string(out))
+	if err != nil {
+		return "", fmt.Errorf("%w: %s", err, result)
+	}
+	return result, nil
+}
 
 // ---- GetMailsTool ------------------------------------------------------
 
@@ -21,11 +35,11 @@ type GetMailsTool struct{}
 func (t *GetMailsTool) Name() string { return "get_mails" }
 
 // Permission declares this tool as public.
-func (t *GetMailsTool) Permission() PermissionLevel { return PermPublic }
+func (t *GetMailsTool) Permission() base.PermissionLevel { return base.PermPublic }
 
 // Info returns eino tool metadata.
 func (t *GetMailsTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(),
+	return base.InfoFromSchema(t.Name(),
 		"获取 macOS Mail.app 中的邮件列表。支持按邮箱名、时间范围（since/until）和已读状态过滤。返回发件人、主题、日期和已读状态，不含正文（用 get_mail_content 读取正文）。仅支持 macOS。",
 		map[string]*schema.ParameterInfo{
 			"mailbox": {
@@ -59,7 +73,7 @@ func (t *GetMailsTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 
 // InvokableRun fetches mail list via osascript.
 func (t *GetMailsTool) InvokableRun(_ context.Context, input string, _ ...tool.Option) (string, error) {
-	args := parseArgs(input)
+	args := base.ParseArgs(input)
 	mailbox, _ := args["mailbox"].(string)
 	since, _ := args["since"].(string)
 	until, _ := args["until"].(string)
@@ -192,11 +206,11 @@ type GetMailContentTool struct{}
 func (t *GetMailContentTool) Name() string { return "get_mail_content" }
 
 // Permission declares this tool as public.
-func (t *GetMailContentTool) Permission() PermissionLevel { return PermPublic }
+func (t *GetMailContentTool) Permission() base.PermissionLevel { return base.PermPublic }
 
 // Info returns eino tool metadata.
 func (t *GetMailContentTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(),
+	return base.InfoFromSchema(t.Name(),
 		"读取 macOS Mail.app 中某封邮件的完整正文。通过主题和可选的发件人定位邮件；多封匹配时返回最新一封。仅支持 macOS。",
 		map[string]*schema.ParameterInfo{
 			"subject": {
@@ -220,7 +234,7 @@ func (t *GetMailContentTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 
 // InvokableRun retrieves the full body of a matching email via osascript.
 func (t *GetMailContentTool) InvokableRun(_ context.Context, input string, _ ...tool.Option) (string, error) {
-	args := parseArgs(input)
+	args := base.ParseArgs(input)
 	subject, _ := args["subject"].(string)
 	if subject == "" {
 		return "参数 subject 不能为空", nil

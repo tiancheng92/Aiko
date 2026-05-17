@@ -1,7 +1,7 @@
 //go:build darwin
 
-// internal/tools/reminders_darwin.go
-package tools
+// internal/tools/reminders/reminders_darwin.go
+package reminders
 
 import (
 	"context"
@@ -11,6 +11,8 @@ import (
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
+
+	"aiko/internal/tools/base"
 )
 
 // runAppleScript executes an AppleScript and returns trimmed stdout or error.
@@ -33,11 +35,11 @@ type GetRemindersTool struct{}
 func (t *GetRemindersTool) Name() string { return "get_reminders" }
 
 // Permission declares this tool as public.
-func (t *GetRemindersTool) Permission() PermissionLevel { return PermPublic }
+func (t *GetRemindersTool) Permission() base.PermissionLevel { return base.PermPublic }
 
 // Info returns eino tool metadata.
 func (t *GetRemindersTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(),
+	return base.InfoFromSchema(t.Name(),
 		"获取 macOS「提醒事项」App 中的提醒。可按清单名过滤；不传则返回所有清单的未完成提醒。仅支持 macOS。",
 		map[string]*schema.ParameterInfo{
 			"list": {
@@ -56,7 +58,7 @@ func (t *GetRemindersTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 
 // InvokableRun fetches reminders via osascript.
 func (t *GetRemindersTool) InvokableRun(_ context.Context, input string, _ ...tool.Option) (string, error) {
-	args := parseArgs(input)
+	args := base.ParseArgs(input)
 	listName, _ := args["list"].(string)
 	includeCompleted, _ := args["include_completed"].(bool)
 
@@ -128,11 +130,11 @@ type CompleteReminderTool struct{}
 func (t *CompleteReminderTool) Name() string { return "complete_reminder" }
 
 // Permission declares this tool as public.
-func (t *CompleteReminderTool) Permission() PermissionLevel { return PermPublic }
+func (t *CompleteReminderTool) Permission() base.PermissionLevel { return base.PermPublic }
 
 // Info returns eino tool metadata.
 func (t *CompleteReminderTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(),
+	return base.InfoFromSchema(t.Name(),
 		"将 macOS「提醒事项」中的某条提醒标记为已完成。需提供提醒名称，可选提供清单名以避免同名歧义。仅支持 macOS。",
 		map[string]*schema.ParameterInfo{
 			"name": {
@@ -151,7 +153,7 @@ func (t *CompleteReminderTool) Info(_ context.Context) (*schema.ToolInfo, error)
 
 // InvokableRun marks the reminder as completed via osascript.
 func (t *CompleteReminderTool) InvokableRun(_ context.Context, input string, _ ...tool.Option) (string, error) {
-	args := parseArgs(input)
+	args := base.ParseArgs(input)
 	name, _ := args["name"].(string)
 	if name == "" {
 		return "参数 name 不能为空", nil

@@ -1,10 +1,12 @@
-// internal/tools/app_control_tools.go
-package tools
+// internal/tools/appctl/app_control_tools.go
+package appctl
 
 import (
 	"context"
 
 	"github.com/cloudwego/eino/schema"
+
+	"aiko/internal/tools/base"
 )
 
 // ListRunningAppsTool returns the names of all visible running applications.
@@ -14,7 +16,7 @@ type ListRunningAppsTool struct{}
 func (t *ListRunningAppsTool) Name() string { return "list_running_apps" }
 
 // Permission declares this tool as public (read-only, non-destructive).
-func (t *ListRunningAppsTool) Permission() PermissionLevel { return PermPublic }
+func (t *ListRunningAppsTool) Permission() base.PermissionLevel { return base.PermPublic }
 
 // Info returns eino tool metadata.
 func (t *ListRunningAppsTool) Info(_ context.Context) (*schema.ToolInfo, error) {
@@ -32,11 +34,11 @@ type ControlAppTool struct{}
 func (t *ControlAppTool) Name() string { return "control_app" }
 
 // Permission declares this tool as protected.
-func (t *ControlAppTool) Permission() PermissionLevel { return PermProtected }
+func (t *ControlAppTool) Permission() base.PermissionLevel { return base.PermProtected }
 
 // Info returns eino tool metadata.
 func (t *ControlAppTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(),
+	return base.InfoFromSchema(t.Name(),
 		"控制 macOS 应用程序：打开并激活、仅激活到前台、或退出。仅支持 macOS。",
 		map[string]*schema.ParameterInfo{
 			"action": {

@@ -1,10 +1,12 @@
-// internal/tools/calendar_tools.go
-package tools
+// internal/tools/calendar/calendar_tools.go
+package calendar
 
 import (
 	"context"
 
 	"github.com/cloudwego/eino/schema"
+
+	"aiko/internal/tools/base"
 )
 
 // GetCalendarEventsTool retrieves events from macOS Calendar within a date range.
@@ -14,11 +16,11 @@ type GetCalendarEventsTool struct{}
 func (t *GetCalendarEventsTool) Name() string { return "get_calendar_events" }
 
 // Permission declares this tool as public.
-func (t *GetCalendarEventsTool) Permission() PermissionLevel { return PermPublic }
+func (t *GetCalendarEventsTool) Permission() base.PermissionLevel { return base.PermPublic }
 
 // Info returns eino tool metadata.
 func (t *GetCalendarEventsTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(),
+	return base.InfoFromSchema(t.Name(),
 		"查询 macOS 日历中指定日期范围内的事件，返回标题、开始/结束时间、地点和备注。仅支持 macOS。",
 		map[string]*schema.ParameterInfo{
 			"start_date": {
@@ -47,11 +49,11 @@ type CreateCalendarEventTool struct{}
 func (t *CreateCalendarEventTool) Name() string { return "create_calendar_event" }
 
 // Permission declares this tool as protected (modifies user data).
-func (t *CreateCalendarEventTool) Permission() PermissionLevel { return PermProtected }
+func (t *CreateCalendarEventTool) Permission() base.PermissionLevel { return base.PermProtected }
 
 // Info returns eino tool metadata.
 func (t *CreateCalendarEventTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(t.Name(),
+	return base.InfoFromSchema(t.Name(),
 		"在 macOS 日历中创建新事件。创建前可用 get_calendar_events 确认无时间冲突。仅支持 macOS。",
 		map[string]*schema.ParameterInfo{
 			"title": {

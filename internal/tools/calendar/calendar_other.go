@@ -1,7 +1,7 @@
 //go:build !darwin
 
-// internal/tools/calendar_other.go
-package tools
+// internal/tools/calendar/calendar_other.go
+package calendar
 
 import (
 	"context"

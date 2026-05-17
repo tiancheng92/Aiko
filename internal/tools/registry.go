@@ -12,7 +12,9 @@ import (
 	"aiko/internal/knowledge"
 	"aiko/internal/memory"
 	"aiko/internal/scheduler"
+	toolappctl "aiko/internal/tools/appctl"
 	toolbrowser "aiko/internal/tools/browser"
+	toolcalendar "aiko/internal/tools/calendar"
 	toolclipboard "aiko/internal/tools/clipboard"
 	toolcron "aiko/internal/tools/cron"
 	toolcontext "aiko/internal/tools/context"
@@ -22,6 +24,9 @@ import (
 	toolgrowth "aiko/internal/tools/growth"
 	toolimage "aiko/internal/tools/image"
 	toollocation "aiko/internal/tools/location"
+	toolmail "aiko/internal/tools/mail"
+	toolreminders "aiko/internal/tools/reminders"
+	toolscreenshot "aiko/internal/tools/screenshot"
 	toolsystem "aiko/internal/tools/system"
 	"aiko/internal/tools/timeutil"
 	toolweb "aiko/internal/tools/web"
@@ -120,16 +125,16 @@ func All() []Tool {
 		&toollocation.GetLocationTool{},
 		&weather.GetWeatherTool{},
 		&toolbrowser.GetBrowserURLTool{},
-		&GetRemindersTool{},
-		&CompleteReminderTool{},
-		&GetMailsTool{},
-		&GetMailContentTool{},
+		&toolreminders.GetRemindersTool{},
+		&toolreminders.CompleteReminderTool{},
+		&toolmail.GetMailsTool{},
+		&toolmail.GetMailContentTool{},
 		&toolclipboard.ReadClipboardTool{},
 		&toolclipboard.WriteClipboardTool{},
-		&ListRunningAppsTool{},
-		&ControlAppTool{},
-		&GetCalendarEventsTool{},
-		&CreateCalendarEventTool{},
+		&toolappctl.ListRunningAppsTool{},
+		&toolappctl.ControlAppTool{},
+		&toolcalendar.GetCalendarEventsTool{},
+		&toolcalendar.CreateCalendarEventTool{},
 		// Developer utility tools
 		&tooldev.FormatJSONTool{},
 		&tooldev.JSONToStructTool{},
@@ -155,7 +160,7 @@ func AllEino(permStore *PermissionStore) []tool.BaseTool {
 		result = append(result, ToEino(t, permStore))
 	}
 	// Enhanced multimodal tools (EnhancedInvokableTool interface).
-	result = append(result, ToEinoEnhanced(&TakeScreenshotTool{}, permStore))
+	result = append(result, ToEinoEnhanced(&toolscreenshot.TakeScreenshotTool{}, permStore))
 	return result
 }
 
@@ -201,8 +206,8 @@ func AllPermissionDeclarations() []namedPermDecl {
 	}
 	// Enhanced multimodal tools.
 	decls = append(decls, namedPermDecl{
-		Name_: (&TakeScreenshotTool{}).Name(),
-		Perm_: (&TakeScreenshotTool{}).Permission(),
+		Name_: (&toolscreenshot.TakeScreenshotTool{}).Name(),
+		Perm_: (&toolscreenshot.TakeScreenshotTool{}).Permission(),
 	})
 	return decls
 }

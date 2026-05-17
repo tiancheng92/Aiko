@@ -1,7 +1,7 @@
 //go:build darwin
 
-// internal/tools/app_control_darwin.go
-package tools
+// internal/tools/appctl/app_control_darwin.go
+package appctl
 
 import (
 	"context"
@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/cloudwego/eino/components/tool"
+
+	"aiko/internal/tools/base"
 )
 
 // InvokableRun lists visible running applications via System Events osascript.
@@ -30,7 +32,7 @@ end tell`
 
 // InvokableRun controls the named application via AppleScript.
 func (t *ControlAppTool) InvokableRun(_ context.Context, input string, _ ...tool.Option) (string, error) {
-	args := parseArgs(input)
+	args := base.ParseArgs(input)
 	action, ok := args["action"].(string)
 	if !ok || action == "" {
 		return "请提供 action 参数（open/activate/quit）", nil

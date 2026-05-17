@@ -1,7 +1,7 @@
 //go:build !darwin
 
-// internal/tools/app_control_other.go
-package tools
+// internal/tools/appctl/app_control_other.go
+package appctl
 
 import (
 	"context"

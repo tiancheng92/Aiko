@@ -1,6 +1,6 @@
 //go:build !darwin
 
-package tools
+package screenshot
 
 import (
 	"context"

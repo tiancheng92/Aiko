@@ -1,16 +1,19 @@
 //go:build darwin
 
-// internal/tools/calendar_darwin.go
-package tools
+// internal/tools/calendar/calendar_darwin.go
+package calendar
 
 import (
 	"context"
-	json "github.com/bytedance/sonic"
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
+	json "github.com/bytedance/sonic"
 	"github.com/cloudwego/eino/components/tool"
+
+	"aiko/internal/tools/base"
 )
 
 // calendarEvent is the JSON-serialisable representation of a Calendar event.
@@ -80,9 +83,19 @@ func escapeAppleScriptString(s string) string {
 	return s
 }
 
+// runAppleScript executes an AppleScript and returns trimmed stdout or error.
+func runAppleScript(script string) (string, error) {
+	out, err := exec.Command("osascript", "-e", script).CombinedOutput()
+	result := strings.TrimSpace(string(out))
+	if err != nil {
+		return "", fmt.Errorf("%w: %s", err, result)
+	}
+	return result, nil
+}
+
 // InvokableRun queries Calendar.app for events in the given date range.
 func (t *GetCalendarEventsTool) InvokableRun(_ context.Context, input string, _ ...tool.Option) (string, error) {
-	args := parseArgs(input)
+	args := base.ParseArgs(input)
 	startDate, _ := args["start_date"].(string)
 	endDate, _ := args["end_date"].(string)
 	calName, _ := args["calendar_name"].(string)
@@ -184,7 +197,7 @@ end tell`,
 
 // InvokableRun creates a new event in Calendar.app.
 func (t *CreateCalendarEventTool) InvokableRun(_ context.Context, input string, _ ...tool.Option) (string, error) {
-	args := parseArgs(input)
+	args := base.ParseArgs(input)
 	title, _ := args["title"].(string)
 	startTime, _ := args["start_time"].(string)
 	endTime, _ := args["end_time"].(string)
