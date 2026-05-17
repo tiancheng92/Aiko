@@ -2,8 +2,6 @@
 package tools
 
 import (
-	"github.com/cloudwego/eino/schema"
-
 	"aiko/internal/tools/base"
 	"aiko/internal/tools/location"
 )
@@ -33,16 +31,6 @@ type CodeConfirmInfo = base.CodeConfirmInfo
 type UpdateConfirmInfo = base.UpdateConfirmInfo
 type ConfirmResult = base.ConfirmResult
 type PersistBeforeRestartKey = base.PersistBeforeRestartKey
-
-// infoFromSchema and parseArgs are package-private wrappers used by tool implementations
-// that remain in the parent package during migration.
-func infoFromSchema(name, desc string, params map[string]*schema.ParameterInfo) *schema.ToolInfo {
-	return base.InfoFromSchema(name, desc, params)
-}
-
-func parseArgs(input string) map[string]any {
-	return base.ParseArgs(input)
-}
 
 // FetchLocation re-exports location.FetchLocation for callers that import internal/tools.
 func FetchLocation() string {
