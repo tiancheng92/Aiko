@@ -362,19 +362,25 @@ func (a *App) startup(ctx context.Context) {
 
 	home, err := os.UserHomeDir()
 	if err != nil {
-		panic(fmt.Errorf("get home dir: %w", err))
+		a.startupErr = fmt.Sprintf("无法获取用户目录: %v", err)
+		slog.Error("startup: get home dir failed", "err", err)
+		return
 	}
 	dataDir := filepath.Join(home, ".aiko")
 	a.dataDir = dataDir
 
 	a.sqlDB, err = db.Open(dataDir)
 	if err != nil {
-		panic(err)
+		a.startupErr = fmt.Sprintf("数据库初始化失败: %v", err)
+		slog.Error("startup: db open failed", "err", err)
+		return
 	}
 	a.configStore = config.NewStore(a.sqlDB)
 	a.cfg, err = a.configStore.Load()
 	if err != nil {
-		panic(err)
+		a.startupErr = fmt.Sprintf("配置加载失败: %v", err)
+		slog.Error("startup: config load failed", "err", err)
+		return
 	}
 	// Apply active model profile if set.
 	profileStore := config.NewProfileStore(a.sqlDB)
@@ -421,7 +427,9 @@ func (a *App) startup(ctx context.Context) {
 	vectorPath := filepath.Join(dataDir, "vectors")
 	a.vectorDB, err = chromem.NewPersistentDB(vectorPath, false)
 	if err != nil {
-		panic(err)
+		a.startupErr = fmt.Sprintf("向量库初始化失败: %v", err)
+		slog.Error("startup: vectordb open failed", "err", err)
+		return
 	}
 
 	if len(a.cfg.MissingRequired()) == 0 {
@@ -1983,6 +1991,14 @@ func (a *App) domReady(_ context.Context) {
 			"message": "Aiko 已更新至 v" + a.pendingUpdateVersion,
 		})
 		a.pendingUpdateVersion = ""
+	}
+
+	// Show startup failure notification if startup() encountered a fatal error.
+	if a.startupErr != "" {
+		wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
+			"title":   "❌ 启动失败",
+			"message": a.startupErr,
+		})
 	}
 }
 
