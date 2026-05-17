@@ -489,13 +489,15 @@ func (a *App) startup(ctx context.Context) {
 
 // buildAgent assembles the full tool list and constructs a new eino Agent from
 // already-resolved components. extraTools is nil for the initial build and
-// contains MCP tools for subsequent rebuilds.
+// contains MCP tools for subsequent rebuilds. proactiveStore is shared with the
+// proactive engine so the followup tool and engine operate on the same instance.
 func (a *App) buildAgent(
 	ctx context.Context,
 	chatModel model.ToolCallingChatModel,
 	longMem *memory.LongStore,
 	knowledgeSt *knowledge.Store,
 	sched *scheduler.Scheduler,
+	proactiveStore proactive.Store,
 	extraTools []tool.BaseTool,
 	cfgSkillsDirs []string,
 ) (*agent.Agent, error) {
@@ -521,7 +523,6 @@ func (a *App) buildAgent(
 		func(event string, data any) { wailsruntime.EventsEmit(a.ctx, event, data) },
 		version,
 	)
-	proactiveStore := proactive.NewStore(a.sqlDB)
 	followupTool := internaltools.ToEino(proactive.NewScheduleFollowupTool(proactiveStore), a.permStore)
 	allTools := append(builtinTools, contextTools...)
 	allTools = append(allTools, extraTools...)
@@ -690,8 +691,9 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	// holding a.mu can deadlock if the event handler calls an App method.
 	sched := scheduler.New(a.sqlDB, chatFn, onResult)
 
+	proactiveStore := proactive.NewStore(a.sqlDB)
 	// MCP tools are loaded asynchronously after the agent is online (see below).
-	newAgent, err := a.buildAgent(ctx, chatModel, longMem, knowledgeSt, sched, nil, cfg.SkillsDirs)
+	newAgent, err := a.buildAgent(ctx, chatModel, longMem, knowledgeSt, sched, proactiveStore, nil, cfg.SkillsDirs)
 	if err != nil {
 		return fmt.Errorf("build agent: %w", err)
 	}
@@ -718,7 +720,6 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		a.ttsSpeaker = tts.New(a.cfg.TTSBackend, a.cfg.TTSModelDir)
 		a.ttsBackendKey = newKey
 	}
-	proactiveStore := proactive.NewStore(a.sqlDB)
 	engine := proactive.NewEngine(a, proactiveStore)
 	a.proactiveEngine = engine
 	// Capture the current generation so the async MCP callback can detect stale results.
@@ -786,7 +787,8 @@ func (a *App) rebuildAgentTools(ctx context.Context, mcpTools []tool.BaseTool, c
 	cfgSnapshot := *a.cfg
 	a.mu.RUnlock()
 
-	newAgent, err := a.buildAgent(ctx, chatModel, longMem, knowledgeSt, sched, mcpTools, cfgSnapshot.SkillsDirs)
+	proactiveStore := proactive.NewStore(a.sqlDB)
+	newAgent, err := a.buildAgent(ctx, chatModel, longMem, knowledgeSt, sched, proactiveStore, mcpTools, cfgSnapshot.SkillsDirs)
 	if err != nil {
 		return fmt.Errorf("build agent: %w", err)
 	}
