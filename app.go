@@ -89,6 +89,8 @@ type App struct {
 	watcherWG            sync.WaitGroup     // tracks background watchers started in startup
 	cancelWatcher        context.CancelFunc // cancels the screen-watcher goroutine on shutdown
 	pendingUpdateVersion string             // non-empty when a successful update marker was found on startup
+	dataDir              string             // ~/.aiko; set once in startup, read-only thereafter
+	startupErr           string             // non-empty when startup failed; read in domReady to show notification
 }
 
 // NewApp creates a new App instance.
