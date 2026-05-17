@@ -15,19 +15,6 @@ func init() {
 	gob.Register(ConfirmResult{})
 }
 
-// ShellConfirmInfo is the interrupt payload sent to the frontend for user confirmation.
-type ShellConfirmInfo struct {
-	ID         string `json:"id"`
-	Command    string `json:"command"`
-	WorkingDir string `json:"working_dir"`
-}
-
-// ConfirmResult is passed as resume data from ConfirmToolExecution to the tool.
-type ConfirmResult struct {
-	Approved      bool   `json:"approved"`
-	EditedContent string `json:"edited_content"` // user-edited command or code
-}
-
 // ExecuteShellTool runs a shell command after user confirmation via eino interrupt.
 type ExecuteShellTool struct {
 	Cfg           *config.Config

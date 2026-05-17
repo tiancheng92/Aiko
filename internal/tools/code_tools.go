@@ -14,14 +14,6 @@ func init() {
 	gob.Register(CodeConfirmInfo{})
 }
 
-// CodeConfirmInfo is the interrupt payload sent to the frontend for user confirmation.
-type CodeConfirmInfo struct {
-	ID         string `json:"id"`
-	Language   string `json:"language"`
-	Code       string `json:"code"`
-	WorkingDir string `json:"working_dir"`
-}
-
 // ExecuteCodeTool runs a code snippet using the system interpreter after user confirmation.
 type ExecuteCodeTool struct {
 	Cfg           *config.Config

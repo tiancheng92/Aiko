@@ -2,51 +2,40 @@
 package tools
 
 import (
-	"log/slog"
-
-	json "github.com/bytedance/sonic"
-
-	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
+
+	"aiko/internal/tools/base"
 )
+
+// Re-export base types so callers that import "aiko/internal/tools" keep working.
 
 // PermissionLevel describes how much trust a tool requires.
-type PermissionLevel string
+type PermissionLevel = base.PermissionLevel
 
 const (
-	// PermPublic tools run without any user approval (e.g. GetCurrentTime).
-	PermPublic PermissionLevel = "public"
+	// PermPublic tools run without any user approval.
+	PermPublic = base.PermPublic
 	// PermProtected tools require one-time user approval stored in the DB.
-	PermProtected PermissionLevel = "protected"
+	PermProtected = base.PermProtected
 )
 
-// Tool combines eino's InvokableTool with permission declaration and a stable
-// name accessor used by the permission store.
-type Tool interface {
-	tool.InvokableTool
-	// Name returns the stable snake_case name used in permission storage.
-	Name() string
-	// Permission returns the required permission level.
-	Permission() PermissionLevel
-}
+// Tool combines eino's InvokableTool with permission declaration.
+type Tool = base.Tool
 
-// infoFromSchema is a helper to build a *schema.ToolInfo from name, desc and params.
+// ShellConfirmInfo, CodeConfirmInfo, UpdateConfirmInfo, ConfirmResult, PersistBeforeRestartKey
+// are re-exported from base so agent code that imports "aiko/internal/tools" continues to work.
+type ShellConfirmInfo = base.ShellConfirmInfo
+type CodeConfirmInfo = base.CodeConfirmInfo
+type UpdateConfirmInfo = base.UpdateConfirmInfo
+type ConfirmResult = base.ConfirmResult
+type PersistBeforeRestartKey = base.PersistBeforeRestartKey
+
+// infoFromSchema and parseArgs are package-private wrappers used by tool implementations
+// that remain in the parent package during migration.
 func infoFromSchema(name, desc string, params map[string]*schema.ParameterInfo) *schema.ToolInfo {
-	return &schema.ToolInfo{
-		Name:        name,
-		Desc:        desc,
-		ParamsOneOf: schema.NewParamsOneOfByParams(params),
-	}
+	return base.InfoFromSchema(name, desc, params)
 }
 
-// parseArgs unmarshals the JSON input string into a map, returning an empty map on failure.
 func parseArgs(input string) map[string]any {
-	args := map[string]any{}
-	if input == "" || input == "{}" {
-		return args
-	}
-	if err := json.Unmarshal([]byte(input), &args); err != nil {
-		slog.Warn("tool: unmarshal args", "err", err)
-	}
-	return args
+	return base.ParseArgs(input)
 }

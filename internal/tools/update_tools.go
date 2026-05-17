@@ -12,19 +12,6 @@ func init() {
 	gob.Register(UpdateConfirmInfo{})
 }
 
-// PersistBeforeRestartKey is a context key. agent.go stores a func(string) under
-// this key before calling drainRunnerMsg; the update tool retrieves and calls it
-// to flush the current conversation turn to SQLite before the binary is replaced.
-type PersistBeforeRestartKey struct{}
-
-// UpdateConfirmInfo is the interrupt payload for the check_and_update tool.
-type UpdateConfirmInfo struct {
-	ID             string `json:"id"`
-	CurrentVersion string `json:"current_version"`
-	LatestVersion  string `json:"latest_version"`
-	DownloadURL    string `json:"download_url"`
-}
-
 // CheckAndUpdateTool checks for a newer release and installs it after user confirmation.
 type CheckAndUpdateTool struct {
 	// InstallFn is a.InstallUpdate from app.go — injected to avoid circular imports.
