@@ -1224,9 +1224,9 @@ func (a *App) MissingRequiredConfig() []string {
 	return a.cfg.MissingRequired()
 }
 
-// streamChat cancels any in-flight request, acquires the agent, and launches
-// a goroutine that drains the channel returned by fetchCh and emits Wails events.
-func (a *App) streamChat(fetchCh func(*agent.Agent, context.Context) <-chan agent.StreamResult) error {
+// streamChat cancels any in-flight chat, starts a new one via start, and emits
+// chat:* Wails events as tokens arrive.
+func (a *App) streamChat(start func(context.Context, *agent.Agent) <-chan agent.StreamResult) error {
 	a.mu.Lock()
 	if a.chatCancel != nil {
 		a.chatCancel()
@@ -1259,10 +1259,11 @@ func (a *App) streamChat(fetchCh func(*agent.Agent, context.Context) <-chan agen
 			}
 			a.mu.Unlock()
 		}()
-		ch := fetchCh(ag, chatCtx)
+		ch := start(chatCtx, ag)
 		ep := agent.NewEmotionParser()
 		for result := range ch {
 			if result.Err != nil {
+				// Ignore context cancellation — user triggered StopGeneration; frontend handles UI.
 				if errors.Is(result.Err, context.Canceled) {
 					return
 				}
@@ -1304,7 +1305,7 @@ func (a *App) streamChat(fetchCh func(*agent.Agent, context.Context) <-chan agen
 
 // SendMessage streams an AI response for a plain-text user message.
 func (a *App) SendMessage(userInput string) error {
-	return a.streamChat(func(ag *agent.Agent, ctx context.Context) <-chan agent.StreamResult {
+	return a.streamChat(func(ctx context.Context, ag *agent.Agent) <-chan agent.StreamResult {
 		return ag.Chat(ctx, userInput)
 	})
 }
@@ -1364,7 +1365,7 @@ func (a *App) SendMessageWithImages(userInput string, images []string) error {
 		Role:                  schema.User,
 		UserInputMultiContent: parts,
 	}
-	return a.streamChat(func(ag *agent.Agent, ctx context.Context) <-chan agent.StreamResult {
+	return a.streamChat(func(ctx context.Context, ag *agent.Agent) <-chan agent.StreamResult {
 		return ag.ChatWithMessage(ctx, msg)
 	})
 }
@@ -1414,7 +1415,7 @@ func (a *App) SendMessageWithFiles(userInput string, images []string, files []Fi
 			"_file_names": fileNames,
 		},
 	}
-	return a.streamChat(func(ag *agent.Agent, ctx context.Context) <-chan agent.StreamResult {
+	return a.streamChat(func(ctx context.Context, ag *agent.Agent) <-chan agent.StreamResult {
 		return ag.ChatWithMessage(ctx, msg)
 	})
 }
