@@ -3,7 +3,9 @@ package mcp_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"io"
+	"net"
 	"testing"
 	"time"
 
@@ -12,6 +14,18 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	_ "modernc.org/sqlite"
 )
+
+// freePort returns a localhost port that had nothing listening (briefly opened then closed).
+func freePort(t *testing.T) int {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("get free port: %v", err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+	return port
+}
 
 // newTestMCPDB creates an in-memory SQLite DB with the mcp_servers table.
 // SetMaxOpenConns(1) ensures all connections share the same in-memory database.
@@ -69,15 +83,17 @@ func TestLoadToolsAsync_CancelledContext(t *testing.T) {
 	db := newTestMCPDB(t)
 	store := internalmcp.NewServerStore(db)
 
-	_, err := db.Exec(`INSERT INTO mcp_servers(name, transport, url, enabled) VALUES ('test', 'sse', 'http://127.0.0.1:19999/sse', 1)`)
+	port := freePort(t)
+	_, err := db.Exec(fmt.Sprintf(`INSERT INTO mcp_servers(name, transport, url, enabled) VALUES ('test', 'sse', 'http://127.0.0.1:%d/sse', 1)`, port))
 	if err != nil {
 		t.Fatalf("insert server: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
 
 	done := make(chan struct{})
-	internalmcp.LoadToolsAsync(ctx, store, 30*time.Second,
+	internalmcp.LoadToolsAsync(ctx, store, 5*time.Second,
 		func(_ []tool.BaseTool, closers []io.Closer) {
 			for _, c := range closers {
 				_ = c.Close()
@@ -85,12 +101,9 @@ func TestLoadToolsAsync_CancelledContext(t *testing.T) {
 			close(done)
 		})
 
-	// Cancel immediately so the per-server goroutine hits a context error.
-	cancel()
-
 	select {
 	case <-done:
-	case <-time.After(5 * time.Second):
+	case <-time.After(3 * time.Second):
 		t.Fatal("LoadToolsAsync did not call done after context cancel")
 	}
 }
@@ -101,7 +114,8 @@ func TestLoadToolsAsync_ConnectionRefused(t *testing.T) {
 	db := newTestMCPDB(t)
 	store := internalmcp.NewServerStore(db)
 
-	_, err := db.Exec(`INSERT INTO mcp_servers(name, transport, url, enabled) VALUES ('refused', 'sse', 'http://127.0.0.1:19998/sse', 1)`)
+	port := freePort(t)
+	_, err := db.Exec(fmt.Sprintf(`INSERT INTO mcp_servers(name, transport, url, enabled) VALUES ('refused', 'sse', 'http://127.0.0.1:%d/sse', 1)`, port))
 	if err != nil {
 		t.Fatalf("insert server: %v", err)
 	}
@@ -121,7 +135,7 @@ func TestLoadToolsAsync_ConnectionRefused(t *testing.T) {
 		if r.count != 0 {
 			t.Errorf("expected 0 tools for refused connection, got %d", r.count)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("LoadToolsAsync did not call done within timeout for refused connection")
 	}
 }
@@ -132,7 +146,8 @@ func TestLoadToolsAsync_DisabledServersSkipped(t *testing.T) {
 	db := newTestMCPDB(t)
 	store := internalmcp.NewServerStore(db)
 
-	_, err := db.Exec(`INSERT INTO mcp_servers(name, transport, url, enabled) VALUES ('disabled', 'sse', 'http://127.0.0.1:19997/sse', 0)`)
+	port := freePort(t)
+	_, err := db.Exec(fmt.Sprintf(`INSERT INTO mcp_servers(name, transport, url, enabled) VALUES ('disabled', 'sse', 'http://127.0.0.1:%d/sse', 0)`, port))
 	if err != nil {
 		t.Fatalf("insert server: %v", err)
 	}

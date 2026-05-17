@@ -3,46 +3,25 @@ package scheduler_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 
+	"aiko/internal/db"
 	"aiko/internal/scheduler"
-
-	_ "modernc.org/sqlite"
 )
 
-// newTestDB creates an in-memory SQLite DB with the cron_jobs table (full schema).
+// newTestDB opens a real SQLite DB in a temp directory and runs the full
+// production migrations, ensuring schema parity with the deployed database.
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:")
+	sqlDB, err := db.Open(t.TempDir())
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	// Restrict to a single connection so all goroutines share the same
-	// in-memory database (modernc.org/sqlite creates a separate DB per
-	// connection when using ":memory:").
-	db.SetMaxOpenConns(1)
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS cron_jobs (
-			id             INTEGER PRIMARY KEY AUTOINCREMENT,
-			name           TEXT NOT NULL,
-			description    TEXT NOT NULL,
-			schedule       TEXT NOT NULL,
-			prompt         TEXT NOT NULL,
-			enabled        INTEGER NOT NULL DEFAULT 1,
-			save_to_memory INTEGER NOT NULL DEFAULT 0,
-			notify         INTEGER NOT NULL DEFAULT 1,
-			last_run       DATETIME,
-			next_run_at    DATETIME,
-			created_at     DATETIME DEFAULT CURRENT_TIMESTAMP
-		)
-	`)
-	if err != nil {
-		t.Fatalf("create table: %v", err)
-	}
-	t.Cleanup(func() { db.Close() })
-	return db
+	t.Cleanup(func() { sqlDB.Close() })
+	return sqlDB
 }
 
 // noopChatFn is a stub chatFn that immediately returns a fixed response.
@@ -159,7 +138,10 @@ func TestSetJobEnabled(t *testing.T) {
 	if err := s.SetJobEnabled(ctx, job.ID, false); err != nil {
 		t.Fatalf("SetJobEnabled false: %v", err)
 	}
-	jobs, _ := s.ListJobs(ctx)
+	jobs, err := s.ListJobs(ctx)
+	if err != nil {
+		t.Fatalf("ListJobs: %v", err)
+	}
 	if jobs[0].Enabled {
 		t.Error("expected job to be disabled")
 	}
@@ -167,7 +149,10 @@ func TestSetJobEnabled(t *testing.T) {
 	if err := s.SetJobEnabled(ctx, job.ID, true); err != nil {
 		t.Fatalf("SetJobEnabled true: %v", err)
 	}
-	jobs, _ = s.ListJobs(ctx)
+	jobs, err = s.ListJobs(ctx)
+	if err != nil {
+		t.Fatalf("ListJobs: %v", err)
+	}
 	if !jobs[0].Enabled {
 		t.Error("expected job to be enabled again")
 	}
@@ -236,25 +221,31 @@ func TestConcurrentJobCreation(t *testing.T) {
 	s := scheduler.New(db, noopChatFn, nil)
 	ctx := context.Background()
 
-	const n = 10
 	var wg sync.WaitGroup
-	for i := range n {
+	var mu sync.Mutex
+	var errs []error
+	for i := range 10 {
 		wg.Add(1)
-		go func(idx int) {
+		go func(n int) {
 			defer wg.Done()
 			_, err := s.CreateJob(ctx, "concurrent", "desc", "0 8 * * *", "hi", false, false)
 			if err != nil {
-				t.Errorf("concurrent CreateJob %d: %v", idx, err)
+				mu.Lock()
+				errs = append(errs, fmt.Errorf("goroutine %d: %w", n, err))
+				mu.Unlock()
 			}
 		}(i)
 	}
 	wg.Wait()
+	for _, err := range errs {
+		t.Error(err)
+	}
 
 	jobs, err := s.ListJobs(ctx)
 	if err != nil {
 		t.Fatalf("ListJobs: %v", err)
 	}
-	if len(jobs) != n {
-		t.Errorf("expected %d jobs, got %d", n, len(jobs))
+	if len(jobs) != 10 {
+		t.Errorf("expected 10 jobs, got %d", len(jobs))
 	}
 }
