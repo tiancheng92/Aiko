@@ -1,6 +1,6 @@
 //go:build darwin
 
-package tools
+package system
 
 import (
 	"context"
@@ -11,6 +11,8 @@ import (
 	"time"
 
 	einotool "github.com/cloudwego/eino/components/tool"
+
+	"aiko/internal/tools/base"
 )
 
 const (
@@ -71,7 +73,7 @@ func checkLatestRelease(currentVersion string) (updateCheckResult, error) {
 // Phase 2 (after resume): flush conversation, emit restarting signal, install.
 func (t *CheckAndUpdateTool) InvokableRun(ctx context.Context, _ string, opts ...einotool.Option) (string, error) {
 	// Phase 2: resumed after user confirmed/rejected.
-	isTarget, hasData, confirmResult := einotool.GetResumeContext[ConfirmResult](ctx)
+	isTarget, hasData, confirmResult := einotool.GetResumeContext[base.ConfirmResult](ctx)
 	if isTarget && hasData {
 		if !confirmResult.Approved {
 			return "已取消更新", nil
@@ -84,7 +86,7 @@ func (t *CheckAndUpdateTool) InvokableRun(ctx context.Context, _ string, opts ..
 		}
 
 		// Persist the current conversation turn before the process is replaced.
-		if flushFn, ok := ctx.Value(PersistBeforeRestartKey{}).(func(string)); ok {
+		if flushFn, ok := ctx.Value(base.PersistBeforeRestartKey{}).(func(string)); ok {
 			flushFn("v" + latestVersion + " 更新完成，我回来啦~")
 		}
 
@@ -123,7 +125,7 @@ func (t *CheckAndUpdateTool) InvokableRun(ctx context.Context, _ string, opts ..
 	t.pendingURL.Store(rel.downloadURL)
 
 	id := fmt.Sprintf("update-%d", time.Now().UnixNano())
-	return "", einotool.Interrupt(ctx, UpdateConfirmInfo{
+	return "", einotool.Interrupt(ctx, base.UpdateConfirmInfo{
 		ID:             id,
 		CurrentVersion: t.CurrentVersion,
 		LatestVersion:  rel.latestVersion,

@@ -1,4 +1,4 @@
-package tools
+package system
 
 import (
 	"context"
@@ -6,10 +6,12 @@ import (
 	"sync/atomic"
 
 	"github.com/cloudwego/eino/schema"
+
+	"aiko/internal/tools/base"
 )
 
 func init() {
-	gob.Register(UpdateConfirmInfo{})
+	gob.Register(base.UpdateConfirmInfo{})
 }
 
 // CheckAndUpdateTool checks for a newer release and installs it after user confirmation.
@@ -32,11 +34,11 @@ type CheckAndUpdateTool struct {
 func (t *CheckAndUpdateTool) Name() string { return "check_and_update" }
 
 // Permission returns the tool's required permission level.
-func (t *CheckAndUpdateTool) Permission() PermissionLevel { return PermProtected }
+func (t *CheckAndUpdateTool) Permission() base.PermissionLevel { return base.PermProtected }
 
 // Info returns the eino ToolInfo for this tool.
 func (t *CheckAndUpdateTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return infoFromSchema(
+	return base.InfoFromSchema(
 		t.Name(),
 		"检查 Aiko 是否有新版本可用，若有则提示用户确认后自动下载安装并重启应用。安装过程不可逆，请在合适的时机调用。",
 		nil,

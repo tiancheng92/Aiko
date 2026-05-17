@@ -1,5 +1,5 @@
-// internal/tools/image.go
-package tools
+// internal/tools/image/image.go
+package toolimage
 
 import (
 	"context"
@@ -35,7 +35,7 @@ func (t *ReadImageTool) InvokableRun(_ context.Context, input string, _ ...tool.
 	if t.Cfg == nil {
 		return "read_image 不可用：配置未初始化", nil
 	}
-	args := parseArgs(input)
+	args := base.ParseArgs(input)
 	path, _ := args["path"].(string)
 	if path == "" {
 		return "参数 path 不能为空", nil
@@ -76,7 +76,7 @@ func (t *SaveImageTool) InvokableRun(ctx context.Context, input string, _ ...too
 	if t.Cfg == nil {
 		return "save_image 不可用：配置未初始化", nil
 	}
-	args := parseArgs(input)
+	args := base.ParseArgs(input)
 	source, _ := args["source"].(string)
 	destPath, _ := args["path"].(string)
 	if source == "" {

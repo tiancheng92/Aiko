@@ -18,6 +18,8 @@ import (
 	exectools "aiko/internal/tools/exec"
 	toolfs "aiko/internal/tools/fs"
 	toolgrowth "aiko/internal/tools/growth"
+	toolimage "aiko/internal/tools/image"
+	toolsystem "aiko/internal/tools/system"
 	"aiko/internal/tools/timeutil"
 	toolweb "aiko/internal/tools/web"
 	"aiko/internal/tools/weather"
@@ -121,10 +123,10 @@ func All() []Tool {
 		&timeutil.GetCurrentTimeTool{},
 		&timeutil.GetTimezoneTool{},
 		&timeutil.FormatTimeTool{},
-		&GetOSInfoTool{},
-		&GetHardwareInfoTool{},
-		&GetSystemStatsTool{},
-		&GetNetworkStatusTool{},
+		&toolsystem.GetOSInfoTool{},
+		&toolsystem.GetHardwareInfoTool{},
+		&toolsystem.GetSystemStatsTool{},
+		&toolsystem.GetNetworkStatusTool{},
 		&GetLocationTool{},
 		&weather.GetWeatherTool{},
 		&GetBrowserURLTool{},
@@ -200,9 +202,9 @@ func AllPermissionDeclarations() []namedPermDecl {
 		&toolfs.MoveFileTool{},
 		&exectools.ExecuteShellTool{},
 		&exectools.ExecuteCodeTool{},
-		&ReadImageTool{},
-		&SaveImageTool{},
-		&CheckAndUpdateTool{},
+		&toolimage.ReadImageTool{},
+		&toolimage.SaveImageTool{},
+		&toolsystem.CheckAndUpdateTool{},
 	}
 	for _, t := range ctxPrototypes {
 		decls = append(decls, namedPermDecl{Name_: t.Name(), Perm_: t.Permission()})
@@ -268,10 +270,10 @@ func AllContextual(
 		&exectools.ExecuteShellTool{Cfg: cfg, RegisterCmd: registerCmd, UnregisterCmd: unregisterCmd},
 		&exectools.ExecuteCodeTool{Cfg: cfg, RegisterCmd: registerCmd, UnregisterCmd: unregisterCmd},
 		// Image tools
-		&ReadImageTool{Cfg: cfg},
-		&SaveImageTool{Cfg: cfg},
+		&toolimage.ReadImageTool{Cfg: cfg},
+		&toolimage.SaveImageTool{Cfg: cfg},
 		// Update tool
-		&CheckAndUpdateTool{InstallFn: installUpdateFn, EmitFn: emitFn, CurrentVersion: currentVersion},
+		&toolsystem.CheckAndUpdateTool{InstallFn: installUpdateFn, EmitFn: emitFn, CurrentVersion: currentVersion},
 	}
 	result := make([]tool.BaseTool, len(contextTools))
 	for i, t := range contextTools {
