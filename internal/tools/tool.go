@@ -2,6 +2,8 @@
 package tools
 
 import (
+	"log/slog"
+
 	json "github.com/bytedance/sonic"
 
 	"github.com/cloudwego/eino/components/tool"
@@ -43,6 +45,8 @@ func parseArgs(input string) map[string]any {
 	if input == "" || input == "{}" {
 		return args
 	}
-	_ = json.Unmarshal([]byte(input), &args)
+	if err := json.Unmarshal([]byte(input), &args); err != nil {
+		slog.Warn("tool: unmarshal args", "input", input, "err", err)
+	}
 	return args
 }

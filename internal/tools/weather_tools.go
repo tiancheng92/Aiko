@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"time"
@@ -66,7 +67,9 @@ func (t *GetWeatherTool) InvokableRun(_ context.Context, input string, _ ...tool
 	var params struct {
 		Location string `json:"location"`
 	}
-	_ = json.Unmarshal([]byte(input), &params)
+	if err := json.Unmarshal([]byte(input), &params); err != nil {
+		slog.Warn("weather: unmarshal input", "err", err)
+	}
 
 	loc := params.Location
 	apiURL := fmt.Sprintf("https://wttr.in/%s?format=j1", url.PathEscape(loc))
