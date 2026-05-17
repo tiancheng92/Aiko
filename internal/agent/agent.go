@@ -84,6 +84,11 @@ func (s *memCheckPointStore) Set(_ context.Context, key string, value []byte) er
 	return nil
 }
 
+// streamResultBufSize is the buffer capacity for StreamResult channels.
+// A buffer of 64 prevents the goroutine from blocking when the frontend
+// is briefly slow to consume tokens.
+const streamResultBufSize = 64
+
 // locationCache caches the IP-based location string to avoid a network call every turn.
 var locationCache struct {
 	sync.Mutex
@@ -330,7 +335,7 @@ func (a *Agent) reflect(ctx context.Context, userInput, assistantReply string, h
 // persisted to short-term memory and excess messages are migrated to
 // long-term memory asynchronously.
 func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult {
-	ch := make(chan StreamResult, 64)
+	ch := make(chan StreamResult, streamResultBufSize)
 
 	go func() {
 		defer close(ch)
@@ -378,7 +383,7 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 // ChatDirect sends a prompt to the agent and streams tokens without persisting
 // the exchange to memory. Used by the scheduler to avoid polluting chat history.
 func (a *Agent) ChatDirect(ctx context.Context, prompt string) <-chan StreamResult {
-	ch := make(chan StreamResult, 64)
+	ch := make(chan StreamResult, streamResultBufSize)
 
 	go func() {
 		defer close(ch)
@@ -756,7 +761,7 @@ func extractImagesFromMessage(msg *schema.Message) []string {
 // After streaming, user input and assistant reply are persisted to short-term
 // memory; images are stored as data URLs so history can re-render them.
 func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan StreamResult {
-	ch := make(chan StreamResult, 64)
+	ch := make(chan StreamResult, streamResultBufSize)
 
 	go func() {
 		defer close(ch)
