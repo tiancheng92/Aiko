@@ -1,7 +1,7 @@
 //go:build !darwin
 
-// internal/tools/clipboard_other.go
-package tools
+// internal/tools/clipboard/clipboard_other.go
+package clipboard
 
 import (
 	"context"

@@ -5,6 +5,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"aiko/internal/tools/base"
+	"aiko/internal/tools/location"
 )
 
 // Re-export base types so callers that import "aiko/internal/tools" keep working.
@@ -22,6 +23,9 @@ const (
 // Tool combines eino's InvokableTool with permission declaration.
 type Tool = base.Tool
 
+// EnhancedTool is a tool that may return multimodal (non-text) results.
+type EnhancedTool = base.EnhancedTool
+
 // ShellConfirmInfo, CodeConfirmInfo, UpdateConfirmInfo, ConfirmResult, PersistBeforeRestartKey
 // are re-exported from base so agent code that imports "aiko/internal/tools" continues to work.
 type ShellConfirmInfo = base.ShellConfirmInfo
@@ -38,4 +42,9 @@ func infoFromSchema(name, desc string, params map[string]*schema.ParameterInfo) 
 
 func parseArgs(input string) map[string]any {
 	return base.ParseArgs(input)
+}
+
+// FetchLocation re-exports location.FetchLocation for callers that import internal/tools.
+func FetchLocation() string {
+	return location.FetchLocation()
 }

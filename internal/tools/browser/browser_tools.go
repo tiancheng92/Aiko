@@ -1,5 +1,5 @@
-// internal/tools/browser_tools.go
-package tools
+// Package browser provides tools to read the current browser URL and page content.
+package browser
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 
+	"aiko/internal/tools/base"
 	toolweb "aiko/internal/tools/web"
 )
 
@@ -20,7 +21,7 @@ type GetBrowserURLTool struct{}
 func (t *GetBrowserURLTool) Name() string { return "get_browser_url" }
 
 // Permission declares this tool as public (no extra approval needed).
-func (t *GetBrowserURLTool) Permission() PermissionLevel { return PermPublic }
+func (t *GetBrowserURLTool) Permission() base.PermissionLevel { return base.PermPublic }
 
 // Info returns eino tool metadata.
 func (t *GetBrowserURLTool) Info(_ context.Context) (*schema.ToolInfo, error) {

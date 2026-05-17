@@ -1,7 +1,7 @@
 //go:build darwin
 
-// internal/tools/location_darwin.go
-package tools
+// internal/tools/location/location_darwin.go
+package location
 
 /*
 #cgo CFLAGS: -x objective-c -mmacosx-version-min=11.0

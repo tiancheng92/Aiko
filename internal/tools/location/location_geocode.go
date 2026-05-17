@@ -1,5 +1,5 @@
-// internal/tools/location_geocode.go
-package tools
+// internal/tools/location/location_geocode.go
+package location
 
 import (
 	"fmt"

@@ -1,5 +1,5 @@
-// internal/tools/location_tools.go
-package tools
+// Package location provides geographic location tools.
+package location
 
 import (
 	"context"
@@ -12,6 +12,8 @@ import (
 	json "github.com/bytedance/sonic"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
+
+	"aiko/internal/tools/base"
 )
 
 const locationTimeout = 10 * time.Second
@@ -40,7 +42,7 @@ type GetLocationTool struct{}
 func (t *GetLocationTool) Name() string { return "get_location" }
 
 // Permission marks the tool as protected (requires user opt-in).
-func (t *GetLocationTool) Permission() PermissionLevel { return PermProtected }
+func (t *GetLocationTool) Permission() base.PermissionLevel { return base.PermProtected }
 
 // Info returns the eino tool schema.
 func (t *GetLocationTool) Info(_ context.Context) (*schema.ToolInfo, error) {

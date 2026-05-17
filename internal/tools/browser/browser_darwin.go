@@ -1,7 +1,7 @@
 //go:build darwin
 
-// internal/tools/browser_darwin.go
-package tools
+// internal/tools/browser/browser_darwin.go
+package browser
 
 import (
 	"fmt"

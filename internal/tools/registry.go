@@ -12,6 +12,8 @@ import (
 	"aiko/internal/knowledge"
 	"aiko/internal/memory"
 	"aiko/internal/scheduler"
+	toolbrowser "aiko/internal/tools/browser"
+	toolclipboard "aiko/internal/tools/clipboard"
 	toolcron "aiko/internal/tools/cron"
 	toolcontext "aiko/internal/tools/context"
 	tooldev "aiko/internal/tools/dev"
@@ -19,6 +21,7 @@ import (
 	toolfs "aiko/internal/tools/fs"
 	toolgrowth "aiko/internal/tools/growth"
 	toolimage "aiko/internal/tools/image"
+	toollocation "aiko/internal/tools/location"
 	toolsystem "aiko/internal/tools/system"
 	"aiko/internal/tools/timeutil"
 	toolweb "aiko/internal/tools/web"
@@ -51,19 +54,6 @@ func (g *permGate) InvokableRun(ctx context.Context, input string, opts ...tool.
 		return fmt.Sprintf("工具 %q 尚未授权，请在设置 → 工具权限 中开启后重试。", g.inner.Name()), nil
 	}
 	return g.inner.InvokableRun(ctx, input, opts...)
-}
-
-// EnhancedTool describes a tool that returns multimodal results via eino's
-// EnhancedInvokableTool interface. It intentionally does NOT embed Tool
-// (which carries the plain-string InvokableRun) to avoid a duplicate-method
-// conflict; only the structured InvokableRun signature is exposed here.
-type EnhancedTool interface {
-	tool.BaseTool
-	// Name returns the stable snake_case name used in permission storage.
-	Name() string
-	// Permission returns the required permission level.
-	Permission() PermissionLevel
-	InvokableRun(ctx context.Context, arg *schema.ToolArgument, opts ...tool.Option) (*schema.ToolResult, error)
 }
 
 // enhancedPermGate wraps an EnhancedTool with permission enforcement.
@@ -127,15 +117,15 @@ func All() []Tool {
 		&toolsystem.GetHardwareInfoTool{},
 		&toolsystem.GetSystemStatsTool{},
 		&toolsystem.GetNetworkStatusTool{},
-		&GetLocationTool{},
+		&toollocation.GetLocationTool{},
 		&weather.GetWeatherTool{},
-		&GetBrowserURLTool{},
+		&toolbrowser.GetBrowserURLTool{},
 		&GetRemindersTool{},
 		&CompleteReminderTool{},
 		&GetMailsTool{},
 		&GetMailContentTool{},
-		&ReadClipboardTool{},
-		&WriteClipboardTool{},
+		&toolclipboard.ReadClipboardTool{},
+		&toolclipboard.WriteClipboardTool{},
 		&ListRunningAppsTool{},
 		&ControlAppTool{},
 		&GetCalendarEventsTool{},

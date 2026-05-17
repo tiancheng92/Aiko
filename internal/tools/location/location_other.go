@@ -1,7 +1,7 @@
 //go:build !darwin
 
-// internal/tools/location_other.go
-package tools
+// internal/tools/location/location_other.go
+package location
 
 import "fmt"
 

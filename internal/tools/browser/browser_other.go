@@ -1,7 +1,7 @@
 //go:build !darwin
 
-// internal/tools/browser_other.go
-package tools
+// internal/tools/browser/browser_other.go
+package browser
 
 import "errors"
 
