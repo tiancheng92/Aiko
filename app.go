@@ -2127,8 +2127,9 @@ func (a *App) GetVoiceAutoSend() bool {
 func (a *App) SetVoiceAutoSend(enabled bool) error {
 	a.mu.Lock()
 	a.cfg.VoiceAutoSend = enabled
+	cfgCopy := *a.cfg
 	a.mu.Unlock()
-	return a.configStore.Save(a.cfg)
+	return a.configStore.Save(&cfgCopy)
 }
 
 // GetSoundsEnabled returns whether chat sound effects are enabled.
@@ -2142,8 +2143,9 @@ func (a *App) GetSoundsEnabled() bool {
 func (a *App) SetSoundsEnabled(enabled bool) error {
 	a.mu.Lock()
 	a.cfg.SoundsEnabled = enabled
+	cfgCopy := *a.cfg
 	a.mu.Unlock()
-	return a.configStore.Save(a.cfg)
+	return a.configStore.Save(&cfgCopy)
 }
 
 // AddMCPServer adds a new MCP server configuration and reloads tools.
@@ -2471,8 +2473,11 @@ func (a *App) GetTTSAutoPlay() bool {
 
 // SetTTSAutoPlay sets TTS auto-play and persists it.
 func (a *App) SetTTSAutoPlay(enabled bool) error {
+	a.mu.Lock()
 	a.cfg.TTSAutoPlay = enabled
-	return a.configStore.Save(a.cfg)
+	cfgCopy := *a.cfg
+	a.mu.Unlock()
+	return a.configStore.Save(&cfgCopy)
 }
 
 // SetupKokoroTTS 在后台异步安装 Kokoro TTS 环境：
