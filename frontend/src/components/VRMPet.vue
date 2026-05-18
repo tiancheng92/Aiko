@@ -4,7 +4,18 @@ import {
   VRMAnimationLoaderPlugin,
   createVRMAnimationClip,
 } from "@pixiv/three-vrm-animation";
-import * as THREE from "three";
+import {
+  AmbientLight,
+  AnimationMixer,
+  Clock,
+  DirectionalLight,
+  LoopOnce,
+  LoopPingPong,
+  PerspectiveCamera,
+  Scene,
+  SRGBColorSpace,
+  WebGLRenderer,
+} from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import {
@@ -255,7 +266,7 @@ async function playAnimation(url, { loop = true, fadeTime = 0.5 } = {}) {
     const clip = await loadClip(url, vrm);
     if (!clip) return;
     const newAction = idleMixer.clipAction(clip);
-    newAction.setLoop(loop ? THREE.LoopPingPong : THREE.LoopOnce, Infinity);
+    newAction.setLoop(loop ? LoopPingPong : LoopOnce, Infinity);
     newAction.clampWhenFinished = !loop;
     if (_currentAction && _currentAction !== newAction) {
       newAction.reset().play();
@@ -276,7 +287,7 @@ async function initAnimationSystem(v) {
     idleMixer = null;
   }
   _currentAction = null;
-  idleMixer = new THREE.AnimationMixer(v.scene);
+  idleMixer = new AnimationMixer(v.scene);
   // Welcome greeting on first load, then settle into idle.
   await playAnimation("/vrm/appearing.vrma", { loop: false, fadeTime: 0.3 });
   _pendingTimers.push(setTimeout(() => {
@@ -354,12 +365,12 @@ function tick() {
 
 /** initRenderer creates the THREE.js scene, camera, lights, and WebGL renderer. */
 async function initRenderer() {
-  scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(40, 1, 0.1, 20);
+  scene = new Scene();
+  camera = new PerspectiveCamera(40, 1, 0.1, 20);
   camera.position.set(0, 1.1, 3.2);
   camera.lookAt(0, 1.1, 0);
 
-  renderer = new THREE.WebGLRenderer({
+  renderer = new WebGLRenderer({
     canvas: canvasRef.value,
     alpha: true,
     antialias: true,
@@ -367,20 +378,20 @@ async function initRenderer() {
   });
   renderer.setPixelRatio(window.devicePixelRatio || 1);
   renderer.setSize(petSize.value, petSize.value);
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.outputColorSpace = SRGBColorSpace;
 
   // Key light: front-top to illuminate face
-  const keyLight = new THREE.DirectionalLight(0xffffff, 1.8);
+  const keyLight = new DirectionalLight(0xffffff, 1.8);
   keyLight.position.set(0, 2, 2);
   scene.add(keyLight);
   // Fill light: slight left side to avoid flat look
-  const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  const fillLight = new DirectionalLight(0xffffff, 0.8);
   fillLight.position.set(-2, 1, 1);
   scene.add(fillLight);
   // Ambient: base brightness so shadows aren't black
-  scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+  scene.add(new AmbientLight(0xffffff, 0.8));
 
-  clock = new THREE.Clock();
+  clock = new Clock();
   tick();
 }
 
