@@ -1,7 +1,7 @@
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import Live2DPet from './components/Live2DPet.vue'
-import VRMPet from './components/VRMPet.vue'
+import { ref, onMounted, onUnmounted, nextTick, watch, defineAsyncComponent } from 'vue'
+const Live2DPet = defineAsyncComponent(() => import('./components/Live2DPet.vue'))
+const VRMPet = defineAsyncComponent(() => import('./components/VRMPet.vue'))
 import ChatBubble from './components/ChatBubble.vue'
 import SettingsWindow from './components/SettingsWindow.vue'
 import NotificationBubble from './components/NotificationBubble.vue'
