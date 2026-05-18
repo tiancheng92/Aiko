@@ -3,7 +3,7 @@ import { ref, onMounted, onUnmounted, nextTick, watch, defineAsyncComponent } fr
 const Live2DPet = defineAsyncComponent(() => import('./components/Live2DPet.vue'))
 const VRMPet = defineAsyncComponent(() => import('./components/VRMPet.vue'))
 import ChatBubble from './components/ChatBubble.vue'
-import SettingsWindow from './components/SettingsWindow.vue'
+const SettingsWindow = defineAsyncComponent(() => import('./components/SettingsWindow.vue'))
 import NotificationBubble from './components/NotificationBubble.vue'
 import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize, GetConfig, SetChatVisible } from '../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../wailsjs/runtime/runtime'
