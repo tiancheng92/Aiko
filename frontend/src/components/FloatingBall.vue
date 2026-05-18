@@ -34,6 +34,7 @@ async function loadPosition(screenW, screenH) {
 }
 
 let offScreenChanged = null
+let screenChangedHandler = null
 
 onMounted(async () => {
   try {
@@ -46,17 +47,19 @@ onMounted(async () => {
     pos.value = { x: window.innerWidth - bs - 40, y: window.innerHeight - bs - 40 }
   }
 
-  offScreenChanged = EventsOn('screen:active:changed', debounce(async (info) => {
+  screenChangedHandler = debounce(async (info) => {
     try {
       await loadPosition(info.width, info.height)
     } catch (err) {
       console.warn('FloatingBall screen:active:changed:', err)
     }
-  }, 200))
+  }, 200)
+  offScreenChanged = EventsOn('screen:active:changed', screenChangedHandler)
 })
 
 onUnmounted(() => {
-  if (offScreenChanged) offScreenChanged()
+  offScreenChanged?.()
+  screenChangedHandler?.cancel?.()
 })
 
 /** onMouseDown starts drag tracking on mouse button press. */

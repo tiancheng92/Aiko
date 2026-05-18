@@ -88,6 +88,7 @@ let mounted = true
 let offSizeChange = null
 let offPositionReset = null
 let offScreenChanged = null
+let screenChangedHandler = null
 
 watch(pos, (p) => { if (p) emit('position', { ...p }) })
 
@@ -220,7 +221,7 @@ onMounted(async () => {
     pos.value = { x: sw.value - petSize.value - 40, y: sh.value - petSize.value - 40 }
   })
 
-  offScreenChanged = EventsOn('screen:active:changed', debounce(async (info) => {
+  screenChangedHandler = debounce(async (info) => {
     const w = info.width
     const h = info.height
     sw.value = w
@@ -245,7 +246,8 @@ onMounted(async () => {
     } catch (e) {
       console.warn('screen:active:changed: GetBallPosition failed', e)
     }
-  }, 200))
+  }, 200)
+  offScreenChanged = EventsOn('screen:active:changed', screenChangedHandler)
 })
 
 /** Watch modelPath and hot-reload the Live2D model when it changes. */
@@ -318,6 +320,7 @@ onUnmounted(() => {
   offSizeChange?.()
   offPositionReset?.()
   offScreenChanged?.()
+  screenChangedHandler?.cancel?.()
   // Clean up any in-progress drag listeners to prevent ghost handlers.
   window.removeEventListener('mousemove', onMouseMove)
   window.removeEventListener('mouseup', onMouseUp)

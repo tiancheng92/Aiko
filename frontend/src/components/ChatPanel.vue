@@ -662,6 +662,7 @@ let offSoundsChanged
 let offAvatarChanged
 let offVoiceStart, offVoiceTranscript, offVoiceEnd, offVoiceFinal, offVoiceError, offVoiceAutoSend
 let offUpdateProgress, offUpdateError
+let voiceTranscriptHandler, updateProgressHandler
 
 const updateProgress = ref(0)
 const updateProgressMsg = ref('')
@@ -928,10 +929,11 @@ onMounted(async () => {
     nextTick(() => textareaEl.value?.focus())
   })
 
-  offVoiceTranscript = EventsOn('voice:transcript', throttle((text) => {
+  voiceTranscriptHandler = throttle((text) => {
     setInputDOM(text)
     voiceHint.value = text
-  }, 80))
+  }, 80)
+  offVoiceTranscript = EventsOn('voice:transcript', voiceTranscriptHandler)
 
   offVoiceEnd = EventsOn('voice:end', () => {
     isRecording.value = false
@@ -964,14 +966,15 @@ onMounted(async () => {
     voiceAutoSend.value = val
   })
 
-  offUpdateProgress = EventsOn('update:progress', throttle((data) => {
+  updateProgressHandler = throttle((data) => {
     isUpdating.value = true
     updateProgress.value = data.pct ?? 0
     updateProgressMsg.value = data.msg ?? ''
     if ((data.pct ?? 0) >= 100) {
       setTimeout(() => { isUpdating.value = false }, 2000)
     }
-  }, 100))
+  }, 100)
+  offUpdateProgress = EventsOn('update:progress', updateProgressHandler)
   offUpdateError = EventsOn('update:error', (msg) => {
     isUpdating.value = false
     updateProgress.value = 0
@@ -1000,7 +1003,9 @@ onUnmounted(() => {
   offTTSDone?.(); offTTSError?.(); offTTSAudio?.()
   offSoundsChanged?.(); offAvatarChanged?.()
   offVoiceStart?.(); offVoiceTranscript?.(); offVoiceEnd?.(); offVoiceFinal?.(); offVoiceError?.(); offVoiceAutoSend?.()
+  voiceTranscriptHandler?.cancel?.()
   offUpdateProgress?.(); offUpdateError?.()
+  updateProgressHandler?.cancel?.()
   document.removeEventListener('click', closeColDrops)
   sentinelObserver?.disconnect()
   sentinelObserver = null

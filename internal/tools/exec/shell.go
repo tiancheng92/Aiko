@@ -131,7 +131,7 @@ func runShellCommand(ctx context.Context, command, workingDir string, timeoutSec
 		if cmdCtx.Err() == context.DeadlineExceeded {
 			return fmt.Sprintf("命令超时（%ds）\n%s", timeoutSecs, output), nil
 		}
-		if ctx.Err() == context.Canceled {
+		if ctx.Err() != nil {
 			return fmt.Sprintf("命令已终止\n%s", output), nil
 		}
 		return fmt.Sprintf("命令执行失败：%s\n%s", err.Error(), output), nil

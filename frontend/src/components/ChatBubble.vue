@@ -58,6 +58,7 @@ function applySize({ width, height }) {
 
 let offSizeChange = null
 let offScreenChanged = null
+let screenChangedHandler = null
 let latencyTimer = null
 let offModelChangedLatency = null
 let offVisibilityLatency = null
@@ -122,14 +123,15 @@ onMounted(async () => {
 
   refreshProfileInfo()
   offModelChangedLatency = EventsOn('config:model:changed', () => { pingOnce(); refreshProfileInfo() })
-  offScreenChanged = EventsOn('screen:active:changed', debounce(async (info) => {
+  screenChangedHandler = debounce(async (info) => {
     try {
       const [w, h] = await GetChatSize(info.width, info.height)
       applySize({ width: w, height: h })
     } catch (e) {
       console.warn('screen:active:changed: GetChatSize failed', e)
     }
-  }, 200))
+  }, 200)
+  offScreenChanged = EventsOn('screen:active:changed', screenChangedHandler)
 
   offToken = EventsOn('chat:token', () => {
     isLLMActive.value = true
@@ -150,6 +152,7 @@ onMounted(async () => {
 onUnmounted(() => {
   offSizeChange?.()
   offScreenChanged?.()
+  screenChangedHandler?.cancel?.()
   offToken?.()
   offDone?.()
   offChatError?.()

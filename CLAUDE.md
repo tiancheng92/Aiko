@@ -123,6 +123,8 @@ frontend/src/
 | `bubble:toggle` | any | 切换聊天气泡显示/隐藏 |
 | `pet:state:change` | any | 宠物状态变更 (idle/thinking/speaking/error) |
 | `knowledge:progress` | backend→frontend | 知识库导入进度更新 |
+| `knowledge:done` | backend→frontend | 知识库导入完成（无 payload）|
+| `knowledge:error` | backend→frontend | 知识库导入失败（payload: 错误字符串）|
 | `config:model:changed` | frontend→frontend | Live2D/VRM 模型切换通知 |
 | `config:chat:size:changed` | frontend→frontend | 聊天框尺寸变更 |
 | `notification:show` | backend→frontend | 显示应用内通知气泡 |
@@ -144,6 +146,7 @@ frontend/src/
 | `tool:executing` | backend→frontend | 工具开始执行（显示进度条）|
 | `tool:executed` | backend→frontend | 工具执行结束（隐藏进度条）|
 | `update:progress` | backend→frontend | 应用更新下载进度（pct/msg）|
+| `update:error` | backend→frontend | 应用更新失败（payload: 错误字符串）|
 
 ## 开发命令
 

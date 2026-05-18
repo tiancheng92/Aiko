@@ -144,7 +144,7 @@ func runCodeExecution(ctx context.Context, language, code, workingDir string, ti
 		if cmdCtx.Err() == context.DeadlineExceeded {
 			return fmt.Sprintf("代码执行超时（%ds）\n%s", timeoutSecs, output), nil
 		}
-		if ctx.Err() == context.Canceled {
+		if ctx.Err() != nil {
 			return fmt.Sprintf("执行已终止\n%s", output), nil
 		}
 		return fmt.Sprintf("执行失败：%s\n%s", err.Error(), output), nil

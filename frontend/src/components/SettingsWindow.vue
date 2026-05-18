@@ -169,6 +169,10 @@ let offCronJobDone = null
 let offKnowledgeDone = null
 let offKnowledgeError = null
 let offUpdateError = null
+let offModelChanged = null
+let progressHandler = null
+let screenHandler = null
+let updateProgressHandler = null
 
 // ── Modal spring animation ──────────────────────────────────────────────────
 // Shared across all 4 modal types (only one modal open at a time).
@@ -342,7 +346,8 @@ onMounted(async () => {
     console.warn('GetAutoLaunch failed:', e)
   }
   fetchLarkStatus()
-  offProgress = EventsOn('knowledge:progress', throttle((p) => { importProgress.value = p }, 100))
+  progressHandler = throttle((p) => { importProgress.value = p }, 100)
+  offProgress = EventsOn('knowledge:progress', progressHandler)
   offKnowledgeDone = EventsOn('knowledge:done', async () => {
     importProgress.value = null
     try { sources.value = await ListKnowledgeSources() || [] } catch (_) {}
@@ -352,7 +357,7 @@ onMounted(async () => {
     statusMsg.value = '导入失败: ' + msg
   })
   // Refresh per-screen sizes when the user moves the mouse to a different screen.
-  offScreen = EventsOn('screen:active:changed', debounce(async (info) => {
+  screenHandler = debounce(async (info) => {
     try {
       const petSize = await GetPetSize(info.width, info.height)
       if (petSize > 0) cfg.value.PetSize = petSize
@@ -362,16 +367,21 @@ onMounted(async () => {
       if (cw > 0) cfg.value.ChatWidth = cw
       if (ch > 0) cfg.value.ChatHeight = ch
     } catch (e) { console.warn('SettingsWindow screen:active:changed: GetChatSize failed', e) }
-  }, 200))
+  }, 200)
+  offScreen = EventsOn('screen:active:changed', screenHandler)
   // Auto-fetch model list if URL is already configured.
   if (cfg.value.LLMBaseURL) fetchLLMModels()
 
-  offUpdateProgress = EventsOn('update:progress', throttle((data) => {
+  updateProgressHandler = throttle((data) => {
     updateProgress.value = data.pct
     updateProgressMsg.value = data.msg
-  }, 100))
+  }, 100)
+  offUpdateProgress = EventsOn('update:progress', updateProgressHandler)
 
   offCronJobDone = EventsOn('cron:job:done', () => { fetchCronJobs() })
+  offModelChanged = EventsOn('config:model:changed', () => {
+    if (statusMsg.value === '正在重启 Agent…') statusMsg.value = '已切换模型配置'
+  })
   offUpdateError = EventsOn('update:error', (msg) => {
     updateError.value = '安装失败: ' + msg
     updateInstalling.value = false
@@ -382,13 +392,14 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  offProgress?.()
-  offScreen?.()
-  offUpdateProgress?.()
+  offProgress?.(); progressHandler?.cancel?.()
+  offScreen?.(); screenHandler?.cancel?.()
+  offUpdateProgress?.(); updateProgressHandler?.cancel?.()
   offCronJobDone?.()
   offKnowledgeDone?.()
   offKnowledgeError?.()
   offUpdateError?.()
+  offModelChanged?.()
   cancelModal?.()
   clearTimeout(saveTimer)
   // Safety net — ensure no drag listeners linger if the component unmounts mid-drag.
@@ -528,7 +539,8 @@ async function saveProfile() {
   }
 }
 
-/** activateProfile switches to the given profile. */
+/** activateProfile switches to the given profile. DB update returns immediately;
+ *  Agent reinit is async — success is confirmed via config:model:changed event. */
 async function activateProfile(id) {
   try {
     await ActivateModelProfile(id)
@@ -537,7 +549,7 @@ async function activateProfile(id) {
     // LLM fields with stale values loaded before the profile switch.
     const loaded = await GetConfig()
     if (loaded) applyConfig(loaded)
-    statusMsg.value = '已切换模型配置'
+    statusMsg.value = '正在重启 Agent…'
   } catch (e) {
     statusMsg.value = '切换失败: ' + e
   }

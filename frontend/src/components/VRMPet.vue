@@ -618,7 +618,7 @@ watch(petState, (state) => {
   applyStateAnimation(state);
 });
 
-let offSizeChange, offPositionReset, offScreenChanged, offPreviewAnim;
+let offSizeChange, offPositionReset, offScreenChanged, offPreviewAnim, screenChangedHandler;
 
 onMounted(async () => {
   loadVRMModels();
@@ -693,7 +693,7 @@ onMounted(async () => {
       y: sh.value - petSize.value - 40,
     };
   });
-  offScreenChanged = EventsOn("screen:active:changed", debounce(async (info) => {
+  screenChangedHandler = debounce(async (info) => {
     sw.value = info.width;
     sh.value = info.height;
     try {
@@ -710,7 +710,8 @@ onMounted(async () => {
               y: info.height - petSize.value - 40,
             };
     } catch (_) {}
-  }, 200));
+  }, 200);
+  offScreenChanged = EventsOn("screen:active:changed", screenChangedHandler);
 });
 
 onUnmounted(() => {
@@ -727,6 +728,7 @@ onUnmounted(() => {
   offSizeChange?.();
   offPositionReset?.();
   offScreenChanged?.();
+  screenChangedHandler?.cancel?.();
   window.removeEventListener("mousemove", onMouseMove);
   window.removeEventListener("mouseup", onMouseUp);
   window.removeEventListener("blur", onMouseUp);
