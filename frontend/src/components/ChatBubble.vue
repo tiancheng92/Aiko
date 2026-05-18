@@ -1,6 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { defineAsyncComponent } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
 const ChatPanel = defineAsyncComponent(() => import('./ChatPanel.vue'))
 import ContextMenu from './ContextMenu.vue'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
