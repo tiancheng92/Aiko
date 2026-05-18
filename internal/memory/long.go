@@ -1,16 +1,17 @@
 package memory
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"fmt"
 	"math"
-
-	"github.com/rs/zerolog/log"
-	"sort"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/cloudwego/eino/components/embedding"
 	"github.com/google/uuid"
@@ -70,7 +71,7 @@ func (l *LongStore) Store(ctx context.Context, text string) error {
 		ID:      id,
 		Content: text,
 		Metadata: map[string]string{
-			"created_at": fmt.Sprintf("%d", now.Unix()),
+			"created_at": strconv.FormatInt(now.Unix(), 10),
 			"type":       "raw",
 		},
 	}); err != nil {
@@ -86,7 +87,7 @@ func (l *LongStore) Store(ctx context.Context, text string) error {
 			ID:      summaryID,
 			Content: summary,
 			Metadata: map[string]string{
-				"created_at": fmt.Sprintf("%d", now.Unix()),
+				"created_at": strconv.FormatInt(now.Unix(), 10),
 				"type":       "summary",
 				"raw_id":     id,
 			},
@@ -139,9 +140,7 @@ func decayRank(results []chromem.Result, k int) []string {
 	for _, r := range results {
 		candidates = append(candidates, scored{content: r.Content, score: timeDecayScore(r, now)})
 	}
-	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].score > candidates[j].score
-	})
+	slices.SortFunc(candidates, func(a, b scored) int { return cmp.Compare(b.score, a.score) })
 	out := make([]string, 0, k)
 	for i, c := range candidates {
 		if i >= k {
@@ -177,22 +176,20 @@ func (l *LongStore) Search(ctx context.Context, query string, k int) ([]string, 
 
 	now := float64(time.Now().Unix())
 	var candidates []scored
-	seen := make(map[string]bool) // deduplicate by raw_id
+	seen := make(map[string]struct{}) // deduplicate by raw_id
 	for _, r := range results {
 		// Skip duplicate summary entries that point to a raw we already have.
 		if rawID := r.Metadata["raw_id"]; rawID != "" {
-			if seen[rawID] {
+			if _, dup := seen[rawID]; dup {
 				continue
 			}
-			seen[rawID] = true
+			seen[rawID] = struct{}{}
 		}
 		candidates = append(candidates, scored{content: r.Content, score: timeDecayScore(r, now)})
 	}
 
 	// Sort by blended score descending.
-	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].score > candidates[j].score
-	})
+	slices.SortFunc(candidates, func(a, b scored) int { return cmp.Compare(b.score, a.score) })
 
 	// Return top-k content strings.
 	out := make([]string, 0, k)

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/rs/zerolog/log"
 
@@ -271,14 +272,21 @@ func (s *ShortStore) LastUserMessage() (Message, error) {
 	return Message{}, sql.ErrNoRows
 }
 
+// formatBlockPool recycles strings.Builder instances used to assemble migration blocks.
+var formatBlockPool = sync.Pool{New: func() any { return new(strings.Builder) }}
+
 // FormatBlock formats a slice of messages into a single text block for storage.
 func FormatBlock(msgs []Message) string {
-	var sb strings.Builder
+	sb := formatBlockPool.Get().(*strings.Builder)
+	sb.Reset()
 	for i := range msgs {
 		sb.WriteString(msgs[i].Role)
 		sb.WriteString(": ")
 		sb.WriteString(msgs[i].Content)
 		sb.WriteString("\n")
 	}
-	return sb.String()
+	s := sb.String()
+	sb.Reset()
+	formatBlockPool.Put(sb)
+	return s
 }

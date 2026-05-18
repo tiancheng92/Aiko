@@ -24,7 +24,7 @@ func parseEmotionTag(s string) (string, float64, string, bool) {
 	return emotion, intensity, s[m[1]:], true
 }
 
-// EmotionParser is a per-response streaming state machine that strips the
+// EmotionParser is a per-response streaming state machine that extracts the
 // optional emotion prefix tag from the token stream.
 // It is not safe for concurrent use.
 type EmotionParser struct {
@@ -42,8 +42,7 @@ func NewEmotionParser() *EmotionParser {
 //   - textToEmit is non-empty when text should be forwarded to the frontend.
 //   - emotion is non-empty (with intensity) when an emotion tag was detected.
 //
-// Once parsing is complete (tag found or given up), all subsequent tokens are
-// returned verbatim as textToEmit.
+// Emotion tag filtering (stripping from display) is handled entirely by the frontend.
 func (p *EmotionParser) Feed(tok string) (text string, emotion string, intensity float64) {
 	if !p.parsing {
 		return tok, "", 0

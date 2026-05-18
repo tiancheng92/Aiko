@@ -17,25 +17,27 @@ import (
 	internaltools "aiko/internal/tools"
 )
 
-// streamResultPool recycles StreamResult values to reduce allocations during streaming.
-var streamResultPool = sync.Pool{New: func() any { return &StreamResult{} }}
+// builderPool recycles strings.Builder instances to reuse their internal byte buffers
+// across streaming responses, avoiding repeated buffer reallocations.
+var builderPool = sync.Pool{New: func() any { return new(strings.Builder) }}
 
-// sendToken acquires a pooled StreamResult, sets Token, sends it, then returns it to the pool.
-func sendToken(ch chan<- StreamResult, token string) {
-	r := streamResultPool.Get().(*StreamResult)
-	r.Token = token
-	ch <- *r
-	r.Token = ""
-	streamResultPool.Put(r)
+func getBuilder() *strings.Builder {
+	b := builderPool.Get().(*strings.Builder)
+	b.Reset()
+	return b
 }
 
-// sendThinkingToken acquires a pooled StreamResult, sets ThinkingToken, sends it, then returns it to the pool.
+func putBuilder(b *strings.Builder) {
+	b.Reset()
+	builderPool.Put(b)
+}
+
+// sendToken sends a token StreamResult to ch.
+func sendToken(ch chan<- StreamResult, token string) { ch <- StreamResult{Token: token} }
+
+// sendThinkingToken sends a thinking-token StreamResult to ch.
 func sendThinkingToken(ch chan<- StreamResult, token string) {
-	r := streamResultPool.Get().(*StreamResult)
-	r.ThinkingToken = token
-	ch <- *r
-	r.ThinkingToken = ""
-	streamResultPool.Put(r)
+	ch <- StreamResult{ThinkingToken: token}
 }
 
 // drainRunner consumes all events from runner.Query, forwards tokens to ch,
@@ -68,21 +70,33 @@ func drainIter(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIterator[
 	return resp, thinking, imgs, len(uniqueTools), ok
 }
 
-// nextEvent wraps iter.Next() in a goroutine so callers can race it against
-// ctx.Done(). iter.Next() blocks on sync.Cond.Wait() and has no context
-// awareness; without this wrapper, StopGeneration cannot unblock a thinking LLM.
+// iterResult carries a single event from iter.Next().
 type iterResult struct {
 	event *adk.AgentEvent
 	ok    bool
 }
 
-func nextEvent(iter *adk.AsyncIterator[*adk.AgentEvent]) <-chan iterResult {
-	c := make(chan iterResult, 1)
+// pumpIter starts a goroutine that calls iter.Next() in a loop and sends each
+// result to the returned channel. Because iter.Next() blocks on sync.Cond.Wait()
+// and has no context awareness, the goroutine cannot be interrupted mid-call;
+// it exits as soon as iter.Next() returns after doneC is closed.
+// doneC must be closed exactly once by the caller (e.g. via sync.Once + defer).
+func pumpIter(iter *adk.AsyncIterator[*adk.AgentEvent], doneC <-chan struct{}) <-chan iterResult {
+	ch := make(chan iterResult, 1)
 	go func() {
-		event, ok := iter.Next()
-		c <- iterResult{event, ok}
+		for {
+			event, ok := iter.Next()
+			select {
+			case ch <- iterResult{event, ok}:
+			case <-doneC:
+				return
+			}
+			if !ok {
+				return
+			}
+		}
 	}()
-	return c
+	return ch
 }
 
 // processStreamingMessage drains a streaming MessageVariant, forwarding tokens,
@@ -139,8 +153,18 @@ func processStreamingMessage(mo *adk.MessageVariant, ch chan<- StreamResult,
 func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIterator[*adk.AgentEvent],
 	ch chan<- StreamResult, pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string,
 	uniqueTools map[string]struct{}, imgsBuf *[]string) (string, string, bool) {
-	var sb strings.Builder
-	var thinkingSb strings.Builder
+	sb := getBuilder()
+	thinkingSb := getBuilder()
+	defer func() {
+		putBuilder(sb)
+		putBuilder(thinkingSb)
+	}()
+
+	doneC := make(chan struct{})
+	var once sync.Once
+	closeDone := func() { once.Do(func() { close(doneC) }) }
+	defer closeDone()
+	eventCh := pumpIter(iter, doneC)
 
 	for {
 		var event *adk.AgentEvent
@@ -148,7 +172,7 @@ func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIter
 		select {
 		case <-ctx.Done():
 			return "", "", false
-		case r := <-nextEvent(iter):
+		case r := <-eventCh:
 			event, ok = r.event, r.ok
 		}
 		if !ok {
@@ -193,7 +217,7 @@ func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIter
 
 		mo := event.Output.MessageOutput
 		if mo.IsStreaming {
-			if !processStreamingMessage(mo, ch, uniqueTools, imgsBuf, &sb, &thinkingSb) {
+			if !processStreamingMessage(mo, ch, uniqueTools, imgsBuf, sb, thinkingSb) {
 				return "", "", false
 			}
 		} else if mo.Message != nil && mo.Message.Role == schema.Tool {
@@ -222,7 +246,9 @@ func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIter
 			}
 		}
 	}
-	return sb.String(), thinkingSb.String(), true
+	// Clone before returning: the builders go back to the pool immediately after,
+	// so callers must not hold references to the internal buffer.
+	return strings.Clone(sb.String()), strings.Clone(thinkingSb.String()), true
 }
 
 // extractImages returns data URLs or HTTP(S) URLs for any image parts in parts.

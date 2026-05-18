@@ -98,6 +98,10 @@ func (a *Agent) gatherContextSources(ctx context.Context, userInput string) (
 	return
 }
 
+// ctxBufPool recycles strings.Builder instances used to assemble the per-turn
+// system context, reusing the underlying buffer across conversation turns.
+var ctxBufPool = sync.Pool{New: func() any { return new(strings.Builder) }}
+
 // buildContext fetches user profile, long-term memories (summaries and raws separately),
 // and recent short-term history concurrently, then returns a message list ready for
 // runner.Run. Errors from individual sources are logged and skipped — a partial context
@@ -111,7 +115,12 @@ func (a *Agent) buildContext(ctx context.Context, userInput string) ([]adk.Messa
 	var msgs []adk.Message
 
 	// Build context pair (user + assistant "Understood.") — always includes current time.
-	var ctxBuf strings.Builder
+	ctxBuf := ctxBufPool.Get().(*strings.Builder)
+	ctxBuf.Reset()
+	defer func() {
+		ctxBuf.Reset()
+		ctxBufPool.Put(ctxBuf)
+	}()
 	ctxBuf.WriteString("Current time: ")
 	ctxBuf.WriteString(time.Now().Format("2006-01-02 15:04:05 CST"))
 	ctxBuf.WriteByte('\n')

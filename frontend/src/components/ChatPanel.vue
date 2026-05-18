@@ -315,6 +315,8 @@ function shortenUrl(url) {
 }
 
 const PAGE_SIZE = 10
+/** stripEmotionTags removes [情绪:xxx/0.0] tags from a string. */
+function stripEmotionTags(s) { return s.replace(/\[情绪:\w+\/[\d.]+\]\n?/g, '') }
 
 const messages = ref([])
 /** oldestLoadedID is the smallest message ID currently in the list; used for lazy-loading older pages. */
@@ -617,6 +619,7 @@ let soundsEnabled = false
 
 /** applyToken appends a token to the last streaming assistant message. */
 function applyToken(token) {
+  token = stripEmotionTags(token)
   // Transition the thinking placeholder on first real token.
   // If the placeholder already has thinkingContent, update it in-place to preserve
   // the accumulated thinking text; otherwise remove it and fall through to create
@@ -676,7 +679,7 @@ function mapMsg(m) {
   return {
     id: m.ID,
     role: m.Role,
-    content: m.Content,
+    content: stripEmotionTags(m.Content ?? ''),
     thinkingContent: m.ThinkingContent ?? '',
     thinkingExpanded: false,
     time: m.CreatedAt,
