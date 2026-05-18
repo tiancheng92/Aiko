@@ -4,6 +4,7 @@ import * as PIXI from 'pixi.js'
 import { Live2DModel, MotionPriority } from 'pixi-live2d-display/cubism4'
 import { GetBallPosition, SaveBallPosition, GetScreenSize, GetConfig, SaveConfig, GetMousePosition, GetPetSize } from '../../wailsjs/go/main/App'
 import { Quit, EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
+import { debounce } from '../utils/timing.js'
 import { usePetState } from '../composables/usePetState.js'
 import { useModelPath } from '../composables/useModelPath.js'
 import ContextMenu from './ContextMenu.vue'
@@ -219,7 +220,7 @@ onMounted(async () => {
     pos.value = { x: sw.value - petSize.value - 40, y: sh.value - petSize.value - 40 }
   })
 
-  offScreenChanged = EventsOn('screen:active:changed', async (info) => {
+  offScreenChanged = EventsOn('screen:active:changed', debounce(async (info) => {
     const w = info.width
     const h = info.height
     sw.value = w
@@ -244,7 +245,7 @@ onMounted(async () => {
     } catch (e) {
       console.warn('screen:active:changed: GetBallPosition failed', e)
     }
-  })
+  }, 200))
 })
 
 /** Watch modelPath and hot-reload the Live2D model when it changes. */

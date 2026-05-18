@@ -26,6 +26,7 @@ import {
 } from '../../wailsjs/go/main/App'
 import { ListProactiveItems, DeleteProactiveItem } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
+import { throttle, debounce } from '../utils/timing.js'
 import { useModelPath } from '../composables/useModelPath.js'
 import { useEscapeKey } from '../composables/useEscapeKey.js'
 import { useConfirm } from '../composables/useConfirm.js'
@@ -165,6 +166,9 @@ let offProgress = null
 let offScreen = null
 let offUpdateProgress = null
 let offCronJobDone = null
+let offKnowledgeDone = null
+let offKnowledgeError = null
+let offUpdateError = null
 
 // ── Modal spring animation ──────────────────────────────────────────────────
 // Shared across all 4 modal types (only one modal open at a time).
@@ -338,9 +342,17 @@ onMounted(async () => {
     console.warn('GetAutoLaunch failed:', e)
   }
   fetchLarkStatus()
-  offProgress = EventsOn('knowledge:progress', (p) => { importProgress.value = p })
+  offProgress = EventsOn('knowledge:progress', throttle((p) => { importProgress.value = p }, 100))
+  offKnowledgeDone = EventsOn('knowledge:done', async () => {
+    importProgress.value = null
+    try { sources.value = await ListKnowledgeSources() || [] } catch (_) {}
+  })
+  offKnowledgeError = EventsOn('knowledge:error', (msg) => {
+    importProgress.value = null
+    statusMsg.value = '导入失败: ' + msg
+  })
   // Refresh per-screen sizes when the user moves the mouse to a different screen.
-  offScreen = EventsOn('screen:active:changed', async (info) => {
+  offScreen = EventsOn('screen:active:changed', debounce(async (info) => {
     try {
       const petSize = await GetPetSize(info.width, info.height)
       if (petSize > 0) cfg.value.PetSize = petSize
@@ -350,16 +362,20 @@ onMounted(async () => {
       if (cw > 0) cfg.value.ChatWidth = cw
       if (ch > 0) cfg.value.ChatHeight = ch
     } catch (e) { console.warn('SettingsWindow screen:active:changed: GetChatSize failed', e) }
-  })
+  }, 200))
   // Auto-fetch model list if URL is already configured.
   if (cfg.value.LLMBaseURL) fetchLLMModels()
 
-  offUpdateProgress = EventsOn('update:progress', (data) => {
+  offUpdateProgress = EventsOn('update:progress', throttle((data) => {
     updateProgress.value = data.pct
     updateProgressMsg.value = data.msg
-  })
+  }, 100))
 
   offCronJobDone = EventsOn('cron:job:done', () => { fetchCronJobs() })
+  offUpdateError = EventsOn('update:error', (msg) => {
+    updateError.value = '安装失败: ' + msg
+    updateInstalling.value = false
+  })
 
   // Enable auto-save watcher only after all initial data has been loaded.
   mountedReady.value = true
@@ -370,6 +386,9 @@ onUnmounted(() => {
   offScreen?.()
   offUpdateProgress?.()
   offCronJobDone?.()
+  offKnowledgeDone?.()
+  offKnowledgeError?.()
+  offUpdateError?.()
   cancelModal?.()
   clearTimeout(saveTimer)
   // Safety net — ensure no drag listeners linger if the component unmounts mid-drag.
@@ -410,20 +429,15 @@ async function checkUpdate() {
   }
 }
 
-/** installUpdate downloads and installs the latest release, then restarts. */
+/** installUpdate starts an async download-and-install. Errors come via update:error event. */
 async function installUpdate() {
   if (!updateInfo.value?.download_url) return
   updateInstalling.value = true
   updateProgress.value = 0
   updateProgressMsg.value = ''
   updateError.value = ''
-  try {
-    await InstallUpdate(updateInfo.value.download_url)
-  } catch (e) {
-    updateError.value = '安装失败: ' + e
-    updateInstalling.value = false
-  }
-  // On success the app will quit/restart; no need to reset installing state.
+  await InstallUpdate(updateInfo.value.download_url)
+  // On success the app will quit/restart. Async errors handled by offUpdateError listener.
 }
 
 /** fetchProfiles loads all model profiles from the backend. */
@@ -718,18 +732,17 @@ async function togglePerm(perm) {
   }
 }
 
-/** importFile opens a file picker and imports into knowledge base. */
+/** importFile opens a file picker and starts an async knowledge base import.
+ *  Completion and errors are reported via knowledge:done / knowledge:error events. */
 async function importFile() {
   const path = await OpenFileDialog('选择文档', [{ DisplayName: '文档', Pattern: '*.txt;*.md;*.pdf;*.epub' }])
   if (!path) return
   importProgress.value = { Source: path, Total: 0, Processed: 0 }
   try {
     await ImportKnowledge(path)
-    sources.value = await ListKnowledgeSources() || []
   } catch (e) {
-    statusMsg.value = '导入失败: ' + e
-  } finally {
     importProgress.value = null
+    statusMsg.value = '导入失败: ' + e
   }
 }
 

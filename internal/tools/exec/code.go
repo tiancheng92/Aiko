@@ -8,6 +8,7 @@ import (
 	"os"
 	goexec "os/exec"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"aiko/internal/execenv"
@@ -116,6 +117,13 @@ func runCodeExecution(ctx context.Context, language, code, workingDir string, ti
 	cmd := goexec.CommandContext(cmdCtx, binary, tmpPath)
 	cmd.Env = execenv.AugmentedEnv()
 	cmd.Dir = filepath.Clean(workingDir)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		if cmd.Process != nil {
+			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		}
+		return nil
+	}
 
 	if register != nil {
 		register(id, cancel)
@@ -135,6 +143,9 @@ func runCodeExecution(ctx context.Context, language, code, workingDir string, ti
 	if err != nil {
 		if cmdCtx.Err() == context.DeadlineExceeded {
 			return fmt.Sprintf("代码执行超时（%ds）\n%s", timeoutSecs, output), nil
+		}
+		if ctx.Err() == context.Canceled {
+			return fmt.Sprintf("执行已终止\n%s", output), nil
 		}
 		return fmt.Sprintf("执行失败：%s\n%s", err.Error(), output), nil
 	}

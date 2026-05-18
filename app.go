@@ -576,6 +576,21 @@ func (a *App) domReady(_ context.Context) {
 }
 
 func (a *App) shutdown(_ context.Context) {
+	// Cancel all in-flight requests first — a.ctx is context.Background() and is
+	// never cancelled by Wails itself, so the LLM/TTS goroutines would otherwise
+	// keep blocking on their HTTP streams until the server closes the connection,
+	// holding up process exit.
+	a.mu.Lock()
+	if a.chatCancel != nil {
+		a.chatCancel()
+		a.chatCancel = nil
+	}
+	if a.ttsCancel != nil {
+		a.ttsCancel()
+		a.ttsCancel = nil
+	}
+	a.mu.Unlock()
+
 	// Cancel the screen-watcher goroutine immediately so watcherWG.Wait() below
 	// doesn't block — the goroutine uses its own derived context, not a.ctx.
 	if a.cancelWatcher != nil {

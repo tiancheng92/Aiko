@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import ChatPanel from './ChatPanel.vue'
 import ContextMenu from './ContextMenu.vue'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
+import { debounce } from '../utils/timing.js'
 import { ExportChatHistory, GetChatSize, PingLLM, SaveChatSize, GetConfig, ListModelProfiles } from '../../wailsjs/go/main/App'
 import { ICON_EXPORT, ICON_TRASH, ICON_SETTING } from '../utils/icons'
 import { springAnimate } from '../composables/useSpring.js'
@@ -121,14 +122,14 @@ onMounted(async () => {
 
   refreshProfileInfo()
   offModelChangedLatency = EventsOn('config:model:changed', () => { pingOnce(); refreshProfileInfo() })
-  offScreenChanged = EventsOn('screen:active:changed', async (info) => {
+  offScreenChanged = EventsOn('screen:active:changed', debounce(async (info) => {
     try {
       const [w, h] = await GetChatSize(info.width, info.height)
       applySize({ width: w, height: h })
     } catch (e) {
       console.warn('screen:active:changed: GetChatSize failed', e)
     }
-  })
+  }, 200))
 
   offToken = EventsOn('chat:token', () => {
     isLLMActive.value = true

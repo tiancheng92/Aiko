@@ -8,6 +8,7 @@ import (
 	"os"
 	goexec "os/exec"
 	"strings"
+	"syscall"
 	"time"
 
 	"aiko/internal/execenv"
@@ -88,6 +89,10 @@ func IsTrustedCommand(command string, trusted []string) bool {
 }
 
 // runShellCommand executes command in workingDir with the given timeout.
+// The bash process is placed in its own process group (Setpgid) so that
+// cancel/timeout kills the entire group — including child processes that
+// hold the stdout/stderr pipe open — ensuring cmd.Run() always returns
+// promptly and the progress bar is dismissed.
 func runShellCommand(ctx context.Context, command, workingDir string, timeoutSecs int, register func(string, func()), unregister func(string)) (string, error) {
 	id := fmt.Sprintf("shell-run-%d", time.Now().UnixNano())
 	timeout := time.Duration(timeoutSecs) * time.Second
@@ -97,6 +102,15 @@ func runShellCommand(ctx context.Context, command, workingDir string, timeoutSec
 	cmd := goexec.CommandContext(cmdCtx, "bash", "-c", command)
 	cmd.Env = execenv.AugmentedEnv()
 	cmd.Dir = workingDir
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// Override CommandContext's default kill so the whole process group is
+	// signalled, not just the bash parent.
+	cmd.Cancel = func() error {
+		if cmd.Process != nil {
+			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		}
+		return nil
+	}
 
 	if register != nil {
 		register(id, cancel)
@@ -116,6 +130,9 @@ func runShellCommand(ctx context.Context, command, workingDir string, timeoutSec
 	if err != nil {
 		if cmdCtx.Err() == context.DeadlineExceeded {
 			return fmt.Sprintf("命令超时（%ds）\n%s", timeoutSecs, output), nil
+		}
+		if ctx.Err() == context.Canceled {
+			return fmt.Sprintf("命令已终止\n%s", output), nil
 		}
 		return fmt.Sprintf("命令执行失败：%s\n%s", err.Error(), output), nil
 	}

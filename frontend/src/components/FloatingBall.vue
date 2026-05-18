@@ -2,6 +2,7 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { GetBallPosition, SaveBallPosition, GetScreenSize } from '../../wailsjs/go/main/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
+import { debounce } from '../utils/timing.js'
 
 const emit = defineEmits(['click', 'position', 'ball-size'])
 const pos = ref(null)
@@ -45,13 +46,13 @@ onMounted(async () => {
     pos.value = { x: window.innerWidth - bs - 40, y: window.innerHeight - bs - 40 }
   }
 
-  offScreenChanged = EventsOn('screen:active:changed', async (info) => {
+  offScreenChanged = EventsOn('screen:active:changed', debounce(async (info) => {
     try {
       await loadPosition(info.width, info.height)
     } catch (err) {
       console.warn('FloatingBall screen:active:changed:', err)
     }
-  })
+  }, 200))
 })
 
 onUnmounted(() => {

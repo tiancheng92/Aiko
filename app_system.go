@@ -349,11 +349,21 @@ func (a *App) CheckUpdate() (UpdateInfo, error) {
 	return info, nil
 }
 
-// InstallUpdate downloads the DMG at downloadURL, replaces only the main
-// binary inside the running .app bundle, re-signs with the original signing
-// identity (preserving TCC permission grants), then restarts the app.
-// Progress is emitted as "update:progress" Wails events (0–100).
+// InstallUpdate starts an asynchronous download-and-install of the update at
+// downloadURL. It returns immediately; progress is broadcast via
+// "update:progress" events (0–100) and errors via "update:error".
 func (a *App) InstallUpdate(downloadURL string) error {
+	go func() {
+		if err := a.doInstallUpdate(downloadURL); err != nil {
+			wailsruntime.EventsEmit(a.ctx, "update:error", err.Error())
+		}
+	}()
+	return nil
+}
+
+// doInstallUpdate performs the actual download, DMG mount, binary replacement,
+// re-signing, and restart. Called from InstallUpdate in a goroutine.
+func (a *App) doInstallUpdate(downloadURL string) error {
 	emit := func(pct int, msg string) {
 		wailsruntime.EventsEmit(a.ctx, "update:progress", map[string]any{"pct": pct, "msg": msg})
 	}

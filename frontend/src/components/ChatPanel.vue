@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { SendMessage, SendMessageWithImages, SendMessageWithFiles, GetMessages, GetMessagesBeforeID, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig, RegenerateLastReply, GetSoundsEnabled } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
+import { throttle, debounce } from '../utils/timing.js'
 import { marked, Renderer } from 'marked'
 import markedKatex from 'marked-katex-extension'
 import 'katex/dist/katex.min.css'
@@ -660,7 +661,7 @@ let offTTSDone, offTTSError, offTTSAudio
 let offSoundsChanged
 let offAvatarChanged
 let offVoiceStart, offVoiceTranscript, offVoiceEnd, offVoiceFinal, offVoiceError, offVoiceAutoSend
-let offUpdateProgress
+let offUpdateProgress, offUpdateError
 
 const updateProgress = ref(0)
 const updateProgressMsg = ref('')
@@ -927,10 +928,10 @@ onMounted(async () => {
     nextTick(() => textareaEl.value?.focus())
   })
 
-  offVoiceTranscript = EventsOn('voice:transcript', (text) => {
+  offVoiceTranscript = EventsOn('voice:transcript', throttle((text) => {
     setInputDOM(text)
     voiceHint.value = text
-  })
+  }, 80))
 
   offVoiceEnd = EventsOn('voice:end', () => {
     isRecording.value = false
@@ -963,13 +964,19 @@ onMounted(async () => {
     voiceAutoSend.value = val
   })
 
-  offUpdateProgress = EventsOn('update:progress', (data) => {
+  offUpdateProgress = EventsOn('update:progress', throttle((data) => {
     isUpdating.value = true
     updateProgress.value = data.pct ?? 0
     updateProgressMsg.value = data.msg ?? ''
     if ((data.pct ?? 0) >= 100) {
       setTimeout(() => { isUpdating.value = false }, 2000)
     }
+  }, 100))
+  offUpdateError = EventsOn('update:error', (msg) => {
+    isUpdating.value = false
+    updateProgress.value = 0
+    updateProgressMsg.value = ''
+    messages.value.push({ role: 'system', content: '⚠️ 更新失败: ' + msg })
   })
 
   // Observe message container width for code block max-width.
@@ -993,7 +1000,7 @@ onUnmounted(() => {
   offTTSDone?.(); offTTSError?.(); offTTSAudio?.()
   offSoundsChanged?.(); offAvatarChanged?.()
   offVoiceStart?.(); offVoiceTranscript?.(); offVoiceEnd?.(); offVoiceFinal?.(); offVoiceError?.(); offVoiceAutoSend?.()
-  offUpdateProgress?.()
+  offUpdateProgress?.(); offUpdateError?.()
   document.removeEventListener('click', closeColDrops)
   sentinelObserver?.disconnect()
   sentinelObserver = null
@@ -1833,7 +1840,7 @@ img.msg-avatar {
 }
 
 /* Wrap */
-.bubble-wrap { max-width: 82%; display: flex; flex-direction: column; position: relative; }
+.bubble-wrap { max-width: 82%; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .msg.user .bubble-wrap { align-items: flex-end; }
 
 /* Collapsible wrapper */
@@ -1925,7 +1932,7 @@ img.msg-avatar {
 .recollapse-btn:hover { color: var(--text-secondary); }
 
 /* Bubble row: relative container，按钮绝对定位不占空间 */
-.bubble-row { position: relative; display: inline-flex; }
+.bubble-row { position: relative; display: inline-flex; max-width: 100%; }
 .msg.user .bubble-row { justify-content: flex-end; }
 .msg.assistant .bubble-row { justify-content: flex-start; flex-direction: column; align-items: flex-start; }
 
@@ -2132,6 +2139,8 @@ img.msg-avatar {
   outline-offset: 1px;
 }
 
+.bubble.markdown { max-width: 100%; }
+
 /* Markdown prose */
 .bubble.markdown :deep(p) { margin: 0 0 8px; }
 .bubble.markdown :deep(p:last-child) { margin-bottom: 0; }
@@ -2262,7 +2271,7 @@ img.msg-avatar {
   margin: 10px 0;
   border-radius: 8px;
   border: 1px solid rgba(255,255,255,0.1);
-  max-width: calc(var(--code-max-width, 100%) - 32px);
+  max-width: 100%;
 }
 .bubble.markdown :deep(.tbl-scroll) {
   overflow-x: auto;

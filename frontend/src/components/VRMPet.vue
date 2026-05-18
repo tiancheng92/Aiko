@@ -18,6 +18,7 @@ import {
   SaveConfig,
 } from "../../wailsjs/go/main/App";
 import { EventsEmit, EventsOn, Quit } from "../../wailsjs/runtime/runtime";
+import { debounce } from "../utils/timing.js";
 import { useEmotionEvents } from "../composables/useEmotionEvents.js";
 import { usePetState } from "../composables/usePetState.js";
 import { useVRMModel } from "../composables/useVRMModel.js";
@@ -692,7 +693,7 @@ onMounted(async () => {
       y: sh.value - petSize.value - 40,
     };
   });
-  offScreenChanged = EventsOn("screen:active:changed", async (info) => {
+  offScreenChanged = EventsOn("screen:active:changed", debounce(async (info) => {
     sw.value = info.width;
     sh.value = info.height;
     try {
@@ -709,7 +710,7 @@ onMounted(async () => {
               y: info.height - petSize.value - 40,
             };
     } catch (_) {}
-  });
+  }, 200));
 });
 
 onUnmounted(() => {

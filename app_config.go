@@ -66,11 +66,13 @@ func (a *App) SaveConfig(cfg *config.Config) error {
 	*a.cfg = *cfg // update in-place so existing tool pointers see the new values
 	a.mu.Unlock()
 
-	if err := a.initLLMComponents(a.ctx); err != nil {
-		log.Warn().Err(err).Msg("SaveConfig: LLM reinit skipped")
-	} else {
-		wailsruntime.EventsEmit(a.ctx, "config:model:changed", nil)
-	}
+	go func() {
+		if err := a.initLLMComponents(a.ctx); err != nil {
+			log.Warn().Err(err).Msg("SaveConfig: LLM reinit skipped")
+		} else {
+			wailsruntime.EventsEmit(a.ctx, "config:model:changed", nil)
+		}
+	}()
 	return nil
 }
 
@@ -144,11 +146,13 @@ func (a *App) SaveModelProfile(p config.ModelProfile) (config.ModelProfile, erro
 		a.mu.Unlock()
 
 		if llmChanged {
-			if err := a.initLLMComponents(a.ctx); err != nil {
-				log.Warn().Err(err).Msg("SaveModelProfile: LLM reinit skipped")
-			} else {
-				wailsruntime.EventsEmit(a.ctx, "config:model:changed", nil)
-			}
+			go func() {
+				if err := a.initLLMComponents(a.ctx); err != nil {
+					log.Warn().Err(err).Msg("SaveModelProfile: LLM reinit skipped")
+				} else {
+					wailsruntime.EventsEmit(a.ctx, "config:model:changed", nil)
+				}
+			}()
 		}
 	}
 	return p, nil
@@ -176,10 +180,17 @@ func (a *App) ActivateModelProfile(id int64) error {
 	if err := a.configStore.Save(&cfgCopy); err != nil {
 		return err
 	}
-	if err := a.initLLMComponents(a.ctx); err != nil {
-		return err
-	}
-	wailsruntime.EventsEmit(a.ctx, "config:model:changed", nil)
+	go func() {
+		if err := a.initLLMComponents(a.ctx); err != nil {
+			log.Warn().Err(err).Msg("ActivateModelProfile: LLM reinit skipped")
+			wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
+				"title":   "⚠️ 模型切换",
+				"message": "模型配置已保存，但 Agent 重启失败：" + err.Error(),
+			})
+			return
+		}
+		wailsruntime.EventsEmit(a.ctx, "config:model:changed", nil)
+	}()
 	return nil
 }
 
