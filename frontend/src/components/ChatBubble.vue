@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import ChatPanel from './ChatPanel.vue'
+import { defineAsyncComponent } from 'vue'
+const ChatPanel = defineAsyncComponent(() => import('./ChatPanel.vue'))
 import ContextMenu from './ContextMenu.vue'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { debounce } from '../utils/timing.js'
@@ -430,7 +431,10 @@ defineExpose({ focusInput, scrollToBottom })
       </button>
     </div>
     <div class="content">
-      <ChatPanel ref="chatPanelRef" />
+      <Suspense>
+        <ChatPanel ref="chatPanelRef" />
+        <template #fallback></template>
+      </Suspense>
     </div>
     <ContextMenu ref="chatMenuRef" :items="chatMenuItems" />
     <!-- Resize handles — invisible drag strips, hidden in fullscreen -->
