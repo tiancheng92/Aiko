@@ -175,6 +175,16 @@ func (a *App) AcquireKeyWindow() { acquireKeyWindow() }
 // ReleaseKeyWindow resigns key-window status, restoring focus to the previous app.
 func (a *App) ReleaseKeyWindow() { releaseKeyWindow() }
 
+// ReadClipboard returns the current system clipboard text via pbpaste,
+// bypassing WKWebView's clipboard permission restriction.
+func (a *App) ReadClipboard() string {
+	out, err := exec.Command("pbpaste").Output()
+	if err != nil {
+		return ""
+	}
+	return string(out)
+}
+
 // ConfirmToolExecution is called by the frontend when the user approves or rejects
 // a pending tool execution request.
 func (a *App) ConfirmToolExecution(id string, approved bool, editedContent string) {

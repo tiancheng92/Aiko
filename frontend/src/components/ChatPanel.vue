@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { SendMessage, SendMessageWithImages, SendMessageWithFiles, GetMessages, GetMessagesBeforeID, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig, RegenerateLastReply, GetSoundsEnabled } from '../../wailsjs/go/main/App'
+import { SendMessage, SendMessageWithImages, SendMessageWithFiles, GetMessages, GetMessagesBeforeID, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig, RegenerateLastReply, GetSoundsEnabled, ReadClipboard } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 import { throttle, debounce } from '../utils/timing.js'
 import { marked, Renderer } from 'marked'
@@ -440,6 +440,8 @@ const copiedIdx = ref(null)
 const showClearConfirm = ref(false)
 const msgMenuRef = ref(null)
 const msgMenuItems = ref([])
+const inputMenuRef = ref(null)
+const inputMenuItems = ref([])
 /** tableDetailRow holds the key-value pairs for the row-detail modal; null when hidden. */
 const tableDetailRow = ref(null)
 
@@ -1110,34 +1112,112 @@ async function copyMessage(idx) {
   } catch {}
 }
 
-/** onAssistantBubbleContextMenu shows the per-message right-click menu. */
-function onAssistantBubbleContextMenu(e, i) {
+const ICON_COPY  = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+const ICON_REGEN = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>'
+const ICON_SPEAK = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>'
+const ICON_STOP_SPEAK = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>'
+
+/** unlockScroll restores the messages container scroll after the context menu closes. */
+function unlockScroll() {
+  if (messagesEl.value) messagesEl.value.style.overflow = ''
+}
+
+/** onBubbleContextMenu shows the per-message right-click menu. */
+function onBubbleContextMenu(e, i) {
   const m = messages.value[i]
-  if (!m || m.role !== 'assistant' || m.streaming || m.thinking) return
-  // Only allow regen on the last assistant message.
-  const lastAssistantIdx = messages.value.reduce((last, msg, idx) =>
-    msg.role === 'assistant' && !msg.streaming && !msg.thinking ? idx : last, -1)
-  if (i !== lastAssistantIdx) return
+  if (!m || m.streaming || m.thinking) return
   e.preventDefault()
-  msgMenuItems.value = [
-    {
-      iconSvg: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>',
-      label: '重新生成',
-      action: () => regenLastReply(i),
-    },
-  ]
+  e.stopPropagation()
+  if (messagesEl.value) messagesEl.value.style.overflow = 'hidden'
+  const items = []
+  if (m.content) {
+    items.push({
+      iconSvg: ICON_COPY,
+      label: '复制',
+      action: () => navigator.clipboard.writeText(m.content),
+    })
+  }
+  if (m.role === 'assistant' && m.content) {
+    if (items.length) items.push({ divider: true })
+    const isSpeaking = activeTTSMsgId.value === i
+    items.push({
+      iconSvg: isSpeaking ? ICON_STOP_SPEAK : ICON_SPEAK,
+      label: isSpeaking ? '停止朗读' : '朗读',
+      action: () => speakMessage(i),
+    })
+    const lastAssistantIdx = messages.value.reduce((last, msg, idx) =>
+      msg.role === 'assistant' && !msg.streaming && !msg.thinking ? idx : last, -1)
+    if (i === lastAssistantIdx && !loading.value) {
+      items.push({
+        iconSvg: ICON_REGEN,
+        label: '重新生成',
+        action: () => regenLastReply(i),
+      })
+    }
+  }
+  if (!items.length) return
+  msgMenuItems.value = items
   msgMenuRef.value?.show(e.clientX, e.clientY)
 }
 
-/** regenLastReply removes the last assistant + user bubble and re-requests. */
+const ICON_PASTE = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>'
+const ICON_CUT = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="20" r="2"/><circle cx="6" cy="4" r="2"/><line x1="6" y1="6" x2="6" y2="18"/><line x1="6" y1="12" x2="21" y2="3"/><line x1="6" y1="12" x2="21" y2="21"/></svg>'
+
+/** onTextareaContextMenu shows paste-only or copy/paste/cut menu depending on selection. */
+function onTextareaContextMenu(e) {
+  e.preventDefault()
+  e.stopPropagation()
+  const el = textareaEl.value
+  if (!el) return
+  const hasSelection = el.selectionStart !== el.selectionEnd
+  const items = []
+  if (hasSelection) {
+    items.push({
+      iconSvg: ICON_COPY,
+      label: '复制',
+      action: () => navigator.clipboard.writeText(el.value.slice(el.selectionStart, el.selectionEnd)),
+    })
+  }
+  items.push({
+    iconSvg: ICON_PASTE,
+    label: '粘贴',
+    action: async () => {
+      const text = await ReadClipboard().catch(() => '')
+      if (!text) return
+      const start = el.selectionStart
+      const end = el.selectionEnd
+      el.value = el.value.slice(0, start) + text + el.value.slice(end)
+      el.selectionStart = el.selectionEnd = start + text.length
+      autoResize()
+    },
+  })
+  if (hasSelection) {
+    items.push({
+      iconSvg: ICON_CUT,
+      label: '剪切',
+      action: () => {
+        navigator.clipboard.writeText(el.value.slice(el.selectionStart, el.selectionEnd))
+        const start = el.selectionStart
+        el.value = el.value.slice(0, start) + el.value.slice(el.selectionEnd)
+        el.selectionStart = el.selectionEnd = start
+        autoResize()
+      },
+    })
+  }
+  inputMenuItems.value = items
+  inputMenuRef.value?.show(e.clientX, e.clientY)
+}
+
+/** regenLastReply removes the last user+assistant bubbles, re-appends the user bubble, then re-requests. */
 async function regenLastReply(assistantIdx) {
   if (loading.value) return
-  // Remove the assistant bubble at assistantIdx.
-  messages.value.splice(assistantIdx, 1)
-  // Remove the preceding user bubble (last user before assistantIdx).
+  // Find and remove the preceding user bubble, saving its data to re-append below.
   const userIdx = messages.value.slice(0, assistantIdx).reduce(
     (last, m, idx) => m.role === 'user' ? idx : last, -1)
+  const userMsg = userIdx >= 0 ? { ...messages.value[userIdx] } : null
+  messages.value.splice(assistantIdx, 1)
   if (userIdx >= 0) messages.value.splice(userIdx, 1)
+  if (userMsg) messages.value.push(userMsg)
 
   loading.value = true
   isStreaming.value = true
@@ -1433,7 +1513,7 @@ defineExpose({ focusInput, scrollToBottom })
             :data-msg-key="msgKey(m, i)"
           >
             <div class="bubble-row" :class="{ 'is-collapsed': isCollapsed(m, i) }"
-              @contextmenu="m.role === 'assistant' ? onAssistantBubbleContextMenu($event, i) : undefined">
+              @contextmenu="onBubbleContextMenu($event, i)">
               <!-- Bubble content -->
               <div v-if="m.role !== 'assistant'" class="bubble markdown" :class="{ 'has-images': (m.images && m.images.length > 0) || (m.files && m.files.length > 0) }">
                 <div v-if="m.images && m.images.length > 0" class="msg-images">
@@ -1613,7 +1693,9 @@ defineExpose({ focusInput, scrollToBottom })
     <ToolConfirmModal />
 
     <!-- Per-message right-click context menu -->
-    <ContextMenu ref="msgMenuRef" :items="msgMenuItems" />
+    <ContextMenu ref="msgMenuRef" :items="msgMenuItems" @close="unlockScroll" />
+    <!-- Textarea right-click context menu -->
+    <ContextMenu ref="inputMenuRef" :items="inputMenuItems" />
 
     <!-- Clear chat confirmation dialog -->
     <Transition name="confirm-pop">
@@ -1722,9 +1804,10 @@ defineExpose({ focusInput, scrollToBottom })
         @keydown.enter.exact="onEnterKey"
         @keydown.meta.enter.prevent="insertNewline"
         @paste="onPaste"
+        @contextmenu.prevent="onTextareaContextMenu"
         :disabled="loading"
       />
-      <div class="input-toolbar">
+      <div class="input-toolbar" @contextmenu.stop.prevent>
         <div class="toolbar-spacer" />
         <button
           class="attach-btn"

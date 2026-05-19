@@ -80,9 +80,10 @@ defineExpose({ show, hide })
         <button
           v-else
           role="menuitem"
-          :class="['ctx-item', { danger: item.danger, hovered: hoveredIndex === i }]"
+          :class="['ctx-item', { danger: item.danger, hovered: hoveredIndex === i, disabled: item.disabled }]"
+          :disabled="item.disabled"
           :data-idx="i"
-          @click="() => { item.action(); hide() }"
+          @click="() => { if (!item.disabled) { item.action(); hide() } }"
         >
           <span class="ctx-icon-wrap">
             <span v-if="item.iconSvg" class="ctx-icon-svg" v-html="item.iconSvg" />
@@ -153,6 +154,10 @@ defineExpose({ show, hide })
 .ctx-item:hover .ctx-icon-wrap,
 .ctx-item:focus-visible .ctx-icon-wrap,
 .ctx-item.hovered .ctx-icon-wrap { color: #fff; }
+
+.ctx-item.disabled { opacity: 0.38; cursor: not-allowed; }
+.ctx-item.disabled:hover,
+.ctx-item.disabled.hovered { background: transparent; color: var(--text-primary); transform: none; }
 
 .ctx-item.danger { color: var(--danger); }
 .ctx-item.danger:hover,

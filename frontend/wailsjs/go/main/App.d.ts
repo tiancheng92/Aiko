@@ -126,6 +126,8 @@ export function OpenFileDialog(arg1:string,arg2:Array<frontend.FileFilter>):Prom
 
 export function PingLLM():Promise<number>;
 
+export function ReadClipboard():Promise<string>;
+
 export function RegenerateLastReply():Promise<void>;
 
 export function ReleaseKeyWindow():Promise<void>;

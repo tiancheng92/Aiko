@@ -234,6 +234,10 @@ export function PingLLM() {
   return window['go']['main']['App']['PingLLM']();
 }
 
+export function ReadClipboard() {
+  return window['go']['main']['App']['ReadClipboard']();
+}
+
 export function RegenerateLastReply() {
   return window['go']['main']['App']['RegenerateLastReply']();
 }

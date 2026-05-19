@@ -401,7 +401,7 @@ defineExpose({ focusInput, scrollToBottom })
     @mouseenter="clearTimeout(idleTimer)"
     @mouseleave="resetIdleTimer()"
   >
-    <div class="title-bar">
+    <div class="title-bar" @contextmenu.stop.prevent>
       <svg class="title-logo" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <!-- large bubble (top-left) -->
         <rect x="1.5" y="2" width="14" height="10" rx="3.5" fill="currentColor"/>
