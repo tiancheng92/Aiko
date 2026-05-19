@@ -2,7 +2,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
-import { marked } from 'marked'
+import { renderMarkdown } from '../composables/useMarkdown.js'
 
 const props = defineProps({
   petPos:  { type: Object, default: () => ({ x: -1, y: -1 }) },
@@ -50,11 +50,6 @@ const pos = computed(() => {
   return { x: bx, y: by }
 })
 
-/** renderMd renders markdown content for notification body. */
-function renderMd(text) {
-  if (!text) return ''
-  return marked(text, { breaks: true, gfm: true })
-}
 
 /** dismiss hides the notification and clears the auto-hide timer. */
 function dismiss() {
@@ -105,7 +100,7 @@ onUnmounted(() => {
           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
-      <div class="notif-body markdown" v-html="renderMd(notification.message)" @click.stop />
+      <div class="notif-body markdown" v-html="renderMarkdown(notification.message)" @click.stop />
     </div>
     </Transition>
   </Teleport>
@@ -248,12 +243,66 @@ onUnmounted(() => {
 .notif-body :deep(strong) { color: var(--text-primary); font-weight: 600; }
 .notif-body :deep(em) { color: var(--text-primary); font-style: italic; }
 .notif-body :deep(code) {
+  font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
+  font-size: 12px;
+}
+.notif-body :deep(:not(pre) > code) {
   background: rgba(255, 255, 255, 0.08);
   padding: 1px 6px;
   border-radius: 4px;
-  font-size: 12px;
-  font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
 }
+.notif-body :deep(.code-block) {
+  margin: 6px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.notif-body :deep(.code-header) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px;
+  background: rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.notif-body :deep(.code-lang) {
+  font-size: 10px;
+  color: rgba(125,211,252,0.6);
+  font-family: 'SF Mono', ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.notif-body :deep(.code-copy) {
+  font-size: 10px;
+  padding: 2px 8px;
+  background: var(--accent-alpha-12);
+  color: var(--accent);
+  border: 1px solid var(--accent-alpha-20);
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.12s, color 0.12s;
+}
+.notif-body :deep(.code-copy:hover) { background: var(--accent); color: #fff; border-color: transparent; }
+.notif-body :deep(pre) {
+  background: rgba(10, 10, 20, 0.6);
+  padding: 8px 10px;
+  overflow-x: auto;
+  margin: 0;
+}
+.notif-body :deep(pre code) { white-space: pre-wrap; word-break: break-word; background: none; padding: 0; }
+.notif-body :deep(.code-line) { display: flex; align-items: flex-start; line-height: 1.6; }
+.notif-body :deep(.line-nr) {
+  flex-shrink: 0;
+  min-width: 2.5ch;
+  padding-right: 0.6ch;
+  margin-right: 1ch;
+  color: rgba(148,163,184,0.35);
+  font-size: 11px;
+  user-select: none;
+  border-right: 1px solid rgba(255,255,255,0.08);
+}
+.notif-body :deep(.line-code) { flex: 1; min-width: 0; white-space: pre-wrap; word-break: break-word; }
 .notif-body :deep(ul), .notif-body :deep(ol) {
   margin: 4px 0 6px;
   padding-left: 18px;
