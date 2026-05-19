@@ -619,7 +619,6 @@ let soundsEnabled = false
 
 /** applyToken appends a token to the last streaming assistant message. */
 function applyToken(token) {
-  token = stripEmotionTags(token)
   // Transition the thinking placeholder on first real token.
   // If the placeholder already has thinkingContent, update it in-place to preserve
   // the accumulated thinking text; otherwise remove it and fall through to create
@@ -1064,8 +1063,8 @@ function renderMarkdown(text) {
   if (!text) return ''
   const cached = _mdCache.get(text)
   if (cached !== undefined) return cached
-  // Strip LLM thinking blocks before rendering.
-  const stripped = text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim()
+  // Strip LLM thinking blocks and emotion tags before rendering.
+  const stripped = stripEmotionTags(text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')).trim()
   if (!stripped) { _mdCache.set(text, ''); return '' }
   // Replace bare DDG redirect URLs with the real destination so marked's
   // autolink / link renderer can display them cleanly.

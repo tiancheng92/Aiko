@@ -53,6 +53,7 @@ const { currentVRMModel, availableVRMModels, vrmModelURL, loadVRMModels } =
 
 let scene, camera, renderer, vrm, clock, rafId, idleMixer;
 let mounted = true;
+let _vrmLoadSeq = 0; // incremented on each loadVRM call; stale loads self-abort
 let mouseTrackTimer = null;
 let isDragging = false;
 let dragStart = null;
@@ -398,9 +399,12 @@ async function initRenderer() {
 /** loadVRM loads a .vrm file by URL and replaces the current model in the scene. */
 async function loadVRM(url) {
   if (!url) return;
+  const seq = ++_vrmLoadSeq;
   const loader = new GLTFLoader();
   loader.register((parser) => new VRMLoaderPlugin(parser));
   const gltf = await loader.loadAsync(url);
+  // Abort if a newer load started while we were fetching.
+  if (seq !== _vrmLoadSeq || !mounted) return;
   const newVrm = gltf.userData.vrm;
   VRMUtils.removeUnnecessaryVertices(gltf.scene);
   VRMUtils.removeUnnecessaryJoints(gltf.scene);
@@ -417,7 +421,7 @@ async function loadVRM(url) {
   }
   vrm = newVrm;
   scene.add(vrm.scene);
-  initAnimationSystem(vrm);
+  await initAnimationSystem(vrm);
 }
 
 // ── Idle Animations ──────────────────────────────────────────────────────────

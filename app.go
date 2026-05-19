@@ -403,16 +403,19 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 			return
 		}
 		log.Info().Str("job", job.Name).Int("result_len", len(result)).Msg("cron job completed")
-		// Show in-app bubble. Truncate long results so the bubble stays readable.
-		bubbleMsg := result
-		const bubbleMaxRunes = 200
-		if runes := []rune(result); len(runes) > bubbleMaxRunes {
-			bubbleMsg = string(runes[:bubbleMaxRunes]) + "…"
+		// Show in-app bubble only when the chat panel is closed; if it's open
+		// the streamed tokens are already visible in the chat history.
+		if !a.IsChatVisible() {
+			bubbleMsg := result
+			const bubbleMaxRunes = 200
+			if runes := []rune(result); len(runes) > bubbleMaxRunes {
+				bubbleMsg = string(runes[:bubbleMaxRunes]) + "…"
+			}
+			wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
+				"title":   "⏰ " + job.Name,
+				"message": bubbleMsg,
+			})
 		}
-		wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
-			"title":   "⏰ " + job.Name,
-			"message": bubbleMsg,
-		})
 		// Extra macOS system notification when Notify is enabled.
 		if job.Notify {
 			go notify.System("⏰ "+job.Name, result)
