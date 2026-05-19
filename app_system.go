@@ -470,7 +470,12 @@ func (a *App) doInstallUpdate(downloadURL string) error {
 			"--preserve-metadata=entitlements", appBundle)
 	}
 
-	// 6. Write update-success marker so next launch can notify the user.
+	// 6. Unmount DMG now that the binary has been replaced and re-signed.
+	emit(92, "卸载 DMG…")
+	_ = run("hdiutil", "detach", "-quiet", mountPoint)
+	_ = os.Remove(tmpDMG)
+
+	// 7. Write update-success marker so next launch can notify the user.
 	if home, err := os.UserHomeDir(); err == nil {
 		base := filepath.Base(downloadURL)
 		latestTag := strings.TrimSuffix(strings.TrimPrefix(base, "Aiko-"), ".dmg")
@@ -481,7 +486,7 @@ func (a *App) doInstallUpdate(downloadURL string) error {
 		_ = os.WriteFile(markerPath, fmt.Appendf(nil, `{"version":%q}`, latestTag), 0o644)
 	}
 
-	// 7. Write a tiny restart script and run it detached.
+	// 8. Write a tiny restart script and run it detached.
 	emit(95, "准备重启…")
 	script := fmt.Sprintf("#!/bin/sh\nsleep 1\nopen %q\n", appBundle)
 	scriptPath := filepath.Join(os.TempDir(), "aiko-restart.sh")

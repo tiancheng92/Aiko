@@ -168,7 +168,9 @@ func (a *Agent) buildContext(ctx context.Context, userInput string) ([]adk.Messa
 // persistAndMigrate saves user and assistant messages to SQLite, then checks
 // whether the total message count exceeds ShortTermLimit. If so, the oldest
 // excess messages are migrated to long-term vector memory.
-func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userImages []string, userFiles []string, assistantReply string, thinkingContent string, assistantImages []string, toolCallCount int) {
+// skipSave skips the SQLite inserts when flushFn already persisted the turn
+// (e.g. check_and_update pre-restart flush), preventing duplicate history entries.
+func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userImages []string, userFiles []string, assistantReply string, thinkingContent string, assistantImages []string, toolCallCount int, skipSave bool) {
 	if a.shortMem == nil {
 		return
 	}
@@ -178,18 +180,20 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userIma
 	// short-term memory overflow has occurred.
 	a.turnCount.Add(1)
 
-	if _, err := a.shortMem.AddWithImagesAndFiles("user", userInput, userImages, userFiles); err != nil {
-		log.Warn().Err(err).Msg("short memory: add user message")
-		return
-	}
-	// Strip the leading emotion tag before persisting so it never appears in
-	// chat history or long-term memory.
-	if _, _, stripped, ok := parseEmotionTag(assistantReply); ok {
-		assistantReply = stripped
-	}
-	if _, err := a.shortMem.AddFull("assistant", assistantReply, thinkingContent, assistantImages, nil); err != nil {
-		log.Warn().Err(err).Msg("short memory: add assistant message")
-		return
+	if !skipSave {
+		if _, err := a.shortMem.AddWithImagesAndFiles("user", userInput, userImages, userFiles); err != nil {
+			log.Warn().Err(err).Msg("short memory: add user message")
+			return
+		}
+		// Strip the leading emotion tag before persisting so it never appears in
+		// chat history or long-term memory.
+		if _, _, stripped, ok := parseEmotionTag(assistantReply); ok {
+			assistantReply = stripped
+		}
+		if _, err := a.shortMem.AddFull("assistant", assistantReply, thinkingContent, assistantImages, nil); err != nil {
+			log.Warn().Err(err).Msg("short memory: add assistant message")
+			return
+		}
 	}
 
 	// Trigger async self-growth reflection if warranted.

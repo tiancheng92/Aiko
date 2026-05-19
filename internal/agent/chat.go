@@ -140,10 +140,12 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 		}
 
 		// Inject flush callback so check_and_update can persist before restart.
+		var flushed bool
 		flushFn := func(assistantSummary string) {
 			if a.shortMem == nil {
 				return
 			}
+			flushed = true
 			if _, _, stripped, ok := parseEmotionTag(assistantSummary); ok {
 				assistantSummary = stripped
 			}
@@ -166,7 +168,7 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 		}
 
 		ch <- StreamResult{Done: true}
-		go a.persistAndMigrate(context.Background(), userInput, nil, nil, fullResponse, thinkingContent, toolImgs, toolCallCount)
+		go a.persistAndMigrate(context.Background(), userInput, nil, nil, fullResponse, thinkingContent, toolImgs, toolCallCount, flushed)
 	}()
 
 	return ch
@@ -277,10 +279,12 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 		}
 
 		// Inject flush callback so check_and_update can persist before restart.
+		var flushed bool
 		flushFn := func(assistantSummary string) {
 			if a.shortMem == nil {
 				return
 			}
+			flushed = true
 			if _, err := a.shortMem.AddWithImagesAndFiles("user", userMemory, userImages, userFiles); err != nil {
 				log.Warn().Err(err).Msg("short memory: add user message")
 			}
@@ -301,7 +305,7 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 		}
 
 		ch <- StreamResult{Done: true}
-		go a.persistAndMigrate(context.Background(), userMemory, userImages, userFiles, fullResponse, thinkingContent, toolImgs, toolCallCount)
+		go a.persistAndMigrate(context.Background(), userMemory, userImages, userFiles, fullResponse, thinkingContent, toolImgs, toolCallCount, flushed)
 	}()
 
 	return ch
