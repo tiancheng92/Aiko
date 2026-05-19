@@ -552,7 +552,7 @@ onMounted(async () => {
     if (idx >= 0) {
       const m = messages.value[idx]
       const k = msgKey(m, idx)
-      nextTick(() => {
+      nextTick(() => requestAnimationFrame(() => {
         const bubbleEl = messagesEl.value?.querySelector(`[data-msg-key="${CSS.escape(k)}"]`)
         if (bubbleEl && bubbleEl.scrollHeight > COLLAPSE_HEIGHT) {
           const nextC = new Set(collapsedIds.value)
@@ -562,7 +562,7 @@ onMounted(async () => {
           nextE.add(k)
           expandedIds.value = nextE
         }
-      })
+      }))
     }
     // Auto-play TTS if enabled and this is not a voice-triggered response
     if (cfg.value?.TTSAutoPlay && lastMsg?.content && !isRecording.value) {
