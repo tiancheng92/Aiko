@@ -27,6 +27,13 @@ type FileAttachment struct {
 	Content  string `json:"content"`
 }
 
+// ChatOptions carries per-message inference options from the frontend.
+type ChatOptions struct {
+	ThinkingLevel string `json:"thinkingLevel"` // "default"|"off"|"low"|"medium"|"high"
+	UseKnowledge  bool   `json:"useKnowledge"`
+	UseMemory     bool   `json:"useMemory"`
+}
+
 // ChatDirect streams a proactive AI response for the given prompt without saving to memory.
 func (a *App) ChatDirect(ctx context.Context, prompt string) error {
 	a.mu.RLock()
@@ -145,9 +152,10 @@ func (a *App) streamChat(start func(context.Context, *agent.Agent) <-chan agent.
 }
 
 // SendMessage streams an AI response for a plain-text user message.
-func (a *App) SendMessage(userInput string) error {
+func (a *App) SendMessage(userInput string, opts ChatOptions) error {
+	agOpts := agent.ChatOptions{ThinkingLevel: opts.ThinkingLevel, UseKnowledge: opts.UseKnowledge, UseMemory: opts.UseMemory}
 	return a.streamChat(func(ctx context.Context, ag *agent.Agent) <-chan agent.StreamResult {
-		return ag.Chat(ctx, userInput)
+		return ag.Chat(ctx, userInput, agOpts)
 	})
 }
 
@@ -171,13 +179,13 @@ func (a *App) RegenerateLastReply() error {
 	if err := a.shortMem.DeleteByIDs([]int64{userMsg.ID}); err != nil {
 		return fmt.Errorf("delete last user message: %w", err)
 	}
-	return a.SendMessage(userMsg.Content)
+	return a.SendMessage(userMsg.Content, ChatOptions{UseKnowledge: true, UseMemory: true})
 }
 
 // SendMessageWithImages streams an AI response for a user message that includes
 // one or more inline images encoded as data URLs ("data:image/png;base64,...").
 // Falls back to a plain text message if no valid images are provided.
-func (a *App) SendMessageWithImages(userInput string, images []string) error {
+func (a *App) SendMessageWithImages(userInput string, images []string, opts ChatOptions) error {
 	// Build UserInputMultiContent: text part first, then image parts.
 	parts := make([]schema.MessageInputPart, 0, 1+len(images))
 	if userInput != "" {
@@ -206,8 +214,9 @@ func (a *App) SendMessageWithImages(userInput string, images []string) error {
 		Role:                  schema.User,
 		UserInputMultiContent: parts,
 	}
+	agOpts := agent.ChatOptions{ThinkingLevel: opts.ThinkingLevel, UseKnowledge: opts.UseKnowledge, UseMemory: opts.UseMemory}
 	return a.streamChat(func(ctx context.Context, ag *agent.Agent) <-chan agent.StreamResult {
-		return ag.ChatWithMessage(ctx, msg)
+		return ag.ChatWithMessage(ctx, msg, agOpts)
 	})
 }
 
@@ -215,7 +224,7 @@ func (a *App) SendMessageWithImages(userInput string, images []string) error {
 // inline images (data URLs) and/or text file attachments.
 // File contents are appended to the user text before sending to the LLM.
 // Only file names are persisted in memory — not the content.
-func (a *App) SendMessageWithFiles(userInput string, images []string, files []FileAttachment) error {
+func (a *App) SendMessageWithFiles(userInput string, images []string, files []FileAttachment, opts ChatOptions) error {
 	// Build LLM text: original input + file contents appended.
 	var llmBuilder strings.Builder
 	llmBuilder.WriteString(userInput)
@@ -256,8 +265,9 @@ func (a *App) SendMessageWithFiles(userInput string, images []string, files []Fi
 			"_file_names": fileNames,
 		},
 	}
+	agOpts := agent.ChatOptions{ThinkingLevel: opts.ThinkingLevel, UseKnowledge: opts.UseKnowledge, UseMemory: opts.UseMemory}
 	return a.streamChat(func(ctx context.Context, ag *agent.Agent) <-chan agent.StreamResult {
-		return ag.ChatWithMessage(ctx, msg)
+		return ag.ChatWithMessage(ctx, msg, agOpts)
 	})
 }
 

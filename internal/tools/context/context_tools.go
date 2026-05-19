@@ -39,6 +39,9 @@ func (t *SearchKnowledgeTool) InvokableRun(ctx context.Context, input string, _ 
 	if t.KnowledgeSt == nil {
 		return "知识库未启用（需配置 Embedding 模型并导入文档）", nil
 	}
+	if v, ok := ctx.Value(base.UseKnowledgeKey{}).(bool); ok && !v {
+		return "本次消息已禁用知识库检索", nil
+	}
 	args := base.ParseArgs(input)
 	query, _ := args["query"].(string)
 	if query == "" {

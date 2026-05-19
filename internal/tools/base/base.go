@@ -12,6 +12,10 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
+// UseKnowledgeKey is a context key for passing the per-message useKnowledge flag to tools.
+// When the value is false, tools that search the knowledge base should skip the search.
+type UseKnowledgeKey struct{}
+
 // PermissionLevel describes how much trust a tool requires.
 type PermissionLevel string
 

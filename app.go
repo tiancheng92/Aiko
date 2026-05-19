@@ -345,7 +345,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 				"name":   job.Name,
 				"prompt": job.Prompt,
 			})
-			ch = ag.Chat(ctx, job.Prompt)
+			ch = ag.Chat(ctx, job.Prompt, agent.ChatOptions{UseKnowledge: true, UseMemory: true})
 		} else {
 			ch = ag.ChatDirect(ctx, job.Prompt)
 		}

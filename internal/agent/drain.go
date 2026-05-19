@@ -14,9 +14,12 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 
+	"aiko/internal/config"
+	"aiko/internal/llm"
 	internaltools "aiko/internal/tools"
 )
 
@@ -67,8 +70,12 @@ func sendThinkingToken(ch chan<- StreamResult, token string) {
 // and returns the accumulated response string, thinking content, tool images, and tool-call count.
 // Returns (response, thinking, images, toolCalls, true) on success or ("", "", nil, 0, false) after sending an error to ch.
 func drainRunner(ctx context.Context, runner *adk.Runner, query string, ch chan<- StreamResult,
-	pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, string, []string, int, bool) {
-	iter := runner.Query(ctx, query, adk.WithCheckPointID(checkpointID))
+	pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID, thinkingLevel, provider string) (string, string, []string, int, bool) {
+	runOpts := []adk.AgentRunOption{adk.WithCheckPointID(checkpointID)}
+	if opt := llm.ReasoningOption(thinkingLevel, config.Provider(provider)); opt != nil {
+		runOpts = append(runOpts, adk.WithChatModelOptions([]model.Option{*opt}))
+	}
+	iter := runner.Query(ctx, query, runOpts...)
 	return drainIter(ctx, runner, iter, ch, pendingConfirms, emitEvent, checkpointID)
 }
 
@@ -77,8 +84,12 @@ func drainRunner(ctx context.Context, runner *adk.Runner, query string, ch chan<
 // tool images, and tool-call count.
 // Returns (response, thinking, images, toolCalls, true) on success or ("", "", nil, 0, false) after sending an error to ch.
 func drainRunnerMsg(ctx context.Context, runner *adk.Runner, msgs []adk.Message, ch chan<- StreamResult,
-	pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID string) (string, string, []string, int, bool) {
-	iter := runner.Run(ctx, msgs, adk.WithCheckPointID(checkpointID))
+	pendingConfirms *sync.Map, emitEvent func(string, ...any), checkpointID, thinkingLevel, provider string) (string, string, []string, int, bool) {
+	runOpts := []adk.AgentRunOption{adk.WithCheckPointID(checkpointID)}
+	if opt := llm.ReasoningOption(thinkingLevel, config.Provider(provider)); opt != nil {
+		runOpts = append(runOpts, adk.WithChatModelOptions([]model.Option{*opt}))
+	}
+	iter := runner.Run(ctx, msgs, runOpts...)
 	return drainIter(ctx, runner, iter, ch, pendingConfirms, emitEvent, checkpointID)
 }
 

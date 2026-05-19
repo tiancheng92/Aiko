@@ -17,6 +17,7 @@ import (
 
 	"aiko/internal/bytesconv"
 	"aiko/internal/memory"
+	"aiko/internal/tools/base"
 )
 
 // userProfileCache holds a recently-read USER.md to avoid redundant disk reads on every turn.
@@ -49,7 +50,7 @@ func readUserProfile(dataDir string) string {
 // user profile, long-term memory search results, recent short-term messages,
 // and current location. Errors from individual sources are logged and treated
 // as empty (non-fatal) to avoid blocking the chat turn.
-func (a *Agent) gatherContextSources(ctx context.Context, userInput string) (
+func (a *Agent) gatherContextSources(ctx context.Context, userInput string, useKnowledge, useMemory bool) (
 	profile string,
 	memResult memory.MemorySearchResult,
 	recentMsgs []*schema.Message,
@@ -64,7 +65,7 @@ func (a *Agent) gatherContextSources(ctx context.Context, userInput string) (
 	})
 
 	g.Go(func() error {
-		if a.longMem == nil {
+		if a.longMem == nil || !useMemory {
 			return nil
 		}
 		res, err := a.longMem.SearchSplit(gctx, userInput, 5)
@@ -106,8 +107,10 @@ var ctxBufPool = sync.Pool{New: func() any { return new(strings.Builder) }}
 // and recent short-term history concurrently, then returns a message list ready for
 // runner.Run. Errors from individual sources are logged and skipped — a partial context
 // is better than no response.
-func (a *Agent) buildContext(ctx context.Context, userInput string) ([]adk.Message, error) {
-	profile, memResult, recentMsgs, location, err := a.gatherContextSources(ctx, userInput)
+func (a *Agent) buildContext(ctx context.Context, userInput string, useKnowledge, useMemory bool) ([]adk.Message, error) {
+	// Propagate useKnowledge to tools (e.g. search_knowledge) via context.
+	ctx = context.WithValue(ctx, base.UseKnowledgeKey{}, useKnowledge)
+	profile, memResult, recentMsgs, location, err := a.gatherContextSources(ctx, userInput, useKnowledge, useMemory)
 	if err != nil {
 		return nil, err
 	}

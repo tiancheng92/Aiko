@@ -13,6 +13,13 @@ import (
 	internaltools "aiko/internal/tools"
 )
 
+// ChatOptions carries per-message overrides for the agent turn.
+type ChatOptions struct {
+	ThinkingLevel string // "default" | "off" | "low" | "medium" | "high"
+	UseKnowledge  bool
+	UseMemory     bool
+}
+
 // SetSkillHint records that a skill was activated during this turn.
 // Called by the skill middleware after injecting a skill into the prompt.
 // The hint is consumed and cleared by shouldReflect after the reply.
@@ -122,7 +129,7 @@ func (a *Agent) reflect(ctx context.Context, userInput, assistantReply string, h
 // tokens. After the final Done=true result, user and assistant messages are
 // persisted to short-term memory and excess messages are migrated to
 // long-term memory asynchronously.
-func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult {
+func (a *Agent) Chat(ctx context.Context, userInput string, opts ChatOptions) <-chan StreamResult {
 	ch := make(chan StreamResult, streamResultBufSize)
 
 	go func() {
@@ -133,7 +140,7 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 			}
 		}()
 
-		ctxMsgs, err := a.buildContext(ctx, userInput)
+		ctxMsgs, err := a.buildContext(ctx, userInput, opts.UseKnowledge, opts.UseMemory)
 		if err != nil {
 			ch <- StreamResult{Err: err}
 			return
@@ -162,7 +169,7 @@ func (a *Agent) Chat(ctx context.Context, userInput string) <-chan StreamResult 
 
 		msgs := append(ctxMsgs, &schema.Message{Role: schema.User, Content: content})
 		checkpointID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
-		fullResponse, thinkingContent, toolImgs, toolCallCount, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID)
+		fullResponse, thinkingContent, toolImgs, toolCallCount, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID, opts.ThinkingLevel, a.cfg.LLMProvider)
 		if !ok {
 			return
 		}
@@ -186,7 +193,7 @@ func (a *Agent) ChatDirect(ctx context.Context, prompt string) <-chan StreamResu
 				ch <- StreamResult{Err: fmt.Errorf("agent panic: %v", r)}
 			}
 		}()
-		_, _, _, _, ok := drainRunner(ctx, a.runner, prompt, ch, nil, nil, fmt.Sprintf("direct-%d", time.Now().UnixNano()))
+		_, _, _, _, ok := drainRunner(ctx, a.runner, prompt, ch, nil, nil, fmt.Sprintf("direct-%d", time.Now().UnixNano()), "default", a.cfg.LLMProvider)
 		if !ok {
 			return
 		}
@@ -244,7 +251,7 @@ func extractImagesFromMessage(msg *schema.Message) []string {
 // UserInputMultiContent) to the agent and streams tokens via the returned channel.
 // After streaming, user input and assistant reply are persisted to short-term
 // memory; images are stored as data URLs so history can re-render them.
-func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan StreamResult {
+func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message, opts ChatOptions) <-chan StreamResult {
 	ch := make(chan StreamResult, streamResultBufSize)
 
 	go func() {
@@ -256,7 +263,7 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 		}()
 
 		userText := extractTextFromMessage(msg)
-		ctxMsgs, err := a.buildContext(ctx, userText)
+		ctxMsgs, err := a.buildContext(ctx, userText, opts.UseKnowledge, opts.UseMemory)
 		if err != nil {
 			ch <- StreamResult{Err: err}
 			return
@@ -299,7 +306,7 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message) <-chan
 
 		msgs := append(ctxMsgs, sendMsg)
 		checkpointID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
-		fullResponse, thinkingContent, toolImgs, toolCallCount, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID)
+		fullResponse, thinkingContent, toolImgs, toolCallCount, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID, opts.ThinkingLevel, a.cfg.LLMProvider)
 		if !ok {
 			return
 		}

@@ -22,7 +22,7 @@ func TestChatDirectCollectExists(t *testing.T) {
 // TestAgentInterfaceCompleteness checks that Agent exposes all expected public methods.
 func TestAgentInterfaceCompleteness(t *testing.T) {
 	type agentIface interface {
-		Chat(ctx context.Context, userInput string) <-chan agent.StreamResult
+		Chat(ctx context.Context, userInput string, opts agent.ChatOptions) <-chan agent.StreamResult
 		ChatDirect(ctx context.Context, prompt string) <-chan agent.StreamResult
 		ChatDirectCollect(ctx context.Context, prompt string) (string, error)
 		SetSkillHint(skillName string)
