@@ -1355,30 +1355,29 @@ defineExpose({ focusInput, scrollToBottom })
                 </div>
               </Transition>
             </div>
-          </div>
-
-          <!-- Action buttons: outside bubble-row so overflow:hidden when collapsed doesn't clip them -->
-          <div
-            v-if="!m.streaming && !m.thinking"
-            :class="['msg-actions', m.role]"
-          >
-            <button
-              class="msg-action-btn"
-              @click="copyMessage(i)"
-              :title="copiedIdx === i ? '已复制' : '复制'"
+            <!-- Action buttons: sibling of bubble-row, inside bubble-collapse-wrap so right:100% anchors to bubble width -->
+            <div
+              v-if="!m.streaming && !m.thinking"
+              :class="['msg-actions', m.role]"
             >
-              <svg v-if="copiedIdx !== i" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            </button>
-            <button
-              v-if="m.role === 'assistant'"
-              class="msg-action-btn"
-              :title="activeTTSMsgId === i ? '停止朗读' : '朗读'"
-              @click="speakMessage(i)"
-            >
-              <svg v-if="activeTTSMsgId !== i" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-              <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-            </button>
+              <button
+                class="msg-action-btn"
+                @click="copyMessage(i)"
+                :title="copiedIdx === i ? '已复制' : '复制'"
+              >
+                <svg v-if="copiedIdx !== i" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+              <button
+                v-if="m.role === 'assistant'"
+                class="msg-action-btn"
+                :title="activeTTSMsgId === i ? '停止朗读' : '朗读'"
+                @click="speakMessage(i)"
+              >
+                <svg v-if="activeTTSMsgId !== i" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+              </button>
+            </div>
           </div>
 
           <div v-if="(m.time && !m.streaming && !m.thinking) || (isEverCollapsed(m, i) && !isCollapsed(m, i))" class="msg-meta-row">
@@ -1602,21 +1601,23 @@ defineExpose({ focusInput, scrollToBottom })
             :class="['thinking-' + thinkingLevel]"
             @click="cycleThinkingLevel"
             title="思考等级"
-          ><span class="chip-icon" v-html="ICON_THINKING"></span>{{ thinkingLevelLabel }}</button>
+          ><span class="chip-icon" v-html="ICON_THINKING"></span><span class="chip-label">{{ thinkingLevelLabel }}</span></button>
           <button
             v-if="cfg?.EmbeddingModel"
             class="chat-opt-chip"
             :class="{ active: useKnowledge }"
+            :aria-pressed="useKnowledge"
             @click="toggleKnowledge"
             title="本次是否检索知识库"
-          ><span class="chip-icon" v-html="ICON_KNOWLEDGE"></span>知识库</button>
+          ><span class="chip-icon" v-html="ICON_KNOWLEDGE"></span><span class="chip-label">知识库</span></button>
           <button
             v-if="cfg?.EmbeddingModel"
             class="chat-opt-chip"
             :class="{ active: useMemory }"
+            :aria-pressed="useMemory"
             @click="toggleMemory"
             title="本次是否检索长期记忆"
-          ><span class="chip-icon" v-html="ICON_MEMORY"></span>记忆</button>
+          ><span class="chip-icon" v-html="ICON_MEMORY"></span><span class="chip-label">记忆</span></button>
         </div>
         <button
           class="attach-btn"
@@ -2727,8 +2728,8 @@ img.msg-avatar {
 .chat-opt-chip {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 2px 8px;
+  gap: 0;
+  padding: 3px 7px;
   border-radius: 12px;
   font-size: 11px;
   cursor: pointer;
@@ -2738,6 +2739,22 @@ img.msg-avatar {
   transition: background 0.15s, color 0.15s, border-color 0.15s;
   user-select: none;
   white-space: nowrap;
+  overflow: hidden;
+}
+
+.chip-label {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width 0.2s ease, opacity 0.15s ease, margin-left 0.2s ease;
+  margin-left: 0;
+  white-space: nowrap;
+}
+
+.chat-opt-chip:hover .chip-label {
+  max-width: 60px;
+  opacity: 1;
+  margin-left: 4px;
 }
 
 .chat-opt-chip:hover {
@@ -2745,15 +2762,30 @@ img.msg-avatar {
   color: rgba(255,255,255,0.7);
 }
 
+/* Toggle chips (knowledge / memory): active = accent-tinted, inactive = very dim */
 .chat-opt-chip.active {
-  background: rgba(255,255,255,0.12);
-  color: rgba(255,255,255,0.85);
-  border-color: rgba(255,255,255,0.25);
+  background: rgba(37,99,235,0.18);
+  color: rgba(147,185,255,0.95);
+  border-color: rgba(37,99,235,0.45);
 }
 
-.chat-opt-chip.thinking-low    { color: #4ade80; border-color: rgba(74,222,128,0.3); }
-.chat-opt-chip.thinking-medium { color: #facc15; border-color: rgba(250,204,21,0.3); }
-.chat-opt-chip.thinking-high   { color: #fb923c; border-color: rgba(251,146,60,0.3); }
+.chat-opt-chip:not(.active):not([class*="thinking-"]) {
+  color: rgba(255,255,255,0.5);
+  border-color: rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+}
+
+.chat-opt-chip:not(.active):not([class*="thinking-"]):hover {
+  color: rgba(255,255,255,0.7);
+  border-color: rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.08);
+}
+
+.chat-opt-chip.thinking-off    { color: rgba(255,255,255,0.5); border-color: rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); }
+.chat-opt-chip.thinking-default{ color: rgba(255,255,255,0.55); border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.07); }
+.chat-opt-chip.thinking-low    { color: #4ade80; border-color: rgba(74,222,128,0.3);  background: rgba(74,222,128,0.08); }
+.chat-opt-chip.thinking-medium { color: #facc15; border-color: rgba(250,204,21,0.3);  background: rgba(250,204,21,0.08); }
+.chat-opt-chip.thinking-high   { color: #fb923c; border-color: rgba(251,146,60,0.3);  background: rgba(251,146,60,0.08); }
 
 .chip-icon {
   display: inline-flex;
@@ -2762,7 +2794,7 @@ img.msg-avatar {
   height: 12px;
   flex-shrink: 0;
 }
-.chip-icon svg {
+:deep(.chip-icon svg) {
   width: 12px;
   height: 12px;
 }

@@ -387,10 +387,10 @@ export function renderMarkdown(text) {
     marked(processed)
       .replace(/‍/g, '')
       .replace(/<tool-call name="([^"]*)" args="([^"]*)"><\/tool-call>/g,
-        (_, name, args) => `<span class="tool-call-chip tool-call-chip--tool" data-args="${args}" onclick="window.__showToolArgs(event)">${GEAR_ICON}tool: ${name}</span>`
+        (_, name, args) => `<span class="tool-call-chip tool-call-chip--tool" data-args="${args}" onclick="window.__showToolArgs(event)">${GEAR_ICON}工具: ${name}</span>`
       )
       .replace(/<skill-call name="([^"]*)" args="([^"]*)"><\/skill-call>/g,
-        (_, name, args) => `<span class="tool-call-chip tool-call-chip--skill" data-args="${args}" onclick="window.__showToolArgs(event)">${SKILL_ICON}skill: ${name}</span>`
+        (_, name, args) => `<span class="tool-call-chip tool-call-chip--skill" data-args="${args}" onclick="window.__showToolArgs(event)">${SKILL_ICON}技能: ${name}</span>`
       )
   )
   if (_mdCache.size >= _MD_CACHE_MAX) _mdCache.delete(_mdCache.keys().next().value)
