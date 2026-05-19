@@ -1,25 +1,48 @@
 import { marked, Renderer } from 'marked'
 import markedKatex from 'marked-katex-extension'
 import 'katex/dist/katex.min.css'
-import hljs from 'highlight.js/lib/core'
-import javascript from 'highlight.js/lib/languages/javascript'
-import typescript from 'highlight.js/lib/languages/typescript'
-import python from 'highlight.js/lib/languages/python'
-import bash from 'highlight.js/lib/languages/bash'
-import go from 'highlight.js/lib/languages/go'
-import json from 'highlight.js/lib/languages/json'
-import css from 'highlight.js/lib/languages/css'
-import xml from 'highlight.js/lib/languages/xml'
-import 'highlight.js/styles/github-dark.css'
+import { createHighlighterCore } from 'shiki/core'
+import { createJavaScriptRegexEngine } from 'shiki/engine/javascript'
 
-hljs.registerLanguage('javascript', javascript)
-hljs.registerLanguage('typescript', typescript)
-hljs.registerLanguage('python', python)
-hljs.registerLanguage('bash', bash)
-hljs.registerLanguage('go', go)
-hljs.registerLanguage('json', json)
-hljs.registerLanguage('css', css)
-hljs.registerLanguage('xml', xml)
+const SHIKI_THEME = 'github-dark'
+
+let _hl = null
+/** highlighterReady resolves once Shiki is initialized. */
+export const highlighterReady = createHighlighterCore({
+  themes: [import('shiki/themes/github-dark.mjs')],
+  langs: [
+    import('shiki/langs/javascript.mjs'),
+    import('shiki/langs/typescript.mjs'),
+    import('shiki/langs/python.mjs'),
+    import('shiki/langs/bash.mjs'),
+    import('shiki/langs/shell.mjs'),
+    import('shiki/langs/go.mjs'),
+    import('shiki/langs/json.mjs'),
+    import('shiki/langs/css.mjs'),
+    import('shiki/langs/html.mjs'),
+    import('shiki/langs/xml.mjs'),
+    import('shiki/langs/vue.mjs'),
+    import('shiki/langs/sql.mjs'),
+    import('shiki/langs/yaml.mjs'),
+    import('shiki/langs/rust.mjs'),
+  ],
+  engine: createJavaScriptRegexEngine(),
+}).then(hl => { _hl = hl }).catch(() => {})
+
+/** escapeHtml escapes HTML special characters in a raw string. */
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/** tokenToSpan converts a Shiki ThemedToken to an HTML span string. */
+function tokenToSpan(t) {
+  const content = escapeHtml(t.content)
+  let style = ''
+  if (t.color) style += `color:${t.color};`
+  if (t.fontStyle & 1) style += 'font-style:italic;'
+  if (t.fontStyle & 2) style += 'font-weight:bold;'
+  return style ? `<span style="${style}">${content}</span>` : content
+}
 
 const _codeCache = new Map()
 const _CODE_CACHE_MAX = 100
@@ -29,37 +52,24 @@ renderer.code = ({ text, lang }) => {
   const cacheKey = lang + '\x00' + text
   const cached = _codeCache.get(cacheKey)
   if (cached !== undefined) return cached
-  const language = lang && hljs.getLanguage(lang) ? lang : null
-  const highlighted = language
-    ? hljs.highlight(text, { language }).value
-    : hljs.highlightAuto(text).value
-  const cls = language ? `hljs language-${language}` : 'hljs'
-  // Split HLJS output into per-line HTML while preserving span balance.
-  const lineHtmls = []
-  let cur = ''
-  const stack = []
-  for (let i = 0; i < highlighted.length; i++) {
-    if (highlighted[i] === '\n') {
-      lineHtmls.push(cur + stack.map(() => '</span>').join(''))
-      cur = stack.join('')
-    } else if (highlighted[i] === '<') {
-      const gt = highlighted.indexOf('>', i)
-      const tag = highlighted.slice(i, gt + 1)
-      cur += tag
-      if (tag.startsWith('<span')) stack.push(tag)
-      else if (tag.startsWith('</span')) stack.pop()
-      i = gt
-    } else {
-      cur += highlighted[i]
+  const language = lang || null
+  let lineHtmls
+  if (_hl) {
+    try {
+      const tokens = _hl.codeToTokensBase(text, { lang: language || 'plaintext', theme: SHIKI_THEME })
+      lineHtmls = tokens.map(line => line.map(tokenToSpan).join(''))
+    } catch {
+      lineHtmls = escapeHtml(text).split('\n')
     }
+  } else {
+    lineHtmls = escapeHtml(text).split('\n')
   }
-  if (cur) lineHtmls.push(cur + stack.map(() => '</span>').join(''))
   if (lineHtmls.length > 1 && lineHtmls[lineHtmls.length - 1] === '') lineHtmls.pop()
   const digits = String(lineHtmls.length).length
   const numbered = lineHtmls.map((line, i) =>
     `<span class="code-line"><span class="line-nr">${String(i + 1).padStart(digits)}</span><span class="line-code">${line || ' '}</span></span>`
   ).join('')
-  const result = `<div class="code-block"><div class="code-header"><span class="code-lang">${language || 'text'}</span><button class="code-copy" onclick="navigator.clipboard.writeText(decodeURIComponent(atob(this.dataset.code)));this.textContent='✓';setTimeout(()=>this.textContent='复制',2000)" data-code="${btoa(encodeURIComponent(text))}">复制</button></div><pre><code class="${cls}">${numbered}</code></pre></div>`
+  const result = `<div class="code-block"><div class="code-header"><span class="code-lang">${language || 'text'}</span><button class="code-copy" onclick="navigator.clipboard.writeText(decodeURIComponent(atob(this.dataset.code)));this.textContent='✓';setTimeout(()=>this.textContent='复制',2000)" data-code="${btoa(encodeURIComponent(text))}">复制</button></div><pre><code>${numbered}</code></pre></div>`
   if (_codeCache.size >= _CODE_CACHE_MAX) _codeCache.delete(_codeCache.keys().next().value)
   _codeCache.set(cacheKey, result)
   return result

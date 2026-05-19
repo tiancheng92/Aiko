@@ -154,6 +154,16 @@ const inputMenuRef = ref(null)
 const inputMenuItems = ref([])
 /** tableDetailRow holds the key-value pairs for the row-detail modal; null when hidden. */
 const tableDetailRow = ref(null)
+/** copiedPairKey is the key of the pair whose value was most recently copied, or null. */
+const copiedPairKey = ref(null)
+
+/** copyPairValue copies the value of a single key-value pair to the clipboard. */
+function copyPairValue(pair) {
+  navigator.clipboard.writeText(pair.value).then(() => {
+    copiedPairKey.value = pair.key
+    setTimeout(() => { copiedPairKey.value = null }, 2000)
+  })
+}
 
 useEscapeKey(() => { showClearConfirm.value = false }, showClearConfirm)
 useEscapeKey(() => { tableDetailRow.value = null }, () => tableDetailRow.value !== null)
@@ -1388,6 +1398,10 @@ defineExpose({ focusInput, scrollToBottom })
             <div v-for="pair in tableDetailRow" :key="pair.key" class="tbl-detail-pair">
               <span class="tbl-detail-key">{{ pair.key }}</span>
               <span class="tbl-detail-value markdown" v-html="renderMarkdown(pair.value)"></span>
+              <button class="tbl-detail-pair-copy" :class="{ copied: copiedPairKey === pair.key }" :aria-label="`复制 ${pair.key}`" @click.stop="copyPairValue(pair)">
+                <svg v-if="copiedPairKey !== pair.key" xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
             </div>
           </div>
         </div>
@@ -2323,6 +2337,25 @@ img.msg-avatar {
   color: var(--danger);
   background: rgba(255, 69, 58, 0.14);
 }
+.tbl-detail-pair-copy {
+  flex-shrink: 0;
+  opacity: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.12s, color 0.12s, background 0.12s;
+}
+.tbl-detail-pair:hover .tbl-detail-pair-copy { opacity: 1; }
+.tbl-detail-pair-copy:hover { color: var(--accent); background: var(--accent-alpha-12); }
+.tbl-detail-pair-copy.copied { opacity: 1; color: #4ade80; }
 .tbl-detail-body {
   overflow-y: auto;
   padding: 10px 12px;
