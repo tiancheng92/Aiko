@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { SendMessage, SendMessageWithImages, SendMessageWithFiles, GetMessages, GetMessagesBeforeID, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig, SaveConfig, RegenerateLastReply, GetSoundsEnabled, ReadClipboard } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 import { throttle, debounce } from '../utils/timing.js'
+import { ICON_THINKING, ICON_KNOWLEDGE, ICON_MEMORY } from '../utils/icons.js'
 import { renderMarkdown, extractRealUrl, shortenUrl, stripEmotionTags, stripToolCallTags, closeUnclosedFences } from '../composables/useMarkdown.js'
 import { useSounds } from '../composables/useSounds'
 import { useTypingScheduler } from '../composables/useTypingScheduler'
@@ -1601,21 +1602,21 @@ defineExpose({ focusInput, scrollToBottom })
             :class="['thinking-' + thinkingLevel]"
             @click="cycleThinkingLevel"
             title="思考等级"
-          >🧠 {{ thinkingLevelLabel }}</button>
+          ><span class="chip-icon" v-html="ICON_THINKING"></span>{{ thinkingLevelLabel }}</button>
           <button
             v-if="cfg?.EmbeddingModel"
             class="chat-opt-chip"
             :class="{ active: useKnowledge }"
             @click="toggleKnowledge"
             title="本次是否检索知识库"
-          >📚 知识库</button>
+          ><span class="chip-icon" v-html="ICON_KNOWLEDGE"></span>知识库</button>
           <button
             v-if="cfg?.EmbeddingModel"
             class="chat-opt-chip"
             :class="{ active: useMemory }"
             @click="toggleMemory"
             title="本次是否检索长期记忆"
-          >💾 记忆</button>
+          ><span class="chip-icon" v-html="ICON_MEMORY"></span>记忆</button>
         </div>
         <button
           class="attach-btn"
@@ -2753,6 +2754,18 @@ img.msg-avatar {
 .chat-opt-chip.thinking-low    { color: #4ade80; border-color: rgba(74,222,128,0.3); }
 .chat-opt-chip.thinking-medium { color: #facc15; border-color: rgba(250,204,21,0.3); }
 .chat-opt-chip.thinking-high   { color: #fb923c; border-color: rgba(251,146,60,0.3); }
+
+.chip-icon {
+  display: inline-flex;
+  align-items: center;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+.chip-icon svg {
+  width: 12px;
+  height: 12px;
+}
 .input-hint {
   font-size: 11px;
   color: var(--text-label-muted);

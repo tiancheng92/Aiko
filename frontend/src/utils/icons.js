@@ -30,3 +30,8 @@ export const ICON_TAB_LARK       = SVG('<path d="m22 2-7 20-4-9-9-4Z"/><path d="
 export const ICON_TAB_SMS        = SVG('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/>', 1.5)
 export const ICON_TAB_ABOUT      = SVG('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>', 1.5)
 export const ICON_TAB_GENERAL    = SVG('<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="8" cy="6" r="2" fill="currentColor" stroke="none"/><circle cx="16" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="10" cy="18" r="2" fill="currentColor" stroke="none"/>', 1.5)
+
+// Chat input chips
+export const ICON_THINKING  = SVG('<path d="M12 2a7 7 0 0 1 7 7c0 2.5-1.3 4.7-3.3 6l-.7.4V17a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-1.6l-.7-.4A7 7 0 0 1 12 2Z"/><path d="M10 21h4"/>', 1.8)
+export const ICON_KNOWLEDGE = SVG('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2Z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7Z"/>', 1.8)
+export const ICON_MEMORY    = SVG('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/>', 1.8)
