@@ -815,6 +815,8 @@ onMounted(async () => {
       last.thinkingContent += token
       last.thinkingExpanded = true
     }
+    scrollToBottom()
+    scrollThinkingToBottom()
   })
 
   offToken = EventsOn('chat:token', (token) => {
@@ -1353,6 +1355,18 @@ function scrollToBottom() {
   requestAnimationFrame(() => {
     _scrollRafPending = false
     if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+  })
+}
+
+let _thinkingScrollRafPending = false
+/** scrollThinkingToBottom scrolls the expanded thinking block body to its bottom; coalesced via rAF. */
+function scrollThinkingToBottom() {
+  if (_thinkingScrollRafPending) return
+  _thinkingScrollRafPending = true
+  requestAnimationFrame(() => {
+    _thinkingScrollRafPending = false
+    const body = messagesEl.value?.querySelector('.thinking-block-body.expanded')
+    if (body) body.scrollTop = body.scrollHeight
   })
 }
 
