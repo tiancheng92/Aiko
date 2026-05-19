@@ -2,6 +2,9 @@ package agent
 
 import (
 	"context"
+	"encoding/base64"
+
+	"github.com/bytedance/sonic"
 	"errors"
 	"fmt"
 	"io"
@@ -30,6 +33,26 @@ func getBuilder() *strings.Builder {
 func putBuilder(b *strings.Builder) {
 	b.Reset()
 	builderPool.Put(b)
+}
+
+// buildIndicator returns the indicator token for a tool/skill invocation.
+// arguments (raw JSON) is base64-encoded into an `args` attribute so the
+// frontend can display per-call parameters in a tooltip/popover.
+// Skill calls use <skill-call> with the real skill name extracted from args;
+// all other tools use <tool-call name="xxx">.
+func buildIndicator(name, arguments string) string {
+	b64 := base64.StdEncoding.EncodeToString([]byte(arguments))
+	if name == "skill" {
+		var a struct {
+			Skill string `json:"skill"`
+		}
+		displayName := "skill"
+		if err := sonic.Unmarshal([]byte(arguments), &a); err == nil && a.Skill != "" {
+			displayName = a.Skill
+		}
+		return "\n\n<skill-call name=\"" + displayName + "\" args=\"" + b64 + "\"></skill-call>\n\n"
+	}
+	return "\n\n<tool-call name=\"" + name + "\" args=\"" + b64 + "\"></tool-call>\n\n"
 }
 
 // sendToken sends a token StreamResult to ch.
@@ -105,6 +128,17 @@ func pumpIter(iter *adk.AsyncIterator[*adk.AgentEvent], doneC <-chan struct{}) <
 func processStreamingMessage(mo *adk.MessageVariant, ch chan<- StreamResult,
 	uniqueTools map[string]struct{}, imgsBuf *[]string,
 	sb, thinkingSb *strings.Builder) bool {
+	// callBufs accumulates per-call state keyed by ToolCall.Index.
+	// Each streaming tool call arrives as multiple chunks: the first carries
+	// Function.Name, subsequent ones carry Function.Arguments fragments.
+	// We buffer until the JSON is complete (contains '}'), then emit once.
+	type callBuf struct {
+		name string
+		args strings.Builder
+		sent bool
+	}
+	callBufs := make(map[int]*callBuf)
+	nextIdx := 0 // fallback counter when Index is nil
 	for {
 		m, recvErr := mo.MessageStream.Recv()
 		if recvErr != nil {
@@ -119,7 +153,29 @@ func processStreamingMessage(mo *adk.MessageVariant, ch chan<- StreamResult,
 		}
 		if m.Role == schema.Tool || len(m.ToolCalls) > 0 {
 			for _, tc := range m.ToolCalls {
-				uniqueTools[tc.Function.Name] = struct{}{}
+				idx := nextIdx
+				if tc.Index != nil {
+					idx = *tc.Index
+				}
+				buf, ok := callBufs[idx]
+				if !ok {
+					buf = &callBuf{}
+					callBufs[idx] = buf
+					if tc.Index == nil {
+						nextIdx++
+					}
+				}
+				if tc.Function.Name != "" {
+					buf.name = tc.Function.Name
+				}
+				buf.args.WriteString(tc.Function.Arguments)
+				if !buf.sent && buf.name != "" && strings.Contains(buf.args.String(), "}") {
+					buf.sent = true
+					indicator := buildIndicator(buf.name, buf.args.String())
+					sendToken(ch, indicator)
+					sb.WriteString(indicator)
+					uniqueTools[buf.name] = struct{}{}
+				}
 			}
 			if m.Role == schema.Tool {
 				if imgs := extractToolImages(m.Content); len(imgs) > 0 {
@@ -242,7 +298,12 @@ func drainIterInner(ctx context.Context, runner *adk.Runner, iter *adk.AsyncIter
 			}
 		} else if mo.Message != nil && len(mo.Message.ToolCalls) > 0 {
 			for _, tc := range mo.Message.ToolCalls {
-				uniqueTools[tc.Function.Name] = struct{}{}
+				if tc.Function.Name != "" {
+					uniqueTools[tc.Function.Name] = struct{}{}
+					indicator := buildIndicator(tc.Function.Name, tc.Function.Arguments)
+					sendToken(ch, indicator)
+					sb.WriteString(indicator)
+				}
 			}
 		}
 	}

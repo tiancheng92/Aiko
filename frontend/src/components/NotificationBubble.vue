@@ -251,12 +251,42 @@ onUnmounted(() => {
   padding: 1px 6px;
   border-radius: 4px;
 }
+.notif-body :deep(.tool-call-chip) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px 2px 6px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-family: 'SF Mono', ui-monospace, monospace;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.notif-body :deep(.tool-call-chip--tool) {
+  background: rgba(234, 179, 8, 0.1);
+  border: 1px solid rgba(234, 179, 8, 0.25);
+  color: rgba(253, 224, 71, 0.85);
+}
+.notif-body :deep(.tool-call-chip--skill) {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  color: rgba(74, 222, 128, 0.85);
+}
 .notif-body :deep(.code-block) {
   margin: 6px 0;
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid rgba(255,255,255,0.08);
 }
+.notif-body :deep(.code-lang-icon) {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-right: 5px;
+}
+.notif-body :deep(.code-lang-icon svg) { width: 14px; height: 14px; }
 .notif-body :deep(.code-header) {
   display: flex;
   align-items: center;

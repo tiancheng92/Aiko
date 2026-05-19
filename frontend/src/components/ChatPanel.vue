@@ -3,7 +3,7 @@ import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { SendMessage, SendMessageWithImages, SendMessageWithFiles, GetMessages, GetMessagesBeforeID, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig, RegenerateLastReply, GetSoundsEnabled, ReadClipboard } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 import { throttle, debounce } from '../utils/timing.js'
-import { renderMarkdown, extractRealUrl, shortenUrl, stripEmotionTags, closeUnclosedFences } from '../composables/useMarkdown.js'
+import { renderMarkdown, extractRealUrl, shortenUrl, stripEmotionTags, stripToolCallTags, closeUnclosedFences } from '../composables/useMarkdown.js'
 import { useSounds } from '../composables/useSounds'
 import { useTypingScheduler } from '../composables/useTypingScheduler'
 import { useEscapeKey } from '../composables/useEscapeKey'
@@ -165,8 +165,38 @@ function copyPairValue(pair) {
   })
 }
 
+/** toolArgsPopover holds { pairs, x, y } for the tool-args popover; null when hidden. */
+const toolArgsPopover = ref(null)
+
+window.__showToolArgs = (e) => {
+  e.stopPropagation()
+  const chip = e.currentTarget
+  const b64 = chip.dataset.args || ''
+  let pairs = []
+  try {
+    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0))
+    const obj = JSON.parse(new TextDecoder().decode(bytes))
+    pairs = Object.entries(obj).map(([k, v]) => ({
+      key: k,
+      value: typeof v === 'string' ? v : JSON.stringify(v, null, 2),
+    }))
+  } catch {}
+  if (!pairs.length) return
+  toolArgsPopover.value = { pairs }
+}
+
+/** __toggleChipGroup expands or collapses the extra chips in a tool-call-group. */
+window.__toggleChipGroup = (btn) => {
+  const group = btn.closest('.tool-call-group')
+  if (!group) return
+  const isNowCollapsed = group.classList.toggle('collapsed')
+  const count = group.querySelectorAll('.tool-call-chip-extra').length
+  btn.textContent = isNowCollapsed ? `+${count} 更多` : '收起'
+}
+
 useEscapeKey(() => { showClearConfirm.value = false }, showClearConfirm)
 useEscapeKey(() => { tableDetailRow.value = null }, () => tableDetailRow.value !== null)
+useEscapeKey(() => { toolArgsPopover.value = null }, () => toolArgsPopover.value !== null)
 
 /** collapsedIds holds message keys that should render in collapsed state. */
 const collapsedIds = ref(new Set())
@@ -592,7 +622,7 @@ onMounted(async () => {
     // Auto-play TTS if enabled and this is not a voice-triggered response
     if (cfg.value?.TTSAutoPlay && lastMsg?.content && !isRecording.value) {
       activeTTSMsgId.value = idx
-      SpeakText(lastMsg.content).catch(() => { activeTTSMsgId.value = null })
+      SpeakText(stripToolCallTags(lastMsg.content)).catch(() => { activeTTSMsgId.value = null })
     }
   })
 
@@ -922,7 +952,7 @@ async function speakMessage(idx) {
   activeTTSMsgId.value = idx
   const m = messages.value[idx]
   if (!m) return
-  SpeakText(m.content).catch(() => { activeTTSMsgId.value = null })
+  SpeakText(stripToolCallTags(m.content)).catch(() => { activeTTSMsgId.value = null })
 }
 
 /** onPaste handles clipboard paste events on the textarea.
@@ -1396,6 +1426,31 @@ defineExpose({ focusInput, scrollToBottom })
           </div>
           <div class="tbl-detail-body">
             <div v-for="pair in tableDetailRow" :key="pair.key" class="tbl-detail-pair">
+              <span class="tbl-detail-key">{{ pair.key }}</span>
+              <span class="tbl-detail-value markdown" v-html="renderMarkdown(pair.value)"></span>
+              <button class="tbl-detail-pair-copy" :class="{ copied: copiedPairKey === pair.key }" :aria-label="`复制 ${pair.key}`" @click.stop="copyPairValue(pair)">
+                <svg v-if="copiedPairKey !== pair.key" xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Tool args modal (same style as table row detail) -->
+    <Transition name="tbl-detail-pop">
+      <div v-if="toolArgsPopover" class="tbl-detail-overlay" role="dialog" aria-modal="true" aria-labelledby="tool-args-title">
+        <div class="tbl-detail-backdrop" @click="toolArgsPopover = null" />
+        <div class="tbl-detail-box">
+          <div class="tbl-detail-header">
+            <span id="tool-args-title" class="tbl-detail-title">工具参数</span>
+            <button class="tbl-detail-close" aria-label="关闭" @click="toolArgsPopover = null">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="tbl-detail-body">
+            <div v-for="pair in toolArgsPopover.pairs" :key="pair.key" class="tbl-detail-pair">
               <span class="tbl-detail-key">{{ pair.key }}</span>
               <span class="tbl-detail-value markdown" v-html="renderMarkdown(pair.value)"></span>
               <button class="tbl-detail-pair-copy" :class="{ copied: copiedPairKey === pair.key }" :aria-label="`复制 ${pair.key}`" @click.stop="copyPairValue(pair)">
@@ -1924,6 +1979,66 @@ img.msg-avatar {
 .bubble.markdown :deep(p) { margin: 0 0 8px; }
 .bubble.markdown :deep(p:last-child) { margin-bottom: 0; }
 
+/* Tool call chips */
+.bubble.markdown :deep(.tool-call-chip) {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: 'SF Mono', ui-monospace, monospace;
+  vertical-align: middle;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+.bubble.markdown :deep(.tool-call-chip:hover) { opacity: 0.75; }
+.bubble.markdown :deep(.tool-call-chip--tool) {
+  background: rgba(234, 179, 8, 0.1);
+  border: 1px solid rgba(234, 179, 8, 0.28);
+  color: rgba(253, 224, 71, 0.9);
+}
+.bubble.markdown :deep(.tool-call-chip--skill) {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  color: rgba(74, 222, 128, 0.9);
+}
+.bubble.markdown :deep(.tool-call-chip svg) {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+.bubble.markdown :deep(.tool-call-group) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 6px 0;
+}
+.bubble.markdown :deep(.tool-call-group.collapsed .tool-call-chip-extra) {
+  display: none;
+}
+.bubble.markdown :deep(.tool-call-toggle) {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-tertiary);
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-family: 'SF Mono', ui-monospace, monospace;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1.4;
+  transition: background 0.12s, color 0.12s;
+  flex-shrink: 0;
+}
+.bubble.markdown :deep(.tool-call-toggle:hover) {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+
 /* Code blocks */
 .bubble.markdown :deep(.code-block) {
   margin: 8px 0;
@@ -1932,6 +2047,15 @@ img.msg-avatar {
   border: 1px solid rgba(255,255,255,0.08);
   max-width: var(--code-max-width, 100%);
 }
+.bubble.markdown :deep(.code-lang-icon) {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+}
+.bubble.markdown :deep(.code-lang-icon svg) { width: 16px; height: 16px; }
 .bubble.markdown :deep(.code-header) {
   display: flex;
   align-items: center;
@@ -2399,6 +2523,8 @@ img.msg-avatar {
 .tbl-detail-value.markdown :deep(p + p) { margin-top: 4px; }
 .tbl-detail-value.markdown :deep(strong) { color: #e5e7eb; }
 .tbl-detail-value.markdown :deep(code) { font-size: 12px; }
+.tbl-detail-value.markdown :deep(a) { color: rgba(125, 183, 255, 0.65); text-decoration: none; }
+.tbl-detail-value.markdown :deep(a:hover) { color: rgba(125, 183, 255, 0.9); text-decoration: underline; }
 .tbl-detail-pop-enter-active { transition: opacity 0.22s ease; }
 .tbl-detail-pop-leave-active { transition: opacity 0.14s ease-in; }
 .tbl-detail-pop-enter-from,
