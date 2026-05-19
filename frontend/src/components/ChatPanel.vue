@@ -423,6 +423,21 @@ async function loadOlderMessages() {
     const olderMapped = older.map(mapMsg)
     suppressAnimation.value = true
     messages.value = olderMapped.concat(messages.value)
+    // After prepend, index-based keys (i:N) shift by firstOldIdx.
+    // Re-key collapsedIds and expandedIds to keep collapse state consistent.
+    const rekey = (set) => {
+      const next = new Set()
+      for (const k of set) {
+        if (k.startsWith('i:')) {
+          next.add('i:' + (parseInt(k.slice(2), 10) + firstOldIdx))
+        } else {
+          next.add(k)
+        }
+      }
+      return next
+    }
+    collapsedIds.value = rekey(collapsedIds.value)
+    expandedIds.value = rekey(expandedIds.value)
     await nextTick()
     suppressAnimation.value = false
     oldestLoadedID = older[0].ID
