@@ -1,6 +1,6 @@
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { SendMessage, SendMessageWithImages, SendMessageWithFiles, GetMessages, GetMessagesBeforeID, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig, RegenerateLastReply, GetSoundsEnabled, ReadClipboard } from '../../wailsjs/go/main/App'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { SendMessage, SendMessageWithImages, SendMessageWithFiles, GetMessages, GetMessagesBeforeID, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig, SaveConfig, RegenerateLastReply, GetSoundsEnabled, ReadClipboard } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 import { throttle, debounce } from '../utils/timing.js'
 import { renderMarkdown, extractRealUrl, shortenUrl, stripEmotionTags, stripToolCallTags, closeUnclosedFences } from '../composables/useMarkdown.js'
@@ -366,6 +366,30 @@ const activeTTSMsgId = ref(null)  // id of the message currently being spoken
 const cfg = ref(null)
 const aiAvatar = ref('')    // data URL or '' (use default /logo.png)
 const userAvatar = ref('')  // data URL or '' (use default SVG)
+
+/** thinkingLevel is the current reasoning effort level for the next message. */
+const thinkingLevel = ref('default')
+/** useKnowledge controls whether the knowledge base is queried for the next message. */
+const useKnowledge = ref(true)
+/** useMemory controls whether long-term memory is queried for the next message. */
+const useMemory = ref(true)
+
+/** isOpenRouter is true when the active LLM provider is OpenRouter. */
+const isOpenRouter = computed(() => cfg.value?.LLMProvider === 'openrouter')
+
+/** thinkingLevels returns available thinking level options based on the current provider. */
+const thinkingLevels = computed(() =>
+  isOpenRouter.value
+    ? ['default', 'off', 'low', 'medium', 'high']
+    : ['default', 'low', 'medium', 'high']
+)
+
+/** thinkingLevelLabel returns a human-readable label for the current thinking level. */
+const thinkingLevelLabel = computed(() => {
+  const labels = { default: '默认', off: '关闭', low: '低', medium: '中', high: '高' }
+  return labels[thinkingLevel.value] || '默认'
+})
+
 const { playSend, playReceive, playError, playStop } = useSounds()
 let soundsEnabled = false
 
@@ -651,6 +675,9 @@ onMounted(async () => {
     cfg.value = await GetConfig()
     aiAvatar.value = cfg.value?.AIAvatar || ''
     userAvatar.value = cfg.value?.UserAvatar || ''
+    thinkingLevel.value = cfg.value?.ThinkingLevel || 'default'
+    useKnowledge.value = cfg.value?.UseKnowledge !== false
+    useMemory.value = cfg.value?.UseMemory !== false
   } catch {}
 
   offAvatarChanged = EventsOn('config:avatar:changed', ({ role, dataURL }) => {
@@ -1054,6 +1081,35 @@ function onEnterKey(e) {
   send()
 }
 
+/** Cycles thinking level through available levels and persists. */
+async function cycleThinkingLevel() {
+  const levels = thinkingLevels.value
+  const idx = levels.indexOf(thinkingLevel.value)
+  thinkingLevel.value = levels[(idx + 1) % levels.length]
+  await persistChatOptions()
+}
+
+/** Toggles knowledge base flag and persists. */
+async function toggleKnowledge() {
+  useKnowledge.value = !useKnowledge.value
+  await persistChatOptions()
+}
+
+/** Toggles long-term memory flag and persists. */
+async function toggleMemory() {
+  useMemory.value = !useMemory.value
+  await persistChatOptions()
+}
+
+/** Saves the three chat option fields to config. */
+async function persistChatOptions() {
+  try {
+    await SaveConfig({ ...cfg.value, ThinkingLevel: thinkingLevel.value, UseKnowledge: useKnowledge.value, UseMemory: useMemory.value })
+  } catch (e) {
+    console.error('persistChatOptions failed', e)
+  }
+}
+
 /** send submits the current input as a user message. */
 async function send() {
   const text = getInput().trim()
@@ -1075,11 +1131,12 @@ async function send() {
   messages.value.push({ role: 'assistant', content: '', streaming: true, thinking: true, thinkingContent: '', thinkingExpanded: false })
   scrollToBottom()
   EventsEmit('pet:state:change', 'thinking')
+  const chatOpts = { thinkingLevel: thinkingLevel.value, useKnowledge: useKnowledge.value, useMemory: useMemory.value }
   try {
     if (imgs.length > 0 || fileAttachments.length > 0) {
-      await SendMessageWithFiles(text, imgs, fileAttachments)
+      await SendMessageWithFiles(text, imgs, fileAttachments, chatOpts)
     } else {
-      await SendMessage(text)
+      await SendMessage(text, chatOpts)
     }
   } catch (e) {
     const idx = messages.value.findLastIndex(m => m.thinking)
@@ -1538,7 +1595,28 @@ defineExpose({ focusInput, scrollToBottom })
         :disabled="loading"
       />
       <div class="input-toolbar" @contextmenu.stop.prevent>
-        <div class="toolbar-spacer" />
+        <div class="chat-opts-chips">
+          <button
+            class="chat-opt-chip"
+            :class="['thinking-' + thinkingLevel]"
+            @click="cycleThinkingLevel"
+            title="思考等级"
+          >🧠 {{ thinkingLevelLabel }}</button>
+          <button
+            v-if="cfg?.EmbeddingModel"
+            class="chat-opt-chip"
+            :class="{ active: useKnowledge }"
+            @click="toggleKnowledge"
+            title="本次是否检索知识库"
+          >📚 知识库</button>
+          <button
+            v-if="cfg?.EmbeddingModel"
+            class="chat-opt-chip"
+            :class="{ active: useMemory }"
+            @click="toggleMemory"
+            title="本次是否检索长期记忆"
+          >💾 记忆</button>
+        </div>
         <button
           class="attach-btn"
           title="附加文件"
@@ -2638,7 +2716,43 @@ img.msg-avatar {
   gap: 4px;
   border-top: none;
 }
-.toolbar-spacer { flex: 1; }
+.chat-opts-chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.chat-opt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.45);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.chat-opt-chip:hover {
+  background: rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.7);
+}
+
+.chat-opt-chip.active {
+  background: rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.85);
+  border-color: rgba(255,255,255,0.25);
+}
+
+.chat-opt-chip.thinking-low    { color: #4ade80; border-color: rgba(74,222,128,0.3); }
+.chat-opt-chip.thinking-medium { color: #facc15; border-color: rgba(250,204,21,0.3); }
+.chat-opt-chip.thinking-high   { color: #fb923c; border-color: rgba(251,146,60,0.3); }
 .input-hint {
   font-size: 11px;
   color: var(--text-label-muted);
