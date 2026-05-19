@@ -9,40 +9,36 @@ import (
 )
 
 // ReasoningOption translates a UI thinking level ("default"|"off"|"low"|"medium"|"high")
-// into a provider-specific eino model.Option. Returns (option, true) when an option should
-// be passed, or (zero, false) when no option is needed (level is "default", or level is
-// "off" for OpenAI which has no disable mechanism).
-func ReasoningOption(level string, provider config.Provider) (model.Option, bool) {
+// into a provider-specific eino model.Option. Returns nil when no option should be passed
+// (level is "default", or level is "off" for OpenAI which has no disable mechanism).
+func ReasoningOption(level string, provider config.Provider) *model.Option {
+	var opt model.Option
 	switch provider {
 	case config.ProviderOpenRouter:
 		switch level {
 		case "off":
-			return einoopenrouter.WithReasoning(&einoopenrouter.Reasoning{
-				Effort: einoopenrouter.EffortOfNone,
-			}), true
+			opt = einoopenrouter.WithReasoning(&einoopenrouter.Reasoning{Effort: einoopenrouter.EffortOfNone})
 		case "low":
-			return einoopenrouter.WithReasoning(&einoopenrouter.Reasoning{
-				Effort: einoopenrouter.EffortOfLow,
-			}), true
+			opt = einoopenrouter.WithReasoning(&einoopenrouter.Reasoning{Effort: einoopenrouter.EffortOfLow})
 		case "medium":
-			return einoopenrouter.WithReasoning(&einoopenrouter.Reasoning{
-				Effort: einoopenrouter.EffortOfMedium,
-			}), true
+			opt = einoopenrouter.WithReasoning(&einoopenrouter.Reasoning{Effort: einoopenrouter.EffortOfMedium})
 		case "high":
-			return einoopenrouter.WithReasoning(&einoopenrouter.Reasoning{
-				Effort: einoopenrouter.EffortOfHigh,
-			}), true
+			opt = einoopenrouter.WithReasoning(&einoopenrouter.Reasoning{Effort: einoopenrouter.EffortOfHigh})
+		default:
+			return nil
 		}
 	default: // openai-compatible
 		switch level {
 		case "low":
-			return einoopenai.WithReasoningEffort(einoopenai.ReasoningEffortLevelLow), true
+			opt = einoopenai.WithReasoningEffort(einoopenai.ReasoningEffortLevelLow)
 		case "medium":
-			return einoopenai.WithReasoningEffort(einoopenai.ReasoningEffortLevelMedium), true
+			opt = einoopenai.WithReasoningEffort(einoopenai.ReasoningEffortLevelMedium)
 		case "high":
-			return einoopenai.WithReasoningEffort(einoopenai.ReasoningEffortLevelHigh), true
+			opt = einoopenai.WithReasoningEffort(einoopenai.ReasoningEffortLevelHigh)
+		default:
+			// "default" or "off" for OpenAI: no disable mechanism, don't pass any option.
+			return nil
 		}
 	}
-	// "default" or "off" for OpenAI: don't pass any option.
-	return model.Option{}, false
+	return &opt
 }
