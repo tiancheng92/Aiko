@@ -561,7 +561,7 @@ func (a *App) domReady(_ context.Context) {
 	if a.pendingUpdateVersion != "" {
 		wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
 			"title":   "✅ 更新成功",
-			"message": "Aiko 已更新至 v" + a.pendingUpdateVersion,
+			"message": "Aiko 已更新至 " + a.pendingUpdateVersion,
 		})
 		a.pendingUpdateVersion = ""
 	}
