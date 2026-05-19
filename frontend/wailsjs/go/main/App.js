@@ -278,16 +278,16 @@ export function SavePetSize(arg1, arg2, arg3) {
   return window['go']['main']['App']['SavePetSize'](arg1, arg2, arg3);
 }
 
-export function SendMessage(arg1) {
-  return window['go']['main']['App']['SendMessage'](arg1);
+export function SendMessage(arg1, arg2) {
+  return window['go']['main']['App']['SendMessage'](arg1, arg2);
 }
 
-export function SendMessageWithFiles(arg1, arg2, arg3) {
-  return window['go']['main']['App']['SendMessageWithFiles'](arg1, arg2, arg3);
+export function SendMessageWithFiles(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['SendMessageWithFiles'](arg1, arg2, arg3, arg4);
 }
 
-export function SendMessageWithImages(arg1, arg2) {
-  return window['go']['main']['App']['SendMessageWithImages'](arg1, arg2);
+export function SendMessageWithImages(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SendMessageWithImages'](arg1, arg2, arg3);
 }
 
 export function SetAutoLaunch(arg1) {

@@ -39,6 +39,9 @@ export namespace config {
 	    TavilyAPIKey: string;
 	    AIAvatar: string;
 	    UserAvatar: string;
+	    ThinkingLevel: string;
+	    UseKnowledge: boolean;
+	    UseMemory: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -84,6 +87,9 @@ export namespace config {
 	        this.TavilyAPIKey = source["TavilyAPIKey"];
 	        this.AIAvatar = source["AIAvatar"];
 	        this.UserAvatar = source["UserAvatar"];
+	        this.ThinkingLevel = source["ThinkingLevel"];
+	        this.UseKnowledge = source["UseKnowledge"];
+	        this.UseMemory = source["UseMemory"];
 	    }
 	}
 	export class ModelProfile {
@@ -152,6 +158,22 @@ export namespace frontend {
 
 export namespace main {
 	
+	export class ChatOptions {
+	    thinkingLevel: string;
+	    useKnowledge: boolean;
+	    useMemory: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ChatOptions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.thinkingLevel = source["thinkingLevel"];
+	        this.useKnowledge = source["useKnowledge"];
+	        this.useMemory = source["useMemory"];
+	    }
+	}
 	export class FileAttachment {
 	    name: string;
 	    mimeType: string;

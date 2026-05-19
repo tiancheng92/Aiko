@@ -148,11 +148,11 @@ export function SaveModelProfile(arg1:config.ModelProfile):Promise<config.ModelP
 
 export function SavePetSize(arg1:number,arg2:number,arg3:number):Promise<void>;
 
-export function SendMessage(arg1:string):Promise<void>;
+export function SendMessage(arg1:string,arg2:main.ChatOptions):Promise<void>;
 
-export function SendMessageWithFiles(arg1:string,arg2:Array<string>,arg3:Array<main.FileAttachment>):Promise<void>;
+export function SendMessageWithFiles(arg1:string,arg2:Array<string>,arg3:Array<main.FileAttachment>,arg4:main.ChatOptions):Promise<void>;
 
-export function SendMessageWithImages(arg1:string,arg2:Array<string>):Promise<void>;
+export function SendMessageWithImages(arg1:string,arg2:Array<string>,arg3:main.ChatOptions):Promise<void>;
 
 export function SetAutoLaunch(arg1:boolean):Promise<void>;
 
