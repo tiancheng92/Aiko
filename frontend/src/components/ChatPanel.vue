@@ -1729,7 +1729,9 @@ defineExpose({ focusInput, scrollToBottom })
 /* Row */
 .msg { display: flex; align-items: flex-start; }
 .msg.user { justify-content: flex-end; gap: 8px; }
-.msg.assistant, .msg.system { justify-content: flex-start; gap: 8px; }
+.msg.assistant { justify-content: flex-start; gap: 8px; }
+/* system messages have no avatar — add left padding to align with assistant bubbles (28px avatar + 8px gap) */
+.msg.system { justify-content: flex-start; padding-left: 36px; }
 
 .msg-avatar {
   width: 28px;

@@ -85,22 +85,22 @@ func (t *CheckAndUpdateTool) InvokableRun(ctx context.Context, _ string, opts ..
 			return "更新失败：下载地址丢失，请重试", nil
 		}
 
-		// Persist the current conversation turn before the process is replaced.
-		if flushFn, ok := ctx.Value(base.PersistBeforeRestartKey{}).(func(string)); ok {
-			flushFn("v" + latestVersion + " 更新完成，我回来啦~")
-		}
-
-		// Signal the frontend to clear loading state and show a farewell message.
+		// Signal the frontend to show a progress bar and farewell message.
 		if t.EmitFn != nil {
 			t.EmitFn("app:restarting", map[string]any{"version": latestVersion})
 		}
 
-		// Small delay to let the frontend render the restarting message.
-		time.Sleep(300 * time.Millisecond)
+		// Persist conversation before InstallFn replaces the process.
+		// This runs synchronously; a successful install terminates the process,
+		// so flushFn must be called before InstallFn.
+		if flushFn, ok := ctx.Value(base.PersistBeforeRestartKey{}).(func(string)); ok {
+			flushFn("v" + latestVersion + " 更新完成，我回来啦~")
+		}
 
 		if err := t.InstallFn(downloadURL); err != nil {
 			return "更新安装失败: " + err.Error(), nil
 		}
+		// InstallFn replaces the binary and relaunches; this line is unreachable on success.
 		return "更新完成，应用即将重启", nil
 	}
 

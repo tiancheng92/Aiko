@@ -359,16 +359,12 @@ func (a *App) CheckUpdate() (UpdateInfo, error) {
 	return info, nil
 }
 
-// InstallUpdate starts an asynchronous download-and-install of the update at
-// downloadURL. It returns immediately; progress is broadcast via
-// "update:progress" events (0–100) and errors via "update:error".
+// InstallUpdate synchronously downloads and installs the update at downloadURL.
+// Progress is broadcast via "update:progress" events (0–100). It blocks until
+// the binary has been replaced and the process relaunched, so it only returns
+// on failure (a successful install terminates the process).
 func (a *App) InstallUpdate(downloadURL string) error {
-	go func() {
-		if err := a.doInstallUpdate(downloadURL); err != nil {
-			wailsruntime.EventsEmit(a.ctx, "update:error", err.Error())
-		}
-	}()
-	return nil
+	return a.doInstallUpdate(downloadURL)
 }
 
 // doInstallUpdate performs the actual download, DMG mount, binary replacement,
