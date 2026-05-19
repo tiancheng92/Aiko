@@ -50,6 +50,13 @@ type Config struct {
 	AIAvatar string
 	// UserAvatar is a data URL for the user avatar; empty means use the default icon.
 	UserAvatar string
+	// ThinkingLevel controls the LLM reasoning effort per message.
+	// Values: "default" | "off" | "low" | "medium" | "high". Default "default".
+	ThinkingLevel string
+	// UseKnowledge controls whether knowledge base results are included in context.
+	UseKnowledge bool
+	// UseMemory controls whether long-term memory results are included in context.
+	UseMemory bool
 }
 
 // Store provides persistent read/write access to application configuration in SQLite.
@@ -120,6 +127,9 @@ func (s *Store) Load() (*Config, error) {
 	cfg.TavilyAPIKey = m["tavily_api_key"]
 	cfg.AIAvatar = m["ai_avatar"]
 	cfg.UserAvatar = m["user_avatar"]
+	cfg.ThinkingLevel = orDefault(m["thinking_level"], "default")
+	cfg.UseKnowledge = m["use_knowledge"] != "false" // default true
+	cfg.UseMemory = m["use_memory"] != "false"        // default true
 	return cfg, nil
 }
 
@@ -161,6 +171,9 @@ func (s *Store) Save(cfg *Config) error {
 		"tavily_api_key":           cfg.TavilyAPIKey,
 		"ai_avatar":                cfg.AIAvatar,
 		"user_avatar":              cfg.UserAvatar,
+		"thinking_level":           cfg.ThinkingLevel,
+		"use_knowledge":            strconv.FormatBool(cfg.UseKnowledge),
+		"use_memory":               strconv.FormatBool(cfg.UseMemory),
 	}
 	tx, err := s.db.Begin()
 	if err != nil {
