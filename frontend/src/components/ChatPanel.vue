@@ -3337,11 +3337,14 @@ body > .lightbox .lightbox-img {
   line-height: 1.55;
   color: var(--text-primary);
   min-height: 80px;
+  user-select: text;
+  -webkit-user-select: text;
 }
 .milkdown-wrap :deep(.ProseMirror) {
   background: transparent;
   outline: none;
   min-height: 80px;
+  padding: 0;
   user-select: text;
   -webkit-user-select: text;
   pointer-events: auto;
@@ -3351,9 +3354,12 @@ body > .lightbox .lightbox-img {
   color: var(--text-placeholder, #666);
 }
 /* Hide Crepe frame/toolbar decorations */
-.milkdown-wrap :deep(.crepe-toolbar),
-.milkdown-wrap :deep(.crepe-block-handle),
-.milkdown-wrap :deep(.block-handle) {
+.milkdown-wrap :deep(.milkdown-toolbar),
+.milkdown-wrap :deep(.milkdown-block-handle),
+.milkdown-wrap :deep(.milkdown-top-bar),
+.milkdown-wrap :deep(.milkdown-slash-menu),
+.milkdown-wrap :deep(.milkdown-link-preview),
+.milkdown-wrap :deep(.milkdown-link-edit) {
   display: none !important;
 }
 
