@@ -323,6 +323,7 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message, opts C
 			if _, _, stripped, ok := parseEmotionTag(assistantSummary); ok {
 				assistantSummary = stripped
 			}
+			assistantSummary = collapseBlankLines(assistantSummary)
 			if _, err := a.shortMem.AddFull("assistant", assistantSummary, "", nil, nil); err != nil {
 				log.Warn().Err(err).Msg("short memory: add assistant message")
 			}

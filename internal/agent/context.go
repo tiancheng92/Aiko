@@ -168,6 +168,17 @@ func (a *Agent) buildContext(ctx context.Context, userInput string, useKnowledge
 	return msgs, nil
 }
 
+// collapseBlankLines normalises blank lines in s: removes leading blank lines
+// and collapses runs of 3+ consecutive newlines to exactly two newlines (one
+// blank line), so assistant replies stored in the DB stay compact.
+func collapseBlankLines(s string) string {
+	// Replace 3+ consecutive newlines with exactly 2.
+	for strings.Contains(s, "\n\n\n") {
+		s = strings.ReplaceAll(s, "\n\n\n", "\n\n")
+	}
+	return strings.TrimLeft(s, "\n")
+}
+
 // persistAndMigrate saves user and assistant messages to SQLite, then checks
 // whether the total message count exceeds ShortTermLimit. If so, the oldest
 // excess messages are migrated to long-term vector memory.
@@ -193,6 +204,7 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userIma
 		if _, _, stripped, ok := parseEmotionTag(assistantReply); ok {
 			assistantReply = stripped
 		}
+		assistantReply = collapseBlankLines(assistantReply)
 		if _, err := a.shortMem.AddFull("assistant", assistantReply, thinkingContent, assistantImages, nil); err != nil {
 			log.Warn().Err(err).Msg("short memory: add assistant message")
 			return
