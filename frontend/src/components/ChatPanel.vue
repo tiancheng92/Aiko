@@ -13,8 +13,9 @@ import ToolConfirmModal from './ToolConfirmModal.vue'
 import ExecutionProgress from './ExecutionProgress.vue'
 import LinkPreview from './LinkPreview.vue'
 import ContextMenu from './ContextMenu.vue'
-import Vditor from 'vditor'
-import 'vditor/dist/index.css'
+import { Crepe } from '@milkdown/crepe'
+import '@milkdown/crepe/theme/frame-dark.css'
+import { replaceAll } from '@milkdown/kit/utils'
 
 /** __tr opens the row-detail modal for a clicked table row. */
 window.__tr = (rowEl) => {
@@ -359,12 +360,12 @@ function checkBubbleCollapse(m, i, fromHistory = false) {
   }
 }
 const textareaEl = ref(null)
-/** markdownMode is true when the Vditor editor is active instead of the textarea. */
+/** markdownMode is true when the Milkdown editor is active instead of the textarea. */
 const markdownMode = ref(false)
-/** vditorEl is the DOM element Vditor mounts into. */
-const vditorEl = ref(null)
-/** vditorInstance holds the active Vditor instance, or null when not in markdown mode. */
-let vditorInstance = null
+/** milkdownEl is the DOM element Milkdown mounts into. */
+const milkdownEl = ref(null)
+/** milkdownInstance holds the active Crepe instance, or null when not in markdown mode. */
+let milkdownInstance = null
 /** lpExpanded tracks whether the extra link previews are shown for each message (keyed by msgKey). */
 const lpExpanded = ref({})
 const isRecording = ref(false)
@@ -770,8 +771,7 @@ onMounted(async () => {
   offVoiceFinal = EventsOn('voice:final', (text) => {
     voiceHint.value = ''
     if (markdownMode.value) {
-      vditorInstance?.setValue(text)
-      vditorInstance?.focus()
+      milkdownInstance?.editor.action(replaceAll(text))
       inputEmpty.value = !text.trim()
     } else {
       setInputDOM(text)
@@ -832,7 +832,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  destroyVditor()
+  destroyMilkdown()
   // Invoke every EventsOn teardown; undefined entries are safely skipped via
   // optional chaining so a partial mount (e.g. early error) does not throw here.
   offToken?.(); offDone?.(); offError?.(); offClear?.(); offImage?.(); offThinking?.()
@@ -1154,11 +1154,11 @@ async function persistChatOptions() {
 /** send submits the current input as a user message. */
 async function send() {
   const text = markdownMode.value
-    ? (vditorInstance?.getValue().trim() ?? '')
+    ? (milkdownInstance?.getMarkdown().trim() ?? '')
     : getInput().trim()
   if ((!text && pendingImages.value.length === 0 && pendingFiles.value.length === 0) || loading.value) return
   if (markdownMode.value) {
-    destroyVditor()
+    destroyMilkdown()
   } else {
     setInputDOM('')
     resetTextareaHeight()
@@ -1335,55 +1335,77 @@ function resetTextareaHeight() {
   if (el) el.style.height = 'auto'
 }
 
-/** initVditor creates a Vditor ir-mode instance mounted on vditorEl. */
-function initVditor() {
-  if (!vditorEl.value || vditorInstance) return
-  vditorInstance = new Vditor(vditorEl.value, {
-    mode: 'ir',
-    theme: 'dark',
-    toolbar: [],
-    minHeight: 80,
-    resize: { enable: false },
-    placeholder: '发消息...',
-    preview: {
-      theme: { current: 'dark' },
+/** initMilkdown creates a Crepe instance mounted on milkdownEl. */
+async function initMilkdown() {
+  if (!milkdownEl.value || milkdownInstance) return
+  milkdownInstance = new Crepe({
+    root: milkdownEl.value,
+    defaultValue: '',
+    features: {
+      [Crepe.Feature.Toolbar]: false,
+      [Crepe.Feature.BlockEdit]: false,
+      [Crepe.Feature.ImageBlock]: false,
+      [Crepe.Feature.Latex]: false,
+      [Crepe.Feature.TopBar]: false,
+      [Crepe.Feature.AI]: false,
+      [Crepe.Feature.Cursor]: true,
+      [Crepe.Feature.ListItem]: true,
+      [Crepe.Feature.LinkTooltip]: true,
+      [Crepe.Feature.Placeholder]: true,
+      [Crepe.Feature.CodeMirror]: true,
+      [Crepe.Feature.Table]: true,
     },
-    keydown(e) {
-      // Enter (no modifier) sends the message, same as the textarea behavior.
-      // Shift+Enter is Vditor's soft-break; leave it intact.
-      if (!e.isComposing && e.keyCode !== 229 && e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault()
-        send()
-      }
-    },
-    input() {
-      // keep inputEmpty in sync so the send button enables
-      const empty = !vditorInstance?.getValue().trim()
-      if (inputEmpty.value !== empty) inputEmpty.value = empty
-    },
-    after() {
-      vditorInstance?.focus()
+    featureConfigs: {
+      [Crepe.Feature.Placeholder]: {
+        text: '发消息...',
+        mode: 'block',
+      },
     },
   })
+  milkdownInstance.on((api) => {
+    api.markdownUpdated((ctx, md) => {
+      const empty = !md.trim()
+      if (inputEmpty.value !== empty) inputEmpty.value = empty
+    })
+  })
+  await milkdownInstance.create()
+  const editorDom = milkdownEl.value?.querySelector('.ProseMirror')
+  if (editorDom) {
+    editorDom.addEventListener('keydown', onMilkdownKeydown)
+  }
+  milkdownEl.value?.querySelector('.ProseMirror')?.focus()
 }
 
-/** destroyVditor tears down the Vditor instance and resets state. */
-function destroyVditor() {
-  vditorInstance?.destroy()
-  vditorInstance = null
+/** onMilkdownKeydown intercepts Enter (no modifier) to send the message. */
+function onMilkdownKeydown(e) {
+  if (!e.isComposing && e.keyCode !== 229 && e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+    e.preventDefault()
+    e.stopPropagation()
+    send()
+  }
+}
+
+/** destroyMilkdown tears down the Crepe instance and resets state. */
+async function destroyMilkdown() {
+  const editorDom = milkdownEl.value?.querySelector('.ProseMirror')
+  if (editorDom) {
+    editorDom.removeEventListener('keydown', onMilkdownKeydown)
+  }
+  await milkdownInstance?.destroy()
+  milkdownInstance = null
   markdownMode.value = false
   inputEmpty.value = true
 }
 
-/** toggleMarkdownMode switches between the textarea and Vditor editor. */
+/** toggleMarkdownMode switches between the textarea and Milkdown editor. */
 function toggleMarkdownMode() {
   if (markdownMode.value) {
-    destroyVditor()
+    destroyMilkdown()
     nextTick(() => textareaEl.value?.focus())
   } else {
     inputEmpty.value = true
     markdownMode.value = true
-    nextTick(() => initVditor())
+    nextTick(() => initMilkdown())
   }
 }
 
@@ -1718,7 +1740,7 @@ defineExpose({ focusInput, scrollToBottom })
       </div>
     </Transition>
 
-    <div class="input-area">
+    <div class="input-area" :class="{ 'md-mode': markdownMode }">
       <input
         ref="fileInputEl"
         type="file"
@@ -2878,6 +2900,7 @@ img.msg-avatar {
   position: relative;
   z-index: 1;
 }
+.input-area.md-mode { overflow: visible; }
 .input-area:hover:not(:focus-within) { background: var(--lg-surface-input-h); }
 .input-area:focus-within {
   border-color: var(--accent);
@@ -3295,9 +3318,13 @@ body > .lightbox .lightbox-img {
 .vditor-wrap {
   width: 100%;
   box-sizing: border-box;
+  min-height: 80px;
   max-height: 400px;
   overflow-y: auto;
   border-radius: 8px 8px 0 0;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
 }
 
 /* Override Vditor internals to match app theme */
@@ -3305,6 +3332,7 @@ body > .lightbox .lightbox-img {
   background: transparent;
   border: none;
   box-shadow: none;
+  min-height: 80px;
 }
 .vditor-wrap :deep(.vditor-toolbar) {
   display: none !important;
@@ -3317,6 +3345,14 @@ body > .lightbox .lightbox-img {
   line-height: 1.55;
   color: var(--text-primary);
   min-height: 80px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.vditor-wrap :deep([contenteditable]) {
+  user-select: text;
+  -webkit-user-select: text;
+  pointer-events: auto;
+  cursor: text;
 }
 .vditor-wrap :deep(.vditor-ir pre.vditor-reset) {
   background: transparent;
