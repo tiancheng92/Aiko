@@ -38,27 +38,27 @@ cfg.SystemPrompt + toolPolicyPrompt + emotionPromptSuffix
 
 ### 规则 1：实时数据类
 
-**适用工具**：`get_current_time` / `get_timezone` / `get_system_stats` / `get_network_status` / `get_location` / `get_weather` / `get_exchange_rate` / `get_browser_url` / `read_clipboard`
+**适用工具**：`get_current_time` / `get_timezone` / `get_system_stats` / `get_network_status` / `get_location` / `get_weather` / `get_exchange_rate` / `get_browser_url` / `read_clipboard` / `take_screenshot`
 
 **规则**：上述数据随时变化，禁止凭记忆或推测回答，每次必须调用对应工具获取最新值。
 
-### 规则 2：用户数据类
+### 规则 2：用户存储数据类
 
-**适用工具**：`get_reminders` / `get_mails` / `get_mail_content` / `get_calendar_events` / `list_running_apps` / `get_os_info` / `get_hardware_info`
+**适用工具**：`get_reminders` / `get_mails` / `get_mail_content` / `get_calendar_events` / `list_running_apps` / `get_os_info` / `get_hardware_info` / `search_memory` / `list_skills` / `search_knowledge`
 
-**规则**：上述数据存储在用户系统中，内容未知，禁止臆测，必须调用工具读取后才能引用。
+**规则**：上述数据存储在用户系统或应用中，内容未知，禁止臆测，必须调用工具读取后才能引用。
 
-### 规则 3：文件与知识类
+### 规则 3：文件与网络内容类
 
-**适用工具**：`list_directory` / `read_file` / `read_image` / `search_knowledge` / `search_memory` / `list_skills`
+**适用工具**：`list_directory` / `read_file` / `read_image` / `web_search` / `web_fetch`
 
-**规则**：文件或知识库的内容在读取之前完全未知，不得引用未经工具读取过的文件内容或知识条目。读取文件前先用 `list_directory` 确认路径存在。
+**规则**：文件和网络内容在获取之前完全未知，不得引用未经工具读取过的文件内容或网页内容。读取文件前先用 `list_directory` 确认路径存在。
 
-### 规则 4：执行结果类
+### 规则 4：执行与写入类
 
-**适用工具**：`execute_shell` / `execute_code` / `write_file` / `delete_file` / `move_file` / `make_directory`
+**适用工具**：`execute_shell` / `execute_code` / `write_file` / `delete_file` / `move_file` / `make_directory` / `write_clipboard` / `control_app` / `create_calendar_event` / `complete_reminder` / `cron` / `save_memory` / `save_skill` / `update_user_profile` / `save_image` / `check_and_update`
 
-**规则**：执行结果不可预测，禁止在调用工具前猜测或伪造结果。必须实际执行后，依据工具返回的真实输出进行报告。
+**规则**：执行与写入结果不可预测，禁止在调用工具前猜测或伪造结果。必须实际执行后，依据工具返回的真实输出进行报告。
 
 ### 规则 5：历史工具结果禁止复用
 
