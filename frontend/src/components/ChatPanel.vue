@@ -1705,6 +1705,7 @@ defineExpose({ focusInput, scrollToBottom })
         @change="onFileInputChange"
       />
       <textarea
+        v-show="!markdownMode"
         ref="textareaEl"
         placeholder="发消息..."
         rows="1"
@@ -1717,6 +1718,11 @@ defineExpose({ focusInput, scrollToBottom })
         @paste="onPaste"
         @contextmenu.prevent="onTextareaContextMenu"
         :disabled="loading"
+      />
+      <div
+        v-show="markdownMode"
+        ref="vditorEl"
+        class="vditor-wrap"
       />
       <div class="input-toolbar" @contextmenu.stop.prevent>
         <div class="chat-opts-chips">
@@ -1743,6 +1749,14 @@ defineExpose({ focusInput, scrollToBottom })
             title="本次是否检索长期记忆"
           ><span class="chip-icon" v-html="ICON_MEMORY"></span><span class="chip-label">记忆</span></button>
         </div>
+        <button
+          class="md-btn"
+          :class="{ active: markdownMode }"
+          title="Markdown 编辑模式"
+          aria-label="Markdown 编辑模式"
+          :disabled="loading"
+          @click="toggleMarkdownMode"
+        >M↓</button>
         <button
           class="attach-btn"
           title="附加文件"
