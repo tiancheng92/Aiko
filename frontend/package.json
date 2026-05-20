@@ -18,6 +18,7 @@
     "pixi.js": "^6.5.0",
     "shiki": "^4.0.2",
     "three": "^0.184.0",
+    "vditor": "^3.11.2",
     "vue": "^3.2.37"
   },
   "devDependencies": {
