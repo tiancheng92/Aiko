@@ -3245,6 +3245,65 @@ body > .lightbox .lightbox-img {
 .attach-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .attach-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+/* Markdown mode toggle button */
+.md-btn {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  padding: 0;
+}
+.md-btn:hover:not(:disabled) { background: var(--lg-surface-hover); color: var(--text-secondary); }
+.md-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-alpha-20); }
+.md-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.md-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Vditor editor container */
+.vditor-wrap {
+  width: 100%;
+  box-sizing: border-box;
+  max-height: 400px;
+  overflow-y: auto;
+  border-radius: 8px 8px 0 0;
+}
+
+/* Override Vditor internals to match app theme */
+.vditor-wrap :deep(.vditor) {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+.vditor-wrap :deep(.vditor-toolbar) {
+  display: none !important;
+}
+.vditor-wrap :deep(.vditor-ir) {
+  background: transparent;
+  padding: 10px 12px 6px;
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.55;
+  color: var(--text-primary);
+  min-height: 80px;
+}
+.vditor-wrap :deep(.vditor-ir pre.vditor-reset) {
+  background: transparent;
+  padding: 0;
+}
+.vditor-wrap :deep(.vditor-reset) {
+  color: var(--text-primary);
+}
+
 /* Pending file chips above input */
 .pending-files {
   display: flex;
