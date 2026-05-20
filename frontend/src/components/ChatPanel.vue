@@ -821,6 +821,8 @@ onUnmounted(() => {
   voiceTranscriptHandler?.cancel?.()
   offUpdateProgress?.(); offUpdateError?.()
   updateProgressHandler?.cancel?.()
+  onMessagesScroll?.cancel?.()
+  if (_smoothScrollRaf) { cancelAnimationFrame(_smoothScrollRaf); _smoothScrollRaf = null }
   document.removeEventListener('click', closeColDrops)
   sentinelObserver?.disconnect()
   sentinelObserver = null
@@ -1202,6 +1204,16 @@ function onMessagesClick(e) {
   const href = a.getAttribute('href')
   if (href) BrowserOpenURL(href)
 }
+/** isAtBottom tracks whether the messages list is scrolled to (or near) the bottom. */
+const isAtBottom = ref(true)
+
+/** onMessagesScroll updates isAtBottom; throttled to avoid per-pixel overhead. */
+const onMessagesScroll = throttle(() => {
+  const el = messagesEl.value
+  if (!el) return
+  isAtBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < 60
+}, 100)
+
 let _scrollRafPending = false
 /** scrollToBottom scrolls to the latest message; coalesced via rAF to avoid redundant layout reads. */
 function scrollToBottom() {
@@ -1209,8 +1221,37 @@ function scrollToBottom() {
   _scrollRafPending = true
   requestAnimationFrame(() => {
     _scrollRafPending = false
-    if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+    if (messagesEl.value) {
+      messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+      isAtBottom.value = true
+    }
   })
+}
+
+let _smoothScrollRaf = null
+/** smoothScrollToBottom animates a 1-second ease-in-out scroll to the bottom; used by the floating button. */
+function smoothScrollToBottom() {
+  const el = messagesEl.value
+  if (!el) return
+  if (_smoothScrollRaf) { cancelAnimationFrame(_smoothScrollRaf); _smoothScrollRaf = null }
+  const start = el.scrollTop
+  const end = el.scrollHeight - el.clientHeight
+  if (end - start < 2) { isAtBottom.value = true; return }
+  const duration = 1000
+  const t0 = performance.now()
+  function step(now) {
+    const p = Math.min((now - t0) / duration, 1)
+    // ease-in-out cubic
+    const e = p < 0.5 ? 4 * p * p * p : 1 - (-2 * p + 2) ** 3 / 2
+    el.scrollTop = start + (end - start) * e
+    if (p < 1) {
+      _smoothScrollRaf = requestAnimationFrame(step)
+    } else {
+      _smoothScrollRaf = null
+      isAtBottom.value = true
+    }
+  }
+  _smoothScrollRaf = requestAnimationFrame(step)
 }
 
 let _thinkingScrollRafPending = false
@@ -1271,7 +1312,7 @@ defineExpose({ focusInput, scrollToBottom })
 <template>
   <div class="chat-panel" ref="chatPanelEl" @mousemove="onChatPanelMousemove" :style="{ '--code-max-width': codeMaxWidth > 0 ? codeMaxWidth + 'px' : 'none' }">
     <div class="chat-spotlight" ref="spotlightEl" aria-hidden="true" />
-    <div class="messages" ref="messagesEl" @click="onMessagesClick">
+    <div class="messages" ref="messagesEl" @click="onMessagesClick" @scroll="onMessagesScroll">
       <!-- Lazy-load sentinel: entering viewport triggers loading older messages -->
       <div id="msg-load-sentinel" class="load-sentinel">
         <div v-if="loadingHistory" class="history-loading">
@@ -1417,6 +1458,12 @@ defineExpose({ focusInput, scrollToBottom })
         <img v-else-if="m.role === 'user' && userAvatar" class="msg-avatar" :src="userAvatar" alt="用户" draggable="false" />
       </div>
       </TransitionGroup>
+      <!-- Scroll-to-bottom floating button -->
+      <Transition name="scroll-btn">
+        <button v-if="!isAtBottom" class="scroll-to-bottom-btn" aria-label="滚到底部" @click="smoothScrollToBottom">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </Transition>
     </div>
     <!-- Image lightbox (normal: inside panel; fullscreen: teleported to body to escape backdrop-filter stacking context) -->
     <template v-if="lightboxSrc">
@@ -1722,6 +1769,40 @@ defineExpose({ focusInput, scrollToBottom })
 .messages::-webkit-scrollbar-track { background: transparent; }
 .messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
 .messages::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
+
+/* Scroll-to-bottom button */
+.scroll-to-bottom-btn {
+  position: sticky;
+  bottom: 12px;
+  float: right;
+  margin-right: 10px;
+  clear: both;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--lg-surface-elevated);
+  border: 1px solid var(--lg-border-subtle);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: var(--lg-blur-sm);
+  -webkit-backdrop-filter: var(--lg-blur-sm);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  transition: background 0.12s, color 0.12s, transform 0.1s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 5;
+}
+.scroll-to-bottom-btn:hover {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+}
+.scroll-to-bottom-btn:active { transform: scale(0.9); }
+.scroll-btn-enter-active { transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.scroll-btn-leave-active { transition: opacity 0.14s ease, transform 0.14s ease; }
+.scroll-btn-enter-from { opacity: 0; transform: scale(0.7); }
+.scroll-btn-leave-to { opacity: 0; transform: scale(0.7); }
 
 /* Lazy-load sentinel */
 .load-sentinel { height: 24px; display: flex; align-items: center; justify-content: center; }

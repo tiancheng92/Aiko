@@ -346,7 +346,9 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 				"name":   job.Name,
 				"prompt": job.Prompt,
 			})
-			ch = ag.ChatDirectSave(ctx, job.Prompt)
+			// Prepend the job name so the stored user message matches the
+			// formatted label shown by the frontend's chat:cron:start handler.
+			ch = ag.ChatDirectSave(ctx, fmt.Sprintf("⏰ **%s**\n%s", job.Name, job.Prompt))
 		} else {
 			ch = ag.ChatDirect(ctx, job.Prompt)
 		}
