@@ -748,12 +748,16 @@ onMounted(async () => {
   offVoiceStart = EventsOn('voice:start', () => {
     isRecording.value = true
     voiceHint.value = ''
-    setInputDOM('')
-    nextTick(() => textareaEl.value?.focus())
+    if (!markdownMode.value) {
+      setInputDOM('')
+      nextTick(() => textareaEl.value?.focus())
+    }
   })
 
   voiceTranscriptHandler = throttle((text) => {
-    setInputDOM(text)
+    if (!markdownMode.value) {
+      setInputDOM(text)
+    }
     voiceHint.value = text
   }, 80)
   offVoiceTranscript = EventsOn('voice:transcript', voiceTranscriptHandler)
@@ -764,8 +768,15 @@ onMounted(async () => {
   })
 
   offVoiceFinal = EventsOn('voice:final', (text) => {
-    setInputDOM(text)
     voiceHint.value = ''
+    if (markdownMode.value) {
+      vditorInstance?.setValue(text)
+      vditorInstance?.focus()
+      inputEmpty.value = !text.trim()
+    } else {
+      setInputDOM(text)
+      nextTick(() => textareaEl.value?.focus())
+    }
     if (voiceAutoSend.value && text.trim()) {
       send()
     }
@@ -1333,6 +1344,14 @@ function initVditor() {
     placeholder: '发消息...',
     preview: {
       theme: { current: 'dark' },
+    },
+    keydown(e) {
+      // Enter (no modifier) sends the message, same as the textarea behavior.
+      // Shift+Enter is Vditor's soft-break; leave it intact.
+      if (!e.isComposing && e.keyCode !== 229 && e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        send()
+      }
     },
     input() {
       // keep inputEmpty in sync so the send button enables
