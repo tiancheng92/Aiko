@@ -1765,8 +1765,8 @@ defineExpose({ focusInput, scrollToBottom })
       />
       <div
         v-show="markdownMode"
-        ref="vditorEl"
-        class="vditor-wrap"
+        ref="milkdownEl"
+        class="milkdown-wrap"
       />
       <div class="input-toolbar" @contextmenu.stop.prevent>
         <div class="chat-opts-chips">
@@ -3314,8 +3314,8 @@ body > .lightbox .lightbox-img {
 .md-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .md-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-/* Vditor editor container */
-.vditor-wrap {
+/* Milkdown editor container */
+.milkdown-wrap {
   width: 100%;
   box-sizing: border-box;
   min-height: 80px;
@@ -3327,39 +3327,34 @@ body > .lightbox .lightbox-img {
   cursor: text;
 }
 
-/* Override Vditor internals to match app theme */
-.vditor-wrap :deep(.vditor) {
+/* Override Milkdown/Crepe internals to match app theme */
+.milkdown-wrap :deep(.milkdown) {
   background: transparent;
-  border: none;
   box-shadow: none;
-  min-height: 80px;
-}
-.vditor-wrap :deep(.vditor-toolbar) {
-  display: none !important;
-}
-.vditor-wrap :deep(.vditor-ir) {
-  background: transparent;
   padding: 10px 12px 6px;
   font-size: 13px;
   font-family: inherit;
   line-height: 1.55;
   color: var(--text-primary);
   min-height: 80px;
-  user-select: text;
-  -webkit-user-select: text;
 }
-.vditor-wrap :deep([contenteditable]) {
+.milkdown-wrap :deep(.ProseMirror) {
+  background: transparent;
+  outline: none;
+  min-height: 80px;
   user-select: text;
   -webkit-user-select: text;
   pointer-events: auto;
   cursor: text;
 }
-.vditor-wrap :deep(.vditor-ir pre.vditor-reset) {
-  background: transparent;
-  padding: 0;
+.milkdown-wrap :deep(.ProseMirror p.is-empty::before) {
+  color: var(--text-placeholder, #666);
 }
-.vditor-wrap :deep(.vditor-reset) {
-  color: var(--text-primary);
+/* Hide Crepe frame/toolbar decorations */
+.milkdown-wrap :deep(.crepe-toolbar),
+.milkdown-wrap :deep(.crepe-block-handle),
+.milkdown-wrap :deep(.block-handle) {
+  display: none !important;
 }
 
 /* Pending file chips above input */
