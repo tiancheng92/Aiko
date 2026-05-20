@@ -26,8 +26,6 @@ github.com/cloudwego/base64x v0.1.7 h1:NppS+Fgzg5ovhn4NkUXaDT3x9jldgH5ToMCqzBSi2
 github.com/cloudwego/base64x v0.1.7/go.mod h1:Cu1PV9zfrSf7ET2tIbWbbEy7jO7HHJ13q4X2SQ8aWYg=
 github.com/cloudwego/eino v0.8.13 h1:z5dhaZNN8TWZbP/lgKxGmF26Ii8fPeUlQCGV/NTtms0=
 github.com/cloudwego/eino v0.8.13/go.mod h1:+2N4nsMPxA6kGBHpH+75JuTfEcGprAMTdsZESrShKpU=
-github.com/cloudwego/eino-ext/adk/backend/local v0.2.4 h1:ye0iTpR8G2P4A2SZjRsxKmTj62iIpZs0eBH65vmeU2k=
-github.com/cloudwego/eino-ext/adk/backend/local v0.2.4/go.mod h1:os5Tq5FuSoz/MLqAdZER3ip49Oef9prc0kVsKsPYO48=
 github.com/cloudwego/eino-ext/components/embedding/openai v0.0.0-20260513082551-3da946a1ddee h1:fRfHrChh5nbZUm9U1EkLxLuhFgnYAbxerrddMb1tiFo=
 github.com/cloudwego/eino-ext/components/embedding/openai v0.0.0-20260513082551-3da946a1ddee/go.mod h1:zyPrZT2bO6LyRJgVksQowR18jVgyLSvqK93hnO53/Lc=
 github.com/cloudwego/eino-ext/components/model/openai v0.1.13 h1:5XHRTiTD5bt9KQrMHcfvuWNklEC3tpm3XHejdozt9vM=

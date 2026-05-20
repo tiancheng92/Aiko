@@ -5,6 +5,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/cloudwego/eino/compose"
 	"github.com/rs/zerolog/log"
 )
 
@@ -18,7 +19,11 @@ func Logging() Middleware {
 			out, err := next(ctx, input)
 			elapsed := time.Since(start)
 			if err != nil {
-				log.Error().Str("tool", name).Str("args", input).Err(err).Dur("elapsed", elapsed).Msg("tool invocation failed")
+				if _, ok := compose.IsInterruptRerunError(err); ok {
+					log.Warn().Str("tool", name).Str("args", input).Err(err).Dur("elapsed", elapsed).Msg("tool invocation failed")
+				} else {
+					log.Error().Str("tool", name).Str("args", input).Err(err).Dur("elapsed", elapsed).Msg("tool invocation failed")
+				}
 			} else {
 				log.Debug().Str("tool", name).Str("result", out).Dur("elapsed", elapsed).Msg("tool result")
 			}

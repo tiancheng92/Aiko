@@ -5,7 +5,6 @@ go 1.26.3
 require (
 	github.com/bytedance/sonic v1.15.1
 	github.com/cloudwego/eino v0.8.13
-	github.com/cloudwego/eino-ext/adk/backend/local v0.2.4
 	github.com/cloudwego/eino-ext/components/embedding/openai v0.0.0-20260513082551-3da946a1ddee
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.13
 	github.com/cloudwego/eino-ext/components/model/openrouter v0.1.10

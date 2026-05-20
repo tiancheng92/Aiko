@@ -204,6 +204,31 @@ func (a *Agent) ChatDirect(ctx context.Context, prompt string) <-chan StreamResu
 	return ch
 }
 
+// ChatDirectSave sends a prompt to the agent without loading conversation context,
+// but persists the exchange to short/long-term memory after completion.
+// Used by scheduled jobs that have SaveToMemory=true: the job result is recorded
+// in history without injecting prior chat history into the prompt.
+func (a *Agent) ChatDirectSave(ctx context.Context, prompt string) <-chan StreamResult {
+	ch := make(chan StreamResult, streamResultBufSize)
+
+	go func() {
+		defer close(ch)
+		defer func() {
+			if r := recover(); r != nil {
+				ch <- StreamResult{Err: fmt.Errorf("agent panic: %v", r)}
+			}
+		}()
+		fullResponse, thinkingContent, toolImgs, toolCallCount, ok := drainRunner(ctx, a.runner, prompt, ch, a.pendingConfirms, a.emitEvent, fmt.Sprintf("direct-save-%d", time.Now().UnixNano()), "default", a.cfg.LLMProvider)
+		if !ok {
+			return
+		}
+		ch <- StreamResult{Done: true}
+		go a.persistAndMigrate(context.Background(), prompt, nil, nil, fullResponse, thinkingContent, toolImgs, toolCallCount, false)
+	}()
+
+	return ch
+}
+
 // ChatDirectCollect sends a prompt to the agent, collects the full response
 // as a string, and returns it. Unlike ChatDirect, no Wails events are emitted.
 // Used by the ProactiveEngine when the chat panel is closed.

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	json "github.com/bytedance/sonic"
 	"fmt"
 	"io"
 	"os"
@@ -13,10 +12,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rs/zerolog/log"
-	chromem "github.com/philippgille/chromem-go"
+	json "github.com/bytedance/sonic"
+
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
+	chromem "github.com/philippgille/chromem-go"
+	"github.com/rs/zerolog/log"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"aiko/internal/agent"
@@ -32,8 +33,8 @@ import (
 	"aiko/internal/scheduler"
 	"aiko/internal/skill"
 	"aiko/internal/sms"
-	"aiko/internal/tts"
 	internaltools "aiko/internal/tools"
+	"aiko/internal/tts"
 )
 
 // App is the main application struct. All exported methods are Wails bindings.
@@ -42,32 +43,32 @@ type App struct {
 	sqlDB        *sql.DB
 	configStore  *config.Store
 	profileStore *config.ProfileStore
-	cfg         *config.Config
-	vectorDB    *chromem.DB
-	shortMem    *memory.ShortStore
-	permStore   *internaltools.PermissionStore
-	mcpStore    *mcp.ServerStore
+	cfg          *config.Config
+	vectorDB     *chromem.DB
+	shortMem     *memory.ShortStore
+	permStore    *internaltools.PermissionStore
+	mcpStore     *mcp.ServerStore
 
 	// mu guards fields that may be replaced on config save while agent goroutines run.
-	mu           sync.RWMutex
-	activeScreen ScreenInfo // current screen under the mouse cursor, guarded by mu
-	scheduler    *scheduler.Scheduler
-	longMem     *memory.LongStore
-	knowledgeSt *knowledge.Store
-	petAgent    *agent.Agent
-	smsWatcher      *sms.Watcher // guarded by mu
-	chatCancel      context.CancelFunc // cancels the current in-flight SendMessage; guarded by mu
-	chatGeneration  uint64             // incremented on each SendMessage; used to avoid stale cancel nils
-	ttsSpeaker      tts.Speaker        // current TTS backend; replaced on profile switch
-	ttsBackendKey   string             // backend key; guards against redundant reloads
-	ttsCancel       context.CancelFunc // cancels in-flight SpeakText; guarded by mu
-	ttsGeneration   uint64             // incremented on each SpeakText call; used to avoid stale cancel nils
-	isChatVisible   bool               // tracks whether the chat panel is open; guarded by mu
-	proactiveEngine *proactive.ProactiveEngine
-	mcpClosers      []io.Closer // guarded by mu; closed and rebuilt on initLLMComponents
-	llmTransport    *llm.ErrorBodyTransport // captures raw error bodies from the active LLM HTTP client; guarded by mu
-	chatModel       model.ToolCallingChatModel // current chat model; guarded by mu; reused by rebuildAgentTools
-	rebuildGen      atomic.Int64              // incremented on each initLLMComponents; guards stale async MCP results
+	mu                   sync.RWMutex
+	activeScreen         ScreenInfo // current screen under the mouse cursor, guarded by mu
+	scheduler            *scheduler.Scheduler
+	longMem              *memory.LongStore
+	knowledgeSt          *knowledge.Store
+	petAgent             *agent.Agent
+	smsWatcher           *sms.Watcher       // guarded by mu
+	chatCancel           context.CancelFunc // cancels the current in-flight SendMessage; guarded by mu
+	chatGeneration       uint64             // incremented on each SendMessage; used to avoid stale cancel nils
+	ttsSpeaker           tts.Speaker        // current TTS backend; replaced on profile switch
+	ttsBackendKey        string             // backend key; guards against redundant reloads
+	ttsCancel            context.CancelFunc // cancels in-flight SpeakText; guarded by mu
+	ttsGeneration        uint64             // incremented on each SpeakText call; used to avoid stale cancel nils
+	isChatVisible        bool               // tracks whether the chat panel is open; guarded by mu
+	proactiveEngine      *proactive.ProactiveEngine
+	mcpClosers           []io.Closer                // guarded by mu; closed and rebuilt on initLLMComponents
+	llmTransport         *llm.ErrorBodyTransport    // captures raw error bodies from the active LLM HTTP client; guarded by mu
+	chatModel            model.ToolCallingChatModel // current chat model; guarded by mu; reused by rebuildAgentTools
+	rebuildGen           atomic.Int64               // incremented on each initLLMComponents; guards stale async MCP results
 	runningCmds          sync.Map
 	pendingConfirms      sync.Map
 	watcherWG            sync.WaitGroup     // tracks background watchers started in startup
@@ -345,7 +346,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 				"name":   job.Name,
 				"prompt": job.Prompt,
 			})
-			ch = ag.Chat(ctx, job.Prompt, agent.ChatOptions{UseKnowledge: true, UseMemory: true})
+			ch = ag.ChatDirectSave(ctx, job.Prompt)
 		} else {
 			ch = ag.ChatDirect(ctx, job.Prompt)
 		}
@@ -634,4 +635,3 @@ func (a *App) shutdown(_ context.Context) {
 		}
 	}
 }
-

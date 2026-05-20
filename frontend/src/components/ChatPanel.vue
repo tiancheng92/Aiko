@@ -1198,14 +1198,16 @@ function scrollToBottom() {
 }
 
 let _thinkingScrollRafPending = false
-/** scrollThinkingToBottom scrolls the expanded thinking block body to its bottom; coalesced via rAF. */
+/** scrollThinkingToBottom scrolls the expanded thinking block body to its bottom; waits for Vue DOM flush then rAF. */
 function scrollThinkingToBottom() {
   if (_thinkingScrollRafPending) return
   _thinkingScrollRafPending = true
-  requestAnimationFrame(() => {
-    _thinkingScrollRafPending = false
-    const body = messagesEl.value?.querySelector('.thinking-block-body.expanded')
-    if (body) body.scrollTop = body.scrollHeight
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      _thinkingScrollRafPending = false
+      const body = messagesEl.value?.querySelector('.thinking-block-body.expanded')
+      if (body) body.scrollTop = body.scrollHeight
+    })
   })
 }
 
