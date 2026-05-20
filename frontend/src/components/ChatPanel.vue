@@ -439,6 +439,7 @@ let offToken, offDone, offError, offClear, offProactiveStart, offProactiveMessag
 let offTTSDone, offTTSError, offTTSAudio
 let offSoundsChanged
 let offAvatarChanged
+let offModelChanged
 let offVoiceStart, offVoiceTranscript, offVoiceEnd, offVoiceFinal, offVoiceError, offVoiceAutoSend
 let offUpdateProgress, offUpdateError
 let voiceTranscriptHandler, updateProgressHandler
@@ -686,6 +687,21 @@ onMounted(async () => {
     else if (role === 'user') userAvatar.value = dataURL || ''
   })
 
+  offModelChanged = EventsOn('config:model:changed', async () => {
+    try {
+      const prevProvider = cfg.value?.LLMProvider
+      cfg.value = await GetConfig()
+      if (cfg.value?.LLMProvider !== prevProvider) {
+        const validLevels = cfg.value?.LLMProvider === 'openrouter'
+          ? ['default', 'off', 'low', 'medium', 'high']
+          : ['default', 'low', 'medium', 'high']
+        if (!validLevels.includes(thinkingLevel.value)) {
+          thinkingLevel.value = 'default'
+        }
+      }
+    } catch {}
+  })
+
   offSoundsChanged = EventsOn('config:sounds:changed', (val) => {
     soundsEnabled = val
   })
@@ -800,7 +816,7 @@ onUnmounted(() => {
   offToken?.(); offDone?.(); offError?.(); offClear?.(); offImage?.(); offThinking?.()
   offProactiveStart?.(); offProactiveMessage?.(); offCronStart?.(); offSystemInject?.()
   offTTSDone?.(); offTTSError?.(); offTTSAudio?.()
-  offSoundsChanged?.(); offAvatarChanged?.()
+  offSoundsChanged?.(); offAvatarChanged?.(); offModelChanged?.()
   offVoiceStart?.(); offVoiceTranscript?.(); offVoiceEnd?.(); offVoiceFinal?.(); offVoiceError?.(); offVoiceAutoSend?.()
   voiceTranscriptHandler?.cancel?.()
   offUpdateProgress?.(); offUpdateError?.()
