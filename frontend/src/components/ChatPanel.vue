@@ -1324,12 +1324,11 @@ function resetTextareaHeight() {
 
 /** initVditor creates a Vditor ir-mode instance mounted on vditorEl. */
 function initVditor() {
-  if (!vditorEl.value) return
+  if (!vditorEl.value || vditorInstance) return
   vditorInstance = new Vditor(vditorEl.value, {
     mode: 'ir',
     theme: 'dark',
     toolbar: [],
-    height: 'auto',
     minHeight: 80,
     placeholder: '发消息...',
     preview: {
@@ -1360,6 +1359,7 @@ function toggleMarkdownMode() {
     destroyVditor()
     nextTick(() => textareaEl.value?.focus())
   } else {
+    inputEmpty.value = true
     markdownMode.value = true
     nextTick(() => initVditor())
   }
