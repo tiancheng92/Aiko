@@ -785,7 +785,9 @@ onMounted(async () => {
   offVoiceError = EventsOn('voice:error', (errMsg) => {
     isRecording.value = false
     voiceHint.value = ''
-    setInputDOM('')
+    if (!markdownMode.value) {
+      setInputDOM('')
+    }
     EventsEmit('notification:show', {
       title: '🎙️ 语音识别失败',
       message: errMsg === 'mic_denied'
@@ -1341,6 +1343,7 @@ function initVditor() {
     theme: 'dark',
     toolbar: [],
     minHeight: 80,
+    resize: { enable: false },
     placeholder: '发消息...',
     preview: {
       theme: { current: 'dark' },
