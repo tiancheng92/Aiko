@@ -13,6 +13,8 @@ import ToolConfirmModal from './ToolConfirmModal.vue'
 import ExecutionProgress from './ExecutionProgress.vue'
 import LinkPreview from './LinkPreview.vue'
 import ContextMenu from './ContextMenu.vue'
+import Vditor from 'vditor'
+import 'vditor/dist/index.css'
 
 /** __tr opens the row-detail modal for a clicked table row. */
 window.__tr = (rowEl) => {
@@ -357,6 +359,12 @@ function checkBubbleCollapse(m, i, fromHistory = false) {
   }
 }
 const textareaEl = ref(null)
+/** markdownMode is true when the Vditor editor is active instead of the textarea. */
+const markdownMode = ref(false)
+/** vditorEl is the DOM element Vditor mounts into. */
+const vditorEl = ref(null)
+/** vditorInstance holds the active Vditor instance, or null when not in markdown mode. */
+let vditorInstance = null
 /** lpExpanded tracks whether the extra link previews are shown for each message (keyed by msgKey). */
 const lpExpanded = ref({})
 const isRecording = ref(false)
@@ -811,6 +819,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  destroyVditor()
   // Invoke every EventsOn teardown; undefined entries are safely skipped via
   // optional chaining so a partial mount (e.g. early error) does not throw here.
   offToken?.(); offDone?.(); offError?.(); offClear?.(); offImage?.(); offThinking?.()
@@ -1131,10 +1140,16 @@ async function persistChatOptions() {
 
 /** send submits the current input as a user message. */
 async function send() {
-  const text = getInput().trim()
+  const text = markdownMode.value
+    ? (vditorInstance?.getValue().trim() ?? '')
+    : getInput().trim()
   if ((!text && pendingImages.value.length === 0 && pendingFiles.value.length === 0) || loading.value) return
-  setInputDOM('')
-  resetTextareaHeight()
+  if (markdownMode.value) {
+    destroyVditor()
+  } else {
+    setInputDOM('')
+    resetTextareaHeight()
+  }
   loading.value = true
   isStreaming.value = true
   firstTokenThisTurn = true
@@ -1302,8 +1317,52 @@ function autoResize() {
 
 /** resetTextareaHeight resets the textarea to single-line height after send. */
 function resetTextareaHeight() {
+  if (markdownMode.value) return
   const el = textareaEl.value
   if (el) el.style.height = 'auto'
+}
+
+/** initVditor creates a Vditor ir-mode instance mounted on vditorEl. */
+function initVditor() {
+  if (!vditorEl.value) return
+  vditorInstance = new Vditor(vditorEl.value, {
+    mode: 'ir',
+    theme: 'dark',
+    toolbar: [],
+    height: 'auto',
+    minHeight: 80,
+    placeholder: '发消息...',
+    preview: {
+      theme: { current: 'dark' },
+    },
+    input() {
+      // keep inputEmpty in sync so the send button enables
+      const empty = !vditorInstance?.getValue().trim()
+      if (inputEmpty.value !== empty) inputEmpty.value = empty
+    },
+    after() {
+      vditorInstance?.focus()
+    },
+  })
+}
+
+/** destroyVditor tears down the Vditor instance and resets state. */
+function destroyVditor() {
+  vditorInstance?.destroy()
+  vditorInstance = null
+  markdownMode.value = false
+  inputEmpty.value = true
+}
+
+/** toggleMarkdownMode switches between the textarea and Vditor editor. */
+function toggleMarkdownMode() {
+  if (markdownMode.value) {
+    destroyVditor()
+    nextTick(() => textareaEl.value?.focus())
+  } else {
+    markdownMode.value = true
+    nextTick(() => initVditor())
+  }
 }
 
 defineExpose({ focusInput, scrollToBottom })
