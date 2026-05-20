@@ -366,6 +366,8 @@ const markdownMode = ref(false)
 const milkdownEl = ref(null)
 /** milkdownInstance holds the active Crepe instance, or null when not in markdown mode. */
 let milkdownInstance = null
+/** milkdownEditorDom caches the ProseMirror DOM node for reliable keydown listener cleanup. */
+let milkdownEditorDom = null
 /** lpExpanded tracks whether the extra link previews are shown for each message (keyed by msgKey). */
 const lpExpanded = ref({})
 const isRecording = ref(false)
@@ -1158,7 +1160,7 @@ async function send() {
     : getInput().trim()
   if ((!text && pendingImages.value.length === 0 && pendingFiles.value.length === 0) || loading.value) return
   if (markdownMode.value) {
-    destroyMilkdown()
+    await destroyMilkdown()
   } else {
     setInputDOM('')
     resetTextareaHeight()
@@ -1369,11 +1371,9 @@ async function initMilkdown() {
     })
   })
   await milkdownInstance.create()
-  const editorDom = milkdownEl.value?.querySelector('.ProseMirror')
-  if (editorDom) {
-    editorDom.addEventListener('keydown', onMilkdownKeydown)
-  }
-  milkdownEl.value?.querySelector('.ProseMirror')?.focus()
+  milkdownEditorDom = milkdownEl.value?.querySelector('.ProseMirror') ?? null
+  milkdownEditorDom?.addEventListener('keydown', onMilkdownKeydown)
+  milkdownEditorDom?.focus()
 }
 
 /** onMilkdownKeydown intercepts Enter (no modifier) to send the message. */
@@ -1387,25 +1387,25 @@ function onMilkdownKeydown(e) {
 
 /** destroyMilkdown tears down the Crepe instance and resets state. */
 async function destroyMilkdown() {
-  const editorDom = milkdownEl.value?.querySelector('.ProseMirror')
-  if (editorDom) {
-    editorDom.removeEventListener('keydown', onMilkdownKeydown)
-  }
-  await milkdownInstance?.destroy()
+  milkdownEditorDom?.removeEventListener('keydown', onMilkdownKeydown)
+  milkdownEditorDom = null
+  const inst = milkdownInstance
   milkdownInstance = null
   markdownMode.value = false
   inputEmpty.value = true
+  await inst?.destroy()
 }
 
 /** toggleMarkdownMode switches between the textarea and Milkdown editor. */
-function toggleMarkdownMode() {
+async function toggleMarkdownMode() {
   if (markdownMode.value) {
-    destroyMilkdown()
+    await destroyMilkdown()
     nextTick(() => textareaEl.value?.focus())
   } else {
     inputEmpty.value = true
     markdownMode.value = true
-    nextTick(() => initMilkdown())
+    await nextTick()
+    await initMilkdown()
   }
 }
 
