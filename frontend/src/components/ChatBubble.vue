@@ -210,8 +210,8 @@ const bubbleStyle = computed(() => {
     }
   }
   return {
-    left:   pos.value.x    + 'px',
-    top:    pos.value.y    + 'px',
+    left:   (overrideX.value ?? pos.value.x) + 'px',
+    top:    (overrideY.value ?? pos.value.y) + 'px',
     width:  bubbleW.value  + 'px',
     height: bubbleH.value  + 'px',
   }
@@ -268,39 +268,57 @@ const MIN_H = 320
 
 const isResizing = ref(false)
 let resizeDrag = null
+let resizeLastPos = null   // latest mouse coords from mousemove
+let resizeRafId = null     // pending requestAnimationFrame id
 
-/** startResize begins a drag-resize operation. */
+/** startResize begins a drag-resize operation from a given edge. */
 function startResize(e, edge) {
   if (isFullscreen.value) return
   isResizing.value = true
   document.body.classList.add('no-select')
+  // Clear stale overrides, then pin the appropriate edge per direction:
+  //   e → left pinned (overrideX set once and held)
+  //   s → bottom pinned (overrideY updated each frame in onResizeMove)
+  overrideX.value = null
+  overrideY.value = null
+  if (edge === 'e') overrideX.value = pos.value.x
   resizeDrag = {
     edge,
-    startX: e.clientX,
-    startY: e.clientY,
-    startW: bubbleW.value,
-    startH: bubbleH.value,
+    startX:       e.clientX,
+    startY:       e.clientY,
+    startW:       bubbleW.value,
+    startH:       bubbleH.value,
+    startBottomY: pos.value.y + bubbleH.value,  // for 's': bottom Y anchor
   }
   window.addEventListener('mousemove', onResizeMove)
   window.addEventListener('mouseup', onResizeUp)
   window.addEventListener('blur', onResizeUp)
 }
 
-/** onResizeMove updates bubble dimensions during drag. */
+/** onResizeMove records the latest pointer position and schedules a RAF flush. */
 function onResizeMove(e) {
   if (!resizeDrag) return
-  const dx = e.clientX - resizeDrag.startX
-  const dy = e.clientY - resizeDrag.startY
-  const { edge } = resizeDrag
-  if (edge === 'e' || edge === 'se') {
-    bubbleW.value = Math.max(MIN_W, resizeDrag.startW + dx)
-  }
-  if (edge === 'w') {
-    bubbleW.value = Math.max(MIN_W, resizeDrag.startW - dx)
-  }
-  if (edge === 's' || edge === 'se') {
-    bubbleH.value = Math.max(MIN_H, resizeDrag.startH + dy)
-  }
+  resizeLastPos = { x: e.clientX, y: e.clientY }
+  if (resizeRafId) return  // a frame is already queued, skip
+  resizeRafId = requestAnimationFrame(() => {
+    resizeRafId = null
+    if (!resizeDrag || !resizeLastPos) return
+    const dx = resizeLastPos.x - resizeDrag.startX
+    const dy = resizeLastPos.y - resizeDrag.startY
+    const { edge } = resizeDrag
+    // e: left pinned (overrideX), right extends right
+    if (edge === 'e') bubbleW.value = Math.max(MIN_W, resizeDrag.startW + dx)
+    // w: right pinned (pos formula), left extends left
+    if (edge === 'w') bubbleW.value = Math.max(MIN_W, resizeDrag.startW - dx)
+    // s: bottom pinned, top moves up/down (overrideY tracks the new top)
+    if (edge === 's') {
+      const newH = Math.max(MIN_H, resizeDrag.startH + dy)
+      bubbleH.value = newH
+      overrideY.value = resizeDrag.startBottomY - newH
+    }
+    // n: bottom pinned (pos formula), top extends up
+    if (edge === 'n') bubbleH.value = Math.max(MIN_H, resizeDrag.startH - dy)
+  })
 }
 
 /** onResizeUp finalizes resize and persists via SaveChatSize. */
@@ -308,6 +326,11 @@ function onResizeUp() {
   window.removeEventListener('mousemove', onResizeMove)
   window.removeEventListener('mouseup', onResizeUp)
   window.removeEventListener('blur', onResizeUp)
+  if (resizeRafId) {
+    cancelAnimationFrame(resizeRafId)
+    resizeRafId = null
+  }
+  resizeLastPos = null
   isResizing.value = false
   document.body.classList.remove('no-select')
   if (!resizeDrag) return
@@ -343,6 +366,19 @@ const pos = computed(() => {
   by = Math.max(MENU_BAR + MARGIN, Math.min(by, vh - bubbleH.value - MARGIN))
 
   return { x: bx, y: by }
+})
+
+// Position overrides for 'e'/'s' edge resizes — pin the opposite edge in place.
+// 'w' and 'n' edges don't need overrides: the pos formula naturally anchors
+// the opposite side (right / bottom) via bx = ballX+ballSize-bubbleW and
+// by = ballY-bubbleH-8.
+const overrideX = ref(null)
+const overrideY = ref(null)
+
+// Re-anchor to ball whenever the pet itself moves.
+watch(() => props.ballPos, () => {
+  overrideX.value = null
+  overrideY.value = null
 })
 
 // ─── Context menu ────────────────────────────────────────────────────────────
@@ -438,10 +474,10 @@ defineExpose({ focusInput, scrollToBottom })
     <ContextMenu ref="chatMenuRef" :items="chatMenuItems" />
     <!-- Resize handles — invisible drag strips, hidden in fullscreen -->
     <template v-if="!isFullscreen">
-      <div class="resize-handle resize-e"  @mousedown.stop="startResize($event, 'e')" />
-      <div class="resize-handle resize-s"  @mousedown.stop="startResize($event, 's')" />
-      <div class="resize-handle resize-w"  @mousedown.stop="startResize($event, 'w')" />
-      <div class="resize-handle resize-se" @mousedown.stop="startResize($event, 'se')" />
+      <div class="resize-handle resize-e" @mousedown.stop="startResize($event, 'e')" />
+      <div class="resize-handle resize-w" @mousedown.stop="startResize($event, 'w')" />
+      <div class="resize-handle resize-s" @mousedown.stop="startResize($event, 's')" />
+      <div class="resize-handle resize-n" @mousedown.stop="startResize($event, 'n')" />
     </template>
   </div>
 </template>
@@ -594,10 +630,10 @@ defineExpose({ focusInput, scrollToBottom })
   user-select: none;
   transition: opacity 0.2s ease;
 }
-.resize-e  { right: 0;  top: 6px; bottom: 6px; width: 6px; cursor: ew-resize; }
-.resize-w  { left: 0;   top: 6px; bottom: 6px; width: 6px; cursor: ew-resize; }
-.resize-s  { bottom: 0; left: 6px; right: 6px; height: 6px; cursor: ns-resize; }
-.resize-se { right: 0;  bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; }
+.resize-e { right: 0;  top: 6px; bottom: 6px; width: 6px;    cursor: ew-resize; }
+.resize-w { left: 0;   top: 6px; bottom: 6px; width: 6px;    cursor: ew-resize; }
+.resize-s { bottom: 0; left: 6px; right: 6px;  height: 6px;   cursor: ns-resize; }
+.resize-n { top: 0;    left: 6px; right: 6px;  height: 6px;   cursor: ns-resize; }
 /* Hide resize handles gracefully when in fullscreen */
 .chat-bubble.fullscreen .resize-handle { opacity: 0; pointer-events: none; }
 </style>
