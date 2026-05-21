@@ -2249,6 +2249,8 @@ img.msg-avatar {
 /* Assistant bubble — glass surface */
 .assistant .bubble {
   background: var(--lg-surface);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
   color: var(--text-primary);
   border-radius: 16px 16px 16px 4px;
   border: 1px solid var(--lg-border-subtle);
@@ -3282,6 +3284,8 @@ img.msg-avatar {
 .input-area {
   margin: 10px 12px;
   background: var(--lg-surface-input);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
   border: 1px solid var(--lg-border-subtle);
   border-radius: 12px;
   flex-shrink: 0;
