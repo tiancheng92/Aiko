@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { SendMessage, SendMessageWithImages, SendMessageWithFiles, GetMessages, GetMessagesBeforeID, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig, SaveConfig, RegenerateLastReply, GetSoundsEnabled, ReadClipboard } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 import { throttle, debounce } from '../utils/timing.js'
@@ -35,6 +35,8 @@ const closeColDrops = () => document.querySelectorAll('.tbl-col-drop--open').for
 const PAGE_SIZE = 10
 
 const messages = ref([])
+/** streamingFading holds message keys that are playing the shimmer fade-out animation after streaming ends. */
+const streamingFading = reactive(new Set())
 /** oldestLoadedID is the smallest message ID currently in the list; used for lazy-loading older pages. */
 let oldestLoadedID = null
 /** allLoaded is true when there are no more older messages to fetch. */
@@ -637,7 +639,12 @@ onMounted(async () => {
     typingScheduler.flush()
     const idx = messages.value.length - 1
     const lastMsg = messages.value[idx]
-    if (idx >= 0) messages.value[idx] = { ...messages.value[idx], streaming: false, thinkingExpanded: false, time: new Date() }
+    if (idx >= 0) {
+      const fadingKey = msgKey(messages.value[idx], idx)
+      streamingFading.add(fadingKey)
+      setTimeout(() => streamingFading.delete(fadingKey), 700)
+      messages.value[idx] = { ...messages.value[idx], streaming: false, thinkingExpanded: false, time: new Date() }
+    }
     loading.value = false
     isStreaming.value = false
     proactiveStarted = false
@@ -1529,10 +1536,10 @@ defineExpose({ focusInput, scrollToBottom })
                 </template>
               </div>
               <template v-else>
-                <div v-if="!m.thinkingContent && (m.thinking || (m.streaming && !renderMarkdown(m.content)))" :class="['bubble', 'thinking-bubble', { proactive: m.isProactive, streaming: m.streaming }]">
+                <div v-if="!m.thinkingContent && (m.thinking || (m.streaming && !renderMarkdown(m.content)))" :class="['bubble', 'thinking-bubble', { proactive: m.isProactive, streaming: m.streaming, 'streaming-fading': streamingFading.has(msgKey(m, i)) }]">
                   <span class="dot" /><span class="dot" /><span class="dot" />
                 </div>
-                <div v-if="!m.thinking || m.content || m.thinkingContent" :class="['bubble', 'markdown', { proactive: m.isProactive, streaming: m.streaming }]">
+                <div v-if="!m.thinking || m.content || m.thinkingContent" :class="['bubble', 'markdown', { proactive: m.isProactive, streaming: m.streaming, 'streaming-fading': streamingFading.has(msgKey(m, i)) }]">
                   <!-- ThinkingBlock: inside the bubble, at the top -->
                   <div v-if="m.thinkingContent" :class="['thinking-block', { 'thinking-streaming': m.streaming && !m.content, expanded: m.thinkingExpanded }]">
                     <div class="thinking-block-header" @click="toggleThinkingExpanded(i)">
@@ -2247,6 +2254,43 @@ img.msg-avatar {
   .assistant .bubble.streaming { border-color: var(--thinking-border-on); }
 }
 
+/* Shimmer fade-out — plays after streaming ends */
+.assistant .bubble.streaming-fading {
+  position: relative;
+  border-color: transparent;
+}
+.assistant .bubble.streaming-fading::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--shimmer-angle),
+    rgba(80,  200, 255, 0.90)   0%,
+    rgba(140, 100, 255, 0.85)  20%,
+    rgba(240,  80, 200, 0.80)  40%,
+    rgba(255, 160,  60, 0.80)  60%,
+    rgba(80,  230, 180, 0.85)  80%,
+    rgba(80,  200, 255, 0.90) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  padding: 1px;
+  pointer-events: none;
+  z-index: 0;
+  animation: shimmer-fadeout 0.7s ease-out forwards;
+}
+.assistant .bubble.streaming-fading > * { position: relative; z-index: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .assistant .bubble.streaming-fading::before { display: none; }
+}
+
 /* Thinking-bubble shimmer (same technique) */
 .assistant .thinking-bubble.streaming {
   position: relative;
@@ -2282,6 +2326,40 @@ img.msg-avatar {
 @media (prefers-reduced-motion: reduce) {
   .assistant .thinking-bubble.streaming::before { animation: none; }
   .assistant .thinking-bubble.streaming { border-color: var(--thinking-border-on); }
+}
+.assistant .thinking-bubble.streaming-fading {
+  position: relative;
+  border-color: transparent;
+}
+.assistant .thinking-bubble.streaming-fading::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--shimmer-angle),
+    rgba(80,  200, 255, 0.90)   0%,
+    rgba(140, 100, 255, 0.85)  20%,
+    rgba(240,  80, 200, 0.80)  40%,
+    rgba(255, 160,  60, 0.80)  60%,
+    rgba(80,  230, 180, 0.85)  80%,
+    rgba(80,  200, 255, 0.90) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  padding: 1px;
+  pointer-events: none;
+  z-index: 0;
+  animation: shimmer-fadeout 0.7s ease-out forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .assistant .thinking-bubble.streaming-fading::before { display: none; }
 }
 
 /* System / error bubble */
@@ -3828,6 +3906,12 @@ body > .lightbox .lightbox-img {
 
 @keyframes shimmer-spin {
   to { --shimmer-angle: 360deg; }
+}
+
+@keyframes shimmer-fadeout {
+  0%   { opacity: 1;   transform: scale(1);    }
+  60%  { opacity: 0.6; transform: scale(1.012); }
+  100% { opacity: 0;   transform: scale(1.025); }
 }
 
 /* Clear chat confirmation dialog (non-scoped — teleported to body) */
