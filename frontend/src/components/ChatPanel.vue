@@ -665,6 +665,7 @@ onMounted(async () => {
     const idx = messages.value.length - 1
     const lastMsg = messages.value[idx]
     if (idx >= 0) {
+      settleMessage(idx)
       const fadingKey = msgKey(messages.value[idx], idx)
       streamingFading.add(fadingKey)
       setTimeout(() => streamingFading.delete(fadingKey), 700)
@@ -699,6 +700,8 @@ onMounted(async () => {
 
   offError = EventsOn('chat:error', (err) => {
     typingScheduler.clear()
+    const errIdx = messages.value.findLastIndex(m => m.streaming)
+    if (errIdx >= 0) settleMessage(errIdx)
     const thinkIdx = messages.value.findLastIndex(m => m.thinking)
     if (thinkIdx >= 0) messages.value.splice(thinkIdx, 1)
     messages.value.push({ role: 'system', content: '错误: ' + err })
