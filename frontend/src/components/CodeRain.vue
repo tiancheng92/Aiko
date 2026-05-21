@@ -9,9 +9,11 @@ let resizeTimer = null
 const CHARS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#$%^&*'
 const CHARS_LEN   = CHARS.length
 const FONT_SIZE   = 14
+const COL_SPACING = 24   // column stride; wider than font = fewer, sparser columns
 const INTERVAL_MS = 50
 const FALL_SPEED  = 0.9
 const RESET_THRESHOLD = 0.97
+const DROP_CHANCE = 0.6  // probability per frame that a column emits a new character
 const HEAD_COLOR  = 'rgba(200, 255, 200, 1)'
 const TRAIL_COLOR = 'rgba(0, 255, 65, 1)'
 // Alpha multiplied per frame; 0.85^22 ≈ 0.03 → trail ~22 frames long
@@ -26,7 +28,7 @@ function initCanvas(canvas) {
   if (w === 0 || h === 0) return null
   canvas.width  = w
   canvas.height = h
-  const cols = Math.floor(w / FONT_SIZE)
+  const cols = Math.floor(w / COL_SPACING)
   return Array.from({ length: cols }, () => Math.random() * -(h / FONT_SIZE))
 }
 
@@ -53,16 +55,18 @@ function startAnimation(canvas) {
         if (trail[j].a < ALPHA_THRESHOLD) trail.splice(j, 1)
       }
 
-      // Add new head character at current drop position
+      // Add new head character with DROP_CHANCE probability
       const headY = drops[i] * FONT_SIZE
-      trail.push({ y: headY, char: CHARS[Math.floor(Math.random() * CHARS_LEN)], a: 1.0 })
+      if (Math.random() < DROP_CHANCE) {
+        trail.push({ y: headY, char: CHARS[Math.floor(Math.random() * CHARS_LEN)], a: 1.0 })
+      }
 
       // Draw all trail characters; the last entry is always the head
       for (let j = 0; j < trail.length; j++) {
         const t = trail[j]
         ctx.globalAlpha = t.a
         ctx.fillStyle = j === trail.length - 1 ? HEAD_COLOR : TRAIL_COLOR
-        ctx.fillText(t.char, i * FONT_SIZE, t.y)
+        ctx.fillText(t.char, i * COL_SPACING, t.y)
       }
 
       // Advance drop; reset to top when it leaves the bottom
