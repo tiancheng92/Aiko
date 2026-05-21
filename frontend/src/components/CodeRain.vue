@@ -8,7 +8,7 @@ let resizeTimer = null;
 let running = false;
 
 const CHARS =
-  "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン";
+  "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789";
 const CHARS_LEN = CHARS.length;
 const FONT_SIZE = 12;
 const COL_SPACING = 14;
