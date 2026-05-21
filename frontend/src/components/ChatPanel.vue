@@ -701,7 +701,10 @@ onMounted(async () => {
   offError = EventsOn('chat:error', (err) => {
     typingScheduler.clear()
     const errIdx = messages.value.findLastIndex(m => m.streaming)
-    if (errIdx >= 0) settleMessage(errIdx)
+    if (errIdx >= 0) {
+      settleMessage(errIdx)
+      messages.value[errIdx] = { ...messages.value[errIdx], streaming: false }
+    }
     const thinkIdx = messages.value.findLastIndex(m => m.thinking)
     if (thinkIdx >= 0) messages.value.splice(thinkIdx, 1)
     messages.value.push({ role: 'system', content: '错误: ' + err })
