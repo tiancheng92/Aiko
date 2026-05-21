@@ -1593,7 +1593,11 @@ defineExpose({ focusInput, scrollToBottom })
                     </div>
                   </div>
                   <div v-if="m.thinkingContent && (m.content || m.streaming)" class="thinking-divider" />
-                  <div v-if="m.content || m.streaming" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')" />
+                  <div v-if="m.displayHtml || (!m.streaming && m.content)" v-html="m.displayHtml || renderMarkdown(m.content)" />
+                  <template v-if="m.pendingTokens && m.pendingTokens.length">
+                    <span v-for="tok in m.pendingTokens" :key="tok.key" class="token-word">{{ tok.text }}</span>
+                  </template>
+                  <span v-if="m.streaming" class="stream-cursor">▋</span>
                   <template v-if="!m.streaming && !m.thinking && m.content">
                     <template v-if="extractUrls(m.content).length <= 1">
                       <LinkPreview v-for="u in extractUrls(m.content)" :key="u" :url="u" />
