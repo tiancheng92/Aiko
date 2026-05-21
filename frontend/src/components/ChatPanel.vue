@@ -2457,9 +2457,36 @@ img.msg-avatar {
 .stop-btn:active { transform: scale(0.95); }
 .stop-btn:focus-visible { outline: 2px solid var(--danger); outline-offset: 2px; }
 
-/* Cursor blink */
-.cursor { animation: blink 1s step-end infinite; }
-@keyframes blink { 50% { opacity: 0; } }
+/* Per-token pop animation */
+.token-word {
+  display: inline;
+  animation: token-word-appear 0.12s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+
+/* Rainbow pulse cursor — replaces old .cursor */
+@keyframes cursor-color {
+  0%   { color: rgba(80,  200, 255, 0.95); filter: drop-shadow(0 0 5px rgba(80,  200, 255, 0.65)); }
+  25%  { color: rgba(160, 100, 255, 0.95); filter: drop-shadow(0 0 5px rgba(160, 100, 255, 0.60)); }
+  50%  { color: rgba(240, 80,  200, 0.95); filter: drop-shadow(0 0 5px rgba(240, 80,  200, 0.60)); }
+  75%  { color: rgba(255, 160, 60,  0.95); filter: drop-shadow(0 0 5px rgba(255, 160, 60,  0.50)); }
+  100% { color: rgba(80,  200, 255, 0.95); filter: drop-shadow(0 0 5px rgba(80,  200, 255, 0.65)); }
+}
+@keyframes cursor-pulse {
+  0%, 100% { transform: scaleY(1);    opacity: 0.9; }
+  50%      { transform: scaleY(0.65); opacity: 0.5; }
+}
+.stream-cursor {
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 1px;
+  animation:
+    cursor-color 2s linear infinite,
+    cursor-pulse 0.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .token-word    { animation: none; }
+  .stream-cursor { animation: none; color: rgba(255, 255, 255, 0.7); }
+}
 
 /* Thinking dots */
 .thinking-bubble { display: flex; align-items: center; gap: 5px; padding: 12px 16px; }
@@ -3947,6 +3974,11 @@ body > .lightbox .lightbox-img {
 
 @keyframes shimmer-spin {
   to { --shimmer-angle: 360deg; }
+}
+
+@keyframes token-word-appear {
+  from { opacity: 0; transform: scale(0.88) translateY(2px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);   }
 }
 
 @keyframes shimmer-fadeout {
