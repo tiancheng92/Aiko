@@ -7,6 +7,7 @@ import { debounce } from '../utils/timing.js'
 import { ExportChatHistory, GetChatSize, PingLLM, SaveChatSize, GetConfig, ListModelProfiles } from '../../wailsjs/go/main/App'
 import { ICON_EXPORT, ICON_TRASH, ICON_SETTING } from '../utils/icons'
 import { springAnimate } from '../composables/useSpring.js'
+import CodeRain from './CodeRain.vue'
 
 const props = defineProps({
   ballPos:  { type: Object, default: () => ({ x: -1, y: -1 }) },
@@ -437,6 +438,7 @@ defineExpose({ focusInput, scrollToBottom })
     @mouseenter="clearTimeout(idleTimer)"
     @mouseleave="resetIdleTimer()"
   >
+    <CodeRain />
     <div class="title-bar" @contextmenu.stop.prevent>
       <svg class="title-logo" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <!-- large bubble (top-left) -->
@@ -485,9 +487,7 @@ defineExpose({ focusInput, scrollToBottom })
 <style scoped>
 .chat-bubble {
   position: fixed;
-  background: var(--lg-surface);
-  backdrop-filter: var(--lg-blur);
-  -webkit-backdrop-filter: var(--lg-blur);
+  background: #0a0a0a;
   border: 1px solid var(--lg-border-subtle);
   border-radius: 14px;
   box-shadow: var(--lg-shadow);
@@ -514,6 +514,8 @@ defineExpose({ focusInput, scrollToBottom })
 
 /* Title bar */
 .title-bar {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -618,6 +620,8 @@ defineExpose({ focusInput, scrollToBottom })
 }
 
 .content {
+  position: relative;
+  z-index: 1;
   flex: 1;
   overflow: hidden;
   display: flex;
