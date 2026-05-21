@@ -37,6 +37,7 @@ const PAGE_SIZE = 10
 const messages = ref([])
 /** streamingFading holds message keys that are playing the shimmer fade-out animation after streaming ends. */
 const streamingFading = reactive(new Set())
+let settleIntervalId = null
 /** oldestLoadedID is the smallest message ID currently in the list; used for lazy-loading older pages. */
 let oldestLoadedID = null
 /** allLoaded is true when there are no more older messages to fetch. */
@@ -408,6 +409,14 @@ const thinkingLevelLabel = computed(() => {
 
 const { playSend, playReceive, playError, playStop } = useSounds()
 let soundsEnabled = false
+
+/** settleMessage flushes pendingTokens into displayHtml for the message at idx. */
+function settleMessage(idx) {
+  const msg = messages.value[idx]
+  if (!msg || !msg.pendingTokens?.length) return
+  msg.displayHtml = renderMarkdown(msg.content)
+  msg.pendingTokens = []
+}
 
 /** applyToken appends a token to the last streaming assistant message. */
 function applyToken(token) {
@@ -840,6 +849,11 @@ onMounted(async () => {
     })
     resizeObserver.observe(messagesEl.value)
   }
+
+  settleIntervalId = setInterval(() => {
+    const idx = messages.value.findLastIndex(m => m.streaming)
+    if (idx >= 0) settleMessage(idx)
+  }, 500)
 })
 
 onUnmounted(() => {
@@ -865,6 +879,7 @@ onUnmounted(() => {
   // Cancel any in-flight spring animations.
   springCancels.forEach(cancel => cancel())
   springCancels.clear()
+  clearInterval(settleIntervalId)
   // Release table state accumulated from rendered markdown tables.
   window.__tableState = {}
 })
