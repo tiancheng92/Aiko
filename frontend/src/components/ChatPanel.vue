@@ -1529,10 +1529,10 @@ defineExpose({ focusInput, scrollToBottom })
                 </template>
               </div>
               <template v-else>
-                <div v-if="!m.thinkingContent && (m.thinking || (m.streaming && !renderMarkdown(m.content)))" :class="['bubble', 'thinking-bubble', { proactive: m.isProactive }]">
+                <div v-if="!m.thinkingContent && (m.thinking || (m.streaming && !renderMarkdown(m.content)))" :class="['bubble', 'thinking-bubble', { proactive: m.isProactive, streaming: m.streaming }]">
                   <span class="dot" /><span class="dot" /><span class="dot" />
                 </div>
-                <div v-if="!m.thinking || m.content || m.thinkingContent" :class="['bubble', 'markdown', { proactive: m.isProactive }]">
+                <div v-if="!m.thinking || m.content || m.thinkingContent" :class="['bubble', 'markdown', { proactive: m.isProactive, streaming: m.streaming }]">
                   <!-- ThinkingBlock: inside the bubble, at the top -->
                   <div v-if="m.thinkingContent" :class="['thinking-block', { 'thinking-streaming': m.streaming && !m.content, expanded: m.thinkingExpanded }]">
                     <div class="thinking-block-header" @click="toggleThinkingExpanded(i)">
@@ -2207,6 +2207,81 @@ img.msg-avatar {
 @media (prefers-reduced-motion: reduce) {
   .assistant .bubble { transition: none; }
   .assistant .bubble-wrap:hover .bubble { transform: none; }
+}
+
+/* Streaming shimmer border — rotating conic-gradient hollow border */
+.assistant .bubble.streaming {
+  position: relative;
+  border-color: transparent;
+}
+.assistant .bubble.streaming::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--shimmer-angle),
+    rgba(80,  200, 255, 0.90)   0%,
+    rgba(140, 100, 255, 0.85)  20%,
+    rgba(240,  80, 200, 0.80)  40%,
+    rgba(255, 160,  60, 0.80)  60%,
+    rgba(80,  230, 180, 0.85)  80%,
+    rgba(80,  200, 255, 0.90) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  padding: 1px;
+  animation: shimmer-spin 2s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+.assistant .bubble.streaming > * { position: relative; z-index: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .assistant .bubble.streaming::before { animation: none; }
+  .assistant .bubble.streaming { border-color: var(--thinking-border-on); }
+}
+
+/* Thinking-bubble shimmer (same technique) */
+.assistant .thinking-bubble.streaming {
+  position: relative;
+  border-color: transparent;
+}
+.assistant .thinking-bubble.streaming::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--shimmer-angle),
+    rgba(80,  200, 255, 0.90)   0%,
+    rgba(140, 100, 255, 0.85)  20%,
+    rgba(240,  80, 200, 0.80)  40%,
+    rgba(255, 160,  60, 0.80)  60%,
+    rgba(80,  230, 180, 0.85)  80%,
+    rgba(80,  200, 255, 0.90) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  padding: 1px;
+  animation: shimmer-spin 2s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .assistant .thinking-bubble.streaming::before { animation: none; }
+  .assistant .thinking-bubble.streaming { border-color: var(--thinking-border-on); }
 }
 
 /* System / error bubble */
@@ -3744,6 +3819,17 @@ body > .lightbox .lightbox-img {
 </style>
 
 <style>
+/* Shimmer border animation — must be global for @property + @keyframes */
+@property --shimmer-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes shimmer-spin {
+  to { --shimmer-angle: 360deg; }
+}
+
 /* Clear chat confirmation dialog (non-scoped — teleported to body) */
 .clear-confirm-overlay {
   position: absolute;
