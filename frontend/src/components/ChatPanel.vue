@@ -387,6 +387,8 @@ const userAvatar = ref('')  // data URL or '' (use default SVG)
 /** thinkingLevel is the current reasoning effort level for the next message. */
 const thinkingLevel = ref('default')
 const thinkingChipFired = ref(false)
+const knowledgeChipFired = ref(false)
+const memoryChipFired = ref(false)
 /** useKnowledge controls whether the knowledge base is queried for the next message. */
 const useKnowledge = ref(true)
 /** useMemory controls whether long-term memory is queried for the next message. */
@@ -1237,12 +1239,20 @@ async function cycleThinkingLevel() {
 /** Toggles knowledge base flag and persists. */
 async function toggleKnowledge() {
   useKnowledge.value = !useKnowledge.value
+  knowledgeChipFired.value = false
+  await nextTick()
+  knowledgeChipFired.value = true
+  setTimeout(() => { knowledgeChipFired.value = false }, 450)
   await persistChatOptions()
 }
 
 /** Toggles long-term memory flag and persists. */
 async function toggleMemory() {
   useMemory.value = !useMemory.value
+  memoryChipFired.value = false
+  await nextTick()
+  memoryChipFired.value = true
+  setTimeout(() => { memoryChipFired.value = false }, 450)
   await persistChatOptions()
 }
 
@@ -1907,7 +1917,7 @@ defineExpose({ focusInput, scrollToBottom })
             :disabled="loading"
             @click="toggleKnowledge"
             title="本次是否检索知识库"
-          ><span class="chip-icon" v-html="ICON_KNOWLEDGE"></span><span class="chip-label">知识库</span></button>
+          ><span class="chip-icon" :class="{ 'chip-icon--fired': knowledgeChipFired }" v-html="ICON_KNOWLEDGE"></span><span class="chip-label" :class="{ 'chip-label--fired': knowledgeChipFired }">知识库</span></button>
           <button
             v-if="cfg?.EmbeddingModel"
             class="chat-opt-chip"
@@ -1916,7 +1926,7 @@ defineExpose({ focusInput, scrollToBottom })
             :disabled="loading"
             @click="toggleMemory"
             title="本次是否检索长期记忆"
-          ><span class="chip-icon" v-html="ICON_MEMORY"></span><span class="chip-label">记忆</span></button>
+          ><span class="chip-icon" :class="{ 'chip-icon--fired': memoryChipFired }" v-html="ICON_MEMORY"></span><span class="chip-label" :class="{ 'chip-label--fired': memoryChipFired }">记忆</span></button>
         </div>
         <button
           class="md-btn"
