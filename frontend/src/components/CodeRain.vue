@@ -1,110 +1,141 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref } from "vue";
 
-const canvasEl = ref(null)
-let intervalId = null
-let observer = null
-let resizeTimer = null
+const canvasEl = ref(null);
+let rafId = null;
+let observer = null;
+let resizeTimer = null;
+let running = false;
 
-const CHARS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#$%^&*'
-const CHARS_LEN   = CHARS.length
-const FONT_SIZE   = 14
-const COL_SPACING = 24   // column stride; wider than font = fewer, sparser columns
-const INTERVAL_MS = 50
-const FALL_SPEED  = 0.9
-const RESET_THRESHOLD = 0.97
-const DROP_CHANCE = 0.6  // probability per frame that a column emits a new character
-const HEAD_COLOR  = 'rgba(200, 255, 200, 1)'
-const TRAIL_COLOR = 'rgba(0, 255, 65, 1)'
-// Alpha multiplied per frame; 0.85^22 ≈ 0.03 → trail ~22 frames long
-const TRAIL_DECAY     = 0.85
-const ALPHA_THRESHOLD = 0.03
+const CHARS =
+  "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン";
+const CHARS_LEN = CHARS.length;
+const FONT_SIZE = 14;
+const COL_SPACING = 24;
+const RESET_THRESHOLD = 0.97;
+const DROP_CHANCE = 0.6;
+const HEAD_COLOR = "rgba(200, 255, 200, 1)";
+const TRAIL_COLOR = "rgba(0, 255, 65, 0.5)";
+const ALPHA_THRESHOLD = 0.03;
 
-/** initCanvas sizes the canvas to its parent's dimensions and returns a per-column drops array. Returns null if size is not yet available. */
+// Time-based constants (per millisecond) for frame-rate independence
+// 18 rows/sec fall speed, ~1.1s trail fade (matches original 20fps feel)
+const FALL_PX_PER_MS    = (18 * FONT_SIZE) / 1000;
+const DECAY_PER_MS      = -Math.log(0.03) / 1100;   // ≈ 0.00324
+const EMIT_INTERVAL_MS  = 83;                         // ~12 chars/sec per column
+
+/** initCanvas sizes the canvas to its parent's dimensions. Returns null if size is not yet available. */
 function initCanvas(canvas) {
-  const parent = canvas.parentElement
-  const w = parent ? parent.clientWidth  : canvas.offsetWidth
-  const h = parent ? parent.clientHeight : canvas.offsetHeight
-  if (w === 0 || h === 0) return null
-  canvas.width  = w
-  canvas.height = h
-  const cols = Math.floor(w / COL_SPACING)
-  return Array.from({ length: cols }, () => Math.random() * -(h / FONT_SIZE))
+  const parent = canvas.parentElement;
+  const w = parent ? parent.clientWidth  : canvas.offsetWidth;
+  const h = parent ? parent.clientHeight : canvas.offsetHeight;
+  if (w === 0 || h === 0) return null;
+  canvas.width  = w;
+  canvas.height = h;
+  const cols = Math.floor(w / COL_SPACING);
+  const drops = Array.from({ length: cols }, () => ({
+    y:         Math.random() * -h,
+    emitTimer: Math.random() * EMIT_INTERVAL_MS,
+  }));
+  const trails = drops.map(() => []);
+  return { drops, trails };
 }
 
-/** startAnimation begins the matrix rain draw loop and returns the interval id, or null if canvas has no size. */
+/** startAnimation runs a rAF loop on the canvas. Call stopAnimation() to cancel. */
 function startAnimation(canvas) {
-  const ctx = canvas.getContext('2d')
-  const drops = initCanvas(canvas)
-  if (drops === null) return null
+  const ctx = canvas.getContext("2d");
+  const state = initCanvas(canvas);
+  if (!state) return;
+  const { drops, trails } = state;
 
-  ctx.font = FONT_SIZE + 'px monospace'
+  ctx.font = FONT_SIZE + "px monospace";
+  running = true;
+  let lastTime = null;
 
-  // trails[col] = [{y, char, a}] — characters with decreasing alpha
-  const trails = drops.map(() => [])
+  function frame(ts) {
+    if (!running) return;
+    if (lastTime === null) { lastTime = ts; rafId = requestAnimationFrame(frame); return; }
 
-  return setInterval(() => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    const dt = Math.min(ts - lastTime, 50); // cap delta to handle tab-hidden re-entry
+    lastTime = ts;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const decayFactor = Math.exp(-DECAY_PER_MS * dt);
 
     for (let i = 0; i < drops.length; i++) {
-      const trail = trails[i]
+      const drop  = drops[i];
+      const trail = trails[i];
 
-      // Decay alpha of existing trail entries; remove those below threshold
+      // Decay existing trail entries
       for (let j = trail.length - 1; j >= 0; j--) {
-        trail[j].a *= TRAIL_DECAY
-        if (trail[j].a < ALPHA_THRESHOLD) trail.splice(j, 1)
+        trail[j].a *= decayFactor;
+        if (trail[j].a < ALPHA_THRESHOLD) trail.splice(j, 1);
       }
 
-      // Add new head character with DROP_CHANCE probability
-      const headY = drops[i] * FONT_SIZE
-      if (Math.random() < DROP_CHANCE) {
-        trail.push({ y: headY, char: CHARS[Math.floor(Math.random() * CHARS_LEN)], a: 1.0 })
+      // Emit new head character on interval
+      drop.emitTimer += dt;
+      if (drop.emitTimer >= EMIT_INTERVAL_MS) {
+        drop.emitTimer -= EMIT_INTERVAL_MS;
+        if (Math.random() < DROP_CHANCE) {
+          trail.push({ y: drop.y, char: CHARS[Math.floor(Math.random() * CHARS_LEN)], a: 1.0 });
+        }
       }
 
-      // Draw all trail characters; the last entry is always the head
+      // Draw trail; last entry is always the head
       for (let j = 0; j < trail.length; j++) {
-        const t = trail[j]
-        ctx.globalAlpha = t.a
-        ctx.fillStyle = j === trail.length - 1 ? HEAD_COLOR : TRAIL_COLOR
-        ctx.fillText(t.char, i * COL_SPACING, t.y)
+        const t = trail[j];
+        ctx.globalAlpha = t.a;
+        ctx.fillStyle   = j === trail.length - 1 ? HEAD_COLOR : TRAIL_COLOR;
+        ctx.fillText(t.char, i * COL_SPACING, t.y);
       }
 
-      // Advance drop; reset to top when it leaves the bottom
-      if (drops[i] * FONT_SIZE > canvas.height && Math.random() > RESET_THRESHOLD) {
-        drops[i] = 0
-        trails[i] = []
+      // Advance drop; reset when it exits the bottom
+      drop.y += FALL_PX_PER_MS * dt;
+      if (drop.y > canvas.height && Math.random() > RESET_THRESHOLD) {
+        drop.y = -FONT_SIZE;
+        drop.emitTimer = 0;
+        trails[i] = [];
       }
-      drops[i] += FALL_SPEED
     }
 
-    ctx.globalAlpha = 1.0
-  }, INTERVAL_MS)
+    ctx.globalAlpha = 1.0;
+    rafId = requestAnimationFrame(frame);
+  }
+
+  rafId = requestAnimationFrame(frame);
+}
+
+/** stopAnimation cancels the running rAF loop. */
+function stopAnimation() {
+  running = false;
+  cancelAnimationFrame(rafId);
+  rafId = null;
 }
 
 onMounted(() => {
-  const canvas = canvasEl.value
-  const parent = canvas.parentElement
+  const canvas = canvasEl.value;
+  const parent = canvas.parentElement;
 
-  // Wait one rAF so flex layout has committed before reading dimensions.
   requestAnimationFrame(() => {
-    intervalId = startAnimation(canvas)
+    startAnimation(canvas);
 
     observer = new ResizeObserver(() => {
-      clearTimeout(resizeTimer)
+      clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
-        clearInterval(intervalId)
-        intervalId = startAnimation(canvas)
-      }, 16)
-    })
-    observer.observe(parent ?? canvas)
-  })
-})
+        stopAnimation();
+        startAnimation(canvas);
+      }, 16);
+    });
+    observer.observe(parent ?? canvas);
+  });
+});
 
 onUnmounted(() => {
-  clearInterval(intervalId)
-  clearTimeout(resizeTimer)
-  observer?.disconnect()
-})
+  stopAnimation();
+  clearTimeout(resizeTimer);
+  observer?.disconnect();
+});
 </script>
 
 <template>
