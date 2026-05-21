@@ -11,30 +11,51 @@ const CHARS =
   "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン";
 const CHARS_LEN = CHARS.length;
 const FONT_SIZE = 14;
-const COL_SPACING = 24;
+const COL_SPACING = 14;
 const RESET_THRESHOLD = 0.97;
-const DROP_CHANCE = 0.6;
-const HEAD_COLOR = "rgba(200, 255, 200, 1)";
-const TRAIL_COLOR = "rgba(0, 255, 65, 0.5)";
-const ALPHA_THRESHOLD = 0.03;
+const DROP_CHANCE = 0.7;
+const ALPHA_THRESHOLD  = 0.03;
 
 // Time-based constants (per millisecond) for frame-rate independence
 // 18 rows/sec fall speed, ~1.1s trail fade (matches original 20fps feel)
-const FALL_PX_PER_MS    = (18 * FONT_SIZE) / 1000;
-const DECAY_PER_MS      = -Math.log(0.03) / 1100;   // ≈ 0.00324
-const EMIT_INTERVAL_MS  = 83;                         // ~12 chars/sec per column
+const FALL_PX_PER_MS = (18 * FONT_SIZE) / 1000;
+const DECAY_PER_MS = -Math.log(0.03) / 1100; // ≈ 0.00324
+const EMIT_INTERVAL_MS = 83;
+
+// Pre-computed color LUTs (64 buckets) — avoids CSS string parsing on every draw
+// globalAlpha stays at 1.0; alpha is encoded directly in fillStyle strings
+const LUT_N     = 64;
+const LUT_TRAIL = Array.from({ length: LUT_N }, (_, i) =>
+  `rgba(0,255,65,${((i / (LUT_N - 1)) * 0.5).toFixed(3)})`);
+const LUT_HEAD  = Array.from({ length: LUT_N }, (_, i) =>
+  `rgba(200,255,200,${((i / (LUT_N - 1)) * 0.5).toFixed(3)})`);
+
+/** lutColor returns a pre-computed fillStyle string for a trail entry. */
+function lutColor(a, isHead) {
+  const idx = Math.min(LUT_N - 1, Math.round(a * (LUT_N - 1)));
+  return isHead ? LUT_HEAD[idx] : LUT_TRAIL[idx];
+}
+
+// Object pool — eliminates per-frame heap allocations and GC pauses
+const entryPool = [];
+function allocEntry(y, char) {
+  const e = entryPool.length > 0 ? entryPool.pop() : {};
+  e.y = y; e.char = char; e.a = 1.0;
+  return e;
+}
+function freeEntry(e) { entryPool.push(e); }
 
 /** initCanvas sizes the canvas to its parent's dimensions. Returns null if size is not yet available. */
 function initCanvas(canvas) {
   const parent = canvas.parentElement;
-  const w = parent ? parent.clientWidth  : canvas.offsetWidth;
+  const w = parent ? parent.clientWidth : canvas.offsetWidth;
   const h = parent ? parent.clientHeight : canvas.offsetHeight;
   if (w === 0 || h === 0) return null;
-  canvas.width  = w;
+  canvas.width = w;
   canvas.height = h;
   const cols = Math.floor(w / COL_SPACING);
   const drops = Array.from({ length: cols }, () => ({
-    y:         Math.random() * -h,
+    y: Math.random() * -h,
     emitTimer: Math.random() * EMIT_INTERVAL_MS,
   }));
   const trails = drops.map(() => []);
@@ -48,15 +69,16 @@ function startAnimation(canvas) {
   if (!state) return;
   const { drops, trails } = state;
 
-  ctx.font = FONT_SIZE + "px monospace";
+  ctx.font        = FONT_SIZE + "px monospace";
+  ctx.globalAlpha = 1.0; // fixed at 1; alpha encoded in LUT fillStyle strings
   running = true;
   let lastTime = null;
 
-  function frame(ts) {
+  function tick(ts) {
     if (!running) return;
-    if (lastTime === null) { lastTime = ts; rafId = requestAnimationFrame(frame); return; }
+    if (lastTime === null) { lastTime = ts; rafId = requestAnimationFrame(tick); return; }
 
-    const dt = Math.min(ts - lastTime, 50); // cap delta to handle tab-hidden re-entry
+    const dt = Math.min(ts - lastTime, 50);
     lastTime = ts;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -67,43 +89,48 @@ function startAnimation(canvas) {
       const drop  = drops[i];
       const trail = trails[i];
 
-      // Decay existing trail entries
-      for (let j = trail.length - 1; j >= 0; j--) {
+      // Decay + compact in one pass — no splice, no shifting, no GC
+      let write = 0;
+      for (let j = 0; j < trail.length; j++) {
         trail[j].a *= decayFactor;
-        if (trail[j].a < ALPHA_THRESHOLD) trail.splice(j, 1);
+        if (trail[j].a >= ALPHA_THRESHOLD) {
+          trail[write++] = trail[j];
+        } else {
+          freeEntry(trail[j]);
+        }
       }
+      trail.length = write;
 
-      // Emit new head character on interval
+      // Emit head character from pool
       drop.emitTimer += dt;
       if (drop.emitTimer >= EMIT_INTERVAL_MS) {
         drop.emitTimer -= EMIT_INTERVAL_MS;
         if (Math.random() < DROP_CHANCE) {
-          trail.push({ y: drop.y, char: CHARS[Math.floor(Math.random() * CHARS_LEN)], a: 1.0 });
+          trail.push(allocEntry(drop.y, CHARS[Math.floor(Math.random() * CHARS_LEN)]));
         }
       }
 
       // Draw trail; last entry is always the head
+      const last = trail.length - 1;
       for (let j = 0; j < trail.length; j++) {
         const t = trail[j];
-        ctx.globalAlpha = t.a;
-        ctx.fillStyle   = j === trail.length - 1 ? HEAD_COLOR : TRAIL_COLOR;
+        ctx.fillStyle = lutColor(t.a, j === last);
         ctx.fillText(t.char, i * COL_SPACING, t.y);
       }
 
       // Advance drop; reset when it exits the bottom
       drop.y += FALL_PX_PER_MS * dt;
       if (drop.y > canvas.height && Math.random() > RESET_THRESHOLD) {
-        drop.y = -FONT_SIZE;
+        for (const e of trail) freeEntry(e);
+        trail.length   = 0;
+        drop.y         = -FONT_SIZE;
         drop.emitTimer = 0;
-        trails[i] = [];
       }
     }
-
-    ctx.globalAlpha = 1.0;
-    rafId = requestAnimationFrame(frame);
   }
 
-  rafId = requestAnimationFrame(frame);
+  function loop(ts) { tick(ts); if (running) rafId = requestAnimationFrame(loop); }
+  rafId = requestAnimationFrame(loop);
 }
 
 /** stopAnimation cancels the running rAF loop. */
