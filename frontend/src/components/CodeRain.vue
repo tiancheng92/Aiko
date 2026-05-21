@@ -15,10 +15,11 @@ const RESET_THRESHOLD = 0.975
 const CHAR_COLOR = 'rgba(0, 255, 70, 0.85)'
 const FADE_COLOR = 'rgba(0, 0, 0, 0.05)'
 
-/** initCanvas sizes the canvas to match its CSS display size and resets the drops array. Returns null if canvas has no size yet. */
+/** initCanvas sizes the canvas to match its parent container and resets the drops array. Returns null if container has no size yet. */
 function initCanvas(canvas) {
-  const w = canvas.offsetWidth
-  const h = canvas.offsetHeight
+  const parent = canvas.parentElement
+  const w = parent ? parent.clientWidth  : canvas.offsetWidth
+  const h = parent ? parent.clientHeight : canvas.offsetHeight
   if (w === 0 || h === 0) return null
   canvas.width  = w
   canvas.height = h
@@ -52,16 +53,21 @@ function startAnimation(canvas) {
 
 onMounted(() => {
   const canvas = canvasEl.value
-  intervalId = startAnimation(canvas)
+  const parent = canvas.parentElement
 
-  observer = new ResizeObserver(() => {
-    clearTimeout(resizeTimer)
-    resizeTimer = setTimeout(() => {
-      clearInterval(intervalId)
-      intervalId = startAnimation(canvas)
-    }, 16)
+  // Wait one rAF so flex layout has committed before reading dimensions.
+  requestAnimationFrame(() => {
+    intervalId = startAnimation(canvas)
+
+    observer = new ResizeObserver(() => {
+      clearTimeout(resizeTimer)
+      resizeTimer = setTimeout(() => {
+        clearInterval(intervalId)
+        intervalId = startAnimation(canvas)
+      }, 16)
+    })
+    observer.observe(parent ?? canvas)
   })
-  observer.observe(canvas)
 })
 
 onUnmounted(() => {
