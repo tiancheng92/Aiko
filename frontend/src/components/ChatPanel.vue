@@ -14,8 +14,10 @@ import ExecutionProgress from './ExecutionProgress.vue'
 import LinkPreview from './LinkPreview.vue'
 import ContextMenu from './ContextMenu.vue'
 import { Crepe } from '@milkdown/crepe'
+import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame-dark.css'
 import { replaceAll } from '@milkdown/kit/utils'
+import { editorViewCtx } from '@milkdown/kit/core'
 
 /** __tr opens the row-detail modal for a clicked table row. */
 window.__tr = (rowEl) => {
@@ -979,6 +981,57 @@ function onTextareaContextMenu(e) {
   inputMenuRef.value?.show(e.clientX, e.clientY)
 }
 
+/** onMilkdownContextMenu shows copy/paste/cut menu for the Milkdown editor, mirroring textarea behavior. */
+function onMilkdownContextMenu(e) {
+  e.preventDefault()
+  e.stopPropagation()
+  if (!milkdownInstance) return
+  const selectedText = milkdownInstance.editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx)
+    const { state } = view
+    const { from, to } = state.selection
+    return from === to ? '' : state.doc.textBetween(from, to, '\n')
+  })
+  const hasSelection = !!selectedText
+  const items = []
+  if (hasSelection) {
+    items.push({
+      iconSvg: ICON_COPY,
+      label: '复制',
+      action: () => navigator.clipboard.writeText(selectedText),
+    })
+  }
+  items.push({
+    iconSvg: ICON_PASTE,
+    label: '粘贴',
+    action: async () => {
+      const text = await ReadClipboard().catch(() => '')
+      if (!text) return
+      milkdownInstance?.editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx)
+        const { state, dispatch } = view
+        dispatch(state.tr.replaceSelectionWith(state.schema.text(text)))
+      })
+    },
+  })
+  if (hasSelection) {
+    items.push({
+      iconSvg: ICON_CUT,
+      label: '剪切',
+      action: () => {
+        navigator.clipboard.writeText(selectedText)
+        milkdownInstance?.editor.action((ctx) => {
+          const view = ctx.get(editorViewCtx)
+          const { state, dispatch } = view
+          dispatch(state.tr.deleteSelection())
+        })
+      },
+    })
+  }
+  inputMenuItems.value = items
+  inputMenuRef.value?.show(e.clientX, e.clientY)
+}
+
 /** regenLastReply removes the last user+assistant bubbles, re-appends the user bubble, then re-requests. */
 async function regenLastReply(assistantIdx) {
   if (loading.value) return
@@ -1114,7 +1167,7 @@ function removeFile(idx) {
   pendingFiles.value.splice(idx, 1)
 }
 
-/** onEnterKey sends the message on Enter, but ignores Enter presses that
+/** onEnterKey sends the message on ⌘+Enter, but ignores Enter presses that
  * commit an IME composition (Chinese / Japanese / Korean input). Without
  * this guard, the Enter that closes the IME candidate panel would also
  * send a half-composed message. */
@@ -1303,7 +1356,7 @@ function focusInput() {
   nextTick(() => { textareaEl.value?.focus() })
 }
 
-/** insertNewline inserts a newline at the current cursor position (⌘+Enter). */
+/** insertNewline inserts a newline at the current cursor position (Enter). */
 function insertNewline() {
   const el = textareaEl.value
   if (!el) return
@@ -1338,11 +1391,11 @@ function resetTextareaHeight() {
 }
 
 /** initMilkdown creates a Crepe instance mounted on milkdownEl. */
-async function initMilkdown() {
+async function initMilkdown(initialContent = '') {
   if (!milkdownEl.value || milkdownInstance) return
   milkdownInstance = new Crepe({
     root: milkdownEl.value,
-    defaultValue: '',
+    defaultValue: initialContent,
     features: {
       [Crepe.Feature.Toolbar]: false,
       [Crepe.Feature.BlockEdit]: false,
@@ -1360,7 +1413,7 @@ async function initMilkdown() {
     featureConfigs: {
       [Crepe.Feature.Placeholder]: {
         text: '发消息...',
-        mode: 'block',
+        mode: 'doc',
       },
     },
   })
@@ -1372,21 +1425,29 @@ async function initMilkdown() {
   })
   await milkdownInstance.create()
   milkdownEditorDom = milkdownEl.value?.querySelector('.ProseMirror') ?? null
-  milkdownEditorDom?.addEventListener('keydown', onMilkdownKeydown)
-  milkdownEditorDom?.focus()
+  if (milkdownEditorDom) {
+    milkdownEditorDom.setAttribute('spellcheck', 'false')
+    milkdownEditorDom.setAttribute('autocorrect', 'off')
+    milkdownEditorDom.setAttribute('autocomplete', 'off')
+    milkdownEditorDom.setAttribute('autocapitalize', 'off')
+    milkdownEditorDom.setAttribute('writingsuggestions', 'false')
+    milkdownEditorDom.addEventListener('keydown', onMilkdownKeydown)
+    milkdownEditorDom.focus()
+  }
 }
 
-/** onMilkdownKeydown intercepts Enter (no modifier) to send the message. */
+/** onMilkdownKeydown intercepts Cmd+Enter to send the message. */
 function onMilkdownKeydown(e) {
-  if (!e.isComposing && e.keyCode !== 229 && e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+  if (!e.isComposing && e.keyCode !== 229 && e.key === 'Enter' && e.metaKey) {
     e.preventDefault()
     e.stopPropagation()
     send()
   }
 }
 
-/** destroyMilkdown tears down the Crepe instance and resets state. */
+/** destroyMilkdown tears down the Crepe instance and resets state. Returns the current markdown content. */
 async function destroyMilkdown() {
+  const md = milkdownInstance?.getMarkdown() ?? ''
   milkdownEditorDom?.removeEventListener('keydown', onMilkdownKeydown)
   milkdownEditorDom = null
   const inst = milkdownInstance
@@ -1394,18 +1455,23 @@ async function destroyMilkdown() {
   markdownMode.value = false
   inputEmpty.value = true
   await inst?.destroy()
+  return md
 }
 
-/** toggleMarkdownMode switches between the textarea and Milkdown editor. */
+/** toggleMarkdownMode switches between the textarea and Milkdown editor, carrying content across. */
 async function toggleMarkdownMode() {
   if (markdownMode.value) {
-    await destroyMilkdown()
-    nextTick(() => textareaEl.value?.focus())
+    const md = await destroyMilkdown()
+    await nextTick()
+    if (md.trim()) setInputDOM(md)
+    autoResize()
+    textareaEl.value?.focus()
   } else {
-    inputEmpty.value = true
+    const text = getInput()
+    setInputDOM('')
     markdownMode.value = true
     await nextTick()
-    await initMilkdown()
+    await initMilkdown(text)
   }
 }
 
@@ -1756,9 +1822,11 @@ defineExpose({ focusInput, scrollToBottom })
         spellcheck="false"
         autocorrect="off"
         autocomplete="off"
+        autocapitalize="off"
+        writingsuggestions="false"
         @input="autoResize"
-        @keydown.enter.exact="onEnterKey"
-        @keydown.meta.enter.prevent="insertNewline"
+        @keydown.meta.enter.prevent="onEnterKey"
+        @keydown.enter.exact.prevent="insertNewline"
         @paste="onPaste"
         @contextmenu.prevent="onTextareaContextMenu"
         :disabled="loading"
@@ -1767,12 +1835,14 @@ defineExpose({ focusInput, scrollToBottom })
         v-show="markdownMode"
         ref="milkdownEl"
         class="milkdown-wrap"
+        @contextmenu.prevent="onMilkdownContextMenu"
       />
       <div class="input-toolbar" @contextmenu.stop.prevent>
         <div class="chat-opts-chips">
           <button
             class="chat-opt-chip"
             :class="['thinking-' + thinkingLevel]"
+            :disabled="loading"
             @click="cycleThinkingLevel"
             title="思考等级"
           ><span class="chip-icon" v-html="ICON_THINKING"></span><span class="chip-label">{{ thinkingLevelLabel }}</span></button>
@@ -1781,6 +1851,7 @@ defineExpose({ focusInput, scrollToBottom })
             class="chat-opt-chip"
             :class="{ active: useKnowledge }"
             :aria-pressed="useKnowledge"
+            :disabled="loading"
             @click="toggleKnowledge"
             title="本次是否检索知识库"
           ><span class="chip-icon" v-html="ICON_KNOWLEDGE"></span><span class="chip-label">知识库</span></button>
@@ -1789,6 +1860,7 @@ defineExpose({ focusInput, scrollToBottom })
             class="chat-opt-chip"
             :class="{ active: useMemory }"
             :aria-pressed="useMemory"
+            :disabled="loading"
             @click="toggleMemory"
             title="本次是否检索长期记忆"
           ><span class="chip-icon" v-html="ICON_MEMORY"></span><span class="chip-label">记忆</span></button>
@@ -1811,12 +1883,12 @@ defineExpose({ focusInput, scrollToBottom })
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
         </button>
         <button v-if="isStreaming" class="stop-btn" aria-label="停止生成" @click="stopGeneration">⏹ 停止</button>
-        <button v-else class="send-btn" title="发送 (Enter)" aria-label="发送" @click="send" :disabled="loading || (inputEmpty && pendingImages.length === 0 && pendingFiles.length === 0)">
+        <button v-else class="send-btn" title="发送 (⌘Enter)" aria-label="发送" @click="send" :disabled="loading || (inputEmpty && pendingImages.length === 0 && pendingFiles.length === 0)">
           <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
       </div>
     </div>
-    <div class="input-hint">Enter 发送 · ⌘↩ 换行</div>
+    <div class="input-hint">⌘↩ 发送 · ↩ 换行</div>
   </div>
 </template>
 
@@ -1922,7 +1994,8 @@ defineExpose({ focusInput, scrollToBottom })
 .scroll-btn-leave-to { opacity: 0; transform: scale(0.7); }
 
 /* Lazy-load sentinel */
-.load-sentinel { height: 24px; display: flex; align-items: center; justify-content: center; }
+.load-sentinel { min-height: 0; display: flex; align-items: center; justify-content: center; }
+.load-sentinel:has(> *) { height: 24px; }
 .load-sentinel-dot {
   display: block;
   width: 6px; height: 6px;
@@ -1973,11 +2046,13 @@ img.msg-avatar {
 
 /* Wrap */
 .bubble-wrap { max-width: 82%; min-width: 0; display: flex; flex-direction: column; position: relative; }
-.msg.user .bubble-wrap { align-items: flex-end; }
+.msg.user .bubble-wrap { align-items: flex-end; max-width: 72%; }
+.msg.user .bubble { word-break: break-word; overflow-wrap: anywhere; min-width: 0; max-width: 100%; }
 
 /* Collapsible wrapper */
 .bubble-collapse-wrap {
   position: relative;
+  max-width: 100%;
 }
 /* Clip on `.bubble-row` (inline-flex → bubble width) so the fade anchors
    to the visible edge and respects the bubble's rounded corners. */
@@ -2064,7 +2139,7 @@ img.msg-avatar {
 .recollapse-btn:hover { color: var(--text-secondary); }
 
 /* Bubble row: relative container，按钮绝对定位不占空间 */
-.bubble-row { position: relative; display: inline-flex; max-width: 100%; }
+.bubble-row { position: relative; display: inline-flex; max-width: 100%; min-width: 0; }
 .msg.user .bubble-row { justify-content: flex-end; }
 .msg.assistant .bubble-row { justify-content: flex-start; flex-direction: column; align-items: flex-start; }
 
@@ -2345,6 +2420,10 @@ img.msg-avatar {
   border: 1px solid rgba(255,255,255,0.08);
   max-width: var(--code-max-width, 100%);
 }
+/* User bubbles: reset code-block max-width so it's bounded by the bubble's own 72% width; align code blocks to the right */
+
+.msg.user .bubble.markdown :deep(.code-block) { margin-left: auto; }
+
 .bubble.markdown :deep(.code-lang-icon) {
   display: inline-flex;
   align-items: center;
@@ -2438,6 +2517,79 @@ img.msg-avatar {
 }
 .user .bubble.markdown :deep(a) { color: #fff; text-decoration: underline; }
 
+/* ── User bubble markdown overrides (accent #2563EB background) ──────────── */
+/* Headings: pure white for max contrast */
+.user .bubble.markdown :deep(h1),
+.user .bubble.markdown :deep(h2) { color: #fff; }
+.user .bubble.markdown :deep(h3) { color: rgba(255,255,255,0.92); }
+/* HR: more visible divider */
+.user .bubble.markdown :deep(hr) { border-top-color: rgba(255,255,255,0.28); }
+/* Blockquote: white left bar + dark glass background */
+.user .bubble.markdown :deep(blockquote) {
+  border-left-color: rgba(255,255,255,0.55);
+  background: rgba(0,0,0,0.18);
+  color: rgba(255,255,255,0.88);
+}
+/* Code block wrapper */
+.user .bubble.markdown :deep(.code-block) {
+  border-color: rgba(255,255,255,0.22);
+}
+/* Code header: dark glass on blue */
+.user .bubble.markdown :deep(.code-header) {
+  background: rgba(0,0,0,0.22);
+  border-bottom-color: rgba(0,0,0,0.22);
+}
+/* Language label: muted white */
+.user .bubble.markdown :deep(.code-lang) { color: rgba(255,255,255,0.6); }
+/* Line number gutter */
+.user .bubble.markdown :deep(.line-nr) {
+  color: rgba(255,255,255,0.3);
+  border-right-color: rgba(255,255,255,0.15);
+}
+/* Copy button: white glass style */
+.user .bubble.markdown :deep(.code-copy) {
+  background: rgba(255,255,255,0.14);
+  color: #fff;
+  border-color: rgba(255,255,255,0.28);
+}
+.user .bubble.markdown :deep(.code-copy:hover) {
+  background: rgba(255,255,255,0.88);
+  color: #1d4ed8;
+  border-color: transparent;
+}
+/* Table: stronger borders & contrast on blue */
+.user .bubble.markdown :deep(.table-wrapper) {
+  border-color: rgba(255,255,255,0.28);
+}
+.user .bubble.markdown :deep(.tbl-filter-bar) {
+  background: rgba(0,0,0,0.14);
+  border-bottom-color: rgba(255,255,255,0.15);
+}
+.user .bubble.markdown :deep(.tbl-col-btn) {
+  background: rgba(0,0,0,0.2);
+  border-color: rgba(255,255,255,0.25);
+  color: rgba(255,255,255,0.9);
+}
+.user .bubble.markdown :deep(.tbl-col-btn:hover) { background: rgba(0,0,0,0.32); }
+.user .bubble.markdown :deep(.tbl-filter-input) {
+  background: rgba(0,0,0,0.2);
+  border-color: rgba(255,255,255,0.22);
+  color: #fff;
+}
+.user .bubble.markdown :deep(.tbl-filter-input::placeholder) { color: rgba(255,255,255,0.4); }
+.user .bubble.markdown :deep(.tbl-filter-input:focus) {
+  border-color: rgba(255,255,255,0.7);
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.15);
+}
+.user .bubble.markdown :deep(thead tr) { background: rgba(0,0,0,0.2); }
+.user .bubble.markdown :deep(th) { color: #fff; }
+.user .bubble.markdown :deep(th),
+.user .bubble.markdown :deep(td) { border-bottom-color: rgba(255,255,255,0.14); }
+.user .bubble.markdown :deep(tbody tr:nth-child(even)) { background: rgba(0,0,0,0.1); }
+.user .bubble.markdown :deep(tbody tr:hover) { background: rgba(0,0,0,0.18); }
+.user .bubble.markdown :deep(.sortable-th.sorted) { color: rgba(255,255,255,0.95); }
+/* ─────────────────────────────────────────────────────────────────────────── */
+
 /* Lists */
 .bubble.markdown :deep(ul), .bubble.markdown :deep(ol) { padding-left: 20px; margin: 4px 0 8px; }
 .bubble.markdown :deep(li) { margin: 3px 0; line-height: 1.6; }
@@ -2472,16 +2624,17 @@ img.msg-avatar {
   margin: 10px 0;
   border-radius: 8px;
   border: 1px solid rgba(255,255,255,0.1);
+  width: fit-content;
   max-width: 100%;
 }
 .bubble.markdown :deep(.tbl-scroll) {
   overflow-x: auto;
+  max-width: 100%;
 }
 .bubble.markdown :deep(table) {
   border-collapse: collapse;
   font-size: 13px;
   width: max-content;
-  min-width: 100%;
 }
 .bubble.markdown :deep(thead tr) {
   background: rgba(255,255,255,0.07);
@@ -2940,7 +3093,7 @@ img.msg-avatar {
 .chat-opts-chips {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   flex: 1;
 }
 
@@ -2948,17 +3101,21 @@ img.msg-avatar {
   display: inline-flex;
   align-items: center;
   gap: 0;
-  padding: 3px 7px;
-  border-radius: 12px;
+  height: 30px;
+  padding: 0 7px;
+  border-radius: 6px;
   font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
   cursor: pointer;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.06);
-  color: rgba(255,255,255,0.45);
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-tertiary);
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
   user-select: none;
   white-space: nowrap;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .chip-label {
@@ -2977,45 +3134,40 @@ img.msg-avatar {
 }
 
 .chat-opt-chip:hover {
-  background: rgba(255,255,255,0.1);
-  color: rgba(255,255,255,0.7);
+  background: var(--lg-surface-hover);
+  color: var(--text-secondary);
 }
 
-/* Toggle chips (knowledge / memory): active = accent-tinted, inactive = very dim */
+/* Toggle chips (knowledge / memory): active = accent-tinted */
 .chat-opt-chip.active {
-  background: rgba(37,99,235,0.18);
-  color: rgba(147,185,255,0.95);
-  border-color: rgba(37,99,235,0.45);
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-alpha-20);
+}
+.chat-opt-chip.active:hover {
+  background: var(--accent-alpha-20);
+  color: var(--accent);
 }
 
-.chat-opt-chip:not(.active):not([class*="thinking-"]) {
-  color: rgba(255,255,255,0.5);
-  border-color: rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.04);
-}
+.chat-opt-chip:disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
 
-.chat-opt-chip:not(.active):not([class*="thinking-"]):hover {
-  color: rgba(255,255,255,0.7);
-  border-color: rgba(255,255,255,0.18);
-  background: rgba(255,255,255,0.08);
-}
-
-.chat-opt-chip.thinking-off    { color: rgba(255,255,255,0.5); border-color: rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); }
-.chat-opt-chip.thinking-default{ color: rgba(255,255,255,0.55); border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.07); }
-.chat-opt-chip.thinking-low    { color: #4ade80; border-color: rgba(74,222,128,0.3);  background: rgba(74,222,128,0.08); }
-.chat-opt-chip.thinking-medium { color: #facc15; border-color: rgba(250,204,21,0.3);  background: rgba(250,204,21,0.08); }
-.chat-opt-chip.thinking-high   { color: #fb923c; border-color: rgba(251,146,60,0.3);  background: rgba(251,146,60,0.08); }
+/* Thinking level variants */
+.chat-opt-chip.thinking-off    { color: var(--text-tertiary); }
+.chat-opt-chip.thinking-default{ color: var(--text-secondary); border-color: rgba(255,255,255,0.18); background: rgba(255,255,255,0.06); }
+.chat-opt-chip.thinking-low    { color: #4ade80; border-color: rgba(74,222,128,0.45);  background: rgba(74,222,128,0.08); }
+.chat-opt-chip.thinking-medium { color: #facc15; border-color: rgba(250,204,21,0.45);  background: rgba(250,204,21,0.08); }
+.chat-opt-chip.thinking-high   { color: #fb923c; border-color: rgba(251,146,60,0.45);  background: rgba(251,146,60,0.08); }
 
 .chip-icon {
   display: inline-flex;
   align-items: center;
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
 }
 :deep(.chip-icon svg) {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
 }
 .input-hint {
   font-size: 11px;
@@ -3333,23 +3485,37 @@ body > .lightbox .lightbox-img {
   box-shadow: none;
   padding: 10px 12px 6px;
   font-size: 13px;
-  font-family: inherit;
   line-height: 1.55;
   color: var(--text-primary);
   min-height: 80px;
   user-select: text;
   -webkit-user-select: text;
+  /* Prevent Milkdown from loading external fonts (Noto Sans/Serif, Space Mono) */
+  --crepe-font-default: inherit;
+  --crepe-font-title: inherit;
+  --crepe-font-code: 'SFMono-Regular', 'Menlo', 'Monaco', 'Courier New', monospace;
 }
 .milkdown-wrap :deep(.ProseMirror) {
   background: transparent;
   outline: none;
   min-height: 80px;
   padding: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: inherit;
   user-select: text;
   -webkit-user-select: text;
   pointer-events: auto;
   cursor: text;
 }
+/* Compact prose font sizes — Milkdown's defaults are document-editor scale (16-42px) */
+.milkdown-wrap :deep(.milkdown .ProseMirror p) { font-size: 13px; line-height: 1.55; padding: 2px 0; }
+.milkdown-wrap :deep(.milkdown .ProseMirror h1) { font-size: 1.4em; line-height: 1.3; margin-top: 8px; }
+.milkdown-wrap :deep(.milkdown .ProseMirror h2) { font-size: 1.2em; line-height: 1.3; margin-top: 6px; }
+.milkdown-wrap :deep(.milkdown .ProseMirror h3) { font-size: 1.1em; line-height: 1.3; margin-top: 4px; }
+.milkdown-wrap :deep(.milkdown .ProseMirror h4),
+.milkdown-wrap :deep(.milkdown .ProseMirror h5),
+.milkdown-wrap :deep(.milkdown .ProseMirror h6) { font-size: 1em; line-height: 1.4; margin-top: 4px; }
 .milkdown-wrap :deep(.ProseMirror p.is-empty::before) {
   color: var(--text-placeholder, #666);
 }
@@ -3361,6 +3527,120 @@ body > .lightbox .lightbox-img {
 .milkdown-wrap :deep(.milkdown-link-preview),
 .milkdown-wrap :deep(.milkdown-link-edit) {
   display: none !important;
+}
+/* Code block (CodeMirror) — match app's chat code block aesthetic */
+.milkdown-wrap :deep(.milkdown-code-block) {
+  background: rgba(10, 10, 20, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 0;
+  margin: 4px 0;
+  overflow: visible;
+  min-height: 220px;
+  position: relative;
+}
+/* Tools bar (language badge + copy button) */
+.milkdown-wrap :deep(.milkdown-code-block .tools) {
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.milkdown-wrap :deep(.milkdown-code-block .language-button) {
+  font-size: 11px;
+  color: rgba(125, 211, 252, 0.7);
+  background: transparent;
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-bottom: 0;
+  font-family: 'SFMono-Regular', 'Menlo', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 1 !important;
+}
+.milkdown-wrap :deep(.milkdown-code-block .language-button:hover) {
+  background: rgba(255, 255, 255, 0.08);
+}
+.milkdown-wrap :deep(.milkdown-code-block .expand-icon svg) {
+  color: rgba(125, 211, 252, 0.5);
+}
+.milkdown-wrap :deep(.milkdown-code-block .tools-button-group button) {
+  font-size: 11px;
+  opacity: 1 !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+  border-radius: 4px;
+}
+.milkdown-wrap :deep(.milkdown-code-block .tools-button-group button:hover) {
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+/* CodeMirror editor surface */
+.milkdown-wrap :deep(.milkdown-code-block .cm-editor) {
+  background: transparent !important;
+}
+.milkdown-wrap :deep(.milkdown-code-block .cm-scroller) {
+  padding: 8px 0;
+  font-family: 'SFMono-Regular', 'Menlo', 'Monaco', 'Courier New', monospace !important;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.milkdown-wrap :deep(.milkdown-code-block .cm-gutters) {
+  background: transparent !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.25);
+  min-width: 2.5em;
+}
+.milkdown-wrap :deep(.milkdown-code-block .cm-lineNumbers .cm-gutterElement) {
+  padding: 0 8px 0 4px;
+  font-size: 11px;
+}
+.milkdown-wrap :deep(.milkdown-code-block .cm-content) {
+  padding: 0 12px;
+}
+.milkdown-wrap :deep(.milkdown-code-block .cm-activeLine) {
+  background: rgba(255, 255, 255, 0.03);
+}
+.milkdown-wrap :deep(.milkdown-code-block .cm-activeLineGutter) {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.5);
+}
+/* Language picker dropdown */
+.milkdown-wrap :deep(.milkdown-code-block .language-picker) {
+  z-index: 9999;
+}
+.milkdown-wrap :deep(.milkdown-code-block .list-wrapper) {
+  background: rgba(30, 34, 48, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  width: 200px;
+  max-height: 190px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.milkdown-wrap :deep(.milkdown-code-block .language-list) {
+  height: auto !important;
+  flex: 1;
+  overflow-y: auto;
+}
+.milkdown-wrap :deep(.milkdown-code-block .language-list-item) {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.75);
+  padding: 3px 10px;
+}
+.milkdown-wrap :deep(.milkdown-code-block .language-list-item:hover) {
+  background: rgba(255, 255, 255, 0.07);
+}
+.milkdown-wrap :deep(.milkdown-code-block .search-box) {
+  outline: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  margin: 0 8px 6px;
+  padding: 3px 8px;
+}
+.milkdown-wrap :deep(.milkdown-code-block .search-box input) {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 11px;
 }
 
 /* Pending file chips above input */
