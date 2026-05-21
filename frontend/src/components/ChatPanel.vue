@@ -1556,7 +1556,7 @@ defineExpose({ focusInput, scrollToBottom })
                     <span>{{ fname }}</span>
                   </div>
                 </div>
-                <div v-if="m.content" v-html="renderMarkdown(m.content) + (m.streaming ? '<span class=\'cursor\'>▋</span>' : '')"></div>
+                <div v-if="m.content" v-html="renderMarkdown(m.content)"></div>
                 <template v-if="!m.streaming && !m.thinking && m.content">
                   <template v-if="extractUrls(m.content).length <= 1">
                     <LinkPreview v-for="u in extractUrls(m.content)" :key="u" :url="u" />
