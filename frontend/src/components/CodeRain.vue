@@ -7,17 +7,18 @@ let observer = null
 let resizeTimer = null
 
 const CHARS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#$%^&*'
-const CHARS_LEN = CHARS.length
-const FONT_SIZE = 14
+const CHARS_LEN   = CHARS.length
+const FONT_SIZE   = 14
 const INTERVAL_MS = 50
-const FALL_SPEED = 0.9
+const FALL_SPEED  = 0.9
 const RESET_THRESHOLD = 0.97
-// Head character: near-white bright green (Matrix leading drop)
-const HEAD_COLOR = 'rgba(200, 255, 200, 1)'
-// Fade alpha: each frame reduces existing pixel alpha by this amount (destination-out)
-const FADE_ALPHA = 0.08
+const HEAD_COLOR  = 'rgba(200, 255, 200, 1)'
+const TRAIL_COLOR = 'rgba(0, 255, 65, 1)'
+// Alpha multiplied per frame; 0.85^22 ≈ 0.03 → trail ~22 frames long
+const TRAIL_DECAY     = 0.85
+const ALPHA_THRESHOLD = 0.03
 
-/** initCanvas sizes the canvas to match its parent container and resets the drops array. Returns null if container has no size yet. */
+/** initCanvas sizes the canvas to its parent's dimensions and returns a per-column drops array. Returns null if size is not yet available. */
 function initCanvas(canvas) {
   const parent = canvas.parentElement
   const w = parent ? parent.clientWidth  : canvas.offsetWidth
@@ -37,22 +38,42 @@ function startAnimation(canvas) {
 
   ctx.font = FONT_SIZE + 'px monospace'
 
+  // trails[col] = [{y, char, a}] — characters with decreasing alpha
+  const trails = drops.map(() => [])
+
   return setInterval(() => {
-    // Erase old characters toward transparent (destination-out reduces pixel alpha)
-    ctx.globalCompositeOperation = 'destination-out'
-    ctx.fillStyle = `rgba(0, 0, 0, ${FADE_ALPHA})`
-    ctx.fillRect(0, 0, canvas.width, canvas.height)
-    ctx.globalCompositeOperation = 'source-over'
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
 
     for (let i = 0; i < drops.length; i++) {
-      const ch = CHARS[Math.floor(Math.random() * CHARS_LEN)]
-      ctx.fillStyle = HEAD_COLOR
-      ctx.fillText(ch, i * FONT_SIZE, drops[i] * FONT_SIZE)
+      const trail = trails[i]
+
+      // Decay alpha of existing trail entries; remove those below threshold
+      for (let j = trail.length - 1; j >= 0; j--) {
+        trail[j].a *= TRAIL_DECAY
+        if (trail[j].a < ALPHA_THRESHOLD) trail.splice(j, 1)
+      }
+
+      // Add new head character at current drop position
+      const headY = drops[i] * FONT_SIZE
+      trail.push({ y: headY, char: CHARS[Math.floor(Math.random() * CHARS_LEN)], a: 1.0 })
+
+      // Draw all trail characters; the last entry is always the head
+      for (let j = 0; j < trail.length; j++) {
+        const t = trail[j]
+        ctx.globalAlpha = t.a
+        ctx.fillStyle = j === trail.length - 1 ? HEAD_COLOR : TRAIL_COLOR
+        ctx.fillText(t.char, i * FONT_SIZE, t.y)
+      }
+
+      // Advance drop; reset to top when it leaves the bottom
       if (drops[i] * FONT_SIZE > canvas.height && Math.random() > RESET_THRESHOLD) {
         drops[i] = 0
+        trails[i] = []
       }
       drops[i] += FALL_SPEED
     }
+
+    ctx.globalAlpha = 1.0
   }, INTERVAL_MS)
 }
 
