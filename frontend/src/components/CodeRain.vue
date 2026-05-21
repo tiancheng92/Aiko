@@ -14,8 +14,8 @@ const FALL_SPEED = 0.9
 const RESET_THRESHOLD = 0.97
 // Head character: near-white bright green (Matrix leading drop)
 const HEAD_COLOR = 'rgba(200, 255, 200, 1)'
-// Faster fade = shorter, more dramatic trails (Matrix style); old chars darken to deep green
-const FADE_COLOR = 'rgba(0, 0, 0, 0.08)'
+// Fade alpha: each frame reduces existing pixel alpha by this amount (destination-out)
+const FADE_ALPHA = 0.08
 
 /** initCanvas sizes the canvas to match its parent container and resets the drops array. Returns null if container has no size yet. */
 function initCanvas(canvas) {
@@ -38,12 +38,14 @@ function startAnimation(canvas) {
   ctx.font = FONT_SIZE + 'px monospace'
 
   return setInterval(() => {
-    ctx.fillStyle = FADE_COLOR
+    // Erase old characters toward transparent (destination-out reduces pixel alpha)
+    ctx.globalCompositeOperation = 'destination-out'
+    ctx.fillStyle = `rgba(0, 0, 0, ${FADE_ALPHA})`
     ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.globalCompositeOperation = 'source-over'
 
     for (let i = 0; i < drops.length; i++) {
       const ch = CHARS[Math.floor(Math.random() * CHARS_LEN)]
-      // Head character is bright near-white; trail fades via canvas overlay
       ctx.fillStyle = HEAD_COLOR
       ctx.fillText(ch, i * FONT_SIZE, drops[i] * FONT_SIZE)
       if (drops[i] * FONT_SIZE > canvas.height && Math.random() > RESET_THRESHOLD) {

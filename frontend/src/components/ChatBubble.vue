@@ -444,7 +444,7 @@ defineExpose({ focusInput, scrollToBottom })
         <rect x="1.5" y="2" width="14" height="10" rx="3.5" fill="currentColor"/>
         <path d="M5 12 L4 15.5 L8.5 12.5" fill="currentColor"/>
         <!-- small bubble (bottom-right), cut out from large with white backing -->
-        <rect x="9" y="10.5" width="13" height="9" rx="3" fill="#0a0a0a"/>
+        <rect x="9" y="10.5" width="13" height="9" rx="3" fill="var(--lg-surface)"/>
         <rect x="9.5" y="11" width="12" height="8" rx="2.8" fill="currentColor" opacity="0.72"/>
         <path d="M19.5 19 L20.5 22 L16.5 19.5" fill="currentColor" opacity="0.72"/>
       </svg>
@@ -487,7 +487,9 @@ defineExpose({ focusInput, scrollToBottom })
 <style scoped>
 .chat-bubble {
   position: fixed;
-  background: #0a0a0a;
+  background: var(--lg-surface);
+  backdrop-filter: var(--lg-blur);
+  -webkit-backdrop-filter: var(--lg-blur);
   border: 1px solid var(--lg-border-subtle);
   border-radius: 14px;
   box-shadow: var(--lg-shadow);
