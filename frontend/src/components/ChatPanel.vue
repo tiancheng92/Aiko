@@ -3517,7 +3517,7 @@ body > .lightbox .lightbox-img {
 .milkdown-wrap :deep(.milkdown .ProseMirror h5),
 .milkdown-wrap :deep(.milkdown .ProseMirror h6) { font-size: 1em; line-height: 1.4; margin-top: 4px; }
 .milkdown-wrap :deep(.ProseMirror p.is-empty::before) {
-  color: var(--text-placeholder, #666);
+  color: var(--text-placeholder);
 }
 /* Hide Crepe frame/toolbar decorations */
 .milkdown-wrap :deep(.milkdown-toolbar),
@@ -3728,16 +3728,19 @@ body > .lightbox .lightbox-img {
 .lp-toggle-btn {
   display: inline-block;
   margin-top: 5px;
-  padding: 0;
+  padding: 2px 0;
   background: none;
   border: none;
+  border-radius: 3px;
   font-size: 11px;
-  color: rgba(3, 105, 161, 0.8);
+  color: var(--accent-hover);
   cursor: pointer;
   user-select: none;
   font-family: inherit;
+  transition: color 0.12s;
 }
-.lp-toggle-btn:hover { color: rgba(3, 105, 161, 1); }
+.lp-toggle-btn:hover { color: var(--text-primary); }
+.lp-toggle-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 </style>
 
 <style>
@@ -3827,7 +3830,7 @@ body > .lightbox .lightbox-img {
 
 .clear-confirm-ok {
   border: 1px solid transparent;
-  background: #ff453a;
+  background: var(--danger);
   color: #fff;
   font-weight: 600;
 }
@@ -3848,8 +3851,8 @@ body > .lightbox .lightbox-img {
   to   { opacity: 1; transform: translateY(0);   }
 }
 @keyframes thinking-pulse {
-  0%, 100% { box-shadow: 0 0 18px rgba(60, 130, 255, 0.12), inset 0 0 12px rgba(60, 130, 255, 0.05); }
-  50%       { box-shadow: 0 0 28px rgba(60, 130, 255, 0.24), inset 0 0 18px rgba(60, 130, 255, 0.10); }
+  0%, 100% { box-shadow: var(--thinking-glow); }
+  50%       { box-shadow: var(--thinking-glow-on); }
 }
 @keyframes thinking-bounce {
   0%, 80%, 100% { transform: translateY(0); opacity: 0.5; }
@@ -3859,8 +3862,8 @@ body > .lightbox .lightbox-img {
 .thinking-block {
   margin-bottom: 4px;
   border-radius: 10px;
-  background: linear-gradient(135deg, rgba(40, 100, 220, 0.08) 0%, rgba(60, 150, 255, 0.05) 100%);
-  border: 1px solid rgba(80, 150, 255, 0.18);
+  background: var(--thinking-bg);
+  border: 1px solid var(--thinking-border);
   overflow: hidden;
   position: relative;
   animation: thinking-appear 0.22s var(--ease-enter) both;
@@ -3869,8 +3872,8 @@ body > .lightbox .lightbox-img {
 
 /* Ambient glow when streaming */
 .thinking-block.thinking-streaming {
-  border-color: rgba(80, 150, 255, 0.38);
-  box-shadow: 0 0 18px rgba(60, 130, 255, 0.12), inset 0 0 12px rgba(60, 130, 255, 0.05);
+  border-color: var(--thinking-border-on);
+  box-shadow: var(--thinking-glow);
   animation: thinking-appear 0.22s var(--ease-enter) both,
              thinking-pulse 2.4s ease-in-out infinite;
 }
@@ -3881,7 +3884,7 @@ body > .lightbox .lightbox-img {
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent 0%, rgba(80, 160, 255, 0.55) 40%, rgba(120, 200, 255, 0.45) 60%, transparent 100%);
+  background: var(--thinking-shimmer);
   opacity: 0.8;
 }
 
@@ -3901,20 +3904,20 @@ body > .lightbox .lightbox-img {
   transition: background 0.15s var(--ease-enter);
 }
 .thinking-block-header:hover {
-  background: rgba(80, 150, 255, 0.04);
+  background: rgba(80, 150, 255, 0.05);
 }
 
 .thinking-icon {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: linear-gradient(135deg, rgba(60, 130, 255, 0.28), rgba(100, 190, 255, 0.2));
-  border: 1px solid rgba(80, 150, 255, 0.32);
+  background: var(--thinking-icon-bg);
+  border: 1px solid var(--thinking-icon-border);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: rgba(130, 185, 255, 0.95);
+  color: var(--thinking-icon-fg);
   line-height: 0;
 }
 .thinking-icon svg { display: block; }
@@ -3923,7 +3926,7 @@ body > .lightbox .lightbox-img {
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.04em;
-  color: rgba(160, 205, 255, 0.88);
+  color: var(--thinking-fg);
   flex: 1;
 }
 
@@ -3939,7 +3942,7 @@ body > .lightbox .lightbox-img {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: rgba(100, 175, 255, 0.75);
+  background: var(--thinking-fg-dot);
   display: inline-block;
   animation: thinking-bounce 1.2s ease-in-out infinite;
 }
@@ -3948,7 +3951,7 @@ body > .lightbox .lightbox-img {
 
 /* Chevron: spring on expand, brisk on collapse */
 .thinking-toggle-icon {
-  color: rgba(100, 170, 255, 0.5);
+  color: var(--thinking-chevron);
   transition: transform 0.28s var(--ease-spring), color 0.15s;
   flex-shrink: 0;
   display: flex;
@@ -3956,11 +3959,11 @@ body > .lightbox .lightbox-img {
 }
 .thinking-toggle-icon.expanded {
   transform: rotate(180deg);
-  color: rgba(130, 195, 255, 0.9);
+  color: var(--thinking-chevron-on);
   transition: transform 0.18s var(--ease-exit), color 0.15s;
 }
 .thinking-block-header:hover .thinking-toggle-icon {
-  color: rgba(130, 195, 255, 0.8);
+  color: var(--thinking-chevron-on);
 }
 
 /* Body: expo-out open, faster close */
@@ -3982,7 +3985,7 @@ body > .lightbox .lightbox-img {
   background: transparent;
 }
 .thinking-block-body.expanded::-webkit-scrollbar-thumb {
-  background: rgba(80, 150, 255, 0.25);
+  background: var(--thinking-border-on);
   border-radius: 2px;
 }
 
@@ -3990,7 +3993,7 @@ body > .lightbox .lightbox-img {
   padding: 2px 12px 10px;
   font-size: 12px;
   font-weight: 400;
-  color: rgba(185, 215, 255, 0.72);
+  color: var(--thinking-fg-dim);
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.65;

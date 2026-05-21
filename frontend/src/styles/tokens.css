@@ -124,11 +124,12 @@ html[data-theme="frosted"] {
 ───────────────────────────────────────────────────────────────────────────── */
 :root {
   /* Text hierarchy — contrast verified ≥4.5:1 on dark glass surfaces */
-  --text-primary:    rgba(255, 255, 255, 0.94);  /* body / headings  */
-  --text-secondary:  rgba(255, 255, 255, 0.65);  /* captions / muted */
-  --text-tertiary:   rgba(255, 255, 255, 0.42);  /* placeholders     */
-  --text-body-muted: rgba(255, 255, 255, 0.72);  /* 12–13px readable body (WCAG AA on glass) */
-  --text-label-muted:rgba(255, 255, 255, 0.46);  /* decorative labels only */
+  --text-primary:     rgba(255, 255, 255, 0.94);  /* body / headings  */
+  --text-secondary:   rgba(255, 255, 255, 0.65);  /* captions / muted */
+  --text-tertiary:    rgba(255, 255, 255, 0.42);  /* placeholders     */
+  --text-placeholder: rgba(255, 255, 255, 0.36);  /* input placeholder text (editor + textarea) */
+  --text-body-muted:  rgba(255, 255, 255, 0.72);  /* 12–13px readable body (WCAG AA on glass) */
+  --text-label-muted: rgba(255, 255, 255, 0.46);  /* decorative labels only */
 
   /* Brand accent — muted steel blue */
   --accent:          #2563EB;
@@ -143,4 +144,20 @@ html[data-theme="frosted"] {
   --success:      #30D158;
   --warning:      #FF9F0A;
   --warning-bg:   rgba(255, 159, 10, 0.14);
+
+  /* Thinking-block cool-blue palette */
+  --thinking-fg:        rgba(160, 205, 255, 0.88);  /* label text            */
+  --thinking-fg-dim:    rgba(185, 215, 255, 0.72);  /* body text             */
+  --thinking-fg-dot:    rgba(100, 175, 255, 0.75);  /* streaming dots        */
+  --thinking-border:    rgba(80, 150, 255, 0.18);   /* default border        */
+  --thinking-border-on: rgba(80, 150, 255, 0.38);   /* streaming border      */
+  --thinking-bg:        linear-gradient(135deg, rgba(40, 100, 220, 0.08) 0%, rgba(60, 150, 255, 0.05) 100%);
+  --thinking-glow:      0 0 18px rgba(60, 130, 255, 0.12), inset 0 0 12px rgba(60, 130, 255, 0.05);
+  --thinking-glow-on:   0 0 28px rgba(60, 130, 255, 0.24), inset 0 0 18px rgba(60, 130, 255, 0.10);
+  --thinking-icon-bg:   linear-gradient(135deg, rgba(60, 130, 255, 0.28), rgba(100, 190, 255, 0.20));
+  --thinking-icon-border: rgba(80, 150, 255, 0.32);
+  --thinking-icon-fg:   rgba(130, 185, 255, 0.95);
+  --thinking-chevron:   rgba(100, 170, 255, 0.50);
+  --thinking-chevron-on:rgba(130, 195, 255, 0.90);
+  --thinking-shimmer:   linear-gradient(90deg, transparent 0%, rgba(80, 160, 255, 0.55) 40%, rgba(120, 200, 255, 0.45) 60%, transparent 100%);
 }
