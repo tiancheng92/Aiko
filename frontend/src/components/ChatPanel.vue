@@ -1592,7 +1592,7 @@ defineExpose({ focusInput, scrollToBottom })
                       </div>
                     </div>
                     <div class="thinking-block-body" :class="{ expanded: m.thinkingExpanded }">
-                      <div class="thinking-block-text">{{ m.thinkingContent }}<span v-if="m.streaming && m.thinkingExpanded" class="cursor">▋</span></div>
+                      <div class="thinking-block-text">{{ m.thinkingContent }}<span v-if="m.streaming && m.thinkingExpanded" class="stream-cursor">▋</span></div>
                     </div>
                   </div>
                   <div v-if="m.thinkingContent && (m.content || m.streaming)" class="thinking-divider" />
@@ -2477,15 +2477,16 @@ img.msg-avatar {
 }
 .stream-cursor {
   display: inline-block;
-  vertical-align: middle;
+  vertical-align: text-bottom;
   margin-left: 1px;
+  transform-origin: 50% 85%;
   animation:
     cursor-color 2s linear infinite,
     cursor-pulse 0.8s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
   .token-word    { animation: none; }
-  .stream-cursor { animation: none; color: rgba(255, 255, 255, 0.7); }
+  .stream-cursor { animation: none; color: rgba(255, 255, 255, 0.7); filter: none; }
 }
 
 /* Thinking dots */
