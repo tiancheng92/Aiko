@@ -512,15 +512,10 @@ function mapMsg(m) {
 async function loadOlderMessages() {
   if (loadingHistory.value || allLoaded.value || oldestLoadedID === null) return
   loadingHistory.value = true
-  // Double-rAF: Vue flushes the DOM in the first frame, browser paints in the second.
-  // This guarantees the loading dots are on screen before the IPC call starts.
-  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  // One rAF so Vue flushes the loading-dots before the IPC call starts.
+  await new Promise(resolve => requestAnimationFrame(resolve))
   try {
-    // Fetch and minimum display timer run in parallel — no artificial lag on slow connections.
-    const [older] = await Promise.all([
-      GetMessagesBeforeID(oldestLoadedID, PAGE_SIZE),
-      new Promise(r => setTimeout(r, 300)),
-    ])
+    const older = await GetMessagesBeforeID(oldestLoadedID, PAGE_SIZE)
     if (!older || older.length === 0) {
       allLoaded.value = true
       return
@@ -547,13 +542,12 @@ async function loadOlderMessages() {
     }
     collapsedIds.value = rekey(collapsedIds.value)
     expandedIds.value = rekey(expandedIds.value)
+    // One nextTick for Vue to flush the DOM, then one rAF for browser layout.
     await nextTick()
+    await new Promise(resolve => requestAnimationFrame(resolve))
     suppressAnimation.value = false
     oldestLoadedID = older[0].ID
     olderMapped.forEach((m, i) => checkBubbleCollapse(m, i, true))
-    // Wait for Vue to flush the DOM, then one rAF so the browser finishes layout.
-    await nextTick()
-    await new Promise(resolve => requestAnimationFrame(resolve))
     if (el) {
       // Anchor to the first "old" message element: scroll it to the top of the
       // viewport. getBoundingClientRect() forces a synchronous layout so the
