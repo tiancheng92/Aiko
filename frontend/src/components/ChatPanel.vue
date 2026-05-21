@@ -386,6 +386,7 @@ const userAvatar = ref('')  // data URL or '' (use default SVG)
 
 /** thinkingLevel is the current reasoning effort level for the next message. */
 const thinkingLevel = ref('default')
+const thinkingChipFired = ref(false)
 /** useKnowledge controls whether the knowledge base is queried for the next message. */
 const useKnowledge = ref(true)
 /** useMemory controls whether long-term memory is queried for the next message. */
@@ -1226,6 +1227,10 @@ async function cycleThinkingLevel() {
   const levels = thinkingLevels.value
   const idx = levels.indexOf(thinkingLevel.value)
   thinkingLevel.value = levels[(idx + 1) % levels.length]
+  thinkingChipFired.value = false
+  await nextTick()
+  thinkingChipFired.value = true
+  setTimeout(() => { thinkingChipFired.value = false }, 450)
   await persistChatOptions()
 }
 
@@ -1893,7 +1898,7 @@ defineExpose({ focusInput, scrollToBottom })
             :disabled="loading"
             @click="cycleThinkingLevel"
             title="思考等级"
-          ><span class="chip-icon" v-html="ICON_THINKING"></span><span class="chip-label">{{ thinkingLevelLabel }}</span></button>
+          ><span class="chip-icon" :class="{ 'chip-icon--fired': thinkingChipFired }" v-html="ICON_THINKING"></span><span class="chip-label" :class="{ 'chip-label--fired': thinkingChipFired }">{{ thinkingLevelLabel }}</span></button>
           <button
             v-if="cfg?.EmbeddingModel"
             class="chat-opt-chip"
@@ -3390,6 +3395,26 @@ img.msg-avatar {
 :deep(.chip-icon svg) {
   width: 14px;
   height: 14px;
+}
+.chip-icon--fired {
+  animation: chip-icon-bounce 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.chip-label--fired {
+  animation: chip-label-slide 0.22s ease-out both 0.08s;
+}
+@keyframes chip-icon-bounce {
+  0%   { transform: scale(1)    rotate(0deg); }
+  30%  { transform: scale(1.45) rotate(-12deg); }
+  60%  { transform: scale(0.9)  rotate(6deg); }
+  80%  { transform: scale(1.08) rotate(-3deg); }
+  100% { transform: scale(1)    rotate(0deg); }
+}
+@keyframes chip-label-slide {
+  from { opacity: 0; transform: translateX(-5px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chip-icon--fired, .chip-label--fired { animation: none; }
 }
 .input-hint {
   font-size: 11px;
