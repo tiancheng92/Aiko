@@ -421,13 +421,17 @@ function settleMessage(idx) {
 /** applyToken appends a token to the last streaming assistant message. */
 function applyToken(token) {
   // Transition the thinking placeholder on first real token.
-  // If the placeholder already has thinkingContent, update it in-place to preserve
-  // the accumulated thinking text; otherwise remove it and fall through to create
-  // a fresh message (the old pure-dots placeholder path).
   const thinkIdx = messages.value.findLastIndex(m => m.thinking)
   if (thinkIdx >= 0) {
     if (messages.value[thinkIdx].thinkingContent) {
-      messages.value[thinkIdx] = { ...messages.value[thinkIdx], thinking: false, content: token }
+      messages.value[thinkIdx] = {
+        ...messages.value[thinkIdx],
+        thinking: false,
+        content: token,
+        displayHtml: '',
+        pendingTokens: [{ text: token, key: 0 }],
+        tokenKeyCounter: 1,
+      }
       scrollToBottom()
       return
     }
@@ -437,9 +441,21 @@ function applyToken(token) {
   const idx = messages.value.length - 1
   const last = messages.value[idx]
   if (last && last.role === 'assistant' && last.streaming) {
-    last.content += token  // direct mutation — Vue Proxy tracks this, no object copy needed
+    last.content += token
+    last.pendingTokens.push({ text: token, key: last.tokenKeyCounter++ })
+    if (last.pendingTokens.length >= 40) settleMessage(idx)
   } else {
-    messages.value.push({ role: 'assistant', content: token, streaming: true, isProactive: proactiveStarted, thinkingContent: '', thinkingExpanded: false })
+    messages.value.push({
+      role: 'assistant',
+      content: token,
+      streaming: true,
+      isProactive: proactiveStarted,
+      thinkingContent: '',
+      thinkingExpanded: false,
+      displayHtml: '',
+      pendingTokens: [{ text: token, key: 0 }],
+      tokenKeyCounter: 1,
+    })
     EventsEmit('pet:state:change', 'speaking')
   }
   scrollToBottom()
@@ -602,7 +618,7 @@ onMounted(async () => {
 
   offProactiveStart = EventsOn('chat:proactive:start', () => {
     proactiveStarted = true
-    messages.value.push({ role: 'assistant', content: '', streaming: true, isProactive: true, thinkingContent: '', thinkingExpanded: false })
+    messages.value.push({ role: 'assistant', content: '', streaming: true, isProactive: true, thinkingContent: '', thinkingExpanded: false, displayHtml: '', pendingTokens: [], tokenKeyCounter: 0 })
     EventsEmit('pet:state:change', 'speaking')
     scrollToBottom()
   })
@@ -617,7 +633,7 @@ onMounted(async () => {
   offCronStart = EventsOn('chat:cron:start', ({ name, prompt }) => {
     // Push a user-side trigger label followed by a streaming assistant placeholder.
     messages.value.push({ role: 'user', content: `⏰ **${name}**\n${prompt}`, isCron: true })
-    messages.value.push({ role: 'assistant', content: '', streaming: true, thinking: true, isCron: true, thinkingContent: '', thinkingExpanded: false })
+    messages.value.push({ role: 'assistant', content: '', streaming: true, thinking: true, isCron: true, thinkingContent: '', thinkingExpanded: false, displayHtml: '', pendingTokens: [], tokenKeyCounter: 0 })
     loading.value = true
     isStreaming.value = true
     firstTokenThisTurn = true
