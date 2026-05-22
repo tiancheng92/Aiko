@@ -1123,6 +1123,7 @@ async function speakMessage(idx) {
  *  If the clipboard contains an image, it is captured as a data URL and
  *  added to pendingImages for preview; the default paste action is suppressed. */
 function onPaste(e) {
+  if (!cfg.value?.SupportsVision) return
   const items = [...(e.clipboardData?.items ?? [])]
   const imageItem = items.find(i => i.type.startsWith('image/'))
   if (!imageItem) return

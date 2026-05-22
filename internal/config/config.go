@@ -44,6 +44,9 @@ type Config struct {
 	TTSBackend            string  // "kokoro" | ""（系统 say）
 	// ThemeStyle controls the UI visual style. Values: "liquid-glass" | "frosted".
 	ThemeStyle string
+	// SupportsVision indicates whether the active LLM model can process image inputs.
+	// When false, image attachments are stripped before sending and only text is passed.
+	SupportsVision bool
 	JinaAPIKey string // optional; empty = Jina free tier (~200 req/day)
 	TavilyAPIKey string // optional; empty = DuckDuckGo fallback
 	// AIAvatar is a data URL for the AI avatar; empty means use the default logo.
@@ -226,6 +229,7 @@ func (c *Config) ApplyProfile(p *ModelProfile) {
 		c.TTSSpeed = p.TTSSpeed
 	}
 	c.TTSBackend = p.TTSBackend
+	c.SupportsVision = p.SupportsVision
 }
 
 // MissingRequired returns names of required fields that are empty.

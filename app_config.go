@@ -57,6 +57,7 @@ func (a *App) SaveConfig(cfg *config.Config) error {
 	cfg.TTSBackend = a.cfg.TTSBackend
 	cfg.TTSModelDir = a.cfg.TTSModelDir
 	cfg.ActiveProfileID = a.cfg.ActiveProfileID
+	cfg.SupportsVision = a.cfg.SupportsVision
 	a.mu.RUnlock()
 
 	if err := a.configStore.Save(cfg); err != nil {

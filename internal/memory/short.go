@@ -204,6 +204,9 @@ func (s *ShortStore) RecentMessages(n int) ([]*schema.Message, error) {
 	}
 	out := make([]*schema.Message, 0, len(msgs))
 	for i := range msgs {
+		if msgs[i].Content == "" {
+			continue
+		}
 		role := schema.User
 		if msgs[i].Role == "assistant" {
 			role = schema.Assistant

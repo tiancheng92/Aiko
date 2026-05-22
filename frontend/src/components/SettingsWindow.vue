@@ -87,7 +87,7 @@ const fetchingModels = ref(false)
 const profiles = ref([])
 const activeProfileID = ref(0)
 const showProfileForm = ref(false)
-const profileForm = ref({ id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, embedding_inherit: true, embedding_provider: 'openai', embedding_base_url: '', embedding_api_key: '', tts_model_dir: '', tts_voice: '', tts_speed: 1.0, tts_backend: '' })
+const profileForm = ref({ id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, embedding_inherit: true, embedding_provider: 'openai', embedding_base_url: '', embedding_api_key: '', tts_model_dir: '', tts_voice: '', tts_speed: 1.0, tts_backend: '', supports_vision: false })
 const profileFormError = ref('')
 const profileFormSaving = ref(false)
 const profileModels = ref([])
@@ -464,7 +464,7 @@ async function fetchProfiles() {
 
 /** openProfileForm opens the add-profile form with empty fields. */
 function openProfileForm() {
-  profileForm.value = { id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, embedding_inherit: true, embedding_provider: 'openai', embedding_base_url: '', embedding_api_key: '', tts_model_dir: '', tts_voice: '', tts_speed: 1.0, tts_backend: '' }
+  profileForm.value = { id: 0, name: '', provider: 'openai', base_url: '', api_key: '', model: '', embedding_model: '', embedding_dim: 1536, embedding_inherit: true, embedding_provider: 'openai', embedding_base_url: '', embedding_api_key: '', tts_model_dir: '', tts_voice: '', tts_speed: 1.0, tts_backend: '', supports_vision: false }
   profileFormError.value = ''
   profileModels.value = []
   embeddingModels.value = []
@@ -1388,6 +1388,13 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 </div>
               </label>
               <label>向量维度<span class="field-hint">与所选向量模型保持一致，默认 1536</span><input type="number" v-model.number="profileForm.embedding_dim" min="256" max="4096" /></label>
+              <div class="embed-inherit-row" style="margin-top:8px">
+                <span class="embed-inherit-label">支持视觉输入（图片）<span class="field-hint" style="margin-left:4px">启用后可以向模型发送图片，仅对支持多模态的模型有效</span></span>
+                <label class="toggle">
+                  <input type="checkbox" v-model="profileForm.supports_vision" />
+                  <span class="toggle-track" />
+                </label>
+              </div>
               <div class="form-group" style="margin-top:12px">
                 <label class="form-label">语音合成引擎（TTS）</label>
                 <select v-model="profileForm.tts_backend" class="form-input">

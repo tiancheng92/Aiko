@@ -184,16 +184,37 @@ func (a *App) RegenerateLastReply() error {
 
 // SendMessageWithImages streams an AI response for a user message that includes
 // one or more inline images encoded as data URLs ("data:image/png;base64,...").
-// Falls back to a plain text message if no valid images are provided.
+// Falls back to a plain text message if no valid images are provided or if the
+// active model does not support vision input.
 func (a *App) SendMessageWithImages(userInput string, images []string, opts ChatOptions) error {
-	// Build UserInputMultiContent: text part first, then image parts.
-	parts := make([]schema.MessageInputPart, 0, 1+len(images))
-	if userInput != "" {
-		parts = append(parts, schema.MessageInputPart{
-			Type: schema.ChatMessagePartTypeText,
-			Text: userInput,
-		})
+	a.mu.RLock()
+	supportsVision := a.cfg.SupportsVision
+	a.mu.RUnlock()
+
+	text := userInput
+	if text == "" {
+		text = " "
 	}
+
+	// If the model doesn't support vision, fall back to text-only.
+	if !supportsVision && len(images) > 0 {
+		text = strings.TrimSpace(userInput)
+		if text == "" {
+			text = "[用户发送了图片，但当前模型不支持视觉输入]"
+		} else {
+			text += "\n\n[用户同时发送了图片，但当前模型不支持视觉输入]"
+		}
+		return a.SendMessage(text, opts)
+	}
+
+	// Build UserInputMultiContent: text part first, then image parts.
+	// Always include a text part — some API providers reject messages
+	// that only contain image_url parts.
+	parts := make([]schema.MessageInputPart, 0, 1+len(images))
+	parts = append(parts, schema.MessageInputPart{
+		Type: schema.ChatMessagePartTypeText,
+		Text: text,
+	})
 	for _, dataURL := range images {
 		mimeType, b64data, ok := parseDataURL(dataURL)
 		if !ok {
@@ -212,6 +233,7 @@ func (a *App) SendMessageWithImages(userInput string, images []string, opts Chat
 	}
 	msg := &schema.Message{
 		Role:                  schema.User,
+		Content:               text,
 		UserInputMultiContent: parts,
 	}
 	agOpts := agent.ChatOptions{ThinkingLevel: opts.ThinkingLevel, UseKnowledge: opts.UseKnowledge, UseMemory: opts.UseMemory}
@@ -224,6 +246,7 @@ func (a *App) SendMessageWithImages(userInput string, images []string, opts Chat
 // inline images (data URLs) and/or text file attachments.
 // File contents are appended to the user text before sending to the LLM.
 // Only file names are persisted in memory — not the content.
+// Falls back to text-only if the active model does not support vision input.
 func (a *App) SendMessageWithFiles(userInput string, images []string, files []FileAttachment, opts ChatOptions) error {
 	// Build LLM text: original input + file contents appended.
 	var llmBuilder strings.Builder
@@ -235,13 +258,28 @@ func (a *App) SendMessageWithFiles(userInput string, images []string, files []Fi
 	}
 	llmText := llmBuilder.String()
 
+	a.mu.RLock()
+	supportsVision := a.cfg.SupportsVision
+	a.mu.RUnlock()
+
+	// If the model doesn't support vision and there are images, strip them.
+	effectiveImages := images
+	if !supportsVision && len(images) > 0 {
+		effectiveImages = nil
+		if userInput == "" {
+			llmText = "[用户发送了图片，但当前模型不支持视觉输入]\n\n" + llmText
+		} else {
+			llmText = strings.TrimSpace(userInput) + "\n\n[用户同时发送了图片，但当前模型不支持视觉输入]\n\n" + llmText
+		}
+	}
+
 	// Build UserInputMultiContent: text part first, then image parts.
-	parts := make([]schema.MessageInputPart, 0, 1+len(images))
+	parts := make([]schema.MessageInputPart, 0, 1+len(effectiveImages))
 	parts = append(parts, schema.MessageInputPart{
 		Type: schema.ChatMessagePartTypeText,
 		Text: llmText,
 	})
-	for _, dataURL := range images {
+	for _, dataURL := range effectiveImages {
 		mimeType, b64data, ok := parseDataURL(dataURL)
 		if !ok {
 			log.Warn().Msg("SendMessageWithFiles: invalid data URL, skipping")

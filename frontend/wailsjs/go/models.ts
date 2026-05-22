@@ -35,6 +35,7 @@ export namespace config {
 	    TTSSummarizeThreshold: number;
 	    TTSBackend: string;
 	    ThemeStyle: string;
+	    SupportsVision: boolean;
 	    JinaAPIKey: string;
 	    TavilyAPIKey: string;
 	    AIAvatar: string;
@@ -83,6 +84,7 @@ export namespace config {
 	        this.TTSSummarizeThreshold = source["TTSSummarizeThreshold"];
 	        this.TTSBackend = source["TTSBackend"];
 	        this.ThemeStyle = source["ThemeStyle"];
+	        this.SupportsVision = source["SupportsVision"];
 	        this.JinaAPIKey = source["JinaAPIKey"];
 	        this.TavilyAPIKey = source["TavilyAPIKey"];
 	        this.AIAvatar = source["AIAvatar"];
@@ -109,6 +111,7 @@ export namespace config {
 	    tts_voice: string;
 	    tts_speed: number;
 	    tts_backend: string;
+	    supports_vision: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ModelProfile(source);
@@ -132,6 +135,7 @@ export namespace config {
 	        this.tts_voice = source["tts_voice"];
 	        this.tts_speed = source["tts_speed"];
 	        this.tts_backend = source["tts_backend"];
+	        this.supports_vision = source["supports_vision"];
 	    }
 	}
 
