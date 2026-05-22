@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -17,7 +18,9 @@ import (
 
 // InvokableRun reads text from the macOS clipboard via pbpaste.
 func (t *ReadClipboardTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (string, error) {
-	out, err := exec.Command("pbpaste").Output()
+	cmd := exec.Command("pbpaste")
+	cmd.Env = append(os.Environ(), "LANG=en_US.UTF-8", "LC_CTYPE=en_US.UTF-8")
+	out, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("pbpaste: %w", err)
 	}

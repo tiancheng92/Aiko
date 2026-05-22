@@ -178,11 +178,13 @@ func (a *App) ReleaseKeyWindow() { releaseKeyWindow() }
 // ReadClipboard returns the current system clipboard text via pbpaste,
 // bypassing WKWebView's clipboard permission restriction.
 func (a *App) ReadClipboard() string {
-	out, err := exec.Command("pbpaste").Output()
+	cmd := exec.Command("pbpaste")
+	cmd.Env = append(os.Environ(), "LANG=en_US.UTF-8", "LC_CTYPE=en_US.UTF-8")
+	out, err := cmd.Output()
 	if err != nil {
 		return ""
 	}
-	return string(out)
+	return strings.TrimSuffix(string(out), "\n")
 }
 
 // ConfirmToolExecution is called by the frontend when the user approves or rejects
