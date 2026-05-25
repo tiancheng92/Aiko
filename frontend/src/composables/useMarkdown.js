@@ -314,9 +314,9 @@ export function shortenUrl(url) {
 /** stripEmotionTags removes [情绪:xxx/0.0] tags from a string. */
 export function stripEmotionTags(s) { return s.replace(/\[情绪:\w+\/[\d.]+\]\n?/g, '') }
 
-/** stripToolCallTags removes <tool-call> and <skill-call> markers from a string (e.g. before TTS). */
+/** stripToolCallTags removes emotion tags, <tool-call> and <skill-call> markers from a string (e.g. before TTS). */
 export function stripToolCallTags(s) {
-  return s
+  return stripEmotionTags(s)
     .replace(/<tool-call[^>]*><\/tool-call>\n*/g, '')
     .replace(/<skill-call[^>]*><\/skill-call>\n*/g, '')
 }

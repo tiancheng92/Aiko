@@ -252,10 +252,10 @@
     "exportFailed": "导出失败",
     "thinkingLabel": {
       "default": "默认",
-      "off": "无思考",
-      "low": "低思考",
-      "medium": "中思考",
-      "high": "高思考"
+      "off": "关闭思考",
+      "low": "思考等级-低",
+      "medium": "思考等级-中",
+      "high": "思考等级-高"
     },
     "clearHistoryTitle": "清空聊天记录",
     "thinkingProcess": "思考过程",

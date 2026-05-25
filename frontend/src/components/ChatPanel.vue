@@ -2550,7 +2550,8 @@ img.msg-avatar {
   transition: opacity 0.15s;
   pointer-events: none;
 }
-.msg-actions.assistant { left: 100%; padding-left: 6px; }
+.msg-actions.assistant,
+.msg-actions.system { left: 100%; padding-left: 6px; }
 .msg-actions.user { right: 100%; padding-right: 6px; }
 .bubble-wrap:hover .msg-actions,
 .msg-actions:hover { opacity: 1; pointer-events: auto; }

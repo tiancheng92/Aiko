@@ -257,6 +257,26 @@
       "medium": "중간 사고",
       "high": "높은 사고"
     },
+    "clearHistoryTitle": "채팅 기록 지우기",
+    "thinkingProcess": "사고 과정",
+    "expand": "펼치기",
+    "collapse": "접기",
+    "expandLinks": "{n}개 링크 더 보기",
+    "collapseLinks": "링크 숨기기",
+    "regenerate": "재생성",
+    "listening": "듣는 중...",
+    "rowDetail": "행 세부정보",
+    "toolArgs": "도구 인수",
+    "scrollToBottomAria": "맨 아래로 스크롤",
+    "pendingImage": "보류 중인 이미지 {n}",
+    "removeImage": "이미지 제거",
+    "removeFile": "파일 제거",
+    "preparing": "준비 중...",
+    "paste": "붙여넣기",
+    "cut": "잘라내기",
+    "more": "+{n}개 더",
+    "updateProgress": "업데이트 진행률 {pct}%",
+    "userAlt": "사용자",
     "copy": "복사",
     "copied": "복사됨",
     "speak": "읽기",
@@ -265,23 +285,42 @@
   "chatBubble": {
     "fullscreen": "전체 화면",
     "exitFullscreen": "전체 화면 종료",
-    "close": "닫기"
+    "close": "닫기",
+    "export": "채팅 기록 내보내기",
+    "clearHistory": "채팅 기록 지우기",
+    "openSettings": "설정 열기",
+    "chat": "채팅",
+    "latencyAriaLabel": "LLM 지연시간"
   },
   "toolConfirm": {
     "title": "도구 실행 확인",
+    "titleUpdate": "에이전트가 업데이트 설치를 요청",
+    "titleShell": "에이전트가 셸 명령 실행을 요청",
+    "titleCode": "에이전트가 코드 실행을 요청",
     "shellWarning": "셸 명령은 시스템 파일을 수정하고 임의의 작업을 실행할 수 있습니다. 실행 전에 안전을 확인하세요.",
-    "codeWarning": "코드가 로컬 환경에서 실행됩니다. 실행 전에 안전을 확인하세요.",
+    "codeWarning": "{lang} 코드가 로컬 환경에서 실행됩니다. 실행 전에 안전을 확인하세요.",
+    "updateRiskText": "설치 후 앱이 자동으로 재시작됩니다. 업데이트는 약 10-30초 소요되며 대화는 보존됩니다.",
     "command": "명령",
+    "commandEditable": "명령 (편집 가능)",
+    "code": "코드",
+    "codeEditable": "코드 (편집 가능)",
     "workingDir": "작업 디렉토리",
+    "versionInfo": "버전 정보",
     "confirm": "실행 확인",
     "cancel": "취소",
-    "editBeforeRun": "편집 후 실행"
+    "reject": "거부",
+    "approve": "승인",
+    "installUpdate": "업데이트 설치",
+    "editBeforeRun": "편집 후 실행",
+    "appUpdate": "앱 업데이트"
   },
   "notification": {
     "close": "닫기"
   },
   "execution": {
     "running": "실행 중...",
-    "done": "완료"
+    "executing": "도구 실행 중...",
+    "done": "완료",
+    "kill": "중지"
   }
 }

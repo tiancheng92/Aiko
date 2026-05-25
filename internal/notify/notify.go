@@ -10,10 +10,18 @@
 package notify
 
 import (
+	"regexp"
 	"sync/atomic"
 	"unicode/utf8"
 
 	"github.com/rs/zerolog/log"
+)
+
+// Patterns stripped from notification bodies before delivery.
+var (
+	reToolCall  = regexp.MustCompile(`<tool-call[^>]*></tool-call>`)
+	reSkillCall = regexp.MustCompile(`<skill-call[^>]*></skill-call>`)
+	reEmotion   = regexp.MustCompile(`\[情绪:\w+/[\d.]+\]\n?`)
 )
 
 // maxBodyRunes caps the notification body length. macOS truncates very long
@@ -49,7 +57,16 @@ func System(title, body string) {
 		log.Debug().Str("title", title).Msg("notify: no sender registered, dropping")
 		return
 	}
-	v.fn(title, truncate(body, maxBodyRunes))
+	v.fn(title, truncate(sanitize(body), maxBodyRunes))
+}
+
+// sanitize strips tool-call XML tags, skill-call XML tags, and emotion tags
+// from notification bodies so users see clean readable text.
+func sanitize(s string) string {
+	s = reToolCall.ReplaceAllString(s, "")
+	s = reSkillCall.ReplaceAllString(s, "")
+	s = reEmotion.ReplaceAllString(s, "")
+	return s
 }
 
 // truncate returns the first n runes of s, appending "…" when truncated.

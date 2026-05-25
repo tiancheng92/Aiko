@@ -257,6 +257,26 @@
       "medium": "中思考",
       "high": "高思考"
     },
+    "clearHistoryTitle": "チャット履歴を消去",
+    "thinkingProcess": "思考プロセス",
+    "expand": "展開",
+    "collapse": "折りたたむ",
+    "expandLinks": "さらに{n}個のリンクを表示",
+    "collapseLinks": "リンクを隠す",
+    "regenerate": "再生成",
+    "listening": "聞いています...",
+    "rowDetail": "行の詳細",
+    "toolArgs": "ツール引数",
+    "scrollToBottomAria": "最下部にスクロール",
+    "pendingImage": "送信待ち画像 {n}",
+    "removeImage": "画像を削除",
+    "removeFile": "ファイルを削除",
+    "preparing": "準備中...",
+    "paste": "貼り付け",
+    "cut": "切り取り",
+    "more": "+{n} 件",
+    "updateProgress": "更新進捗 {pct}%",
+    "userAlt": "ユーザー",
     "copy": "コピー",
     "copied": "コピー済み",
     "speak": "読み上げ",
@@ -265,23 +285,42 @@
   "chatBubble": {
     "fullscreen": "フルスクリーン",
     "exitFullscreen": "フルスクリーン解除",
-    "close": "閉じる"
+    "close": "閉じる",
+    "export": "チャット履歴をエクスポート",
+    "clearHistory": "チャット履歴を消去",
+    "openSettings": "設定を開く",
+    "chat": "チャット",
+    "latencyAriaLabel": "LLMレイテンシ"
   },
   "toolConfirm": {
     "title": "ツール実行確認",
+    "titleUpdate": "エージェントがアップデートのインストールを要求",
+    "titleShell": "エージェントがシェルコマンドの実行を要求",
+    "titleCode": "エージェントがコードの実行を要求",
     "shellWarning": "シェルコマンドはシステムファイルを変更し、任意の操作を実行できます。実行前に安全性を確認してください。",
-    "codeWarning": "コードはローカル環境で実行されます。実行前に安全性を確認してください。",
+    "codeWarning": "{lang}コードはローカル環境で実行されます。実行前に安全性を確認してください。",
+    "updateRiskText": "インストール後、アプリは自動的に再起動します。更新には約10〜30秒かかり、会話は保存されます。",
     "command": "コマンド",
+    "commandEditable": "コマンド（編集可能）",
+    "code": "コード",
+    "codeEditable": "コード（編集可能）",
     "workingDir": "作業ディレクトリ",
+    "versionInfo": "バージョン情報",
     "confirm": "実行を確認",
     "cancel": "キャンセル",
-    "editBeforeRun": "編集してから実行"
+    "reject": "拒否",
+    "approve": "承認",
+    "installUpdate": "アップデートをインストール",
+    "editBeforeRun": "編集してから実行",
+    "appUpdate": "アプリアップデート"
   },
   "notification": {
     "close": "閉じる"
   },
   "execution": {
     "running": "実行中...",
-    "done": "完了"
+    "executing": "ツールを実行中...",
+    "done": "完了",
+    "kill": "停止"
   }
 }
