@@ -1259,7 +1259,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
         <!-- Traffic lights + drag handle at the very top of the sidebar -->
         <div class="sidebar-drag" @mousedown="onHeaderMouseDown">
           <div class="traffic-lights" @mousedown.stop>
-            <button class="traffic-btn tl-close" aria-label="关闭设置" @click.stop="$emit('close')">
+            <button class="traffic-btn tl-close" :aria-label="$t('settings.title')" @click.stop="$emit('close')">
               <svg viewBox="0 0 10 10" width="7" height="7"><path d="M2 2 L8 8 M8 2 L2 8" stroke="#4c0519" stroke-width="1.3" stroke-linecap="round"/></svg>
             </button>
             <span class="traffic-btn tl-min" aria-hidden="true" />
@@ -1268,7 +1268,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
         </div>
 
         <!-- Sidebar title -->
-        <div class="sidebar-heading">设置</div>
+        <div class="sidebar-heading">{{ $t('settings.title') }}</div>
 
         <!-- Search field -->
         <div class="sidebar-search" @mousedown.stop>
@@ -1278,7 +1278,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           <input
             v-model="searchQuery"
             type="search"
-            placeholder="搜索"
+            :placeholder="$t('settings.search')"
             class="search-input"
             spellcheck="false"
             autocorrect="off"
@@ -1295,13 +1295,13 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             @click="activeTab = tab.id"
           >
             <span class="nav-icon-wrap" :style="{ background: tab.iconBg }" v-html="tab.iconSvg" />
-            <span class="nav-label">{{ tab.label }}</span>
+            <span class="nav-label">{{ $t('settings.tabs.' + tab.id) }}</span>
           </button>
           <div v-if="filteredTabs.length === 0" class="nav-empty">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
             </svg>
-            <span>无匹配结果</span>
+            <span>{{ $t('settings.search') }} — 无匹配结果</span>
           </div>
         </div>
       </nav>
@@ -1314,22 +1314,22 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
         <!-- 模型设置 -->
         <div v-if="activeTab === 'model'" class="tab-pane">
           <div class="profile-header">
-            <span class="section-title">模型配置方案</span>
-            <button class="btn-add" @click="openProfileForm">+ 新增</button>
+            <span class="section-title">{{ $t('settings.model.title') }}</span>
+            <button class="btn-add" @click="openProfileForm">+ {{ $t('settings.model.addProfile') }}</button>
           </div>
 
-          <div v-if="profiles.length === 0" class="empty-hint">暂无配置方案，点击「新增」接入第一个 AI 模型</div>
+          <div v-if="profiles.length === 0" class="empty-hint">{{ $t('settings.model.noProfile') }}</div>
 
           <div v-for="p in profiles" :key="p.id" :class="['profile-card', { active: p.id === activeProfileID }]">
             <div class="profile-card-main">
               <span class="profile-name" :title="p.name">{{ p.name }}</span>
               <span class="profile-meta" :title="`${p.provider} · ${p.model}`">{{ p.provider }} · {{ p.model }}</span>
-              <span v-if="p.id === activeProfileID" class="profile-badge">使用中</span>
+              <span v-if="p.id === activeProfileID" class="profile-badge">{{ $t('settings.model.activated') }}</span>
             </div>
             <div class="profile-card-actions">
-              <button v-if="p.id !== activeProfileID" class="btn-on-sm" @click="activateProfile(p.id)">激活</button>
-              <button class="btn-edit" @click="editProfile(p)">编辑</button>
-              <button class="btn-danger-sm" @click="deleteProfile(p.id)">删除</button>
+              <button v-if="p.id !== activeProfileID" class="btn-on-sm" @click="activateProfile(p.id)">{{ $t('settings.model.activate') }}</button>
+              <button class="btn-edit" @click="editProfile(p)">{{ $t('settings.model.edit') }}</button>
+              <button class="btn-danger-sm" @click="deleteProfile(p.id)">{{ $t('settings.model.delete') }}</button>
             </div>
           </div>
 
@@ -1337,15 +1337,15 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           <Transition :css="false" @enter="onModalEnter" @leave="onModalLeave">
           <div v-if="showProfileForm" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="profile-form-title" @click.self="showProfileForm = false">
             <div class="modal-box">
-              <div id="profile-form-title" class="modal-title">{{ profileForm.id ? '编辑配置' : '新增配置' }}</div>
-              <label>名称<input v-model="profileForm.name" placeholder="我的 OpenAI" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
-              <label>接入方式
+              <div id="profile-form-title" class="modal-title">{{ profileForm.id ? $t('settings.model.edit') : $t('settings.model.addProfile') }}</div>
+              <label>{{ $t('settings.model.profileName') }}<input v-model="profileForm.name" placeholder="我的 OpenAI" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
+              <label>{{ $t('settings.model.provider') }}
                 <select v-model="profileForm.provider">
                   <option value="openai">OpenAI 兼容接口</option>
                   <option value="openrouter">OpenRouter</option>
                 </select>
               </label>
-              <label>Base URL
+              <label>{{ $t('settings.model.baseURL') }}
                 <div class="url-row">
                   <input
                     v-model="profileForm.base_url"
@@ -1356,8 +1356,8 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                     {{ fetchingProfileModels ? '获取中...' : '获取模型' }}
                   </button>
                 </div>
-              </label>              <label>API Key<input v-model="profileForm.api_key" type="password" placeholder="（可选）" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
-              <label>Model
+              </label>              <label>{{ $t('settings.model.apiKey') }}<input v-model="profileForm.api_key" type="password" placeholder="（可选）" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
+              <label>{{ $t('settings.model.model') }}
                 <div class="select-row">
                   <select v-if="profileModels.length" v-model="profileForm.model">
                     <option value="">-- 请选择模型 --</option>
@@ -1367,20 +1367,20 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 </div>
               </label>
               <div class="embed-inherit-row">
-                <span class="embed-inherit-label">向量模型继承 Chat 模型配置<span class="field-hint" style="margin-left:4px">使用相同的 Base URL 和 API Key</span></span>
+                <span class="embed-inherit-label">{{ $t('settings.model.embeddingInherit') }}<span class="field-hint" style="margin-left:4px">使用相同的 Base URL 和 API Key</span></span>
                 <label class="toggle">
                   <input type="checkbox" v-model="profileForm.embedding_inherit" />
                   <span class="toggle-track" />
                 </label>
               </div>
               <template v-if="!profileForm.embedding_inherit">
-                <label style="margin-top:4px">向量模型接入方式
+                <label style="margin-top:4px">{{ $t('settings.model.embeddingProvider') }}
                   <select v-model="profileForm.embedding_provider">
                     <option value="openai">OpenAI 兼容接口</option>
                     <option value="openrouter">OpenRouter</option>
                   </select>
                 </label>
-                <label>向量模型 Base URL
+                <label>{{ $t('settings.model.embeddingBaseURL') }}
                   <div class="url-row">
                     <input
                       v-model="profileForm.embedding_base_url"
@@ -1392,11 +1392,11 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                     </button>
                   </div>
                 </label>
-                <label>向量模型 API Key
+                <label>{{ $t('settings.model.embeddingAPIKey') }}
                   <input v-model="profileForm.embedding_api_key" type="password" placeholder="（可选）" spellcheck="false" autocorrect="off" autocomplete="off" />
                 </label>
               </template>
-              <label>向量模型（Embedding）
+              <label>{{ $t('settings.model.embeddingModel') }}
                 <div class="select-row">
                   <template v-if="profileForm.embedding_inherit">
                     <select v-if="profileModels.length" v-model="profileForm.embedding_model">
@@ -1414,16 +1414,16 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                   </template>
                 </div>
               </label>
-              <label>向量维度<span class="field-hint">与所选向量模型保持一致，默认 1536</span><input type="number" v-model.number="profileForm.embedding_dim" min="256" max="4096" /></label>
+              <label>{{ $t('settings.model.embeddingDim') }}<span class="field-hint">与所选向量模型保持一致，默认 1536</span><input type="number" v-model.number="profileForm.embedding_dim" min="256" max="4096" /></label>
               <div class="embed-inherit-row" style="margin-top:8px">
-                <span class="embed-inherit-label">支持视觉输入（图片）<span class="field-hint" style="margin-left:4px">启用后可以向模型发送图片，仅对支持多模态的模型有效</span></span>
+                <span class="embed-inherit-label">{{ $t('settings.model.supportsVision') }}<span class="field-hint" style="margin-left:4px">启用后可以向模型发送图片，仅对支持多模态的模型有效</span></span>
                 <label class="toggle">
                   <input type="checkbox" v-model="profileForm.supports_vision" />
                   <span class="toggle-track" />
                 </label>
               </div>
               <div class="form-group" style="margin-top:12px">
-                <label class="form-label">语音合成引擎（TTS）</label>
+                <label class="form-label">{{ $t('settings.model.ttsBackend') }}</label>
                 <select v-model="profileForm.tts_backend" class="form-input">
                   <option value="">系统语音（macOS 内置）</option>
                   <option value="kokoro">Kokoro-82M（本地离线，动漫中文风格）</option>
@@ -1433,13 +1433,13 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               <!-- Kokoro 专属选项 -->
               <template v-if="profileForm.tts_backend === 'kokoro'">
                 <div class="form-group" style="margin-top:8px">
-                  <label class="form-label">声线</label>
+                  <label class="form-label">{{ $t('settings.model.ttsVoice') }}</label>
                   <select v-model="profileForm.tts_voice" class="form-input">
                     <option v-for="v in (kokoroTTSVoices.length ? kokoroTTSVoices : ['zf_xiaobei'])" :key="v" :value="v">{{ v }}</option>
                   </select>
                 </div>
                 <div class="form-group" style="margin-top:8px">
-                  <label class="form-label">语速（0.5–2.0）</label>
+                  <label class="form-label">{{ $t('settings.model.ttsSpeed') }}</label>
                   <input
                     v-model.number="profileForm.tts_speed"
                     type="number" min="0.5" max="2.0" step="0.1"
@@ -1458,8 +1458,8 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               </template>
               <div v-if="profileFormError" class="form-error">{{ profileFormError }}</div>
               <div class="modal-actions">
-                <button class="btn-cancel" @click="showProfileForm = false">取消</button>
-                <button class="btn-save" @click="saveProfile" :disabled="profileFormSaving">{{ profileFormSaving ? '保存中…' : '保存' }}</button>
+                <button class="btn-cancel" @click="showProfileForm = false">{{ $t('settings.model.cancel') }}</button>
+                <button class="btn-save" @click="saveProfile" :disabled="profileFormSaving">{{ profileFormSaving ? '保存中…' : $t('settings.model.saveProfile') }}</button>
               </div>
             </div>
           </div>
@@ -1470,10 +1470,10 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
         <div v-if="activeTab === 'ai'" class="tab-pane">
 
           <!-- 系统提示词 -->
-          <div class="group-label">系统指令</div>
+          <div class="group-label">{{ $t('settings.ai.systemPrompt') }}</div>
           <div class="settings-group">
             <div class="settings-field">
-              <div class="field-label">系统提示词</div>
+              <div class="field-label">{{ $t('settings.ai.systemPrompt') }}</div>
               <textarea v-model="cfg.SystemPrompt" rows="5" spellcheck="false" autocorrect="off" autocomplete="off" />
             </div>
           </div>
@@ -1483,15 +1483,15 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           <div class="settings-group">
             <div class="settings-row">
               <div class="row-body">
-                <div class="row-title">上下文记忆轮数</div>
-                <div class="row-desc">保留最近 N 轮对话作为上下文，越大记得越多但消耗 token 也越多（1–100）</div>
+                <div class="row-title">{{ $t('settings.ai.shortTermLimit') }}</div>
+                <div class="row-desc">{{ $t('settings.ai.shortTermLimitDesc') }}</div>
               </div>
               <input type="number" v-model.number="cfg.ShortTermLimit" min="1" max="100" style="width:72px;text-align:center" />
             </div>
             <div class="settings-row">
               <div class="row-body">
-                <div class="row-title">自我成长触发间隔</div>
-                <div class="row-desc">每隔 N 轮对话，AI 自动整理用户画像与记忆；设为 0 可关闭</div>
+                <div class="row-title">{{ $t('settings.ai.nudgeInterval') }}</div>
+                <div class="row-desc">{{ $t('settings.ai.nudgeIntervalDesc') }}</div>
               </div>
               <input type="number" v-model.number="cfg.NudgeInterval" min="0" max="100" style="width:72px;text-align:center" />
             </div>
@@ -1501,7 +1501,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           <div class="group-label">技能与扩展</div>
           <div class="settings-group">
             <div class="settings-field">
-              <div class="field-label">技能目录 <span class="field-hint-inline">每行一个路径，AI 可调用目录内的 YAML 自定义技能</span></div>
+              <div class="field-label">{{ $t('settings.ai.skillsDirs') }} <span class="field-hint-inline">{{ $t('settings.ai.skillsDirsDesc') }}</span></div>
               <textarea v-model="cfg.SkillsDirs" rows="3" placeholder="~/.aiko/auto-skills" spellcheck="false" autocorrect="off" autocomplete="off" />
             </div>
           </div>
@@ -1510,13 +1510,31 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
         <!-- 通用 -->
         <div v-if="activeTab === 'general'" class="tab-pane">
 
-          <!-- 系统 -->
-          <div class="group-label">系统</div>
+          <!-- 语言 -->
+          <div class="group-label">{{ $t('settings.language.label') }}</div>
           <div class="settings-group">
             <div class="settings-row">
               <div class="row-body">
-                <div class="row-title">登录时自动启动</div>
-                <div class="row-desc">开机登录 macOS 后自动运行 Aiko</div>
+                <div class="row-title">{{ $t('settings.language.label') }}</div>
+                <div class="row-desc">默认跟随系统</div>
+              </div>
+              <div class="row-ctrl">
+                <select v-model="selectedLang" class="vrm-select">
+                  <option v-for="opt in LANG_OPTIONS" :key="opt.value" :value="opt.value">
+                    {{ opt.label }}
+                  </option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- 系统 -->
+          <div class="group-label">{{ $t('settings.general.system') }}</div>
+          <div class="settings-group">
+            <div class="settings-row">
+              <div class="row-body">
+                <div class="row-title">{{ $t('settings.general.autoLaunch') }}</div>
+                <div class="row-desc">{{ $t('settings.general.autoLaunchDesc') }}</div>
               </div>
               <label class="toggle">
                 <input type="checkbox" :checked="autoLaunch" @change="toggleAutoLaunch($event.target.checked)" />
@@ -1526,63 +1544,63 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           </div>
 
           <!-- 界面主题 -->
-          <div class="group-label">界面主题</div>
+          <div class="group-label">{{ $t('settings.general.theme') }}</div>
           <div class="settings-group">
             <div class="settings-row">
               <div class="row-body">
-                <div class="row-title">风格</div>
-                <div class="row-desc">液态玻璃：近透明折射光影；毛玻璃：经典深色质感</div>
+                <div class="row-title">{{ $t('settings.general.style') }}</div>
+                <div class="row-desc">{{ $t('settings.general.styleDesc') }}</div>
               </div>
               <div class="row-ctrl">
                 <div class="backend-toggle">
                   <button
                     :class="['backend-btn', cfg.ThemeStyle !== 'frosted' ? 'active' : '']"
                     @click="setThemeStyle('liquid-glass')"
-                  >液态玻璃</button>
+                  >{{ $t('settings.general.styleLiquidGlass') }}</button>
                   <button
                     :class="['backend-btn', cfg.ThemeStyle === 'frosted' ? 'active' : '']"
                     @click="setThemeStyle('frosted')"
-                  >毛玻璃</button>
+                  >{{ $t('settings.general.styleFrosted') }}</button>
                 </div>
               </div>
             </div>
           </div>
 
           <!-- 快捷键 -->
-          <div class="group-label">快捷键</div>
+          <div class="group-label">{{ $t('settings.general.shortcuts') }}</div>
           <div class="settings-group">
             <div class="shortcut-list">
               <div class="shortcut-row">
                 <div class="shortcut-keys"><kbd>⌥</kbd><kbd>⌥</kbd></div>
-                <span class="shortcut-desc">双击 Option — 显示 / 隐藏聊天框</span>
+                <span class="shortcut-desc">{{ $t('settings.general.shortcutOptionDouble') }}</span>
               </div>
               <div class="shortcut-row">
                 <div class="shortcut-keys"><kbd>⌥</kbd><span class="shortcut-hold">长按 1s</span></div>
-                <span class="shortcut-desc">按住 Option 1 秒 — 开始语音输入</span>
+                <span class="shortcut-desc">{{ $t('settings.general.shortcutOptionHold') }}</span>
               </div>
               <div class="shortcut-row">
                 <div class="shortcut-keys"><span class="shortcut-release">松开 ⌥</span></div>
-                <span class="shortcut-desc">松开 Option — 停止录音，等待识别</span>
+                <span class="shortcut-desc">{{ $t('settings.general.shortcutOptionRelease') }}</span>
               </div>
               <div class="shortcut-row">
                 <div class="shortcut-keys"><kbd>↵</kbd></div>
-                <span class="shortcut-desc">发送消息</span>
+                <span class="shortcut-desc">{{ $t('settings.general.shortcutEnter') }}</span>
               </div>
               <div class="shortcut-row">
                 <div class="shortcut-keys"><kbd>⌘</kbd><kbd>↵</kbd></div>
-                <span class="shortcut-desc">消息框内换行</span>
+                <span class="shortcut-desc">{{ $t('settings.general.shortcutCmdEnter') }}</span>
               </div>
               <div class="shortcut-row">
                 <div class="shortcut-keys"><kbd>⌘</kbd><kbd>V</kbd></div>
-                <span class="shortcut-desc">粘贴图片到消息框（支持截图直接粘贴）</span>
+                <span class="shortcut-desc">{{ $t('settings.general.shortcutCmdV') }}</span>
               </div>
               <div class="shortcut-row">
                 <div class="shortcut-keys"><span class="shortcut-drag">拖拽</span></div>
-                <span class="shortcut-desc">拖动悬浮球 — 重新定位桌宠</span>
+                <span class="shortcut-desc">{{ $t('settings.general.shortcutDrag') }}</span>
               </div>
               <div class="shortcut-row">
                 <div class="shortcut-keys"><span class="shortcut-rc">右键</span></div>
-                <span class="shortcut-desc">右键聊天框 — 导出记录、清空历史、打开设置</span>
+                <span class="shortcut-desc">{{ $t('settings.general.shortcutRightClick') }}</span>
               </div>
             </div>
           </div>
@@ -1590,9 +1608,9 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
         <!-- 外观 -->
         <div v-if="activeTab === 'appearance'" class="tab-pane">
-          <div class="group-label">桌宠模型</div>
+          <div class="group-label">{{ $t('settings.appearance.petModel') }}</div>
           <!-- 渲染后端 -->
-          <label style="margin-top:8px">渲染模式
+          <label style="margin-top:8px">{{ $t('settings.appearance.renderMode') }}
             <div class="backend-toggle">
               <button
                 :class="['backend-btn', cfg.RenderBackend !== 'vrm' ? 'active' : '']"
@@ -1606,19 +1624,19 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           </label>
 
           <!-- VRM 模型选择（仅在 VRM 后端下显示） -->
-          <label v-if="cfg.RenderBackend === 'vrm'">VRM 模型
+          <label v-if="cfg.RenderBackend === 'vrm'">{{ $t('settings.appearance.vrmModel') }}
             <div class="vrm-model-row">
               <select v-model="cfg.VRMModel" @change="onVRMModelChange" class="vrm-select">
                 <option v-for="m in availableVRMModels" :key="m.name" :value="m.name">
-                  {{ m.name }} ({{ m.source === 'user' ? '用户导入' : '内置' }}, {{ m.size_kb }}KB)
+                  {{ m.name }} ({{ m.source === 'user' ? $t('settings.appearance.vrmUserImported') : $t('settings.appearance.vrmBuiltin') }}, {{ m.size_kb }}KB)
                 </option>
               </select>
               <button
                 v-if="availableVRMModels.find(m => m.name === cfg.VRMModel)?.source === 'user'"
                 class="btn-vrm-delete"
                 @click="deleteVRMModel(cfg.VRMModel)"
-                title="删除此模型"
-              >删除</button>
+                :title="$t('settings.appearance.vrmDeleteModel')"
+              >{{ $t('settings.appearance.vrmDelete') }}</button>
             </div>
             <div class="vrm-upload-row">
               <input
@@ -1632,7 +1650,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 class="btn-vrm-upload"
                 :disabled="vrmUploading"
                 @click="$refs.vrmFileInput.click()"
-              >{{ vrmUploading ? '上传中…' : '+ 导入 .vrm 模型' }}</button>
+              >{{ vrmUploading ? '上传中…' : '+ ' + $t('settings.appearance.vrmImport') }}</button>
             </div>
             <div v-if="vrmUploadError" class="vrm-upload-error">{{ vrmUploadError }}</div>
           </label>
@@ -1657,8 +1675,8 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               </select>
             </div>
           </label>
-          <div class="group-label">大小与位置</div>
-          <label style="margin-top:8px">桌宠大小
+          <div class="group-label">{{ $t('settings.appearance.chatSize') }}</div>
+          <label style="margin-top:8px">{{ $t('settings.appearance.petSize') }}
             <div class="screen-label" v-if="props.activeScreen.width > 0">
               当前屏幕：{{ props.activeScreen.width }}×{{ props.activeScreen.height }}
             </div>
@@ -1670,11 +1688,11 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               />
               <span class="size-val">{{ cfg.PetSize || '自动' }}{{ cfg.PetSize ? 'px' : '' }}</span>
             </div>
-            <div class="size-hint">设为 0 时自动根据屏幕高度缩放；拖动滑块可实时预览</div>
+            <div class="size-hint">{{ $t('settings.appearance.petSizeDesc') }}</div>
             <button class="btn-neutral-sm" @click="cfg.PetSize = 0; EventsEmit('config:pet:size:changed', 0)">重置为自动</button>
-            <button class="btn-neutral-sm" @click="resetBallPosition" style="margin-top:6px">重置桌宠位置</button>
+            <button class="btn-neutral-sm" @click="resetBallPosition" style="margin-top:6px">{{ $t('settings.appearance.resetBall') }}</button>
           </label>
-          <label>聊天框宽度
+          <label>{{ $t('settings.appearance.chatWidth') }}
             <div class="size-row">
               <input
                 type="range" min="300" max="800" step="10"
@@ -1684,7 +1702,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               <span class="size-val">{{ cfg.ChatWidth || '默认' }}{{ cfg.ChatWidth ? 'px' : '' }}</span>
             </div>
           </label>
-          <label>聊天框高度
+          <label>{{ $t('settings.appearance.chatHeight') }}
             <div class="size-row">
               <input
                 type="range" min="320" max="900" step="10"
@@ -1696,11 +1714,11 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             <button class="btn-neutral-sm" @click="resetChatSize">重置为默认</button>
           </label>
           <!-- 语音与音效 -->
-          <div class="group-label">语音与音效</div>
+          <div class="group-label">{{ $t('settings.appearance.voice') }}</div>
           <div class="settings-group">
             <div class="settings-row">
               <div class="row-body">
-                <div class="row-title">语音识别后自动发送</div>
+                <div class="row-title">{{ $t('settings.appearance.voiceAutoSend') }}</div>
                 <div class="row-desc">松开 Option 键后，识别完成时自动发送消息，无需手动确认</div>
               </div>
               <label class="toggle">
@@ -1710,7 +1728,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             </div>
             <div class="settings-row">
               <div class="row-body">
-                <div class="row-title">界面提示音</div>
+                <div class="row-title">{{ $t('settings.appearance.soundsEnabled') }}</div>
                 <div class="row-desc">发送、收到消息或出错时播放轻柔提示音</div>
               </div>
               <label class="toggle">
@@ -1720,7 +1738,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             </div>
             <div class="settings-row">
               <div class="row-body">
-                <div class="row-title">AI 回复自动朗读</div>
+                <div class="row-title">{{ $t('settings.appearance.ttsAutoPlay') }}</div>
                 <div class="row-desc">收到 AI 回复后自动语音播放（需在模型配置中选择语音合成引擎）</div>
               </div>
               <label class="toggle">
@@ -1733,31 +1751,31 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           <!-- 头像 -->
           <input ref="aiAvatarInput" type="file" accept="image/*" style="display:none" @change="onAvatarFileChange('ai', $event)" />
           <input ref="userAvatarInput" type="file" accept="image/*" style="display:none" @change="onAvatarFileChange('user', $event)" />
-          <div class="group-label">聊天头像</div>
+          <div class="group-label">{{ $t('settings.appearance.avatar') }}</div>
           <div class="avatar-settings-row">
             <div class="avatar-item">
-              <div class="avatar-preview-wrap" @click="uploadAvatar('ai')" title="点击上传">
-                <img v-if="cfg.AIAvatar" :src="cfg.AIAvatar" class="avatar-preview" alt="AI 头像" draggable="false" />
-                <img v-else src="/logo.png" class="avatar-preview" alt="AI 头像（默认）" draggable="false" />
+              <div class="avatar-preview-wrap" @click="uploadAvatar('ai')" :title="$t('settings.appearance.change')">
+                <img v-if="cfg.AIAvatar" :src="cfg.AIAvatar" class="avatar-preview" :alt="$t('settings.appearance.aiAvatar')" draggable="false" />
+                <img v-else src="/logo.png" class="avatar-preview" :alt="$t('settings.appearance.aiAvatar')" draggable="false" />
                 <div class="avatar-overlay">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 </div>
               </div>
-              <div class="avatar-label">AI 助手</div>
-              <button v-if="cfg.AIAvatar" class="avatar-reset-btn" @click="resetAvatar('ai')">恢复默认</button>
+              <div class="avatar-label">{{ $t('settings.appearance.aiAvatar') }}</div>
+              <button v-if="cfg.AIAvatar" class="avatar-reset-btn" @click="resetAvatar('ai')">{{ $t('settings.appearance.resetAvatar') }}</button>
             </div>
             <div class="avatar-item">
-              <div class="avatar-preview-wrap" @click="uploadAvatar('user')" title="点击上传">
+              <div class="avatar-preview-wrap" @click="uploadAvatar('user')" :title="$t('settings.appearance.change')">
                 <div v-if="!cfg.UserAvatar" class="avatar-preview avatar-default-user">
                   <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
                 </div>
-                <img v-else :src="cfg.UserAvatar" class="avatar-preview" alt="用户头像" draggable="false" />
+                <img v-else :src="cfg.UserAvatar" class="avatar-preview" :alt="$t('settings.appearance.userAvatar')" draggable="false" />
                 <div class="avatar-overlay">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 </div>
               </div>
-              <div class="avatar-label">用户</div>
-              <button v-if="cfg.UserAvatar" class="avatar-reset-btn" @click="resetAvatar('user')">恢复默认</button>
+              <div class="avatar-label">{{ $t('settings.appearance.userAvatar') }}</div>
+              <button v-if="cfg.UserAvatar" class="avatar-reset-btn" @click="resetAvatar('user')">{{ $t('settings.appearance.resetAvatar') }}</button>
             </div>
           </div>
         </div>
@@ -1765,20 +1783,20 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
         <!-- 工具 -->
         <div v-if="activeTab === 'tools'" class="tab-pane">
           <div class="sub-tab-bar" :style="{ '--active-idx': toolsSubTabIndex, '--tab-count': 3 }">
-            <button :class="{ active: toolsSubTab === 'permissions' }" @click="toolsSubTab = 'permissions'">内置工具</button>
-            <button :class="{ active: toolsSubTab === 'mcp' }" @click="toolsSubTab = 'mcp'">MCP 扩展</button>
-            <button :class="{ active: toolsSubTab === 'settings' }" @click="toolsSubTab = 'settings'">执行安全</button>
+            <button :class="{ active: toolsSubTab === 'permissions' }" @click="toolsSubTab = 'permissions'">{{ $t('settings.tools.subTabs.permissions') }}</button>
+            <button :class="{ active: toolsSubTab === 'mcp' }" @click="toolsSubTab = 'mcp'">{{ $t('settings.tools.subTabs.mcp') }}</button>
+            <button :class="{ active: toolsSubTab === 'settings' }" @click="toolsSubTab = 'settings'">{{ $t('settings.tools.subTabs.settings') }}</button>
           </div>
 
           <!-- MCP 子 tab -->
           <template v-if="toolsSubTab === 'mcp'">
             <div class="section-header">
               <h3>MCP 扩展工具</h3>
-              <button class="btn-add-sm" @click="openMCPForm">+ 添加</button>
+              <button class="btn-add-sm" @click="openMCPForm">+ {{ $t('settings.tools.mcp.addServer') }}</button>
             </div>
 
             <div v-if="mcpServers.length === 0" class="empty-hint">
-              暂无 MCP 服务器。点击"添加"接入外部工具（如浏览器控制、数据库查询等）
+              {{ $t('settings.tools.mcp.noServers') }}
             </div>
 
             <div v-for="srv in mcpServers" :key="srv.id" class="mcp-row">
@@ -1791,8 +1809,8 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 <button :class="srv.enabled ? 'btn-on-sm' : 'btn-off-sm'" @click="toggleMCPServer(srv)">
                   {{ srv.enabled ? '已启用' : '已禁用' }}
                 </button>
-                <button class="btn-edit-sm" @click="editMCPServer(srv)">编辑</button>
-                <button class="btn-danger-small" @click="deleteMCPServer(srv.id)">删除</button>
+                <button class="btn-edit-sm" @click="editMCPServer(srv)">{{ $t('settings.model.edit') }}</button>
+                <button class="btn-danger-small" @click="deleteMCPServer(srv.id)">{{ $t('settings.tools.mcp.delete') }}</button>
               </div>
             </div>
 
@@ -1800,9 +1818,9 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             <Transition :css="false" @enter="onModalEnter" @leave="onModalLeave">
             <div v-if="showMCPForm" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="mcp-form-title" @click.self="showMCPForm = false">
               <div class="modal-box">
-                <div id="mcp-form-title" class="modal-title">{{ mcpForm.id ? '编辑 MCP 服务器' : '新增 MCP 服务器' }}</div>
-                <label>名称<input v-model="mcpForm.name" placeholder="my-server" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
-                <label>传输方式
+                <div id="mcp-form-title" class="modal-title">{{ mcpForm.id ? $t('settings.tools.mcp.editServer') : $t('settings.tools.mcp.addServer') }}</div>
+                <label>{{ $t('settings.tools.mcp.name') }}<input v-model="mcpForm.name" placeholder="my-server" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
+                <label>{{ $t('settings.tools.mcp.transport') }}
                   <select v-model="mcpForm.transport">
                     <option value="stdio">stdio</option>
                     <option value="sse">SSE</option>
@@ -1810,17 +1828,17 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                   </select>
                 </label>
                 <template v-if="mcpForm.transport === 'stdio'">
-                  <label>命令<input v-model="mcpForm.command" placeholder="/usr/local/bin/mcp-server" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
-                  <label>参数<span class="field-hint">空格分隔</span><input v-model="mcpForm.args" placeholder="--flag value" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
+                  <label>{{ $t('settings.tools.mcp.command') }}<input v-model="mcpForm.command" placeholder="/usr/local/bin/mcp-server" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
+                  <label>{{ $t('settings.tools.mcp.args') }}<span class="field-hint">空格分隔</span><input v-model="mcpForm.args" placeholder="--flag value" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
                 </template>
                 <template v-else>
-                  <label>URL<input v-model="mcpForm.url" placeholder="http://localhost:8080/sse" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
-                  <label>请求头<span class="field-hint">每行一个，格式：Key: Value</span><textarea v-model="mcpForm.headers" rows="3" placeholder="Authorization: Bearer xxx&#10;X-Custom: value" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
+                  <label>{{ $t('settings.tools.mcp.url') }}<input v-model="mcpForm.url" placeholder="http://localhost:8080/sse" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
+                  <label>{{ $t('settings.tools.mcp.headers') }}<span class="field-hint">每行一个，格式：Key: Value</span><textarea v-model="mcpForm.headers" rows="3" placeholder="Authorization: Bearer xxx&#10;X-Custom: value" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
                 </template>
                 <div v-if="mcpFormError" class="form-error">{{ mcpFormError }}</div>
                 <div class="modal-actions">
-                  <button class="btn-cancel" @click="showMCPForm = false">取消</button>
-                  <button class="btn-save" :disabled="mcpFormSaving" @click="saveMCPServer">{{ mcpFormSaving ? '保存中…' : '保存' }}</button>
+                  <button class="btn-cancel" @click="showMCPForm = false">{{ $t('settings.tools.mcp.cancel') }}</button>
+                  <button class="btn-save" :disabled="mcpFormSaving" @click="saveMCPServer">{{ mcpFormSaving ? '保存中…' : $t('settings.tools.mcp.save') }}</button>
                 </div>
               </div>
             </div>
@@ -1884,8 +1902,8 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           <!-- 执行安全子 tab -->
           <template v-if="toolsSubTab === 'settings'">
             <div class="settings-section" style="margin-top:8px">
-              <h3 class="section-title">文件访问目录</h3>
-              <p class="section-hint">AI 只能读写列表内的路径。留空则禁止所有文件操作；支持通配符（如 /Users/me/projects/*）</p>
+              <h3 class="section-title">{{ $t('settings.tools.settings.allowedPaths') }}</h3>
+              <p class="section-hint">{{ $t('settings.tools.settings.allowedPathsDesc') }}</p>
               <div class="path-list">
                 <div v-for="(p, i) in cfg.AllowedPaths" :key="i" class="path-row">
                   <span class="path-text">{{ p }}</span>
@@ -1901,13 +1919,13 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                   @keydown.enter="addPath"
                   spellcheck="false" autocorrect="off" autocomplete="off"
                 />
-                <button class="btn-add-sm" @click="addPath">添加</button>
+                <button class="btn-add-sm" @click="addPath">{{ $t('settings.tools.settings.addPath') }}</button>
               </div>
             </div>
 
             <div class="settings-section" style="margin-top:12px">
-              <h3 class="section-title">免确认命令</h3>
-              <p class="section-hint">以下列命令名开头的 Shell 命令将跳过确认直接执行（建议填写低风险命令，如 git、ls）</p>
+              <h3 class="section-title">{{ $t('settings.tools.settings.trustedCommands') }}</h3>
+              <p class="section-hint">{{ $t('settings.tools.settings.trustedCommandsDesc') }}</p>
               <div class="path-list">
                 <div v-for="(cmd, i) in cfg.ShellTrustedCommands" :key="i" class="path-row">
                   <span class="path-text">{{ cmd }}</span>
@@ -1923,29 +1941,29 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                   @keydown.enter="addTrustedCommand"
                   spellcheck="false" autocorrect="off" autocomplete="off"
                 />
-                <button class="btn-add-sm" @click="addTrustedCommand">添加</button>
+                <button class="btn-add-sm" @click="addTrustedCommand">{{ $t('settings.tools.settings.addPath') }}</button>
               </div>
             </div>
 
             <div class="settings-section" style="margin-top:12px">
               <h3 class="section-title">超时限制</h3>
               <div class="form-row">
-                <label for="shell-timeout-input">Shell 命令超时（秒）</label>
+                <label for="shell-timeout-input">{{ $t('settings.tools.settings.shellTimeout') }}</label>
                 <input id="shell-timeout-input" type="number" v-model.number="cfg.ShellTimeout" min="1" max="3600" class="short-input" aria-describedby="timeout-hint" />
               </div>
               <div class="form-row">
-                <label for="code-timeout-input">代码执行超时（秒）</label>
+                <label for="code-timeout-input">{{ $t('settings.tools.settings.codeTimeout') }}</label>
                 <input id="code-timeout-input" type="number" v-model.number="cfg.CodeTimeout" min="1" max="3600" class="short-input" aria-describedby="timeout-hint" />
               </div>
-              <p id="timeout-hint" class="section-hint" style="margin-top:8px">超时后进程强制终止，范围 1–3600 秒</p>
+              <p id="timeout-hint" class="section-hint" style="margin-top:8px">{{ $t('settings.tools.settings.codeTimeoutDesc') }}</p>
             </div>
 
           </template>
         </div>
         <div v-if="activeTab === 'knowledge'" class="tab-pane">
           <div class="section-header">
-            <h3>知识库文件</h3>
-            <button @click="importFile" :disabled="!!importProgress" class="btn-add-sm">+ 导入文档</button>
+            <h3>{{ $t('settings.knowledge.sources') }}</h3>
+            <button @click="importFile" :disabled="!!importProgress" class="btn-add-sm">+ {{ $t('settings.knowledge.import') }}</button>
           </div>
           <p class="section-hint">支持 .txt、.md、.pdf、.epub；导入后 AI 可通过语义检索引用文档内容</p>
           <div v-if="importProgress" class="progress">
@@ -1954,28 +1972,28 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           <ul v-if="sources.length">
             <li v-for="src in sources" :key="src">
               <span>{{ src }}</span>
-              <button class="btn-danger-small" :aria-label="`删除 ${src}`" @click="deleteSource(src)">删除</button>
+              <button class="btn-danger-small" :aria-label="`${$t('settings.knowledge.deleteSource')} ${src}`" @click="deleteSource(src)">{{ $t('settings.knowledge.deleteSource') }}</button>
             </li>
           </ul>
-          <p v-else class="empty">暂无知识库文件，点击「导入文档」开始添加</p>
+          <p v-else class="empty">{{ $t('settings.knowledge.noSources') }}</p>
         </div>
 
         <!-- 自动化 -->
         <div v-if="activeTab === 'automation'" class="tab-pane">
           <div class="sub-tab-bar" :style="{ '--active-idx': automationSubTabIndex, '--tab-count': 2 }">
-            <button :class="{ active: automationSubTab === 'cron' }" @click="automationSubTab = 'cron'">定时任务</button>
-            <button :class="{ active: automationSubTab === 'proactive' }" @click="automationSubTab = 'proactive'">待触发提醒</button>
+            <button :class="{ active: automationSubTab === 'cron' }" @click="automationSubTab = 'cron'">{{ $t('settings.automation.subTabs.cron') }}</button>
+            <button :class="{ active: automationSubTab === 'proactive' }" @click="automationSubTab = 'proactive'">{{ $t('settings.automation.subTabs.proactive') }}</button>
           </div>
 
           <!-- 定时任务子 tab -->
           <template v-if="automationSubTab === 'cron'">
             <div class="section-header">
-              <h3>定时任务</h3>
-              <button class="btn-add-sm" @click="openCronForm">+ 新建</button>
+              <h3>{{ $t('settings.automation.subTabs.cron') }}</h3>
+              <button class="btn-add-sm" @click="openCronForm">+ {{ $t('settings.automation.cron.add') }}</button>
             </div>
 
             <div v-if="cronJobs.length === 0" class="empty-hint">
-              暂无定时任务，点击"新建"创建
+              {{ $t('settings.automation.cron.noJobs') }}
             </div>
 
             <div v-for="job in cronJobs" :key="job.ID" class="cron-row">
@@ -1992,11 +2010,11 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 <div v-if="job.Notify || job.SaveToMemory" class="cron-flags">
                   <span v-if="job.Notify" class="cron-flag cron-flag--on">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width="10" height="10"><path d="M8 1a5 5 0 0 0-5 5v1.38l-.8 1.6A1 1 0 0 0 3.1 10.5h9.8a1 1 0 0 0 .9-1.52L13 7.38V6a5 5 0 0 0-5-5zm0 13a2 2 0 0 1-1.73-1h3.46A2 2 0 0 1 8 14z"/></svg>
-                    通知
+                    {{ $t('settings.automation.cron.notify') }}
                   </span>
                   <span v-if="job.SaveToMemory" class="cron-flag cron-flag--on">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width="10" height="10"><path d="M8 1a3.5 3.5 0 1 0 0 7A3.5 3.5 0 0 0 8 1zM3 10.5C3 9.12 5.24 8 8 8s5 1.12 5 2.5V14H3v-3.5z"/></svg>
-                    存入记忆
+                    {{ $t('settings.automation.cron.saveToMemory') }}
                   </span>
                 </div>
                 <div class="cron-lastrun">
@@ -2005,11 +2023,11 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 </div>
               </div>
               <div class="cron-actions">
-                <button class="btn-add-sm" @click="runCronJobNow(job.ID)">执行</button>
-                <button class="btn-edit-sm" @click="editCronJob(job)">编辑</button>
+                <button class="btn-add-sm" @click="runCronJobNow(job.ID)">{{ $t('settings.automation.cron.runNow') }}</button>
+                <button class="btn-edit-sm" @click="editCronJob(job)">{{ $t('settings.automation.cron.edit') }}</button>
                 <button v-if="job.Enabled" class="btn-off-sm" @click="toggleCronJob(job)">禁用</button>
                 <button v-else class="btn-on-sm" @click="toggleCronJob(job)">启用</button>
-                <button class="btn-danger-small" @click="deleteCronJob(job.ID)">删除</button>
+                <button class="btn-danger-small" @click="deleteCronJob(job.ID)">{{ $t('settings.automation.cron.delete') }}</button>
               </div>
             </div>
 
@@ -2017,15 +2035,15 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             <Transition :css="false" @enter="onModalEnter" @leave="onModalLeave">
             <div v-if="showCronForm" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="cron-form-title" @click.self="showCronForm = false">
               <div class="modal-box">
-                <div id="cron-form-title" class="modal-title">{{ cronForm.id ? '编辑定时任务' : '新建定时任务' }}</div>
-                <label>名称 *<input v-model="cronForm.name" placeholder="每日早报" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
-                <label>描述<input v-model="cronForm.description" placeholder="可选说明" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
-                <label>执行时间（Cron）*<span class="field-hint">5 段 cron 格式（分 时 日 月 周），如 0 8 * * * = 每天 8 点；也支持 @daily、@hourly 等</span><input v-model="cronForm.schedule" placeholder="0 8 * * *" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
-                <label>触发指令 *<textarea v-model="cronForm.prompt" rows="4" placeholder="到达时间时发给 AI 的指令，如：帮我总结今日新闻" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
+                <div id="cron-form-title" class="modal-title">{{ cronForm.id ? $t('settings.automation.cron.edit') : $t('settings.automation.cron.add') }}</div>
+                <label>{{ $t('settings.automation.cron.name') }} *<input v-model="cronForm.name" placeholder="每日早报" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
+                <label>{{ $t('settings.automation.cron.description') }}<input v-model="cronForm.description" placeholder="可选说明" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
+                <label>{{ $t('settings.automation.cron.schedule') }} *<span class="field-hint">5 段 cron 格式（分 时 日 月 周），如 0 8 * * * = 每天 8 点；也支持 @daily、@hourly 等</span><input v-model="cronForm.schedule" placeholder="0 8 * * *" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
+                <label>{{ $t('settings.automation.cron.prompt') }} *<textarea v-model="cronForm.prompt" rows="4" placeholder="到达时间时发给 AI 的指令，如：帮我总结今日新闻" spellcheck="false" autocorrect="off" autocomplete="off" /></label>
                 <div class="cron-toggle-row">
                   <label class="cron-toggle-label">
                     <span class="cron-toggle-text">
-                      <span class="cron-toggle-title">系统通知</span>
+                      <span class="cron-toggle-title">{{ $t('settings.automation.cron.notify') }}</span>
                       <span class="cron-toggle-hint">执行完成后发送 macOS 系统通知</span>
                     </span>
                     <button
@@ -2039,7 +2057,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                   </label>
                   <label class="cron-toggle-label">
                     <span class="cron-toggle-text">
-                      <span class="cron-toggle-title">存入记忆</span>
+                      <span class="cron-toggle-title">{{ $t('settings.automation.cron.saveToMemory') }}</span>
                       <span class="cron-toggle-hint">执行成功后将结果写入长期记忆</span>
                     </span>
                     <button
@@ -2054,8 +2072,8 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 </div>
                 <div v-if="cronFormError" class="form-error">{{ cronFormError }}</div>
                 <div class="modal-actions">
-                  <button class="btn-cancel" @click="showCronForm = false">取消</button>
-                  <button class="btn-save" :disabled="cronFormSaving" @click="saveCronJob">{{ cronFormSaving ? '保存中…' : '保存' }}</button>
+                  <button class="btn-cancel" @click="showCronForm = false">{{ $t('settings.automation.cron.cancel') }}</button>
+                  <button class="btn-save" :disabled="cronFormSaving" @click="saveCronJob">{{ cronFormSaving ? '保存中…' : $t('settings.automation.cron.save') }}</button>
                 </div>
               </div>
             </div>
@@ -2065,14 +2083,14 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           <!-- 提醒事项子 tab -->
           <template v-if="automationSubTab === 'proactive'">
             <div class="section-header">
-              <h3>提醒事项</h3>
+              <h3>{{ $t('settings.automation.subTabs.proactive') }}</h3>
               <button class="btn-neutral-sm" @click="loadProactiveItems">刷新</button>
             </div>
 
             <div v-if="proactiveError" class="form-error">{{ proactiveError }}</div>
 
             <div v-if="proactiveItems.length === 0 && !proactiveError" class="empty-hint">
-              暂无待触发的提醒事项
+              {{ $t('settings.automation.proactive.noItems') }}
             </div>
 
             <div v-for="item in proactiveItems" :key="item.ID" class="proactive-row">
@@ -2080,7 +2098,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 <span class="proactive-time">{{ formatProactiveTime(item.TriggerAt) }}</span>
                 <span class="proactive-prompt">{{ truncatePrompt(item.Prompt, 60) }}</span>
               </div>
-              <button class="btn-danger-sm" @click="deleteProactiveItem(item.ID)">删除</button>
+              <button class="btn-danger-sm" @click="deleteProactiveItem(item.ID)">{{ $t('settings.automation.proactive.delete') }}</button>
             </div>
           </template>
         </div>
@@ -2090,7 +2108,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           <div class="url-row" style="margin-bottom:8px">
             <span style="flex:1;font-size:12px;color:#9ca3af">lark-cli 路径由 PATH 自动查找</span>
             <button class="fetch-btn" @click="fetchLarkStatus" :disabled="larkStatusLoading">
-              {{ larkStatusLoading ? '检测中...' : '检测状态' }}
+              {{ larkStatusLoading ? '检测中...' : $t('settings.lark.status') }}
             </button>
           </div>
 
@@ -2148,7 +2166,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
         <!-- 短信监听 -->
         <div v-if="activeTab === 'sms'" class="tab-pane">
           <div class="section-header">
-            <h3>短信验证码自动识别</h3>
+            <h3>{{ $t('settings.sms.watcher') }}</h3>
           </div>
           <p class="sms-desc">
             监听 macOS「信息」App 收到的短信，自动提取验证码并复制到剪贴板，同时推送通知气泡。<br>
@@ -2157,9 +2175,9 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
           <div class="sms-toggle-row">
             <span class="sms-status-dot" :class="smsWatcherRunning ? 'dot-on' : 'dot-off'"></span>
-            <span class="sms-status-label">{{ smsWatcherRunning ? '监听中' : '已停止' }}</span>
+            <span class="sms-status-label">{{ smsWatcherRunning ? $t('settings.sms.running') : $t('settings.sms.stopped') }}</span>
             <button class="fetch-btn" @click="toggleSMSWatcher" :disabled="smsWatcherLoading">
-              {{ smsWatcherLoading ? '处理中...' : (smsWatcherRunning ? '停止监听' : '开启监听') }}
+              {{ smsWatcherLoading ? '处理中...' : (smsWatcherRunning ? $t('settings.sms.stop') : $t('settings.sms.start')) }}
             </button>
           </div>
 
@@ -2188,10 +2206,10 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
         <!-- 关于 -->
         <div v-if="activeTab === 'about'" class="tab-pane about-pane">
-          <div class="section-header"><h3>关于 Aiko</h3></div>
+          <div class="section-header"><h3>{{ $t('settings.about.version') }}</h3></div>
 
           <div class="about-version-row">
-            <span class="about-label">当前版本</span>
+            <span class="about-label">{{ $t('settings.about.currentVersion') }}</span>
             <span class="about-version">v{{ currentVersion }}</span>
           </div>
 
@@ -2199,7 +2217,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             <!-- Not yet checked -->
             <button v-if="!updateInfo && !updateChecking && !updateInstalling"
               class="fetch-btn" @click="checkUpdate">
-              检查更新
+              {{ $t('settings.about.checkUpdate') }}
             </button>
 
             <!-- Checking -->
@@ -2207,16 +2225,16 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
             <!-- No update -->
             <div v-if="updateInfo && !updateInfo.has_update && !updateInstalling" class="about-hint">
-              已是最新版本（v{{ updateInfo.latest_version }}）
+              {{ $t('settings.about.upToDate') }}（v{{ updateInfo.latest_version }}）
             </div>
 
             <!-- Has update -->
             <div v-if="updateInfo && updateInfo.has_update && !updateInstalling" class="about-update-available">
-              <span>发现新版本 <strong>v{{ updateInfo.latest_version }}</strong></span>
+              <span>{{ $t('settings.about.newVersion') }} <strong>v{{ updateInfo.latest_version }}</strong></span>
               <button
                 class="about-changelog-link"
                 @click="BrowserOpenURL(`https://github.com/tiancheng92/Aiko/releases/tag/v${updateInfo.latest_version}`)"
-              >更新内容</button>
+              >{{ $t('settings.about.releaseNotes') }}</button>
               <button class="fetch-btn fetch-btn--primary" @click="installUpdate"
                 :disabled="!updateInfo.download_url">
                 {{ updateInfo.download_url ? '立即更新' : '无可用下载' }}
@@ -2250,7 +2268,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
     <div class="win-footer">
       <span class="status-msg">
         <template v-if="statusMsg">{{ statusMsg }}</template>
-        <template v-else-if="saving">保存中…</template>
+        <template v-else-if="saving">{{ $t('settings.saving') }}</template>
       </span>
       <button class="btn-done" @click="$emit('close')">完成</button>
     </div>
