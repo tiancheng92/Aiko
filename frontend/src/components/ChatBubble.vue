@@ -4,6 +4,7 @@ const ChatPanel = defineAsyncComponent(() => import('./ChatPanel.vue'))
 import ContextMenu from './ContextMenu.vue'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { debounce } from '../utils/timing.js'
+import { useI18n } from 'vue-i18n'
 import { ExportChatHistory, GetChatSize, PingLLM, SaveChatSize, GetConfig, ListModelProfiles } from '../../wailsjs/go/main/App'
 import { ICON_EXPORT, ICON_TRASH, ICON_SETTING } from '../utils/icons'
 import { springAnimate } from '../composables/useSpring.js'
@@ -17,6 +18,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['close', 'open-settings'])
 
+const { t } = useI18n()
 const latencyMs = ref(null)        // null = not yet measured, -1 = error, ≥0 = ms
 const activeProfileName = ref('') // name of the currently active model profile
 const activeModel = ref('')        // model id of the currently active profile
@@ -388,10 +390,10 @@ const chatMenuRef = ref(null)
 const chatPanelRef = ref(null)
 
 const chatMenuItems = computed(() => [
-  { iconSvg: ICON_EXPORT,  label: '导出聊天记录', action: exportHistory },
-  { iconSvg: ICON_TRASH,   label: '清空聊天历史', action: clearHistory, danger: true },
+  { iconSvg: ICON_EXPORT,  label: t('chatBubble.export'), action: exportHistory },
+  { iconSvg: ICON_TRASH,   label: t('chatBubble.clearHistory'), action: clearHistory, danger: true },
   { divider: true },
-  { iconSvg: ICON_SETTING, label: '打开设置',     action: () => emit('open-settings') },
+  { iconSvg: ICON_SETTING, label: t('chatBubble.openSettings'), action: () => emit('open-settings') },
 ])
 
 /** clearHistory broadcasts a clear event to ChatPanel. */
@@ -448,21 +450,21 @@ defineExpose({ focusInput, scrollToBottom })
         <rect x="9.5" y="11" width="12" height="8" rx="2.8" fill="currentColor" opacity="0.72"/>
         <path d="M19.5 19 L20.5 22 L16.5 19.5" fill="currentColor" opacity="0.72"/>
       </svg>
-      <span class="title">聊天</span>
+      <span class="title">{{ $t('chatBubble.chat') }}</span>
       <div class="title-spacer"></div>
       <div class="title-tags">
-        <div class="title-tag latency-tag" :style="{ color: latencyColor(latencyMs) }" aria-label="LLM 延迟">
+        <div class="title-tag latency-tag" :style="{ color: latencyColor(latencyMs) }" :aria-label="$t('chatBubble.latencyAriaLabel')">
           <span class="latency-dot">●</span>
           <span class="latency-value">{{ latencyLabel(latencyMs) }}</span>
         </div>
         <div v-if="activeModel" class="title-tag model-tag" :title="activeModel">{{ activeModel }}</div>
         <div v-if="activeProfileName" class="title-tag profile-tag">{{ activeProfileName }}</div>
       </div>
-      <button class="icon-btn" :title="isFullscreen ? '退出全屏' : '全屏'" :aria-label="isFullscreen ? '退出全屏' : '全屏'" @click="toggleFullscreen">
+      <button class="icon-btn" :title="isFullscreen ? $t('chatBubble.exitFullscreen') : $t('chatBubble.fullscreen')" :aria-label="isFullscreen ? $t('chatBubble.exitFullscreen') : $t('chatBubble.fullscreen')" @click="toggleFullscreen">
         <svg v-if="!isFullscreen" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
         <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>
       </button>
-      <button class="close-btn" aria-label="关闭" @click="$emit('close')">
+      <button class="close-btn" :aria-label="$t('chatBubble.close')" @click="$emit('close')">
         <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
