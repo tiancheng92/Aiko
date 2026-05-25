@@ -142,6 +142,8 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE messages ADD COLUMN thinking_content TEXT NOT NULL DEFAULT ''`,
 		// v9: model_profiles can indicate whether this model supports vision/image inputs.
 		`ALTER TABLE model_profiles ADD COLUMN supports_vision INTEGER NOT NULL DEFAULT 0`,
+		// v10: UI language preference (empty = follow system).
+		`ALTER TABLE settings ADD COLUMN language TEXT NOT NULL DEFAULT ''`,
 	}
 	for _, p := range patches {
 		if _, err := db.Exec(p); err != nil {
