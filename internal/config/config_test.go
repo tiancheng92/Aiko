@@ -173,6 +173,41 @@ func TestVectorEnabled_EmptyURL(t *testing.T) {
 	}
 }
 
+// TestConfigLanguage_RoundTrip tests that Language round-trips through Save/Load.
+func TestConfigLanguage_RoundTrip(t *testing.T) {
+	db := newTestDB(t)
+	store := config.NewStore(db)
+
+	cfg := &config.Config{Language: "ja"}
+	if err := store.Save(cfg); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	loaded, err := store.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if loaded.Language != "ja" {
+		t.Errorf("Language: got %q, want %q", loaded.Language, "ja")
+	}
+}
+
+// TestConfigLanguage_Default tests that Language defaults to empty string.
+func TestConfigLanguage_Default(t *testing.T) {
+	db := newTestDB(t)
+	store := config.NewStore(db)
+
+	loaded, err := store.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if loaded.Language != "" {
+		t.Errorf("Language default: got %q, want %q", loaded.Language, "")
+	}
+}
+
 // TestVectorEnabled_Configured verifies VectorEnabled=true when both fields are set.
 func TestVectorEnabled_Configured(t *testing.T) {
 	cfg := &config.Config{

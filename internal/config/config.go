@@ -60,6 +60,9 @@ type Config struct {
 	UseKnowledge bool
 	// UseMemory controls whether long-term memory results are included in context.
 	UseMemory bool
+	// Language is the UI language preference. Empty string means "follow system".
+	// Valid values: "zh-CN", "en", "ja", "ko".
+	Language string
 }
 
 // Store provides persistent read/write access to application configuration in SQLite.
@@ -133,6 +136,7 @@ func (s *Store) Load() (*Config, error) {
 	cfg.ThinkingLevel = orDefault(m["thinking_level"], "default")
 	cfg.UseKnowledge = m["use_knowledge"] != "false" // default true
 	cfg.UseMemory = m["use_memory"] != "false"        // default true
+		cfg.Language = m["language"]
 	return cfg, nil
 }
 
@@ -177,6 +181,7 @@ func (s *Store) Save(cfg *Config) error {
 		"thinking_level":           cfg.ThinkingLevel,
 		"use_knowledge":            strconv.FormatBool(cfg.UseKnowledge),
 		"use_memory":               strconv.FormatBool(cfg.UseMemory),
+		"language":                 cfg.Language,
 	}
 	tx, err := s.db.Begin()
 	if err != nil {
