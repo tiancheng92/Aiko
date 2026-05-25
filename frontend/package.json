@@ -19,7 +19,8 @@
     "pixi.js": "^6.5.0",
     "shiki": "^4.0.2",
     "three": "^0.184.0",
-    "vue": "^3.2.37"
+    "vue": "^3.2.37",
+    "vue-i18n": "^11.4.4"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.4",
