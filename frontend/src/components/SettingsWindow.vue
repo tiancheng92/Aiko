@@ -1,6 +1,7 @@
 <!-- frontend/src/components/SettingsWindow.vue -->
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { springAnimate } from '../composables/useSpring.js'
 import {
   GetConfig, SaveConfig,
@@ -37,6 +38,31 @@ import {
 } from '../utils/icons'
 
 const confirm = useConfirm()
+const { locale, t } = useI18n()
+
+const LANG_OPTIONS = [
+  { value: 'zh-CN', label: '中文' },
+  { value: 'en',    label: 'English' },
+  { value: 'ja',    label: '日本語' },
+  { value: 'ko',    label: '한국어' },
+  { value: '',      label: '跟随系统' },
+]
+
+function detectSystemLocale() {
+  const sys = navigator.language
+  const short = sys.slice(0, 2)
+  return ['zh-CN', 'en', 'ja', 'ko'].find(l => l.startsWith(short)) || 'en'
+}
+
+const selectedLang = computed({
+  get: () => cfg.value.Language || '',
+  set: (val) => {
+    cfg.value.Language = val
+    const resolved = val || detectSystemLocale()
+    locale.value = resolved
+    debouncedSave(true)
+  },
+})
 
 const emit = defineEmits(['close'])
 
@@ -62,6 +88,7 @@ const cfg = ref({
   RenderBackend: 'live2d',
   VRMModel: '',
   ThemeStyle: 'frosted',
+  Language: '',
 })
 const availableVRMModels = ref([])
 const { availableModels, loadModels } = useModelPath()
