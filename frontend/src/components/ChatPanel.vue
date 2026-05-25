@@ -8,6 +8,7 @@ import { renderMarkdown, extractRealUrl, shortenUrl, stripEmotionTags, stripTool
 import { useSounds } from '../composables/useSounds'
 import { useTypingScheduler } from '../composables/useTypingScheduler'
 import { useEscapeKey } from '../composables/useEscapeKey'
+import { useI18n } from 'vue-i18n'
 import { springAnimate } from '../composables/useSpring'
 import ToolConfirmModal from './ToolConfirmModal.vue'
 import ExecutionProgress from './ExecutionProgress.vue'
@@ -200,7 +201,7 @@ window.__toggleChipGroup = (btn) => {
   if (!group) return
   const isNowCollapsed = group.classList.toggle('collapsed')
   const count = group.querySelectorAll('.tool-call-chip-extra').length
-  btn.textContent = isNowCollapsed ? `+${count} 更多` : '收起'
+  btn.textContent = isNowCollapsed ? t('chat.more', { n: count }) : t('chat.collapse')
 }
 
 useEscapeKey(() => { showClearConfirm.value = false }, showClearConfirm)
@@ -404,12 +405,13 @@ const thinkingLevels = computed(() =>
     : ['default', 'low', 'medium', 'high']
 )
 
-/** thinkingLevelLabel returns a human-readable label for the current thinking level. */
+/** thinkingLevelLabel returns the i18n label for the current thinking level. */
 const thinkingLevelLabel = computed(() => {
-  const labels = { default: '默认', off: '关闭', low: '低', medium: '中', high: '高' }
-  return labels[thinkingLevel.value] || '默认'
+  const key = { default: 'default', off: 'off', low: 'low', medium: 'medium', high: 'high' }[thinkingLevel.value] || 'default'
+  return t('chat.thinkingLabel.' + key)
 })
 
+const { t } = useI18n()
 const { playSend, playReceive, playError, playStop } = useSounds()
 let soundsEnabled = false
 
@@ -947,7 +949,7 @@ function onBubbleContextMenu(e, i) {
   if (m.content) {
     items.push({
       iconSvg: ICON_COPY,
-      label: '复制',
+      label: t('chat.copy'),
       action: () => navigator.clipboard.writeText(m.content),
     })
   }
@@ -956,7 +958,7 @@ function onBubbleContextMenu(e, i) {
     const isSpeaking = activeTTSMsgId.value === i
     items.push({
       iconSvg: isSpeaking ? ICON_STOP_SPEAK : ICON_SPEAK,
-      label: isSpeaking ? '停止朗读' : '朗读',
+      label: isSpeaking ? t('chat.stopSpeak') : t('chat.speak'),
       action: () => speakMessage(i),
     })
     const lastAssistantIdx = messages.value.reduce((last, msg, idx) =>
@@ -964,7 +966,7 @@ function onBubbleContextMenu(e, i) {
     if (i === lastAssistantIdx && !loading.value) {
       items.push({
         iconSvg: ICON_REGEN,
-        label: '重新生成',
+        label: t('chat.regenerate'),
         action: () => regenLastReply(i),
       })
     }
@@ -988,13 +990,13 @@ function onTextareaContextMenu(e) {
   if (hasSelection) {
     items.push({
       iconSvg: ICON_COPY,
-      label: '复制',
+      label: t('chat.copy'),
       action: () => navigator.clipboard.writeText(el.value.slice(el.selectionStart, el.selectionEnd)),
     })
   }
   items.push({
     iconSvg: ICON_PASTE,
-    label: '粘贴',
+    label: t('chat.paste'),
     action: async () => {
       const text = await ReadClipboard().catch(() => '')
       if (!text) return
@@ -1008,7 +1010,7 @@ function onTextareaContextMenu(e) {
   if (hasSelection) {
     items.push({
       iconSvg: ICON_CUT,
-      label: '剪切',
+      label: t('chat.cut'),
       action: () => {
         navigator.clipboard.writeText(el.value.slice(el.selectionStart, el.selectionEnd))
         const start = el.selectionStart
@@ -1038,13 +1040,13 @@ function onMilkdownContextMenu(e) {
   if (hasSelection) {
     items.push({
       iconSvg: ICON_COPY,
-      label: '复制',
+      label: t('chat.copy'),
       action: () => navigator.clipboard.writeText(selectedText),
     })
   }
   items.push({
     iconSvg: ICON_PASTE,
-    label: '粘贴',
+    label: t('chat.paste'),
     action: async () => {
       const text = await ReadClipboard().catch(() => '')
       if (!text) return
@@ -1058,7 +1060,7 @@ function onMilkdownContextMenu(e) {
   if (hasSelection) {
     items.push({
       iconSvg: ICON_CUT,
-      label: '剪切',
+      label: t('chat.cut'),
       action: () => {
         navigator.clipboard.writeText(selectedText)
         milkdownInstance?.editor.action((ctx) => {
@@ -1466,7 +1468,7 @@ async function initMilkdown(initialContent = '') {
     },
     featureConfigs: {
       [Crepe.Feature.Placeholder]: {
-        text: '发消息...',
+        text: t('chat.placeholder'),
         mode: 'doc',
       },
     },
@@ -1577,7 +1579,7 @@ defineExpose({ focusInput, scrollToBottom })
                       <LinkPreview v-for="u in extractUrls(m.content).slice(1)" :key="u" :url="u" />
                     </template>
                     <button class="lp-toggle-btn" @click="lpExpanded[msgKey(m, i)] = !lpExpanded[msgKey(m, i)]">
-                      {{ lpExpanded[msgKey(m, i)] ? '收起链接 ↑' : `展开另外 ${extractUrls(m.content).length - 1} 个链接 ↓` }}
+                      {{ lpExpanded[msgKey(m, i)] ? $t('chat.collapseLinks') : $t('chat.expandLinks', { n: extractUrls(m.content).length - 1 }) }}
                     </button>
                   </template>
                 </template>
@@ -1593,7 +1595,7 @@ defineExpose({ focusInput, scrollToBottom })
                       <div class="thinking-icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/><path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/><path d="M3.477 10.896a4 4 0 0 1 .585-.396"/><path d="M19.938 10.5a4 4 0 0 1 .585.396"/><path d="M6 18a4 4 0 0 1-1.967-.516"/><path d="M19.967 17.484A4 4 0 0 1 18 18"/></svg>
                       </div>
-                      <span class="thinking-label">思考过程</span>
+                      <span class="thinking-label">{{ $t('chat.thinkingProcess') }}</span>
                       <span v-if="m.streaming && !m.content" class="thinking-streaming-badge">
                         <span class="thinking-dot" /><span class="thinking-dot" /><span class="thinking-dot" />
                       </span>
@@ -1621,7 +1623,7 @@ defineExpose({ focusInput, scrollToBottom })
                         <LinkPreview v-for="u in extractUrls(m.content).slice(1)" :key="u" :url="u" />
                       </template>
                       <button class="lp-toggle-btn" @click="lpExpanded[msgKey(m, i)] = !lpExpanded[msgKey(m, i)]">
-                        {{ lpExpanded[msgKey(m, i)] ? '收起链接 ↑' : `展开另外 ${extractUrls(m.content).length - 1} 个链接 ↓` }}
+                        {{ lpExpanded[msgKey(m, i)] ? $t('chat.collapseLinks') : $t('chat.expandLinks', { n: extractUrls(m.content).length - 1 }) }}
                       </button>
                     </template>
                   </template>
@@ -1636,7 +1638,7 @@ defineExpose({ focusInput, scrollToBottom })
                 <div v-if="isCollapsed(m, i)" class="collapse-fade" :class="m.role" @click.stop="toggleExpand(m, i)">
                   <button class="collapse-btn" @click.stop="toggleExpand(m, i)">
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                    展开
+                    {{ $t('chat.expand') }}
                   </button>
                 </div>
               </Transition>
@@ -1649,7 +1651,7 @@ defineExpose({ focusInput, scrollToBottom })
               <button
                 class="msg-action-btn"
                 @click="copyMessage(i)"
-                :title="copiedIdx === i ? '已复制' : '复制'"
+                :title="copiedIdx === i ? $t('chat.copied') : $t('chat.copy')"
               >
                 <svg v-if="copiedIdx !== i" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                 <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1657,7 +1659,7 @@ defineExpose({ focusInput, scrollToBottom })
               <button
                 v-if="m.role === 'assistant'"
                 class="msg-action-btn"
-                :title="activeTTSMsgId === i ? '停止朗读' : '朗读'"
+                :title="activeTTSMsgId === i ? $t('chat.stopSpeak') : $t('chat.speak')"
                 @click="speakMessage(i)"
               >
                 <svg v-if="activeTTSMsgId !== i" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
@@ -1670,24 +1672,24 @@ defineExpose({ focusInput, scrollToBottom })
             <!-- user: recollapse left of timestamp; assistant: recollapse right of timestamp -->
             <button v-if="m.role === 'user' && isEverCollapsed(m, i) && !isCollapsed(m, i)" class="recollapse-btn" @click.stop="toggleExpand(m, i)">
               <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
-              收起
+              {{ $t('chat.collapse') }}
             </button>
             <span v-if="m.time && !m.streaming && !m.thinking" class="msg-time">{{ formatTime(m.time) }}</span>
             <button v-if="m.role !== 'user' && isEverCollapsed(m, i) && !isCollapsed(m, i)" class="recollapse-btn" @click.stop="toggleExpand(m, i)">
               <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
-              收起
+              {{ $t('chat.collapse') }}
             </button>
           </div>
         </div>
         <div v-if="m.role === 'user' && !userAvatar" class="msg-avatar user-avatar" aria-hidden="true">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
         </div>
-        <img v-else-if="m.role === 'user' && userAvatar" class="msg-avatar" :src="userAvatar" alt="用户" draggable="false" />
+        <img v-else-if="m.role === 'user' && userAvatar" class="msg-avatar" :src="userAvatar" :alt="$t('chat.userAlt')" draggable="false" />
       </div>
       </TransitionGroup>
       <!-- Scroll-to-bottom floating button -->
       <Transition name="scroll-btn">
-        <button v-if="!isAtBottom" class="scroll-to-bottom-btn" aria-label="滚到底部" @click="smoothScrollToBottom">
+        <button v-if="!isAtBottom" class="scroll-to-bottom-btn" :aria-label="$t('chat.scrollToBottomAria')" @click="smoothScrollToBottom">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
       </Transition>
@@ -1718,19 +1720,19 @@ defineExpose({ focusInput, scrollToBottom })
           />
           <!-- Toolbar: zoom controls + fullscreen -->
           <div class="lightbox-toolbar" @click.stop>
-            <button class="lb-btn" @click="lbZoomOut" title="缩小 (-)">
+            <button class="lb-btn" @click="lbZoomOut" title="Zoom out (-)">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
             <span class="lb-zoom-label">{{ Math.round(lightboxZoom * 100) }}%</span>
-            <button class="lb-btn" @click="lbZoomIn" title="放大 (+)">
+            <button class="lb-btn" @click="lbZoomIn" title="Zoom in (+)">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
             <div class="lb-sep" />
-            <button class="lb-btn" @click="lbReset" title="重置 (双击图片)">
+            <button class="lb-btn" @click="lbReset" title="Reset (double-click image)">
               <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
             </button>
             <div class="lb-sep" />
-            <button class="lb-btn" @click="lightboxFullscreen = !lightboxFullscreen" :title="lightboxFullscreen ? '退出全屏' : '全屏'">
+            <button class="lb-btn" @click="lightboxFullscreen = !lightboxFullscreen" :title="lightboxFullscreen ? $t('chatBubble.exitFullscreen') : $t('chatBubble.fullscreen')">
               <svg v-if="!lightboxFullscreen" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
               <svg v-else xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>
             </button>
@@ -1752,11 +1754,11 @@ defineExpose({ focusInput, scrollToBottom })
     <div v-if="showClearConfirm" class="clear-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="clear-confirm-title">
       <div class="clear-confirm-backdrop" @click="showClearConfirm = false" />
       <div class="clear-confirm-box">
-        <p id="clear-confirm-title" class="clear-confirm-title">清空聊天记录</p>
-        <p class="clear-confirm-text">确定要清空所有聊天记录吗？此操作不可撤销。</p>
+        <p id="clear-confirm-title" class="clear-confirm-title">{{ $t('chat.clearHistoryTitle') }}</p>
+        <p class="clear-confirm-text">{{ $t('chat.clearConfirm') }}</p>
         <div class="clear-confirm-actions">
-          <button class="clear-confirm-cancel" @click="showClearConfirm = false">取消</button>
-          <button class="clear-confirm-ok" @click="confirmClearHistory">确认清空</button>
+          <button class="clear-confirm-cancel" @click="showClearConfirm = false">{{ $t('chat.clearConfirmCancel') }}</button>
+          <button class="clear-confirm-ok" @click="confirmClearHistory">{{ $t('chat.clearConfirmOk') }}</button>
         </div>
       </div>
     </div>
@@ -1768,8 +1770,8 @@ defineExpose({ focusInput, scrollToBottom })
         <div class="tbl-detail-backdrop" @click="tableDetailRow = null" />
         <div class="tbl-detail-box">
           <div class="tbl-detail-header">
-            <span id="tbl-detail-title" class="tbl-detail-title">行详情</span>
-            <button class="tbl-detail-close" aria-label="关闭" @click="tableDetailRow = null">
+            <span id="tbl-detail-title" class="tbl-detail-title">{{ $t('chat.rowDetail') }}</span>
+            <button class="tbl-detail-close" :aria-label="$t('chatBubble.close')" @click="tableDetailRow = null">
               <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
@@ -1777,7 +1779,7 @@ defineExpose({ focusInput, scrollToBottom })
             <div v-for="pair in tableDetailRow" :key="pair.key" class="tbl-detail-pair">
               <span class="tbl-detail-key">{{ pair.key }}</span>
               <span class="tbl-detail-value markdown" v-html="renderMarkdown(pair.value)"></span>
-              <button class="tbl-detail-pair-copy" :class="{ copied: copiedPairKey === pair.key }" :aria-label="`复制 ${pair.key}`" @click.stop="copyPairValue(pair)">
+              <button class="tbl-detail-pair-copy" :class="{ copied: copiedPairKey === pair.key }" :aria-label="$t('chat.copy') + ' ' + pair.key" @click.stop="copyPairValue(pair)">
                 <svg v-if="copiedPairKey !== pair.key" xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                 <svg v-else xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
               </button>
@@ -1793,8 +1795,8 @@ defineExpose({ focusInput, scrollToBottom })
         <div class="tbl-detail-backdrop" @click="toolArgsPopover = null" />
         <div class="tbl-detail-box">
           <div class="tbl-detail-header">
-            <span id="tool-args-title" class="tbl-detail-title">工具参数</span>
-            <button class="tbl-detail-close" aria-label="关闭" @click="toolArgsPopover = null">
+            <span id="tool-args-title" class="tbl-detail-title">{{ $t('chat.toolArgs') }}</span>
+            <button class="tbl-detail-close" :aria-label="$t('chatBubble.close')" @click="toolArgsPopover = null">
               <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
@@ -1802,7 +1804,7 @@ defineExpose({ focusInput, scrollToBottom })
             <div v-for="pair in toolArgsPopover.pairs" :key="pair.key" class="tbl-detail-pair">
               <span class="tbl-detail-key">{{ pair.key }}</span>
               <span class="tbl-detail-value markdown" v-html="renderMarkdown(pair.value)"></span>
-              <button class="tbl-detail-pair-copy" :class="{ copied: copiedPairKey === pair.key }" :aria-label="`复制 ${pair.key}`" @click.stop="copyPairValue(pair)">
+              <button class="tbl-detail-pair-copy" :class="{ copied: copiedPairKey === pair.key }" :aria-label="$t('chat.copy') + ' ' + pair.key" @click.stop="copyPairValue(pair)">
                 <svg v-if="copiedPairKey !== pair.key" xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                 <svg v-else xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
               </button>
@@ -1821,7 +1823,7 @@ defineExpose({ focusInput, scrollToBottom })
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
         </span>
         <span class="voice-hint-text">
-          {{ voiceHint ? `"${voiceHint}"` : '正在聆听...' }}
+          {{ voiceHint ? `"${voiceHint}"` : $t('chat.listening') }}
         </span>
         <span class="voice-hint-dots" aria-hidden="true">
           <span />
@@ -1832,8 +1834,8 @@ defineExpose({ focusInput, scrollToBottom })
     <!-- Pending image previews shown above the input row -->
     <div v-if="pendingImages.length > 0" class="pending-images">
       <div v-for="(img, idx) in pendingImages" :key="idx" class="pending-img-wrap">
-        <img :src="img" class="pending-img" :alt="`待发送图片 ${idx + 1}`" />
-        <button class="pending-img-remove" aria-label="移除图片" @click="removeImage(idx)">
+        <img :src="img" class="pending-img" :alt="$t('chat.pendingImage', { n: idx + 1 })" />
+        <button class="pending-img-remove" :aria-label="$t('chat.removeImage')" @click="removeImage(idx)">
           <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
@@ -1843,7 +1845,7 @@ defineExpose({ focusInput, scrollToBottom })
       <div v-for="(f, idx) in pendingFiles" :key="idx" class="pending-file-chip" :title="f.name">
         <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
         <span class="pending-file-name">{{ f.name }}</span>
-        <button class="pending-file-remove" aria-label="移除文件" @click="removeFile(idx)">
+        <button class="pending-file-remove" :aria-label="$t('chat.removeFile')" @click="removeFile(idx)">
           <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
@@ -1856,11 +1858,11 @@ defineExpose({ focusInput, scrollToBottom })
           :aria-valuenow="updateProgress"
           aria-valuemin="0"
           aria-valuemax="100"
-          :aria-label="`更新进度 ${updateProgress}%`"
+          :aria-label="$t('chat.updateProgress', { pct: updateProgress })"
         >
           <div class="update-progress-fill" :style="{ width: updateProgress + '%' }"></div>
         </div>
-        <span class="update-progress-msg">{{ updateProgressMsg || '准备中…' }}（{{ updateProgress }}%）</span>
+        <span class="update-progress-msg">{{ updateProgressMsg || $t('chat.preparing') }}（{{ updateProgress }}%）</span>
       </div>
     </Transition>
 
@@ -1875,7 +1877,7 @@ defineExpose({ focusInput, scrollToBottom })
       <textarea
         v-show="!markdownMode"
         ref="textareaEl"
-        placeholder="发消息..."
+        :placeholder="$t('chat.placeholder')"
         rows="1"
         spellcheck="false"
         autocorrect="off"
@@ -1902,7 +1904,7 @@ defineExpose({ focusInput, scrollToBottom })
             :class="['thinking-' + thinkingLevel]"
             :disabled="loading"
             @click="cycleThinkingLevel"
-            title="思考等级"
+            :title="$t('chat.thinkingLevel')"
           ><span class="chip-icon" :class="{ 'chip-icon--fired': thinkingChipFired }" v-html="ICON_THINKING"></span><span class="chip-label" :class="{ 'chip-label--fired': thinkingChipFired }">{{ thinkingLevelLabel }}</span></button>
           <button
             v-if="cfg?.EmbeddingModel"
@@ -1911,8 +1913,8 @@ defineExpose({ focusInput, scrollToBottom })
             :aria-pressed="useKnowledge"
             :disabled="loading"
             @click="toggleKnowledge"
-            title="本次是否检索知识库"
-          ><span class="chip-icon" :class="{ 'chip-icon--fired': knowledgeChipFired }" v-html="ICON_KNOWLEDGE"></span><span class="chip-label" :class="{ 'chip-label--fired': knowledgeChipFired }">知识库</span></button>
+            :title="$t('chat.useKnowledge')"
+          ><span class="chip-icon" :class="{ 'chip-icon--fired': knowledgeChipFired }" v-html="ICON_KNOWLEDGE"></span><span class="chip-label" :class="{ 'chip-label--fired': knowledgeChipFired }">{{ $t('chat.knowledgeChip') }}</span></button>
           <button
             v-if="cfg?.EmbeddingModel"
             class="chat-opt-chip"
@@ -1920,33 +1922,33 @@ defineExpose({ focusInput, scrollToBottom })
             :aria-pressed="useMemory"
             :disabled="loading"
             @click="toggleMemory"
-            title="本次是否检索长期记忆"
-          ><span class="chip-icon" :class="{ 'chip-icon--fired': memoryChipFired }" v-html="ICON_MEMORY"></span><span class="chip-label" :class="{ 'chip-label--fired': memoryChipFired }">记忆</span></button>
+            :title="$t('chat.useMemory')"
+          ><span class="chip-icon" :class="{ 'chip-icon--fired': memoryChipFired }" v-html="ICON_MEMORY"></span><span class="chip-label" :class="{ 'chip-label--fired': memoryChipFired }">{{ $t('chat.memoryChip') }}</span></button>
         </div>
         <button
           class="md-btn"
           :class="{ active: markdownMode }"
-          title="Markdown 编辑模式"
-          aria-label="Markdown 编辑模式"
+          :title="$t('chat.markdownMode')"
+          :aria-label="$t('chat.markdownMode')"
           :disabled="loading"
           @click="toggleMarkdownMode"
         >M↓</button>
         <button
           class="attach-btn"
-          title="附加文件"
-          aria-label="附加文件"
+          :title="$t('chat.attachFile')"
+          :aria-label="$t('chat.attachFile')"
           :disabled="loading"
           @click="fileInputEl.click()"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
         </button>
-        <button v-if="isStreaming" class="stop-btn" aria-label="停止生成" @click="stopGeneration">⏹ 停止</button>
-        <button v-else class="send-btn" title="发送 (⌘Enter)" aria-label="发送" @click="send" :disabled="loading || (inputEmpty && pendingImages.length === 0 && pendingFiles.length === 0)">
+        <button v-if="isStreaming" class="stop-btn" :aria-label="$t('chat.stopAriaLabel')" @click="stopGeneration">⏹ {{ $t('chat.stop') }}</button>
+        <button v-else class="send-btn" :title="$t('chat.sendTitle')" :aria-label="$t('chat.sendAriaLabel')" @click="send" :disabled="loading || (inputEmpty && pendingImages.length === 0 && pendingFiles.length === 0)">
           <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
       </div>
     </div>
-    <div class="input-hint">⌘↩ 发送 · ↩ 换行</div>
+    <div class="input-hint">{{ $t('chat.sendHint') }}</div>
   </div>
 </template>
 

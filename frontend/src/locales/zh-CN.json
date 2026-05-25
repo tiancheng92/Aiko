@@ -257,6 +257,26 @@
       "medium": "中思考",
       "high": "高思考"
     },
+    "clearHistoryTitle": "清空聊天记录",
+    "thinkingProcess": "思考过程",
+    "expand": "展开",
+    "collapse": "收起",
+    "expandLinks": "展开另外 {n} 个链接",
+    "collapseLinks": "收起链接",
+    "regenerate": "重新生成",
+    "listening": "正在聆听...",
+    "rowDetail": "行详情",
+    "toolArgs": "工具参数",
+    "scrollToBottomAria": "滚到底部",
+    "pendingImage": "待发送图片 {n}",
+    "removeImage": "移除图片",
+    "removeFile": "移除文件",
+    "preparing": "准备中…",
+    "paste": "粘贴",
+    "cut": "剪切",
+    "more": "+{n} 更多",
+    "updateProgress": "更新进度 {pct}%",
+    "userAlt": "用户",
     "copy": "复制",
     "copied": "已复制",
     "speak": "朗读",
@@ -265,23 +285,42 @@
   "chatBubble": {
     "fullscreen": "全屏",
     "exitFullscreen": "退出全屏",
-    "close": "关闭"
+    "close": "关闭",
+    "export": "导出聊天记录",
+    "clearHistory": "清空聊天历史",
+    "openSettings": "打开设置",
+    "chat": "聊天",
+    "latencyAriaLabel": "LLM 延迟"
   },
   "toolConfirm": {
     "title": "工具执行确认",
+    "titleUpdate": "Agent 请求安装应用更新",
+    "titleShell": "Agent 请求执行 Shell 命令",
+    "titleCode": "Agent 请求执行代码",
     "shellWarning": "Shell 命令可修改系统文件、执行任意操作，请确认安全后再执行。",
-    "codeWarning": "代码将在本地环境中执行，请确认代码安全后再执行。",
+    "codeWarning": "{lang} 代码将使用系统解释器直接执行，请检查代码安全后再执行。",
+    "updateRiskText": "安装后应用将自动重启，更新过程约需 10-30 秒，当前对话将被保存。",
     "command": "命令",
+    "commandEditable": "命令（可编辑）",
+    "code": "代码",
+    "codeEditable": "代码（可编辑）",
     "workingDir": "工作目录",
+    "versionInfo": "版本信息",
     "confirm": "确认执行",
     "cancel": "取消",
-    "editBeforeRun": "编辑后再执行"
+    "reject": "拒绝",
+    "approve": "批准",
+    "installUpdate": "安装更新",
+    "editBeforeRun": "编辑后再执行",
+    "appUpdate": "应用更新"
   },
   "notification": {
     "close": "关闭通知"
   },
   "execution": {
     "running": "执行中...",
-    "done": "执行完成"
+    "executing": "正在执行工具…",
+    "done": "执行完成",
+    "kill": "终止"
   }
 }

@@ -257,6 +257,26 @@
       "medium": "Medium Thinking",
       "high": "High Thinking"
     },
+    "clearHistoryTitle": "Clear Chat History",
+    "thinkingProcess": "Thinking",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "expandLinks": "Show {n} more links",
+    "collapseLinks": "Hide links",
+    "regenerate": "Regenerate",
+    "listening": "Listening...",
+    "rowDetail": "Row Detail",
+    "toolArgs": "Tool Arguments",
+    "scrollToBottomAria": "Scroll to bottom",
+    "pendingImage": "Pending image {n}",
+    "removeImage": "Remove image",
+    "removeFile": "Remove file",
+    "preparing": "Preparing...",
+    "paste": "Paste",
+    "cut": "Cut",
+    "more": "+{n} more",
+    "updateProgress": "Update progress {pct}%",
+    "userAlt": "User",
     "copy": "Copy",
     "copied": "Copied",
     "speak": "Read Aloud",
@@ -265,23 +285,42 @@
   "chatBubble": {
     "fullscreen": "Fullscreen",
     "exitFullscreen": "Exit Fullscreen",
-    "close": "Close"
+    "close": "Close",
+    "export": "Export Chat History",
+    "clearHistory": "Clear Chat History",
+    "openSettings": "Open Settings",
+    "chat": "Chat",
+    "latencyAriaLabel": "LLM latency"
   },
   "toolConfirm": {
     "title": "Tool Execution Confirmation",
+    "titleUpdate": "Agent requests to install update",
+    "titleShell": "Agent requests to execute Shell command",
+    "titleCode": "Agent requests to execute code",
     "shellWarning": "Shell commands can modify system files and execute arbitrary operations. Please verify safety before proceeding.",
-    "codeWarning": "Code will be executed in the local environment. Please verify safety before proceeding.",
+    "codeWarning": "{lang} code will be executed using the local interpreter. Please verify safety before proceeding.",
+    "updateRiskText": "After installation the app will restart automatically. The update takes about 10-30 seconds and your conversation will be preserved.",
     "command": "Command",
+    "commandEditable": "Command (editable)",
+    "code": "Code",
+    "codeEditable": "Code (editable)",
     "workingDir": "Working Directory",
-    "confirm": "Confirm Execution",
+    "versionInfo": "Version Info",
+    "confirm": "Approve Execution",
     "cancel": "Cancel",
-    "editBeforeRun": "Edit before running"
+    "reject": "Decline",
+    "approve": "Approve",
+    "installUpdate": "Install Update",
+    "editBeforeRun": "Edit before running",
+    "appUpdate": "App Update"
   },
   "notification": {
     "close": "Dismiss"
   },
   "execution": {
     "running": "Running...",
-    "done": "Complete"
+    "executing": "Executing tool...",
+    "done": "Complete",
+    "kill": "Terminate"
   }
 }
