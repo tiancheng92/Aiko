@@ -3,8 +3,10 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { ConfirmToolExecution } from '../../wailsjs/go/main/App'
+import { useI18n } from 'vue-i18n'
 import { useEscapeKey } from '../composables/useEscapeKey'
 
+const { t } = useI18n()
 const visible = ref(false)
 const request = ref(null) // ToolConfirmRequest
 const editedContent = ref('')
@@ -13,7 +15,7 @@ const submitting = ref(false)
 /** Human-readable label for the tool type / language. */
 const languageLabel = computed(() => {
   if (!request.value) return ''
-  if (request.value.tool_type === 'update') return '应用更新'
+  if (request.value.tool_type === 'update') return t('toolConfirm.appUpdate')
   if (request.value.tool_type === 'shell') return 'Shell'
   const map = { python: 'Python', node: 'Node.js', ruby: 'Ruby', bash: 'Bash' }
   return map[request.value.language] || request.value.language
@@ -22,9 +24,9 @@ const languageLabel = computed(() => {
 /** Risk warning text shown below the editor. */
 const riskText = computed(() => {
   if (!request.value) return ''
-  if (request.value.tool_type === 'update') return '安装后应用将自动重启，更新过程约需 10-30 秒，当前对话将被保存。'
-  if (request.value.tool_type === 'shell') return 'Shell 命令可修改系统文件、执行任意操作，请确认安全后再批准。'
-  return `${languageLabel.value} 代码将使用系统解释器直接执行，请检查内容后再批准。`
+  if (request.value.tool_type === 'update') return t('toolConfirm.updateRiskText')
+  if (request.value.tool_type === 'shell') return t('toolConfirm.shellWarning')
+  return t('toolConfirm.codeWarning', { lang: languageLabel.value })
 })
 
 /** Called when the backend emits a tool:confirm event. */
@@ -90,20 +92,20 @@ useEscapeKey(reject, visible)
         </div>
         <div class="modal-header-text">
           <h2 id="tc-title" class="modal-title">
-            {{ request?.tool_type === 'update' ? 'Agent 请求安装应用更新' : `Agent 请求执行${request?.tool_type === 'shell' ? ' Shell 命令' : '代码'}` }}
+            {{ request?.tool_type === 'update' ? $t('toolConfirm.titleUpdate') : (request?.tool_type === 'shell' ? $t('toolConfirm.titleShell') : $t('toolConfirm.titleCode')) }}
           </h2>
           <span class="badge">{{ languageLabel }}</span>
         </div>
       </div>
 
       <div v-if="request?.tool_type !== 'update'" class="modal-field">
-        <label>工作目录</label>
+        <label>{{ $t('toolConfirm.workingDir') }}</label>
         <span class="dir-path">{{ request?.working_dir }}</span>
       </div>
 
       <!-- version info block (update type) -->
       <div v-if="request?.tool_type === 'update'" class="modal-field">
-        <label>版本信息</label>
+        <label>{{ $t('toolConfirm.versionInfo') }}</label>
         <span class="version-diff">
           v{{ request.current_version }}
           <span class="version-arrow">→</span>
@@ -113,7 +115,7 @@ useEscapeKey(reject, visible)
 
       <!-- editable command/code block (shell/code types) -->
       <div v-else class="modal-field">
-        <label>{{ request?.tool_type === 'shell' ? '命令' : '代码' }}<span class="editable-hint">（可编辑）</span></label>
+        <label>{{ request?.tool_type === 'shell' ? $t('toolConfirm.commandEditable') : $t('toolConfirm.codeEditable') }}</label>
         <textarea
           v-model="editedContent"
           class="content-editor"
@@ -134,8 +136,8 @@ useEscapeKey(reject, visible)
       </div>
 
       <div class="modal-actions">
-        <button class="btn-reject" :disabled="submitting" @click="reject">拒绝</button>
-        <button class="btn-approve" :disabled="submitting" @click="approve">{{ request?.tool_type === 'update' ? '安装更新' : '批准执行' }}</button>
+        <button class="btn-reject" :disabled="submitting" @click="reject">{{ $t('toolConfirm.reject') }}</button>
+        <button class="btn-approve" :disabled="submitting" @click="approve">{{ request?.tool_type === 'update' ? $t('toolConfirm.installUpdate') : $t('toolConfirm.confirm') }}</button>
       </div>
     </div>
   </div>

@@ -2,7 +2,10 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
+import { useI18n } from 'vue-i18n'
 import { KillToolExecution } from '../../wailsjs/go/main/App'
+
+const { t } = useI18n()
 
 /** Currently running executions: [{ id, elapsed, intervalId }] */
 const executions = ref([])
@@ -50,9 +53,9 @@ onUnmounted(() => {
   <TransitionGroup name="exec-item" tag="div" class="exec-list">
     <div v-for="exec in executions" :key="exec.id" class="execution-progress">
       <span class="exec-spinner" aria-hidden="true" />
-      <span class="exec-label">正在执行工具…</span>
+      <span class="exec-label">{{ $t('execution.executing') }}</span>
       <span class="exec-timer">{{ exec.elapsed }}s</span>
-      <button class="exec-kill" @click="kill(exec.id)">终止</button>
+      <button class="exec-kill" @click="kill(exec.id)">{{ $t('execution.kill') }}</button>
     </div>
   </TransitionGroup>
 </template>
