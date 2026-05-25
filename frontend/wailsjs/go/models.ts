@@ -43,6 +43,7 @@ export namespace config {
 	    ThinkingLevel: string;
 	    UseKnowledge: boolean;
 	    UseMemory: boolean;
+	    Language: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -92,6 +93,7 @@ export namespace config {
 	        this.ThinkingLevel = source["ThinkingLevel"];
 	        this.UseKnowledge = source["UseKnowledge"];
 	        this.UseMemory = source["UseMemory"];
+	        this.Language = source["Language"];
 	    }
 	}
 	export class ModelProfile {
