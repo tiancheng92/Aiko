@@ -110,61 +110,8 @@ func TestAddFull_WithThinkingContent(t *testing.T) {
 	}
 }
 
-func newTestShortStoreWithFTS(t *testing.T) *memory.ShortStore {
-	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = db.Exec(`CREATE TABLE messages (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		role TEXT NOT NULL,
-		content TEXT NOT NULL,
-		thinking_content TEXT NOT NULL DEFAULT '',
-		images TEXT NOT NULL DEFAULT '',
-		files TEXT NOT NULL DEFAULT '',
-		migrated_to_long INTEGER NOT NULL DEFAULT 0,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	)`)
-	if err != nil {
-		db.Close()
-		t.Fatal(err)
-	}
-	_, err = db.Exec(`CREATE VIRTUAL TABLE messages_fts USING fts5(content, content=messages, content_rowid=id)`)
-	if err != nil {
-		db.Close()
-		t.Fatal(err)
-	}
-	// modernc.org/sqlite does not auto-create content-sync triggers.
-	for _, trig := range []string{
-		`CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages BEGIN
-			INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
-		END`,
-		`CREATE TRIGGER IF NOT EXISTS messages_fts_ad AFTER DELETE ON messages BEGIN
-			INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.id, old.content);
-		END`,
-		`CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE ON messages BEGIN
-			INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.id, old.content);
-			INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
-		END`,
-	} {
-		if _, err := db.Exec(trig); err != nil {
-			db.Close()
-			t.Fatal(err)
-		}
-	}
-	// Populate the FTS index initially.
-	_, err = db.Exec(`INSERT INTO messages_fts(messages_fts) VALUES('rebuild')`)
-	if err != nil {
-		db.Close()
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
-	return memory.NewShortStore(db)
-}
-
 func TestSearch_FindsMatches(t *testing.T) {
-	s := newTestShortStoreWithFTS(t)
+	s := newTestShortStore(t)
 	s.Add("user", "hello world")
 	s.Add("assistant", "hi there")
 	s.Add("user", "world tour")
@@ -186,7 +133,7 @@ func TestSearch_FindsMatches(t *testing.T) {
 }
 
 func TestSearch_NoResults(t *testing.T) {
-	s := newTestShortStoreWithFTS(t)
+	s := newTestShortStore(t)
 	s.Add("user", "hello")
 
 	results, err := s.Search("nonexistent")
@@ -199,7 +146,7 @@ func TestSearch_NoResults(t *testing.T) {
 }
 
 func TestSearch_EmptyQuery(t *testing.T) {
-	s := newTestShortStoreWithFTS(t)
+	s := newTestShortStore(t)
 	s.Add("user", "hello")
 
 	results, err := s.Search("")
@@ -212,7 +159,7 @@ func TestSearch_EmptyQuery(t *testing.T) {
 }
 
 func TestSearch_SpecialCharacters(t *testing.T) {
-	s := newTestShortStoreWithFTS(t)
+	s := newTestShortStore(t)
 	s.Add("user", "hello world!")
 	s.Add("user", "hello (parens)")
 
@@ -230,7 +177,7 @@ func TestSearch_SpecialCharacters(t *testing.T) {
 }
 
 func TestSearch_CJKPhrase(t *testing.T) {
-	s := newTestShortStoreWithFTS(t)
+	s := newTestShortStore(t)
 	s.Add("user", "早上好，今天天气不错")
 	s.Add("assistant", "你好！早上好！今天想做什么？")
 	s.Add("user", "晚上吃什么")
@@ -252,7 +199,7 @@ func TestSearch_CJKPhrase(t *testing.T) {
 }
 
 func TestSearch_JapanesePhrase(t *testing.T) {
-	s := newTestShortStoreWithFTS(t)
+	s := newTestShortStore(t)
 	// FTS5's default tokenizer treats hiragana/katakana runs as single tokens,
 	// so only messages where the query appears as a standalone token boundary match.
 	s.Add("user", "おはよう")
@@ -269,7 +216,7 @@ func TestSearch_JapanesePhrase(t *testing.T) {
 }
 
 func TestSearch_KoreanPhrase(t *testing.T) {
-	s := newTestShortStoreWithFTS(t)
+	s := newTestShortStore(t)
 	s.Add("user", "안녕하세요")
 	s.Add("assistant", "안녕하세요! 반갑습니다.")
 	s.Add("user", "감사합니다")
@@ -283,8 +230,34 @@ func TestSearch_KoreanPhrase(t *testing.T) {
 	}
 }
 
+func TestSearch_LIKESubstringOnly(t *testing.T) {
+	// LIKE substring matching: query must appear as a contiguous substring.
+	s := newTestShortStore(t)
+	s.Add("user", "今天天气真不错啊")
+	s.Add("assistant", "是啊，天气确实很好")
+
+	// "天气" is a contiguous substring in both messages.
+	results, err := s.Search("天气")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+
+	// "天气不错" is NOT a contiguous substring in "今天天气真不错啊"
+	// (真 sits between 气 and 不), so LIKE won't match it.
+	results, err = s.Search("天气不错")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("expected 0 results for non-contiguous query, got %d", len(results))
+	}
+}
+
 func TestGetNewestToID_IncludesTarget(t *testing.T) {
-	s := newTestShortStoreWithFTS(t)
+	s := newTestShortStore(t)
 	var ids []int64
 	for i := range 25 {
 		id, err := s.Add("user", fmt.Sprintf("message %d", i))
@@ -316,7 +289,7 @@ func TestGetNewestToID_IncludesTarget(t *testing.T) {
 }
 
 func TestGetNewestToID_TargetIsRecent(t *testing.T) {
-	s := newTestShortStoreWithFTS(t)
+	s := newTestShortStore(t)
 	var ids []int64
 	for i := range 5 {
 		id, err := s.Add("user", fmt.Sprintf("msg %d", i))

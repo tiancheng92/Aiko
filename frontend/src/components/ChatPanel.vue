@@ -1714,6 +1714,11 @@ defineExpose({ enterSearch, focusInput, scrollToBottom })
           :placeholder="$t('chat.searchPlaceholder')"
           :aria-label="$t('chat.searchPlaceholder')"
           :value="searchQuery"
+          spellcheck="false"
+          autocorrect="off"
+          autocomplete="off"
+          autocapitalize="off"
+          writingsuggestions="false"
           @input="onSearchInput"
           @keydown="onSearchKeydown"
           ref="searchInputEl"
@@ -1762,7 +1767,7 @@ defineExpose({ enterSearch, focusInput, scrollToBottom })
                     <span>{{ fname }}</span>
                   </div>
                 </div>
-                <div v-if="m.content" v-html="isSearching ? highlightMatches(m.content, searchQuery) : renderMarkdown(m.content)"></div>
+                <div v-if="m.content" v-html="isSearching ? highlightMatches(renderMarkdown(m.content), searchQuery) : renderMarkdown(m.content)"></div>
                 <template v-if="!m.streaming && !m.thinking && m.content">
                   <template v-if="extractUrls(m.content).length <= 1">
                     <LinkPreview v-for="u in extractUrls(m.content)" :key="u" :url="u" />
@@ -1802,7 +1807,7 @@ defineExpose({ enterSearch, focusInput, scrollToBottom })
                     </div>
                   </div>
                   <div v-if="m.thinkingContent && (m.content || m.streaming)" class="thinking-divider" />
-                  <div v-if="m.displayHtml || (!m.streaming && m.content)" v-html="m.displayHtml || (isSearching ? highlightMatches(m.content, searchQuery) : renderMarkdown(m.content))" />
+                  <div v-if="m.displayHtml || (!m.streaming && m.content)" v-html="m.displayHtml || (isSearching ? highlightMatches(renderMarkdown(m.content), searchQuery) : renderMarkdown(m.content))" />
                   <template v-if="m.pendingTokens && m.pendingTokens.length">
                     <span v-for="tok in m.pendingTokens" :key="tok.key" class="token-word">{{ tok.text }}</span>
                   </template>
@@ -4208,20 +4213,20 @@ body > .lightbox .lightbox-img {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--lg-surface-raised);
+  background: var(--lg-surface-elevated);
   border-radius: 8px;
   padding: 6px 10px;
 }
 .search-input-icon {
-  color: var(--lg-text-muted);
+  color: var(--text-secondary);
   flex-shrink: 0;
 }
 .search-input {
   flex: 1;
-  background: var(--lg-surface);
+  background: var(--lg-surface-input);
   border: 1px solid var(--lg-border-subtle);
   border-radius: 4px;
-  color: var(--lg-text);
+  color: var(--text-primary);
   font-size: 13px;
   padding: 4px 8px;
   outline: none;
@@ -4231,20 +4236,20 @@ body > .lightbox .lightbox-img {
   box-shadow: 0 0 0 2px rgba(56, 139, 253, 0.25);
 }
 .search-input::placeholder {
-  color: var(--lg-text-muted);
+  color: var(--text-tertiary);
 }
 .search-input::-webkit-search-cancel-button {
   display: none;
 }
 .search-count {
   font-size: 11px;
-  color: var(--lg-text-muted);
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 .search-close-btn {
   background: none;
   border: none;
-  color: var(--lg-text-muted);
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 6px;
   border-radius: 4px;
@@ -4254,7 +4259,7 @@ body > .lightbox .lightbox-img {
   justify-content: center;
 }
 .search-close-btn:hover {
-  color: var(--lg-text);
+  color: var(--text-primary);
   background: var(--lg-surface-hover);
 }
 .search-close-btn:focus-visible {
@@ -4266,14 +4271,13 @@ body > .lightbox .lightbox-img {
   padding: 32px 16px;
 }
 .search-empty-title {
-  color: var(--lg-text-muted);
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 500;
   margin-bottom: 6px;
 }
 .search-empty-hint {
-  color: var(--lg-text-muted);
-  opacity: 0.6;
+  color: var(--text-tertiary);
   font-size: 12px;
 }
 .search-highlight {

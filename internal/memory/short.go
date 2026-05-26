@@ -170,27 +170,34 @@ func (s *ShortStore) CountUnmigrated() (int, error) {
 	return n, err
 }
 
-// sanitizeFTS5Query wraps the user query in double quotes to escape FTS5
-// special characters, treating the entire input as a literal phrase.
-// Doubles any embedded double-quote characters so they don't break the quoting.
-func sanitizeFTS5Query(q string) string {
-	return `"` + strings.ReplaceAll(q, `"`, `""`) + `"`
+// escapeLikePattern escapes LIKE pattern wildcards so they are matched literally.
+func escapeLikePattern(q string) string {
+	q = strings.ReplaceAll(q, `\`, `\\`)
+	q = strings.ReplaceAll(q, `%`, `\%`)
+	q = strings.ReplaceAll(q, `_`, `\_`)
+	return q
 }
 
-// Search returns all messages whose content matches the FTS5 query, newest first.
-// Returns empty slice (not error) for empty query.
+// Search returns all messages whose content matches the query via LIKE substring
+// matching, newest first. Returns empty slice (not error) for empty query.
 func (s *ShortStore) Search(query string) ([]Message, error) {
-	if strings.TrimSpace(query) == "" {
+	q := strings.TrimSpace(query)
+	if q == "" {
 		return nil, nil
 	}
+	return s.searchLike(q)
+}
+
+// searchLike performs a SQL LIKE substring search.
+func (s *ShortStore) searchLike(query string) ([]Message, error) {
+	pattern := "%" + escapeLikePattern(query) + "%"
 	rows, err := s.db.Query(`
-		SELECT m.id, m.role, m.content, m.thinking_content, m.images, m.files, m.migrated_to_long, m.created_at
-		FROM messages m
-		JOIN messages_fts fts ON m.id = fts.rowid
-		WHERE messages_fts MATCH ?
-		ORDER BY m.id DESC`, sanitizeFTS5Query(query))
+		SELECT id, role, content, thinking_content, images, files, migrated_to_long, created_at
+		FROM messages
+		WHERE content LIKE ? ESCAPE '\'
+		ORDER BY id DESC`, pattern)
 	if err != nil {
-		return nil, fmt.Errorf("search messages: %w", err)
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -202,10 +209,7 @@ func (s *ShortStore) Search(query string) ([]Message, error) {
 		}
 		msgs = append(msgs, m)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return msgs, nil
+	return msgs, rows.Err()
 }
 
 // GetNewestToID loads messages from the newest backwards, paginating by pageSize,
