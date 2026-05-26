@@ -710,13 +710,10 @@ async function jumpToMessage(targetID) {
   }
 }
 
-/** displayMessages always shows the full message list during search (snapshot), so
- *  matching messages are highlighted and non-matching ones dimmed inline.
- *  Only swap to snapshot on the first keystroke that produces results. */
+/** displayMessages returns search results when a query has been executed,
+ *  or the normal message list when idle / before the first keystroke. */
 const displayMessages = computed(() => {
-  if (isSearching.value && searchResults.value !== null) {
-    return searchSnapshot ? searchSnapshot.messages : messages.value
-  }
+  if (isSearching.value && searchResults.value !== null) return searchResults.value
   return messages.value
 })
 
