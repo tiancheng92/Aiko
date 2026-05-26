@@ -178,6 +178,40 @@ func (a *App) startup(ctx context.Context) {
 		}
 	}
 
+	// Initialize pomodoro engine (independent of LLM).
+	pomoCfg := pomodoro.Config{
+		FocusDuration:          a.cfg.PomodoroFocusDuration,
+		ShortBreakDuration:     a.cfg.PomodoroShortBreakDuration,
+		LongBreakDuration:      a.cfg.PomodoroLongBreakDuration,
+		RoundsBeforeLongBreak:  a.cfg.PomodoroRoundsBeforeLongBreak,
+	}
+	a.mu.Lock()
+	a.pomodoroEngine = pomodoro.New(pomoCfg)
+	engine := a.pomodoroEngine
+	a.mu.Unlock()
+
+	engine.OnTick = func(p pomodoro.TickPayload) {
+		a.EmitEvent("pomodoro:tick", p)
+	}
+	engine.OnPhaseChange = func(p pomodoro.PhasePayload) {
+		a.EmitEvent("pomodoro:phase:changed", p)
+		a.EmitEvent("notification:show", map[string]any{
+			"title":   "番茄钟",
+			"message": p.Message,
+		})
+	}
+	engine.OnStateChange = func(p pomodoro.StatePayload) {
+		a.EmitEvent("pomodoro:state:changed", p)
+		switch {
+		case p.State == "running" && engine.Status().Phase == "focus":
+			a.EmitEvent("pet:state:change", "focusing")
+		case p.State == "running":
+			a.EmitEvent("pet:state:change", "resting")
+		case p.State == "idle" || p.State == "paused":
+			a.EmitEvent("pet:state:change", "idle")
+		}
+	}
+
 	// Resize window to cover the full primary screen so position:fixed
 	// coordinates in the WebView map to real screen coordinates.
 	screens, err := wailsruntime.ScreenGetAll(ctx)
@@ -622,6 +656,11 @@ func (a *App) shutdown(_ context.Context) {
 	if sched != nil {
 		sched.Stop()
 	}
+	a.mu.RLock()
+	if a.pomodoroEngine != nil {
+		a.pomodoroEngine.Stop()
+	}
+	a.mu.RUnlock()
 	// Close MCP client connections accumulated across initLLMComponents calls.
 	for _, c := range closers {
 		if err := c.Close(); err != nil {
