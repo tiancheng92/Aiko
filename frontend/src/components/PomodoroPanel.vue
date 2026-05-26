@@ -129,12 +129,18 @@ const ringStyle = computed(() => ({
   background: `conic-gradient(${phaseColor.value} ${progress.value * 360}deg, #333 ${progress.value * 360}deg)`,
 }))
 
+const panelWidth = 230 // approximate panel width in px
+const panelHeight = 140 // approximate panel height in px
+
 const panelStyle = computed(() => {
   const x = props.petPos.x + props.petSize / 2
-  const y = props.petPos.y - 160
+  const y = props.petPos.y - panelHeight - 8
+  const halfW = panelWidth / 2
+  const clampedX = Math.min(Math.max(x, halfW + 8), window.innerWidth - halfW - 8)
+  const clampedY = Math.min(Math.max(y, 38), window.innerHeight - panelHeight - 8)
   return {
-    left: `${x}px`,
-    top: `${Math.max(40, y)}px`,
+    left: `${clampedX}px`,
+    top: `${clampedY}px`,
     transform: 'translate(-50%, 0)',
   }
 })
