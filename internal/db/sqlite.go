@@ -157,6 +157,13 @@ func migrate(db *sql.DB) error {
 		}
 	}
 
+	// v12: FTS5 full-text search index on messages.content (content-sync mode).
+	if _, err := db.Exec(`CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(content, content=messages, content_rowid=id)`); err != nil {
+		if !isDuplicateColumnErr(err) {
+			return fmt.Errorf("patch fts5: %w", err)
+		}
+	}
+
 	return nil
 }
 
