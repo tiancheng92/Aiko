@@ -587,6 +587,7 @@ function enterSearch() {
   isSearching.value = true
   searchQuery.value = ''
   searchResults.value = null
+  selectedResultIndex.value = null
   // Disable infinite-scroll observer while searching.
   sentinelObserver?.disconnect()
   nextTick(() => searchInputEl.value?.focus())
@@ -621,6 +622,7 @@ async function doSearch(query) {
   try {
     const results = await SearchMessages(q)
     searchResults.value = (results || []).map(mapMsg)
+    selectedResultIndex.value = null
   } catch (e) {
     console.warn('search failed:', e)
     searchResults.value = []
@@ -634,9 +636,43 @@ function onSearchInput(e) {
   searchDebounceTimer = setTimeout(() => doSearch(searchQuery.value), 300)
 }
 
-/** onSearchKeydown handles Escape key in search input. */
+/** selectedResultIndex tracks the keyboard-selected search result, or null. */
+const selectedResultIndex = ref(null)
+
+/** onSearchKeydown handles keyboard navigation in search input. */
 function onSearchKeydown(e) {
-  if (e.key === 'Escape') exitSearch()
+  if (e.key === 'Escape') {
+    exitSearch()
+    return
+  }
+  if (!searchResults.value || searchResults.value.length === 0) return
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    selectedResultIndex.value = selectedResultIndex.value === null
+      ? 0
+      : Math.min(selectedResultIndex.value + 1, searchResults.value.length - 1)
+    scrollToSelectedResult()
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    selectedResultIndex.value = selectedResultIndex.value === null
+      ? searchResults.value.length - 1
+      : Math.max(selectedResultIndex.value - 1, 0)
+    scrollToSelectedResult()
+  } else if (e.key === 'Enter' && selectedResultIndex.value !== null) {
+    e.preventDefault()
+    const msg = searchResults.value[selectedResultIndex.value]
+    if (msg) jumpToMessage(msg.id)
+  }
+}
+
+/** scrollToSelectedResult brings the keyboard-selected result into view. */
+function scrollToSelectedResult() {
+  if (selectedResultIndex.value === null) return
+  nextTick(() => {
+    const el = document.querySelector(`[data-msg-key="id:${searchResults.value[selectedResultIndex.value].id}"]`)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  })
 }
 
 /** jumpToMessage loads context from newest down to the page containing targetID, then scrolls to it. */
@@ -1666,22 +1702,24 @@ defineExpose({ enterSearch, focusInput, scrollToBottom })
 <template>
   <div class="chat-panel" ref="chatPanelEl" @mousemove="onChatPanelMousemove" :style="{ '--code-max-width': codeMaxWidth > 0 ? codeMaxWidth + 'px' : 'none' }">
     <!-- Search bar -->
-    <div v-if="isSearching" class="search-bar">
+    <div v-if="isSearching" class="search-bar" role="search" :aria-label="$t('chat.searchPlaceholder')">
       <div class="search-input-wrap">
-        <svg class="search-input-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg class="search-input-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
         <input
           class="search-input"
+          type="search"
           :placeholder="$t('chat.searchPlaceholder')"
+          :aria-label="$t('chat.searchPlaceholder')"
           :value="searchQuery"
           @input="onSearchInput"
           @keydown="onSearchKeydown"
           ref="searchInputEl"
         />
-        <span v-if="searchResults" class="search-count">{{ searchResults.length }} {{ $t('chat.searchMatches') }}</span>
+        <span v-if="searchResults" class="search-count" aria-live="polite">{{ searchResults.length }} {{ $t('chat.searchMatches') }}</span>
         <button class="search-close-btn" @click="exitSearch" :aria-label="$t('chat.searchClose')">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
         </button>
@@ -1696,9 +1734,12 @@ defineExpose({ enterSearch, focusInput, scrollToBottom })
         </div>
         <span v-else-if="!allLoaded" class="load-sentinel-dot" />
       </div>
-      <div v-if="isSearching && searchResults && searchResults.length === 0" class="search-empty">{{ $t('chat.searchNoResults') }}</div>
+      <div v-if="isSearching && searchResults && searchResults.length === 0" class="search-empty">
+        <div class="search-empty-title">{{ $t('chat.searchNoResults') }}</div>
+        <div class="search-empty-hint">{{ $t('chat.searchNoResultsHint') }}</div>
+      </div>
       <TransitionGroup name="msg-slide" tag="div" class="messages-inner" :class="{ 'suppress-anim': suppressAnimation }">
-      <div v-for="(m, i) in displayMessages" :key="msgKey(m, i)" :class="['msg', m.role, { 'is-info': m.isInfo, 'search-dimmed': searchMatchIds && !searchMatchIds.has(m.id) && !m.isInfo }]" :data-msg-key="msgKey(m, i)" @click="searchMatchIds && searchMatchIds.has(m.id) && jumpToMessage(m.id)">
+      <div v-for="(m, i) in displayMessages" :key="msgKey(m, i)" :class="['msg', m.role, { 'is-info': m.isInfo, 'search-dimmed': searchMatchIds && !searchMatchIds.has(m.id) && !m.isInfo, 'search-result-selected': isSearching && selectedResultIndex === i }]" :data-msg-key="msgKey(m, i)" @click="isSearching && searchMatchIds && searchMatchIds.has(m.id) && jumpToMessage(m.id)">
         <img v-if="m.role === 'assistant'" class="msg-avatar" :src="aiAvatar || '/logo.png'" alt="AI" draggable="false" />
         <div class="bubble-wrap" :class="{ ghost: m.ghost }">
           <!-- Collapsible wrapper -->
@@ -4176,14 +4217,23 @@ body > .lightbox .lightbox-img {
 }
 .search-input {
   flex: 1;
-  background: transparent;
-  border: none;
-  outline: none;
+  background: var(--lg-surface);
+  border: 1px solid var(--lg-border-subtle);
+  border-radius: 4px;
   color: var(--lg-text);
   font-size: 13px;
+  padding: 4px 8px;
+  outline: none;
+}
+.search-input:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(56, 139, 253, 0.25);
 }
 .search-input::placeholder {
   color: var(--lg-text-muted);
+}
+.search-input::-webkit-search-cancel-button {
+  display: none;
 }
 .search-count {
   font-size: 11px;
@@ -4195,19 +4245,35 @@ body > .lightbox .lightbox-img {
   border: none;
   color: var(--lg-text-muted);
   cursor: pointer;
-  padding: 2px;
+  padding: 6px;
   border-radius: 4px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .search-close-btn:hover {
   color: var(--lg-text);
   background: var(--lg-surface-hover);
 }
+.search-close-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 .search-empty {
   text-align: center;
+  padding: 32px 16px;
+}
+.search-empty-title {
   color: var(--lg-text-muted);
-  font-size: 13px;
-  padding: 24px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+.search-empty-hint {
+  color: var(--lg-text-muted);
+  opacity: 0.6;
+  font-size: 12px;
 }
 .search-highlight {
   background: rgba(240, 180, 41, 0.25);
@@ -4216,7 +4282,12 @@ body > .lightbox .lightbox-img {
   padding: 0 1px;
 }
 .search-dimmed {
-  opacity: 0.35;
+  opacity: 0.5;
+}
+.search-result-selected {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 4px;
 }
 @keyframes jump-flash {
   0%, 100% { background: transparent; }

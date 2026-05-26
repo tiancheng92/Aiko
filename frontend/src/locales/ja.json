@@ -284,7 +284,8 @@
     "searchPlaceholder": "チャット履歴を検索...",
     "searchMatches": "件",
     "searchClose": "検索を閉じる",
-    "searchNoResults": "一致するメッセージが見つかりません"
+    "searchNoResults": "一致するメッセージが見つかりません",
+    "searchNoResultsHint": "別のキーワードを試すか、スペルを確認してください"
   },
   "chatBubble": {
     "fullscreen": "フルスクリーン",

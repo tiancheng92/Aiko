@@ -284,7 +284,8 @@
     "searchPlaceholder": "채팅 기록 검색...",
     "searchMatches": "건",
     "searchClose": "검색 닫기",
-    "searchNoResults": "일치하는 메시지가 없습니다"
+    "searchNoResults": "일치하는 메시지가 없습니다",
+    "searchNoResultsHint": "다른 키워드를 시도하거나 철자를 확인하세요"
   },
   "chatBubble": {
     "fullscreen": "전체 화면",

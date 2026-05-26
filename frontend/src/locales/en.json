@@ -284,7 +284,8 @@
     "searchPlaceholder": "Search chat history...",
     "searchMatches": "matches",
     "searchClose": "Close search",
-    "searchNoResults": "No matching messages found"
+    "searchNoResults": "No matching messages found",
+    "searchNoResultsHint": "Try different keywords or check your spelling"
   },
   "chatBubble": {
     "fullscreen": "Fullscreen",

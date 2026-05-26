@@ -284,7 +284,8 @@
     "searchPlaceholder": "搜索聊天记录...",
     "searchMatches": "条匹配",
     "searchClose": "关闭搜索",
-    "searchNoResults": "未找到匹配的消息"
+    "searchNoResults": "未找到匹配的消息",
+    "searchNoResultsHint": "尝试其他关键词或检查拼写"
   },
   "chatBubble": {
     "fullscreen": "全屏",
