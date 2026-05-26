@@ -280,7 +280,10 @@
     "copy": "Copy",
     "copied": "Copied",
     "speak": "Read Aloud",
-    "stopSpeak": "Stop Reading"
+    "stopSpeak": "Stop Reading",
+    "searchPlaceholder": "Search chat history...",
+    "searchMatches": "matches",
+    "searchClose": "Close search"
   },
   "chatBubble": {
     "fullscreen": "Fullscreen",
@@ -290,7 +293,8 @@
     "clearHistory": "Clear Chat History",
     "openSettings": "Open Settings",
     "chat": "Chat",
-    "latencyAriaLabel": "LLM latency"
+    "latencyAriaLabel": "LLM latency",
+    "search": "Search chat history"
   },
   "toolConfirm": {
     "title": "Tool Execution Confirmation",
