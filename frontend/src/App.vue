@@ -5,6 +5,7 @@ const VRMPet = defineAsyncComponent(() => import('./components/VRMPet.vue'))
 import ChatBubble from './components/ChatBubble.vue'
 const SettingsWindow = defineAsyncComponent(() => import('./components/SettingsWindow.vue'))
 import NotificationBubble from './components/NotificationBubble.vue'
+import PomodoroPanel from './components/PomodoroPanel.vue'
 import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize, GetConfig, SetChatVisible } from '../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../wailsjs/runtime/runtime'
 import { springAnimate } from './composables/useSpring'
@@ -13,11 +14,14 @@ const bubbleOpen = ref(false)
 watch(bubbleOpen, (v) => { SetChatVisible(v) })
 const renderBackend = ref('live2d')
 const settingsOpen = ref(false)
+const pomodoroPanelOpen = ref(false)
+const pomodoroRunning = ref(false)
+const pomodoroPanelRef = ref(null)
 const ballPos  = ref({ x: -1, y: -1 })
 const ballSize = ref(160)
 const chatBubbleRef = ref(null)
 const activeScreen = ref({ width: 0, height: 0 })
-let offToggle, offToken, offDone, offError, offSettings, offScreenChanged, offRenderBackend
+let offToggle, offToken, offDone, offError, offSettings, offScreenChanged, offRenderBackend, offPomodoroState = null
 const voiceActive = ref(false)
 const siriMounted = ref(false)   // controls v-if (keeps DOM alive during fade-out)
 const siriVisible = ref(false)   // controls CSS transition class
@@ -386,12 +390,13 @@ onMounted(async () => {
       EventsEmit('notification:show', { title: '😿 出错了', message: err })
     }
   })
+  offPomodoroState = EventsOn('pomodoro:state:changed', onPomodoroStateChanged)
 })
 
 onUnmounted(() => {
   offToggle?.(); offToken?.(); offDone?.(); offError?.()
   offSettings?.(); offVoiceStart?.(); offVoiceEnd?.(); offVoiceError?.()
-  offScreenChanged?.(); offRenderBackend?.()
+  offScreenChanged?.(); offRenderBackend?.(); offPomodoroState?.()
   stopSiriAnim?.()
   stopRippleAnim?.()
   if (siriHideTimer) clearTimeout(siriHideTimer)
@@ -401,6 +406,9 @@ onUnmounted(() => {
 
 /** toggleBubble flips the chat bubble open/close state. */
 function toggleBubble() {
+  if (!bubbleOpen.value && pomodoroRunning.value) {
+    return
+  }
   bubbleOpen.value = !bubbleOpen.value
   if (bubbleOpen.value) {
     pendingTokens = ''
@@ -408,6 +416,24 @@ function toggleBubble() {
       chatBubbleRef.value?.focusInput()
       chatBubbleRef.value?.scrollToBottom()
     })
+  }
+}
+
+function openPomodoro() {
+  pomodoroPanelOpen.value = true
+  nextTick(() => {
+    pomodoroPanelRef.value?.show()
+  })
+}
+
+function closePomodoro() {
+  pomodoroPanelOpen.value = false
+}
+
+function onPomodoroStateChanged(payload) {
+  pomodoroRunning.value = payload.state === 'running'
+  if (payload.state === 'running' && bubbleOpen.value) {
+    bubbleOpen.value = false
   }
 }
 
@@ -518,18 +544,22 @@ function onSettingsLeave(el, done) {
   <Live2DPet
     v-if="renderBackend === 'live2d'"
     :active-screen="activeScreen"
+    :pomodoro-panel-open="pomodoroPanelOpen"
     @click="toggleBubble"
     @position="p => ballPos = p"
     @ball-size="s => ballSize = s"
     @open-settings="openSettings"
+    @open-pomodoro="openPomodoro"
   />
   <VRMPet
     v-else-if="renderBackend === 'vrm'"
     :active-screen="activeScreen"
+    :pomodoro-panel-open="pomodoroPanelOpen"
     @click="toggleBubble"
     @position="p => ballPos = p"
     @ball-size="s => ballSize = s"
     @open-settings="openSettings"
+    @open-pomodoro="openPomodoro"
   />
   <Transition :css="false" @enter="onBubbleEnter" @leave="onBubbleLeave">
     <ChatBubble
@@ -553,6 +583,13 @@ function onSettingsLeave(el, done) {
   <NotificationBubble
     :pet-pos="ballPos"
     :pet-size="ballSize"
+  />
+  <PomodoroPanel
+    v-if="pomodoroPanelOpen"
+    ref="pomodoroPanelRef"
+    :pet-pos="ballPos"
+    :pet-size="ballSize"
+    @close="closePomodoro"
   />
 
   <!--
