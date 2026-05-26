@@ -35,7 +35,7 @@ import { useConfirm } from '../composables/useConfirm.js'
 import {
   ICON_TAB_MODEL, ICON_TAB_AI, ICON_TAB_APPEARANCE, ICON_TAB_TOOLS,
   ICON_TAB_KNOWLEDGE, ICON_TAB_AUTOMATION, ICON_TAB_LARK, ICON_TAB_SMS, ICON_TAB_ABOUT,
-  ICON_TAB_GENERAL,
+  ICON_TAB_GENERAL, ICON_TAB_POMODORO,
 } from '../utils/icons'
 
 const confirm = useConfirm()
@@ -295,6 +295,8 @@ const tabMeta = [
     keywords: 'lark feishu cli command 飞书 命令 lark-cli' },
   { id: 'sms',        label: '短信',   iconSvg: ICON_TAB_SMS,        iconBg: 'var(--cat-sms)',
     keywords: 'sms message verification code imessage chat.db 短信 验证码 监听 iMessage 短信监听' },
+  { id: 'pomodoro', label: '番茄钟', iconSvg: ICON_TAB_POMODORO, iconBg: 'var(--cat-pomodoro)',
+    keywords: 'pomodoro timer focus break 番茄 计时 专注 休息 时长 轮数' },
   { id: 'about',      label: '关于',   iconSvg: ICON_TAB_ABOUT,      iconBg: 'var(--cat-about)',
     keywords: 'version update about github release 版本 更新 关于 下载' },
 ].map(t => ({ ...t, _haystack: (t.label + ' ' + t.keywords).toLowerCase() }))
@@ -2226,6 +2228,69 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
             </div>
           </div>
 
+        </div>
+
+        <!-- 番茄钟 -->
+        <div v-if="activeTab === 'pomodoro'" class="tab-pane">
+          <div class="group-label">计时设置</div>
+          <div class="settings-group">
+            <div class="settings-row">
+              <div class="row-body">
+                <span class="row-title">专注时长（分钟）</span>
+                <span class="row-desc">单次专注会话的时长，默认 25</span>
+              </div>
+              <input
+                v-model.number="cfg.PomodoroFocusDuration"
+                type="number"
+                min="1"
+                max="120"
+                class="field-input number"
+              />
+            </div>
+
+            <div class="settings-row">
+              <div class="row-body">
+                <span class="row-title">短休息时长（分钟）</span>
+                <span class="row-desc">专注之间的短暂休息，默认 5</span>
+              </div>
+              <input
+                v-model.number="cfg.PomodoroShortBreakDuration"
+                type="number"
+                min="1"
+                max="30"
+                class="field-input number"
+              />
+            </div>
+
+            <div class="settings-row">
+              <div class="row-body">
+                <span class="row-title">长休息时长（分钟）</span>
+                <span class="row-desc">完成 N 轮后的较长休息，默认 15</span>
+              </div>
+              <input
+                v-model.number="cfg.PomodoroLongBreakDuration"
+                type="number"
+                min="1"
+                max="60"
+                class="field-input number"
+              />
+            </div>
+
+            <div class="settings-row">
+              <div class="row-body">
+                <span class="row-title">长休息间隔（轮）</span>
+                <span class="row-desc">几轮专注后触发长休息，默认 4</span>
+              </div>
+              <input
+                v-model.number="cfg.PomodoroRoundsBeforeLongBreak"
+                type="number"
+                min="1"
+                max="10"
+                class="field-input number"
+              />
+            </div>
+          </div>
+          <p class="hint-text" style="margin-top: 12px; font-size: 11px; color: var(--text-secondary);">修改即时生效，不影响正在进行的番茄钟。</p>
         </div>
 
         <!-- 关于 -->
