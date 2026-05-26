@@ -17,6 +17,7 @@ import (
 
 	"aiko/internal/agent/middleware"
 	"aiko/internal/config"
+	"aiko/internal/knowledge"
 	"aiko/internal/memory"
 	internaltools "aiko/internal/tools"
 )
@@ -143,6 +144,7 @@ type Agent struct {
 	runner          *adk.Runner
 	shortMem        *memory.ShortStore
 	longMem         *memory.LongStore
+	knowledgeSt     *knowledge.Store
 	cfg             *config.Config
 	dataDir         string                          // ~/.aiko data directory, used to read USER.md
 	turnCount       atomic.Int64                    // completed conversation turns (resets on restart)
@@ -224,6 +226,7 @@ func New(
 	chatModel model.ToolCallingChatModel,
 	shortMem *memory.ShortStore,
 	longMem *memory.LongStore,
+	knowledgeSt *knowledge.Store,
 	tools []tool.BaseTool,
 	cfg *config.Config,
 	mw middleware.Middleware,
@@ -256,6 +259,7 @@ func New(
 		runner:          runner,
 		shortMem:        shortMem,
 		longMem:         longMem,
+		knowledgeSt:     knowledgeSt,
 		cfg:             cfg,
 		dataDir:         dataDir,
 		nudgeInterval:   ni,

@@ -16,8 +16,8 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"aiko/internal/bytesconv"
+	"aiko/internal/knowledge"
 	"aiko/internal/memory"
-	"aiko/internal/tools/base"
 )
 
 // userProfileCache holds a recently-read USER.md to avoid redundant disk reads on every turn.
@@ -46,13 +46,15 @@ func readUserProfile(dataDir string) string {
 	return userProfileCache.content
 }
 
-// gatherContextSources fetches the four context inputs concurrently:
-// user profile, long-term memory search results, recent short-term messages,
-// and current location. Errors from individual sources are logged and treated
-// as empty (non-fatal) to avoid blocking the chat turn.
+// gatherContextSources fetches the five context inputs concurrently:
+// user profile, long-term memory search results, knowledge base results,
+// recent short-term messages, and current location.
+// Errors from individual sources are logged and treated as empty (non-fatal)
+// to avoid blocking the chat turn.
 func (a *Agent) gatherContextSources(ctx context.Context, userInput string, useKnowledge, useMemory bool) (
 	profile string,
 	memResult memory.MemorySearchResult,
+	knowledgeResults []knowledge.SearchResult,
 	recentMsgs []*schema.Message,
 	location string,
 	err error,
@@ -74,6 +76,19 @@ func (a *Agent) gatherContextSources(ctx context.Context, userInput string, useK
 			return nil
 		}
 		memResult = res
+		return nil
+	})
+
+	g.Go(func() error {
+		if a.knowledgeSt == nil || !useKnowledge {
+			return nil
+		}
+		results, err := a.knowledgeSt.Search(gctx, userInput, 3)
+		if err != nil {
+			log.Warn().Err(err).Msg("knowledgeSt.Search failed")
+			return nil
+		}
+		knowledgeResults = results
 		return nil
 	})
 
@@ -103,14 +118,12 @@ func (a *Agent) gatherContextSources(ctx context.Context, userInput string, useK
 // system context, reusing the underlying buffer across conversation turns.
 var ctxBufPool = sync.Pool{New: func() any { return new(strings.Builder) }}
 
-// buildContext fetches user profile, long-term memories (summaries and raws separately),
+// buildContext fetches user profile, long-term memories, knowledge base results,
 // and recent short-term history concurrently, then returns a message list ready for
 // runner.Run. Errors from individual sources are logged and skipped — a partial context
 // is better than no response.
 func (a *Agent) buildContext(ctx context.Context, userInput string, useKnowledge, useMemory bool) ([]adk.Message, error) {
-	// Propagate useKnowledge to tools (e.g. search_knowledge) via context.
-	ctx = context.WithValue(ctx, base.UseKnowledgeKey{}, useKnowledge)
-	profile, memResult, recentMsgs, location, err := a.gatherContextSources(ctx, userInput, useKnowledge, useMemory)
+	profile, memResult, knowledgeResults, recentMsgs, location, err := a.gatherContextSources(ctx, userInput, useKnowledge, useMemory)
 	if err != nil {
 		return nil, err
 	}
@@ -154,6 +167,17 @@ func (a *Agent) buildContext(ctx context.Context, userInput string, useKnowledge
 			}
 		}
 		ctxBuf.WriteString("[End of long-term memories]\n")
+	}
+	if len(knowledgeResults) > 0 {
+		ctxBuf.WriteString("\n[Knowledge base results — retrieved by semantic similarity from user-imported documents:]\n")
+		for _, r := range knowledgeResults {
+			ctxBuf.WriteString("- [")
+			ctxBuf.WriteString(r.Source)
+			ctxBuf.WriteString("] ")
+			ctxBuf.WriteString(r.Content)
+			ctxBuf.WriteByte('\n')
+		}
+		ctxBuf.WriteString("[End of knowledge base results]\n")
 	}
 	if ctxBuf.Len() > 0 {
 		msgs = append(msgs,

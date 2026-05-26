@@ -279,7 +279,7 @@ func (a *App) buildAgent(
 		middleware.ErrorRecovery(),
 	)
 
-	return agent.New(ctx, chatModel, a.shortMem, longMem, allTools, a.cfg, mw, skillMW, dataDir,
+	return agent.New(ctx, chatModel, a.shortMem, longMem, knowledgeSt, allTools, a.cfg, mw, skillMW, dataDir,
 		&a.pendingConfirms,
 		func(event string, data ...any) {
 			wailsruntime.EventsEmit(a.ctx, event, data...)
