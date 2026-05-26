@@ -36,6 +36,11 @@ type Config struct {
 	PetSize        int // 宠物显示尺寸（像素），0 表示自动根据屏幕高度计算
 	ChatWidth      int // 聊天框宽度（像素），0 表示使用默认值
 	ChatHeight     int // 聊天框高度（像素），0 表示使用默认值
+	// Pomodoro timer settings (minutes).
+	PomodoroFocusDuration         int // default 25
+	PomodoroShortBreakDuration    int // default 5
+	PomodoroLongBreakDuration     int // default 15
+	PomodoroRoundsBeforeLongBreak int // default 4
 	ActiveProfileID int64 // 当前激活的 ModelProfile ID，0 表示未设置
 	TTSModelDir           string  // kokoro 模型目录（空则使用默认 ~/aiko-tts-venv/models）
 	TTSVoice              string  // 声线名
@@ -123,6 +128,10 @@ func (s *Store) Load() (*Config, error) {
 	cfg.PetSize = parseInt(m["pet_size"], 0)
 	cfg.ChatWidth = parseInt(m["chat_width"], 0)
 	cfg.ChatHeight = parseInt(m["chat_height"], 0)
+	cfg.PomodoroFocusDuration = parseInt(m["pomodoro_focus_duration"], 25)
+	cfg.PomodoroShortBreakDuration = parseInt(m["pomodoro_short_break_duration"], 5)
+	cfg.PomodoroLongBreakDuration = parseInt(m["pomodoro_long_break_duration"], 15)
+	cfg.PomodoroRoundsBeforeLongBreak = parseInt(m["pomodoro_rounds_before_long_break"], 4)
 	cfg.ActiveProfileID = int64(parseInt(m["active_profile_id"], 0))
 	cfg.SMSWatcherEnabled = m["sms_watcher_enabled"] == "true"
 	cfg.SMSAllMessagesEnabled = m["sms_all_messages_enabled"] == "true"
@@ -184,7 +193,11 @@ func (s *Store) Save(cfg *Config) error {
 		"thinking_level":           cfg.ThinkingLevel,
 		"use_knowledge":            strconv.FormatBool(cfg.UseKnowledge),
 		"use_memory":               strconv.FormatBool(cfg.UseMemory),
-		"language":                 cfg.Language,
+		"pomodoro_focus_duration":           strconv.Itoa(cfg.PomodoroFocusDuration),
+		"pomodoro_short_break_duration":     strconv.Itoa(cfg.PomodoroShortBreakDuration),
+		"pomodoro_long_break_duration":      strconv.Itoa(cfg.PomodoroLongBreakDuration),
+		"pomodoro_rounds_before_long_break": strconv.Itoa(cfg.PomodoroRoundsBeforeLongBreak),
+		"language":                          cfg.Language,
 	}
 	tx, err := s.db.Begin()
 	if err != nil {

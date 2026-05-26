@@ -1,5 +1,6 @@
 <script setup>
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, watch, nextTick, onMounted, onUnmounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import * as PIXI from 'pixi.js'
 import { Live2DModel, MotionPriority } from 'pixi-live2d-display/cubism4'
 import { GetBallPosition, SaveBallPosition, GetScreenSize, GetConfig, SaveConfig, GetMousePosition, GetPetSize } from '../../wailsjs/go/main/App'
@@ -8,12 +9,13 @@ import { debounce } from '../utils/timing.js'
 import { usePetState } from '../composables/usePetState.js'
 import { useModelPath } from '../composables/useModelPath.js'
 import ContextMenu from './ContextMenu.vue'
-import { ICON_FACE, ICON_SHIRT, ICON_SETTING, ICON_POWER } from '../utils/icons'
+import { ICON_FACE, ICON_SHIRT, ICON_SETTING, ICON_POWER, ICON_POMODORO } from '../utils/icons'
 
-const emit = defineEmits(['click', 'position', 'ball-size', 'open-settings'])
+const emit = defineEmits(['click', 'position', 'ball-size', 'open-settings', 'open-pomodoro'])
 
 const props = defineProps({
   activeScreen: { type: Object, default: () => ({ width: 0, height: 0 }) },
+  pomodoroPanelOpen: { type: Boolean, default: false },
 })
 
 const pos = ref(null)
@@ -61,14 +63,17 @@ async function switchToNextModel() {
   }
 }
 
-const petMenuItems = [
-  { iconSvg: ICON_FACE,    label: '切换表情', action: cycleExpression },
-  { iconSvg: ICON_SHIRT,   label: '更换模型', action: switchToNextModel },
+const { t } = useI18n()
+
+const petMenuItems = computed(() => [
+  { iconSvg: ICON_FACE,    label: t('petMenu.switchExpression'), action: cycleExpression },
+  { iconSvg: ICON_SHIRT,   label: t('petMenu.switchModel'), action: switchToNextModel },
+  { iconSvg: ICON_POMODORO, label: t('pomodoro.menuLabel'), action: () => emit('open-pomodoro'), disabled: props.pomodoroPanelOpen },
   { divider: true },
-  { iconSvg: ICON_SETTING, label: '打开设置', action: () => emit('open-settings') },
+  { iconSvg: ICON_SETTING, label: t('petMenu.openSettings'), action: () => emit('open-settings') },
   { divider: true },
-  { iconSvg: ICON_POWER,   label: '退出程序', action: () => Quit(), danger: true },
-]
+  { iconSvg: ICON_POWER,   label: t('petMenu.quitApp'), action: () => Quit(), danger: true },
+])
 
 /** onContextMenu shows the pet right-click menu. */
 function onContextMenu(e) {

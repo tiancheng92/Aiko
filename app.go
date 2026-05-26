@@ -29,6 +29,7 @@ import (
 	"aiko/internal/mcp"
 	"aiko/internal/memory"
 	"aiko/internal/notify"
+	"aiko/internal/pomodoro"
 	"aiko/internal/proactive"
 	"aiko/internal/scheduler"
 	"aiko/internal/skill"
@@ -65,6 +66,7 @@ type App struct {
 	ttsGeneration        uint64             // incremented on each SpeakText call; used to avoid stale cancel nils
 	isChatVisible        bool               // tracks whether the chat panel is open; guarded by mu
 	proactiveEngine      *proactive.ProactiveEngine
+	pomodoroEngine       *pomodoro.Engine
 	mcpClosers           []io.Closer                // guarded by mu; closed and rebuilt on initLLMComponents
 	llmTransport         *llm.ErrorBodyTransport    // captures raw error bodies from the active LLM HTTP client; guarded by mu
 	chatModel            model.ToolCallingChatModel // current chat model; guarded by mu; reused by rebuildAgentTools
@@ -173,6 +175,40 @@ func (a *App) startup(ctx context.Context) {
 	if len(a.cfg.MissingRequired()) == 0 {
 		if err := a.initLLMComponents(ctx); err != nil {
 			log.Error().Err(err).Msg("init llm components failed")
+		}
+	}
+
+	// Initialize pomodoro engine (independent of LLM).
+	pomoCfg := pomodoro.Config{
+		FocusDuration:          a.cfg.PomodoroFocusDuration,
+		ShortBreakDuration:     a.cfg.PomodoroShortBreakDuration,
+		LongBreakDuration:      a.cfg.PomodoroLongBreakDuration,
+		RoundsBeforeLongBreak:  a.cfg.PomodoroRoundsBeforeLongBreak,
+	}
+	a.mu.Lock()
+	a.pomodoroEngine = pomodoro.New(pomoCfg)
+	engine := a.pomodoroEngine
+	a.mu.Unlock()
+
+	engine.OnTick = func(p pomodoro.TickPayload) {
+		a.EmitEvent("pomodoro:tick", p)
+	}
+	engine.OnPhaseChange = func(p pomodoro.PhasePayload) {
+		a.EmitEvent("pomodoro:phase:changed", p)
+		a.EmitEvent("notification:show", map[string]any{
+			"title":   "番茄钟",
+			"message": p.Message,
+		})
+	}
+	engine.OnStateChange = func(p pomodoro.StatePayload) {
+		a.EmitEvent("pomodoro:state:changed", p)
+		switch {
+		case p.State == "running" && engine.Status().Phase == "focus":
+			a.EmitEvent("pet:state:change", "focusing")
+		case p.State == "running":
+			a.EmitEvent("pet:state:change", "resting")
+		case p.State == "idle" || p.State == "paused":
+			a.EmitEvent("pet:state:change", "idle")
 		}
 	}
 
@@ -620,6 +656,11 @@ func (a *App) shutdown(_ context.Context) {
 	if sched != nil {
 		sched.Stop()
 	}
+	a.mu.RLock()
+	if a.pomodoroEngine != nil {
+		a.pomodoroEngine.Stop()
+	}
+	a.mu.RUnlock()
 	// Close MCP client connections accumulated across initLLMComponents calls.
 	for _, c := range closers {
 		if err := c.Close(); err != nil {

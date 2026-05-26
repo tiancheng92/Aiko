@@ -1,6 +1,7 @@
 <!-- frontend/src/components/NotificationBubble.vue -->
 <script setup>
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { renderMarkdown } from '../composables/useMarkdown.js'
 
@@ -8,6 +9,8 @@ const props = defineProps({
   petPos:  { type: Object, default: () => ({ x: -1, y: -1 }) },
   petSize: { type: Number, default: 160 },
 })
+
+const { t } = useI18n()
 
 const notification = ref(null)
 const bubbleEl = ref(null)
@@ -60,7 +63,7 @@ function dismiss() {
 
 onMounted(() => {
   offShow = EventsOn('notification:show', (data) => {
-    notification.value = { title: data.title || '通知', message: data.message, ts: new Date() }
+    notification.value = { title: data.title || t('notification.fallbackTitle'), message: data.message, ts: new Date() }
     nextTick(() => {
       if (bubbleEl.value) bubbleH.value = bubbleEl.value.offsetHeight
     })

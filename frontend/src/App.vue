@@ -5,19 +5,25 @@ const VRMPet = defineAsyncComponent(() => import('./components/VRMPet.vue'))
 import ChatBubble from './components/ChatBubble.vue'
 const SettingsWindow = defineAsyncComponent(() => import('./components/SettingsWindow.vue'))
 import NotificationBubble from './components/NotificationBubble.vue'
+import PomodoroPanel from './components/PomodoroPanel.vue'
 import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize, GetConfig, SetChatVisible } from '../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../wailsjs/runtime/runtime'
 import { springAnimate } from './composables/useSpring'
+import { useI18n } from 'vue-i18n'
 
 const bubbleOpen = ref(false)
 watch(bubbleOpen, (v) => { SetChatVisible(v) })
+const { t } = useI18n()
 const renderBackend = ref('live2d')
 const settingsOpen = ref(false)
+const pomodoroPanelOpen = ref(false)
+const pomodoroRunning = ref(false)
+const pomodoroPanelRef = ref(null)
 const ballPos  = ref({ x: -1, y: -1 })
 const ballSize = ref(160)
 const chatBubbleRef = ref(null)
 const activeScreen = ref({ width: 0, height: 0 })
-let offToggle, offToken, offDone, offError, offSettings, offScreenChanged, offRenderBackend
+let offToggle, offToken, offDone, offError, offSettings, offScreenChanged, offRenderBackend, offPomodoroState = null
 const voiceActive = ref(false)
 const siriMounted = ref(false)   // controls v-if (keeps DOM alive during fade-out)
 const siriVisible = ref(false)   // controls CSS transition class
@@ -337,8 +343,8 @@ onMounted(async () => {
   if (firstLaunch) {
     await MarkWelcomeShown()
     EventsEmit('notification:show', {
-      title: '你好！我是你的桌面宠物 ✨',
-      message: '请先在设置中配置 LLM 接口，然后就可以开始聊天了~',
+      title: t('app.welcomeTitle'),
+      message: t('app.welcomeMessage'),
     })
   }
   offToggle = EventsOn('bubble:toggle', () => {
@@ -376,22 +382,23 @@ onMounted(async () => {
   })
   offDone = EventsOn('chat:done', () => {
     if (!bubbleOpen.value && pendingTokens.trim()) {
-      EventsEmit('notification:show', { title: '✨ (=^･ω･^=)', message: pendingTokens.trim() })
+      EventsEmit('notification:show', { title: t('app.pendingNotification'), message: pendingTokens.trim() })
     }
     pendingTokens = ''
   })
   offError = EventsOn('chat:error', (err) => {
     if (!bubbleOpen.value) {
       pendingTokens = ''
-      EventsEmit('notification:show', { title: '😿 出错了', message: err })
+      EventsEmit('notification:show', { title: t('app.errorTitle'), message: err })
     }
   })
+  offPomodoroState = EventsOn('pomodoro:state:changed', onPomodoroStateChanged)
 })
 
 onUnmounted(() => {
   offToggle?.(); offToken?.(); offDone?.(); offError?.()
   offSettings?.(); offVoiceStart?.(); offVoiceEnd?.(); offVoiceError?.()
-  offScreenChanged?.(); offRenderBackend?.()
+  offScreenChanged?.(); offRenderBackend?.(); offPomodoroState?.()
   stopSiriAnim?.()
   stopRippleAnim?.()
   if (siriHideTimer) clearTimeout(siriHideTimer)
@@ -401,6 +408,9 @@ onUnmounted(() => {
 
 /** toggleBubble flips the chat bubble open/close state. */
 function toggleBubble() {
+  if (!bubbleOpen.value && pomodoroRunning.value) {
+    return
+  }
   bubbleOpen.value = !bubbleOpen.value
   if (bubbleOpen.value) {
     pendingTokens = ''
@@ -408,6 +418,24 @@ function toggleBubble() {
       chatBubbleRef.value?.focusInput()
       chatBubbleRef.value?.scrollToBottom()
     })
+  }
+}
+
+function openPomodoro() {
+  pomodoroPanelOpen.value = true
+  nextTick(() => {
+    pomodoroPanelRef.value?.show()
+  })
+}
+
+function closePomodoro() {
+  pomodoroPanelOpen.value = false
+}
+
+function onPomodoroStateChanged(payload) {
+  pomodoroRunning.value = payload.state === 'running'
+  if (payload.state === 'running' && bubbleOpen.value) {
+    bubbleOpen.value = false
   }
 }
 
@@ -518,18 +546,22 @@ function onSettingsLeave(el, done) {
   <Live2DPet
     v-if="renderBackend === 'live2d'"
     :active-screen="activeScreen"
+    :pomodoro-panel-open="pomodoroPanelOpen"
     @click="toggleBubble"
     @position="p => ballPos = p"
     @ball-size="s => ballSize = s"
     @open-settings="openSettings"
+    @open-pomodoro="openPomodoro"
   />
   <VRMPet
     v-else-if="renderBackend === 'vrm'"
     :active-screen="activeScreen"
+    :pomodoro-panel-open="pomodoroPanelOpen"
     @click="toggleBubble"
     @position="p => ballPos = p"
     @ball-size="s => ballSize = s"
     @open-settings="openSettings"
+    @open-pomodoro="openPomodoro"
   />
   <Transition :css="false" @enter="onBubbleEnter" @leave="onBubbleLeave">
     <ChatBubble
@@ -553,6 +585,13 @@ function onSettingsLeave(el, done) {
   <NotificationBubble
     :pet-pos="ballPos"
     :pet-size="ballSize"
+  />
+  <PomodoroPanel
+    v-if="pomodoroPanelOpen"
+    ref="pomodoroPanelRef"
+    :pet-pos="ballPos"
+    :pet-size="ballSize"
+    @close="closePomodoro"
   />
 
   <!--

@@ -35,3 +35,7 @@ export const ICON_TAB_GENERAL    = SVG('<line x1="4" y1="6" x2="20" y2="6"/><lin
 export const ICON_THINKING  = SVG('<path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/><path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/><path d="M3.477 10.896a4 4 0 0 1 .585-.396"/><path d="M19.938 10.5a4 4 0 0 1 .585.396"/><path d="M6 18a4 4 0 0 1-1.967-.516"/><path d="M19.967 17.484A4 4 0 0 1 18 18"/>', 1.8)
 export const ICON_KNOWLEDGE = SVG('<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2Z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7Z"/>', 1.8)
 export const ICON_MEMORY    = SVG('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/>', 1.8)
+
+// Pomodoro
+export const ICON_POMODORO     = SVG('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>')
+export const ICON_TAB_POMODORO = SVG('<path d="M12 2c-3 0-8 2-8 8 0 5 3 10 8 12 5-2 8-7 8-12 0-6-5-8-8-8z"/><path d="M12 6v2"/>', 1.5)

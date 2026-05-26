@@ -17,7 +17,8 @@ import {
   WebGLRenderer,
 } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { nextTick, onMounted, onUnmounted, ref, watch, computed } from "vue";
+import { useI18n } from 'vue-i18n'
 import {
   GetBallPosition,
   GetConfig,
@@ -33,12 +34,13 @@ import { debounce } from "../utils/timing.js";
 import { useEmotionEvents } from "../composables/useEmotionEvents.js";
 import { usePetState } from "../composables/usePetState.js";
 import { useVRMModel } from "../composables/useVRMModel.js";
-import { ICON_POWER, ICON_SETTING, ICON_SHIRT } from "../utils/icons";
+import { ICON_POWER, ICON_SETTING, ICON_SHIRT, ICON_POMODORO } from "../utils/icons";
 import ContextMenu from "./ContextMenu.vue";
 
-const emit = defineEmits(["click", "position", "ball-size", "open-settings"]);
+const emit = defineEmits(["click", "position", "ball-size", "open-settings", "open-pomodoro"]);
 const props = defineProps({
   activeScreen: { type: Object, default: () => ({ width: 0, height: 0 }) },
+  pomodoroPanelOpen: { type: Boolean, default: false },
 });
 
 const canvasRef = ref(null);
@@ -472,22 +474,25 @@ function onContextMenu(e) {
   petMenuRef.value?.show(e.clientX, e.clientY);
 }
 
-const petMenuItems = [
-  { iconSvg: ICON_SHIRT, label: "更换模型", action: switchToNextVRMModel },
+const { t } = useI18n()
+
+const petMenuItems = computed(() => [
+  { iconSvg: ICON_SHIRT, label: t('petMenu.switchModel'), action: switchToNextVRMModel },
+  { iconSvg: ICON_POMODORO, label: t('pomodoro.menuLabel'), action: () => emit("open-pomodoro"), disabled: props.pomodoroPanelOpen },
   { divider: true },
   {
     iconSvg: ICON_SETTING,
-    label: "打开设置",
+    label: t('petMenu.openSettings'),
     action: () => emit("open-settings"),
   },
   { divider: true },
   {
     iconSvg: ICON_POWER,
-    label: "退出程序",
+    label: t('petMenu.quitApp'),
     action: () => Quit(),
     danger: true,
   },
-];
+]);
 
 // ── Drag Handling ────────────────────────────────────────────────────────────
 
