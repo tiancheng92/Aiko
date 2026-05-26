@@ -163,6 +163,28 @@ func migrate(db *sql.DB) error {
 			return fmt.Errorf("patch fts5: %w", err)
 		}
 	}
+	// modernc.org/sqlite does not auto-create the content-sync triggers,
+	// so create them manually (idempotent via IF NOT EXISTS).
+	for _, trig := range []string{
+		`CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages BEGIN
+			INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+		END`,
+		`CREATE TRIGGER IF NOT EXISTS messages_fts_ad AFTER DELETE ON messages BEGIN
+			INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.id, old.content);
+		END`,
+		`CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE ON messages BEGIN
+			INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.id, old.content);
+			INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+		END`,
+	} {
+		if _, err := db.Exec(trig); err != nil {
+			return fmt.Errorf("patch fts5 trigger: %w", err)
+		}
+	}
+	// Populate the FTS index with any existing rows.
+	if _, err := db.Exec(`INSERT INTO messages_fts(messages_fts) VALUES('rebuild')`); err != nil {
+		return fmt.Errorf("patch fts5 rebuild: %w", err)
+	}
 
 	return nil
 }

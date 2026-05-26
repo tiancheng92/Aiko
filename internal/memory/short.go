@@ -170,6 +170,81 @@ func (s *ShortStore) CountUnmigrated() (int, error) {
 	return n, err
 }
 
+// Search returns all messages whose content matches the FTS5 query, newest first.
+// Returns empty slice (not error) for empty query.
+func (s *ShortStore) Search(query string) ([]Message, error) {
+	if strings.TrimSpace(query) == "" {
+		return nil, nil
+	}
+	rows, err := s.db.Query(`
+		SELECT m.id, m.role, m.content, m.thinking_content, m.images, m.files, m.migrated_to_long, m.created_at
+		FROM messages m
+		JOIN messages_fts fts ON m.id = fts.rowid
+		WHERE messages_fts MATCH ?
+		ORDER BY m.id DESC`, query)
+	if err != nil {
+		return nil, fmt.Errorf("search messages: %w", err)
+	}
+	defer rows.Close()
+
+	var msgs []Message
+	for rows.Next() {
+		m, err := scanMessage(rows.Scan)
+		if err != nil {
+			return nil, err
+		}
+		msgs = append(msgs, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return msgs, nil
+}
+
+// GetNewestToID loads messages from the newest backwards, paginating by pageSize,
+// until targetID is included. Returns all loaded messages in chronological order.
+func (s *ShortStore) GetNewestToID(targetID int64, pageSize int) ([]Message, error) {
+	var all []Message
+
+	// First fetch: get most recent page.
+	page, err := s.Recent(pageSize)
+	if err != nil {
+		return nil, fmt.Errorf("get newest to id: first page: %w", err)
+	}
+	if len(page) == 0 {
+		return nil, nil
+	}
+
+	for {
+		// Prepend page to all (page is chronological, prepend = older before newer).
+		all = append(page, all...)
+
+		// Check if target is in this page.
+		found := false
+		for _, m := range page {
+			if m.ID == targetID {
+				found = true
+				break
+			}
+		}
+		if found {
+			break
+		}
+
+		// Fetch next older page.
+		oldestID := page[0].ID
+		page, err = s.BeforeID(oldestID, pageSize)
+		if err != nil {
+			return nil, fmt.Errorf("get newest to id: page before %d: %w", oldestID, err)
+		}
+		if len(page) == 0 {
+			break // reached end, target not found
+		}
+	}
+
+	return all, nil
+}
+
 // OldestN returns the oldest n messages in chronological order.
 func (s *ShortStore) OldestN(n int) ([]Message, error) {
 	rows, err := s.db.Query(`
