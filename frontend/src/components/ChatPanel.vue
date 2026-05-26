@@ -1,6 +1,6 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { SendMessage, SendMessageWithImages, SendMessageWithFiles, GetMessages, GetMessagesBeforeID, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig, SaveConfig, RegenerateLastReply, GetSoundsEnabled, ReadClipboard } from '../../wailsjs/go/main/App'
+import { SendMessage, SendMessageWithImages, SendMessageWithFiles, GetMessages, GetMessagesBeforeID, ClearChatHistory, IsFirstLaunch, MarkWelcomeShown, GetVoiceAutoSend, StopGeneration, SpeakText, StopTTS, GetConfig, SaveConfig, RegenerateLastReply, GetSoundsEnabled, ReadClipboard, SearchMessages, GetMessagesFromNewestToID } from '../../wailsjs/go/main/App'
 import { EventsOn, EventsEmit, BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 import { throttle, debounce } from '../utils/timing.js'
 import { ICON_THINKING, ICON_KNOWLEDGE, ICON_MEMORY } from '../utils/icons.js'
@@ -43,6 +43,17 @@ let settleIntervalId = null
 let oldestLoadedID = null
 /** allLoaded is true when there are no more older messages to fetch. */
 const allLoaded = ref(false)
+/** searchQuery is the current search input text. */
+const searchQuery = ref('')
+/** isSearching is true when the search bar is visible and active. */
+const isSearching = ref(false)
+/** searchResults holds messages returned from FTS5 search, or null when not searching. */
+const searchResults = ref(null)
+/** searchSnapshot saves normal state before entering search for restore on exit. */
+let searchSnapshot = null
+/** searchDebounceTimer holds the active debounce timer for search input. */
+let searchDebounceTimer = null
+const searchInputEl = ref(null)
 /** loadingHistory prevents concurrent history fetches and drives the loading indicator. */
 const loadingHistory = ref(false)
 
@@ -563,6 +574,124 @@ async function loadOlderMessages() {
   } finally {
     loadingHistory.value = false
   }
+}
+
+/** enterSearch saves current message state and activates search mode. */
+function enterSearch() {
+  if (isStreaming.value) return
+  searchSnapshot = {
+    messages: [...messages.value],
+    oldestLoadedID,
+    allLoaded: allLoaded.value,
+  }
+  isSearching.value = true
+  searchQuery.value = ''
+  searchResults.value = null
+  // Disable infinite-scroll observer while searching.
+  sentinelObserver?.disconnect()
+  nextTick(() => searchInputEl.value?.focus())
+}
+
+/** exitSearch restores the pre-search message list and scrolls to bottom. */
+function exitSearch() {
+  if (!searchSnapshot) return
+  isSearching.value = false
+  searchQuery.value = ''
+  searchResults.value = null
+  clearTimeout(searchDebounceTimer)
+  messages.value = searchSnapshot.messages
+  oldestLoadedID = searchSnapshot.oldestLoadedID
+  allLoaded.value = searchSnapshot.allLoaded
+  searchSnapshot = null
+  // Re-enable observer and scroll to bottom.
+  nextTick(() => {
+    const sentinel = document.getElementById('msg-load-sentinel')
+    if (sentinel && sentinelObserver) sentinelObserver.observe(sentinel)
+    scrollToBottom()
+  })
+}
+
+/** doSearch calls the backend FTS5 search and updates results. */
+async function doSearch(query) {
+  const q = query.trim()
+  if (!q) {
+    searchResults.value = null
+    return
+  }
+  try {
+    const results = await SearchMessages(q)
+    searchResults.value = (results || []).map(mapMsg)
+  } catch (e) {
+    console.warn('search failed:', e)
+    searchResults.value = []
+  }
+}
+
+/** onSearchInput handles debounced search input. */
+function onSearchInput(e) {
+  searchQuery.value = e.target.value
+  clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => doSearch(searchQuery.value), 300)
+}
+
+/** onSearchKeydown handles Escape key in search input. */
+function onSearchKeydown(e) {
+  if (e.key === 'Escape') exitSearch()
+}
+
+/** jumpToMessage loads context from newest down to the page containing targetID, then scrolls to it. */
+async function jumpToMessage(targetID) {
+  if (isStreaming.value) return
+  exitSearch()
+  loadingHistory.value = true
+  try {
+    const msgs = await GetMessagesFromNewestToID(targetID)
+    if (!msgs || msgs.length === 0) return
+    suppressAnimation.value = true
+    messages.value = msgs.map(mapMsg)
+    if (msgs.length > 0) oldestLoadedID = msgs[0].ID
+    allLoaded.value = false
+
+    await nextTick()
+    await new Promise(resolve => requestAnimationFrame(resolve))
+    suppressAnimation.value = false
+
+    // Re-enable observer.
+    const sentinel = document.getElementById('msg-load-sentinel')
+    if (sentinel && sentinelObserver) sentinelObserver.observe(sentinel)
+
+    // Scroll to target message and flash highlight.
+    const el = document.querySelector(`[data-msg-key="id:${targetID}"]`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.classList.add('jump-flash')
+      setTimeout(() => el.classList.remove('jump-flash'), 2000)
+    }
+  } catch (e) {
+    console.warn('jump to message failed:', e)
+  } finally {
+    loadingHistory.value = false
+  }
+}
+
+/** displayMessages returns search results when searching, else the normal message list. */
+const displayMessages = computed(() => {
+  if (isSearching.value && searchResults.value) return searchResults.value
+  return messages.value
+})
+
+/** searchMatchIds is a Set of message IDs that match the search query. */
+const searchMatchIds = computed(() => {
+  if (!isSearching.value || !searchResults.value) return null
+  return new Set(searchResults.value.map(m => m.id))
+})
+
+/** highlightMatches wraps occurrences of query terms in <mark> tags. */
+function highlightMatches(text, query) {
+  if (!query || !query.trim()) return text
+  const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`(${escaped})`, 'gi')
+  return text.replace(re, '<mark class="search-highlight">$1</mark>')
 }
 
 onMounted(async () => {
@@ -1531,11 +1660,33 @@ async function toggleMarkdownMode() {
   }
 }
 
-defineExpose({ focusInput, scrollToBottom })
+defineExpose({ enterSearch, focusInput, scrollToBottom })
 </script>
 
 <template>
   <div class="chat-panel" ref="chatPanelEl" @mousemove="onChatPanelMousemove" :style="{ '--code-max-width': codeMaxWidth > 0 ? codeMaxWidth + 'px' : 'none' }">
+    <!-- Search bar -->
+    <div v-if="isSearching" class="search-bar">
+      <div class="search-input-wrap">
+        <svg class="search-input-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input
+          class="search-input"
+          :placeholder="$t('chat.searchPlaceholder')"
+          :value="searchQuery"
+          @input="onSearchInput"
+          @keydown="onSearchKeydown"
+          ref="searchInputEl"
+        />
+        <span v-if="searchResults" class="search-count">{{ searchResults.length }} {{ $t('chat.searchMatches') }}</span>
+        <button class="search-close-btn" @click="exitSearch" :aria-label="$t('chat.searchClose')">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+    </div>
     <div class="chat-spotlight" ref="spotlightEl" aria-hidden="true" />
     <div class="messages" ref="messagesEl" @click="onMessagesClick" @scroll="onMessagesScroll">
       <!-- Lazy-load sentinel: entering viewport triggers loading older messages -->
@@ -1546,7 +1697,7 @@ defineExpose({ focusInput, scrollToBottom })
         <span v-else-if="!allLoaded" class="load-sentinel-dot" />
       </div>
       <TransitionGroup name="msg-slide" tag="div" class="messages-inner" :class="{ 'suppress-anim': suppressAnimation }">
-      <div v-for="(m, i) in messages" :key="msgKey(m, i)" :class="['msg', m.role, { 'is-info': m.isInfo }]">
+      <div v-for="(m, i) in displayMessages" :key="msgKey(m, i)" :class="['msg', m.role, { 'is-info': m.isInfo, 'search-dimmed': searchMatchIds && !searchMatchIds.has(m.id) && !m.isInfo }]" :data-msg-key="msgKey(m, i)" @click="searchMatchIds && searchMatchIds.has(m.id) && jumpToMessage(m.id)">
         <img v-if="m.role === 'assistant'" class="msg-avatar" :src="aiAvatar || '/logo.png'" alt="AI" draggable="false" />
         <div class="bubble-wrap" :class="{ ghost: m.ghost }">
           <!-- Collapsible wrapper -->
@@ -1568,7 +1719,7 @@ defineExpose({ focusInput, scrollToBottom })
                     <span>{{ fname }}</span>
                   </div>
                 </div>
-                <div v-if="m.content" v-html="renderMarkdown(m.content)"></div>
+                <div v-if="m.content" v-html="isSearching ? highlightMatches(m.content, searchQuery) : renderMarkdown(m.content)"></div>
                 <template v-if="!m.streaming && !m.thinking && m.content">
                   <template v-if="extractUrls(m.content).length <= 1">
                     <LinkPreview v-for="u in extractUrls(m.content)" :key="u" :url="u" />
@@ -1608,7 +1759,7 @@ defineExpose({ focusInput, scrollToBottom })
                     </div>
                   </div>
                   <div v-if="m.thinkingContent && (m.content || m.streaming)" class="thinking-divider" />
-                  <div v-if="m.displayHtml || (!m.streaming && m.content)" v-html="m.displayHtml || renderMarkdown(m.content)" />
+                  <div v-if="m.displayHtml || (!m.streaming && m.content)" v-html="m.displayHtml || (isSearching ? highlightMatches(m.content, searchQuery) : renderMarkdown(m.content))" />
                   <template v-if="m.pendingTokens && m.pendingTokens.length">
                     <span v-for="tok in m.pendingTokens" :key="tok.key" class="token-word">{{ tok.text }}</span>
                   </template>
@@ -4000,6 +4151,73 @@ body > .lightbox .lightbox-img {
 }
 .lp-toggle-btn:hover { color: var(--text-primary); }
 .lp-toggle-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.search-bar {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--lg-border-subtle);
+  animation: search-slide-down 0.15s ease-out;
+}
+@keyframes search-slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.search-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--lg-surface-raised);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.search-input-icon {
+  color: var(--lg-text-muted);
+  flex-shrink: 0;
+}
+.search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--lg-text);
+  font-size: 13px;
+}
+.search-input::placeholder {
+  color: var(--lg-text-muted);
+}
+.search-count {
+  font-size: 11px;
+  color: var(--lg-text-muted);
+  white-space: nowrap;
+}
+.search-close-btn {
+  background: none;
+  border: none;
+  color: var(--lg-text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.search-close-btn:hover {
+  color: var(--lg-text);
+  background: var(--lg-surface-hover);
+}
+.search-highlight {
+  background: rgba(240, 180, 41, 0.25);
+  color: #f0b429;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.search-dimmed {
+  opacity: 0.35;
+}
+@keyframes jump-flash {
+  0%, 100% { background: transparent; }
+  50% { background: rgba(240, 180, 41, 0.12); }
+}
+:deep(.jump-flash) {
+  animation: jump-flash 0.5s ease-in-out 4;
+}
 </style>
 
 <style>
