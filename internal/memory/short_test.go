@@ -229,6 +229,60 @@ func TestSearch_SpecialCharacters(t *testing.T) {
 	}
 }
 
+func TestSearch_CJKPhrase(t *testing.T) {
+	s := newTestShortStoreWithFTS(t)
+	s.Add("user", "早上好，今天天气不错")
+	s.Add("assistant", "你好！早上好！今天想做什么？")
+	s.Add("user", "晚上吃什么")
+
+	results, err := s.Search("早上好")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+	// newest first
+	if results[0].Content != "你好！早上好！今天想做什么？" {
+		t.Errorf("msg[0]: want assistant reply, got %q", results[0].Content)
+	}
+	if results[1].Content != "早上好，今天天气不错" {
+		t.Errorf("msg[1]: want user message, got %q", results[1].Content)
+	}
+}
+
+func TestSearch_JapanesePhrase(t *testing.T) {
+	s := newTestShortStoreWithFTS(t)
+	// FTS5's default tokenizer treats hiragana/katakana runs as single tokens,
+	// so only messages where the query appears as a standalone token boundary match.
+	s.Add("user", "おはよう")
+	s.Add("assistant", "はい、おはよう")
+	s.Add("user", "こんばんは")
+
+	results, err := s.Search("おはよう")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+}
+
+func TestSearch_KoreanPhrase(t *testing.T) {
+	s := newTestShortStoreWithFTS(t)
+	s.Add("user", "안녕하세요")
+	s.Add("assistant", "안녕하세요! 반갑습니다.")
+	s.Add("user", "감사합니다")
+
+	results, err := s.Search("안녕하세요")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+}
+
 func TestGetNewestToID_IncludesTarget(t *testing.T) {
 	s := newTestShortStoreWithFTS(t)
 	var ids []int64

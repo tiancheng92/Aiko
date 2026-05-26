@@ -1,0 +1,58 @@
+<h2>Search Interaction — Highlight Filter Mode</h2>
+<p class="subtitle">Click search icon → search bar slides down → type → results inline with highlights</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">Step 1: Normal Chat View</div>
+    <div class="mockup-body" style="min-height:280px">
+      <div style="background:#2a2a2e;border-radius:6px;padding:12px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
+        <span style="color:#e0e0e0;font-size:13px">聊天</span>
+        <span style="color:#888;font-size:18px;cursor:pointer">🔍</span>
+      </div>
+      <div class="placeholder" style="margin:6px 0">14:32 — 今天天气怎么样？</div>
+      <div class="placeholder" style="margin:6px 0">14:32 — 今天上海多云转晴...</div>
+      <div class="placeholder" style="margin:6px 0">14:35 — 帮我查一下日历</div>
+      <div class="placeholder" style="margin:6px 0">14:35 — 你今天有2个会议...</div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">Step 2: Search Active</div>
+    <div class="mockup-body" style="min-height:280px">
+      <div style="background:#2a2a2e;border-radius:6px;padding:8px 12px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px;background:#3a3a3e;border-radius:6px;padding:6px 10px">
+          <span style="color:#888">🔍</span>
+          <input placeholder="搜索聊天记录..." style="background:transparent;border:none;color:white;outline:none;flex:1;font-size:13px" value="天气">
+          <span style="color:#888;font-size:12px">2/4</span>
+          <span style="color:#888;cursor:pointer">✕</span>
+        </div>
+      </div>
+      <div style="background:#3a3a3e33;border-radius:6px;padding:10px;margin:6px 0;border-left:3px solid #f0b429">
+        <div style="color:#ccc;font-size:11px">14:32 · 用户</div>
+        <div>今天<span style="background:#f0b42933;color:#f0b429;border-radius:2px;padding:0 2px">天气</span>怎么样？</div>
+      </div>
+      <div style="background:#3a3a3e33;border-radius:6px;padding:10px;margin:6px 0;border-left:3px solid #f0b429">
+        <div style="color:#ccc;font-size:11px">14:32 · 宠物</div>
+        <div>今天上海多云转晴，<span style="background:#f0b42933;color:#f0b429;border-radius:2px;padding:0 2px">天气</span>适合...</div>
+      </div>
+      <div style="background:#1a1a1e;border-radius:6px;padding:10px;margin:6px 0;opacity:0.4">
+        <div style="color:#666;font-size:11px">14:35 · 用户</div>
+        <div>帮我查一下日历</div>
+      </div>
+      <div style="text-align:center;color:#888;font-size:11px;margin-top:8px">
+        加载更多搜索结果...
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Key Behaviors</h3>
+  <ul>
+    <li>🔍 点击标题栏搜索按钮 → 搜索栏展开</li>
+    <li>输入关键词 → 走服务端 FTS5 搜索，结果替换消息列表</li>
+    <li>匹配消息：高亮关键词 + 左侧高亮条</li>
+    <li>不匹配消息：置灰折叠</li>
+    <li>搜索结果超过一页 → 滚动到底部懒加载下一页</li>
+    <li>清空搜索框 / 点 ✕ → 恢复原消息列表</li>
+  </ul>
+</div>

@@ -710,9 +710,13 @@ async function jumpToMessage(targetID) {
   }
 }
 
-/** displayMessages returns search results when searching, else the normal message list. */
+/** displayMessages always shows the full message list during search (snapshot), so
+ *  matching messages are highlighted and non-matching ones dimmed inline.
+ *  Only swap to snapshot on the first keystroke that produces results. */
 const displayMessages = computed(() => {
-  if (isSearching.value && searchResults.value) return searchResults.value
+  if (isSearching.value && searchResults.value !== null) {
+    return searchSnapshot ? searchSnapshot.messages : messages.value
+  }
   return messages.value
 })
 

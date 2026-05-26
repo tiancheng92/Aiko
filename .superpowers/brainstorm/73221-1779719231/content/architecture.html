@@ -1,0 +1,69 @@
+<h2>Implementation Approach</h2>
+<p class="subtitle">Backend FTS5 + Frontend Search State Machine</p>
+
+<div class="section">
+  <h3>Backend Changes</h3>
+</div>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">New DB: FTS5 Virtual Table</div>
+    <div class="mockup-body">
+      <p><code>CREATE VIRTUAL TABLE messages_fts USING fts5(content, content=messages, content_rowid=id)</code></p>
+      <p>FTS5 content-sync mode — auto stays in sync with messages table, no triggers needed</p>
+      <p>Search query: <code>SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?</code> → join back to messages</p>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">New Wails Bindings</div>
+    <div class="mockup-body">
+      <p><strong>SearchMessages(query)</strong> → []Message (全量)</p>
+      <p><strong>GetMessagesFromNewestToID(targetID, pageSize)</strong> → []Message (跳转用)</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px">
+  <h3>Frontend State Machine</h3>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+  <div class="mockup">
+    <div class="mockup-header">Normal</div>
+    <div class="mockup-body" style="font-size:13px">
+      <p>messages.value — normal lazy-load list</p>
+      <p>IntersectionObserver active</p>
+      <p>🔍 click → enter Search</p>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">Searching</div>
+    <div class="mockup-body" style="font-size:13px">
+      <p>Save snapshot: {messages, oldestLoadedID, allLoaded, scrollTop}</p>
+      <p>IntersectionObserver → disabled</p>
+      <p>messages.value = filtered results with highlights</p>
+      <p>Clear query / ✕ → restore Normal</p>
+      <p>Click result → enter Jump</p>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">Jump</div>
+    <div class="mockup-body" style="font-size:13px">
+      <p>Exit search, load from newest → target page</p>
+      <p>Scroll to target message, flash highlight</p>
+      <p>Resume IntersectionObserver</p>
+      <p>→ Normal</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px">
+  <h3>File Changes</h3>
+  <table style="width:100%;text-align:left;font-size:13px">
+    <tr><th style="padding:6px">File</th><th style="padding:6px">Change</th></tr>
+    <tr><td style="padding:6px">internal/db/sqlite.go</td><td style="padding:6px">Add FTS5 virtual table migration</td></tr>
+    <tr><td style="padding:6px">internal/memory/short.go</td><td style="padding:6px">Add Search(), GetNewestToID()</td></tr>
+    <tr><td style="padding:6px">app_chat.go</td><td style="padding:6px">Add SearchMessages(), GetMessagesFromNewestToID() bindings</td></tr>
+    <tr><td style="padding:6px">ChatPanel.vue</td><td style="padding:6px">Search bar + state machine + jump logic</td></tr>
+  </table>
+</div>
