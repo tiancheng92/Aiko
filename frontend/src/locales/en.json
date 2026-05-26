@@ -283,7 +283,8 @@
     "stopSpeak": "Stop Reading",
     "searchPlaceholder": "Search chat history...",
     "searchMatches": "matches",
-    "searchClose": "Close search"
+    "searchClose": "Close search",
+    "searchNoResults": "No matching messages found"
   },
   "chatBubble": {
     "fullscreen": "Fullscreen",

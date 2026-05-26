@@ -283,7 +283,8 @@
     "stopSpeak": "停止朗读",
     "searchPlaceholder": "搜索聊天记录...",
     "searchMatches": "条匹配",
-    "searchClose": "关闭搜索"
+    "searchClose": "关闭搜索",
+    "searchNoResults": "未找到匹配的消息"
   },
   "chatBubble": {
     "fullscreen": "全屏",

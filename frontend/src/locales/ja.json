@@ -280,7 +280,11 @@
     "copy": "コピー",
     "copied": "コピー済み",
     "speak": "読み上げ",
-    "stopSpeak": "読み上げ停止"
+    "stopSpeak": "読み上げ停止",
+    "searchPlaceholder": "チャット履歴を検索...",
+    "searchMatches": "件",
+    "searchClose": "検索を閉じる",
+    "searchNoResults": "一致するメッセージが見つかりません"
   },
   "chatBubble": {
     "fullscreen": "フルスクリーン",
@@ -290,7 +294,8 @@
     "clearHistory": "チャット履歴を消去",
     "openSettings": "設定を開く",
     "chat": "チャット",
-    "latencyAriaLabel": "LLMレイテンシ"
+    "latencyAriaLabel": "LLMレイテンシ",
+    "search": "チャット履歴を検索"
   },
   "toolConfirm": {
     "title": "ツール実行確認",

@@ -280,7 +280,11 @@
     "copy": "복사",
     "copied": "복사됨",
     "speak": "읽기",
-    "stopSpeak": "읽기 중지"
+    "stopSpeak": "읽기 중지",
+    "searchPlaceholder": "채팅 기록 검색...",
+    "searchMatches": "건",
+    "searchClose": "검색 닫기",
+    "searchNoResults": "일치하는 메시지가 없습니다"
   },
   "chatBubble": {
     "fullscreen": "전체 화면",
@@ -290,7 +294,8 @@
     "clearHistory": "채팅 기록 지우기",
     "openSettings": "설정 열기",
     "chat": "채팅",
-    "latencyAriaLabel": "LLM 지연시간"
+    "latencyAriaLabel": "LLM 지연시간",
+    "search": "채팅 기록 검색"
   },
   "toolConfirm": {
     "title": "도구 실행 확인",

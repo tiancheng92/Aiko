@@ -1696,6 +1696,7 @@ defineExpose({ enterSearch, focusInput, scrollToBottom })
         </div>
         <span v-else-if="!allLoaded" class="load-sentinel-dot" />
       </div>
+      <div v-if="isSearching && searchResults && searchResults.length === 0" class="search-empty">{{ $t('chat.searchNoResults') }}</div>
       <TransitionGroup name="msg-slide" tag="div" class="messages-inner" :class="{ 'suppress-anim': suppressAnimation }">
       <div v-for="(m, i) in displayMessages" :key="msgKey(m, i)" :class="['msg', m.role, { 'is-info': m.isInfo, 'search-dimmed': searchMatchIds && !searchMatchIds.has(m.id) && !m.isInfo }]" :data-msg-key="msgKey(m, i)" @click="searchMatchIds && searchMatchIds.has(m.id) && jumpToMessage(m.id)">
         <img v-if="m.role === 'assistant'" class="msg-avatar" :src="aiAvatar || '/logo.png'" alt="AI" draggable="false" />
@@ -4201,6 +4202,12 @@ body > .lightbox .lightbox-img {
 .search-close-btn:hover {
   color: var(--lg-text);
   background: var(--lg-surface-hover);
+}
+.search-empty {
+  text-align: center;
+  color: var(--lg-text-muted);
+  font-size: 13px;
+  padding: 24px 16px;
 }
 .search-highlight {
   background: rgba(240, 180, 41, 0.25);
