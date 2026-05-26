@@ -758,7 +758,7 @@ onMounted(async () => {
       if (first) {
         messages.value.push({
           role: 'assistant',
-          content: '你好！👋 我是你的 AI 桌面宠物。\n\n我支持：\n- 💬 **自然语言对话**\n- 🔧 **工具调用**（查询时间、系统信息、网络状态等）\n- 📚 **知识库问答**（在设置中导入文档）\n\n**快速操作提示：**\n- 右键点击我 → 切换表情 / 更换模型 / 打开设置\n- 右键点击聊天框 → 导出聊天记录\n\n请先在 ⚙️ **设置** 中配置 LLM 模型后开始聊天。',
+          content: t('chat.system.welcome'),
           thinkingContent: '',
           thinkingExpanded: false,
         })
@@ -872,7 +872,7 @@ onMounted(async () => {
     }
     const thinkIdx = messages.value.findLastIndex(m => m.thinking)
     if (thinkIdx >= 0) messages.value.splice(thinkIdx, 1)
-    messages.value.push({ role: 'system', content: '错误: ' + err })
+    messages.value.push({ role: 'system', content: t('chat.system.error', { error: err }) })
     loading.value = false
     isStreaming.value = false
     proactiveStarted = false
@@ -996,12 +996,12 @@ onMounted(async () => {
       setInputDOM('')
     }
     EventsEmit('notification:show', {
-      title: '🎙️ 语音识别失败',
+      title: t('chat.system.voiceError'),
       message: errMsg === 'mic_denied'
-        ? '请在系统偏好设置中允许 Aiko 使用麦克风。'
+        ? t('chat.system.voiceErrorMicDenied')
         : errMsg === 'speech_denied'
-          ? '请在系统偏好设置中允许 Aiko 使用语音识别。'
-          : `语音识别出错：${errMsg}`,
+          ? t('chat.system.voiceErrorSpeechDenied')
+          : t('chat.system.voiceErrorUnknown', { error: errMsg }),
     })
   })
 
@@ -1022,7 +1022,7 @@ onMounted(async () => {
     isUpdating.value = false
     updateProgress.value = 0
     updateProgressMsg.value = ''
-    messages.value.push({ role: 'system', content: '⚠️ 更新失败: ' + msg })
+    messages.value.push({ role: 'system', content: t('chat.system.updateFailed', { error: msg }) })
   })
 
   // Observe message container width for code block max-width.
@@ -1263,7 +1263,7 @@ async function regenLastReply(assistantIdx) {
   } catch (e) {
     const thinkIdx = messages.value.findLastIndex(m => m.thinking)
     if (thinkIdx >= 0) messages.value.splice(thinkIdx, 1)
-    messages.value.push({ role: 'system', content: '重新生成失败: ' + e })
+    messages.value.push({ role: 'system', content: t('chat.system.regenerateFailed', { error: e }) })
     loading.value = false
     isStreaming.value = false
     EventsEmit('pet:state:change', 'error')
@@ -1346,12 +1346,12 @@ function isReadableMime(mime) {
 /** addFile validates and reads a File object, pushing to pendingFiles on success. */
 function addFile(file) {
   if (file.size > MAX_FILE_BYTES) {
-    messages.value.push({ role: 'system', content: `文件过大（最大 200KB）：${file.name}` })
+    messages.value.push({ role: 'system', content: t('chat.system.fileTooBig', { name: file.name }) })
     return
   }
   const mime = file.type || 'text/plain'
   if (!isReadableMime(mime)) {
-    messages.value.push({ role: 'system', content: `不支持此文件类型，仅支持文本文件：${file.name}` })
+    messages.value.push({ role: 'system', content: t('chat.system.fileUnsupportedType', { name: file.name }) })
     return
   }
   const reader = new FileReader()
@@ -1359,7 +1359,7 @@ function addFile(file) {
     pendingFiles.value.push({ name: file.name, mimeType: mime, content: ev.target.result })
   }
   reader.onerror = () => {
-    messages.value.push({ role: 'system', content: `文件读取失败：${file.name}` })
+    messages.value.push({ role: 'system', content: t('chat.system.fileReadError', { name: file.name }) })
   }
   reader.readAsText(file)
 }
@@ -1465,7 +1465,7 @@ async function send() {
   } catch (e) {
     const idx = messages.value.findLastIndex(m => m.thinking)
     if (idx >= 0) messages.value.splice(idx, 1)
-    messages.value.push({ role: 'system', content: '发送失败: ' + e })
+    messages.value.push({ role: 'system', content: t('chat.system.sendFailed', { error: e }) })
     loading.value = false
     isStreaming.value = false
     EventsEmit('pet:state:change', 'error')
@@ -1919,15 +1919,15 @@ defineExpose({ enterSearch, focusInput, scrollToBottom })
           />
           <!-- Toolbar: zoom controls + fullscreen -->
           <div class="lightbox-toolbar" @click.stop>
-            <button class="lb-btn" @click="lbZoomOut" title="Zoom out (-)">
+            <button class="lb-btn" @click="lbZoomOut" :title="$t('chat.lightbox.zoomOut')">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
             <span class="lb-zoom-label">{{ Math.round(lightboxZoom * 100) }}%</span>
-            <button class="lb-btn" @click="lbZoomIn" title="Zoom in (+)">
+            <button class="lb-btn" @click="lbZoomIn" :title="$t('chat.lightbox.zoomIn')">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
             <div class="lb-sep" />
-            <button class="lb-btn" @click="lbReset" title="Reset (double-click image)">
+            <button class="lb-btn" @click="lbReset" :title="$t('chat.lightbox.reset')">
               <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
             </button>
             <div class="lb-sep" />

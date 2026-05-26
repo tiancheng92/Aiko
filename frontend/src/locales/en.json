@@ -34,19 +34,34 @@
       "shortcutCmdEnter": "New line in message box",
       "shortcutCmdV": "Paste image to message box (supports screenshot paste)",
       "shortcutDrag": "Drag floating ball — Reposition pet",
-      "shortcutRightClick": "Right-click chat bubble — Export, clear history, open settings"
+      "shortcutRightClick": "Right-click chat bubble — Export, clear history, open settings",
+      "languageDefaultDesc": "Follow system by default",
+      "shortcutHoldLabel": "Hold 1s",
+      "shortcutReleaseLabel": "Release Opt",
+      "shortcutDragLabel": "Drag",
+      "shortcutRightClickLabel": "Right Click"
     },
     "appearance": {
       "petModel": "Pet Model",
       "renderMode": "Render Mode",
+      "renderModeLive2D": "Live2D (2D)",
+      "renderModeVRM": "VRM (3D)",
       "vrmModel": "VRM Model",
       "vrmDelete": "Delete",
       "vrmImport": "Import VRM File",
       "vrmUserImported": "User Imported",
       "vrmBuiltin": "Built-in",
       "vrmDeleteModel": "Delete this model",
+      "vrmUploading": "Uploading...",
+      "vrmAnimPreview": "Animation Preview",
+      "live2DModel": "Live2D Model",
       "petSize": "Pet Size",
       "petSizeDesc": "Size in pixels, 0 for auto",
+      "petSizeAuto": "Auto",
+      "chatSizeDefault": "Default",
+      "resetToAuto": "Reset to Auto",
+      "resetToDefault": "Reset to Default",
+      "currentScreen": "Current Screen: {width} x {height}",
       "chatSize": "Chat Bubble Size",
       "chatWidth": "Width",
       "chatHeight": "Height",
@@ -54,22 +69,38 @@
       "resetBallDesc": "Move the floating ball back to default position",
       "voice": "Voice & Sound",
       "voiceAutoSend": "Auto-send after voice recognition",
+      "voiceAutoSendDesc": "Auto-send the recognized text without manual confirmation after releasing the Option key",
       "soundsEnabled": "Chat sound effects",
+      "soundsEnabledDesc": "Play gentle sound cues when sending, receiving messages, or on errors",
       "ttsAutoPlay": "Auto-read AI replies",
+      "ttsAutoPlayDesc": "Automatically read AI replies aloud (requires a TTS engine in model settings)",
       "ttsSummarizeThreshold": "Summary word threshold",
       "ttsSummarizeThresholdDesc": "Summarize messages longer than this before reading, 0 to disable",
       "avatar": "Avatar Settings",
       "aiAvatar": "AI Avatar",
       "userAvatar": "User Avatar",
       "resetAvatar": "Reset",
-      "change": "Change"
+      "change": "Change",
+      "vrmAnimLabels": {
+        "waiting": "Idle",
+        "wave": "Wave",
+        "nod": "Nod",
+        "curious": "Curious",
+        "stretch": "Stretch",
+        "sleepy": "Sleepy",
+        "talk": "Talk",
+        "awkward": "Awkward",
+        "sad": "Sad",
+        "tsundere": "Tsundere",
+        "surprised": "Surprised",
+        "appear": "Appear"
+      }
     },
     "model": {
       "title": "Model Profiles",
       "addProfile": "Add Profile",
       "noProfile": "No model configured. Click the button below to add one.",
       "activate": "Activate",
-      "activateDesc": "Activate",
       "activated": "Activated",
       "edit": "Edit",
       "delete": "Delete",
@@ -91,7 +122,54 @@
       "supportsVision": "Supports Vision",
       "saveProfile": "Save",
       "cancel": "Cancel",
-      "fetchOpenRouter": "Fetch OpenRouter Models"
+      "fetchOpenRouter": "Fetch OpenRouter Models",
+      "restartingAgent": "Restarting Agent...",
+      "profileSwitched": "Profile switched",
+      "noModelsFetched": "No models found",
+      "fetchModelsFailed": "Failed to fetch models: {error}",
+      "saveFailed": "Save failed: {error}",
+      "switchFailed": "Switch failed: {error}",
+      "deleteFailed": "Delete failed: {error}",
+      "deleteProfileTitle": "Delete Profile",
+      "confirmDeleteProfile": "Delete profile \"{name}\"? This cannot be undone.",
+      "deleteVRMTitle": "Delete Model",
+      "confirmDeleteVRM": "Delete \"{name}\"? This cannot be undone.",
+      "validation": {
+        "nameRequired": "Profile name is required",
+        "modelRequired": "Model name is required",
+        "baseUrlRequired": "Base URL is required"
+      },
+      "fetchingModels": "Fetching...",
+      "fetchModels": "Fetch Models",
+      "saving": "Saving...",
+      "providerLabels": {
+        "openai": "OpenAI Compatible API",
+        "openrouter": "OpenRouter"
+      },
+      "placeholder": {
+        "profileName": "My OpenAI",
+        "baseURL": "http://localhost:11434/v1",
+        "baseURLOpenRouter": "https://openrouter.ai/api/v1 (leave empty for default)",
+        "apiKeyOptional": "(optional)",
+        "selectModel": "-- Select Model --",
+        "model": "gpt-4o",
+        "embeddingModel": "text-embedding-3-small (optional)",
+        "embeddingDisable": "-- Disable (turn off knowledge search) --",
+        "embeddingBaseURL": "https://api.openai.com/v1"
+      },
+      "embeddingInheritHint": "Use the same Base URL and API Key",
+      "embeddingDimHint": "Must match the selected vector model, default 1536",
+      "supportsVisionHint": "Enable to send images to the model, only effective for multimodal models",
+      "ttsBackendOptions": {
+        "systemVoice": "System Voice (macOS built-in)",
+        "kokoro": "Kokoro-82M (local offline, anime Chinese voice)"
+      },
+      "kokoro": {
+        "install": "Install / Check Kokoro Environment",
+        "installing": "Installing...",
+        "installFailed": "Install failed: {error}",
+        "retry": "Retry"
+      }
     },
     "ai": {
       "systemPrompt": "System Prompt",
@@ -102,12 +180,15 @@
       "nudgeIntervalDesc": "Trigger memory consolidation every N rounds, 0 for default",
       "skillsDirs": "Skills Directories",
       "skillsDirsDesc": "One directory path per line, containing YAML skill files",
+      "skillsDirsPlaceholder": "~/.aiko/auto-skills",
       "thinkingLevel": "Thinking Level",
       "default": "Default",
       "off": "Off",
       "low": "Low",
       "medium": "Medium",
-      "high": "High"
+      "high": "High",
+      "memoryAndGrowth": "Memory & Growth",
+      "skillsSection": "Skills & Extensions"
     },
     "tools": {
       "subTabs": {
@@ -125,7 +206,15 @@
         "revoke": "Revoke",
         "confirmPrompt": "Confirm each time",
         "autoApprove": "Auto-approve",
-        "disabled": "Disabled"
+        "disabled": "Disabled",
+        "noTools": "No tool information",
+        "publicTitle": "Always On (No Authorization Required)",
+        "protectedTitle": "Sensitive Tools (Can Be Toggled)",
+        "jinaPlaceholder": "jina_xxxxxxxxxxxx (leave empty for default)",
+        "jinaHint": "Optional, increases fetch quota (leave empty for free tier)",
+        "tavilyPlaceholder": "tvly-xxxxxxxxxxxx (leave empty for DuckDuckGo fallback)",
+        "tavilyHint": "Optional, enables Tavily with time filtering; leave empty for DuckDuckGo fallback",
+        "updatePermFailed": "Failed to update permission: {error}"
       },
       "mcp": {
         "addServer": "Add MCP Server",
@@ -140,7 +229,25 @@
         "save": "Save",
         "cancel": "Cancel",
         "delete": "Delete",
-        "noServers": "No MCP servers"
+        "noServers": "No MCP servers",
+        "sectionTitle": "MCP Extension Tools",
+        "enabledStatus": "Enabled",
+        "disabledStatus": "Disabled",
+        "saving": "Saving...",
+        "argsHint": "Space separated",
+        "headersHint": "One per line, format: Key: Value",
+        "validation": {
+          "nameRequired": "Name is required",
+          "commandRequired": "Command is required",
+          "urlRequired": "URL is required"
+        },
+        "deleteServerTitle": "Delete MCP Server",
+        "confirmDelete": "Delete \"{name}\"? The agent will no longer be able to use tools provided by this server.",
+        "placeholder": {
+          "command": "/usr/local/bin/mcp-server",
+          "args": "--flag value",
+          "url": "http://localhost:8080/sse"
+        }
       },
       "settings": {
         "shellTimeout": "Shell Timeout (seconds)",
@@ -151,7 +258,13 @@
         "allowedPathsDesc": "One directory path per line, empty denies all paths",
         "addPath": "Add",
         "trustedCommands": "Trusted Commands",
-        "trustedCommandsDesc": "One command prefix per line, matching commands skip confirmation"
+        "trustedCommandsDesc": "One command prefix per line, matching commands skip confirmation",
+        "noPaths": "No allowed paths; file read/write is disabled",
+        "noCommands": "No trusted commands; all shell commands require confirmation",
+        "pathPlaceholder": "/Users/me/projects or /tmp/*",
+        "cmdPlaceholder": "git",
+        "timeoutSection": "Timeouts",
+        "remove": "Remove"
       }
     },
     "knowledge": {
@@ -170,7 +283,13 @@
       "tavilyAPIKeyDesc": "Leave empty to use DuckDuckGo fallback",
       "progress": "Importing...",
       "done": "Import complete",
-      "error": "Import failed"
+      "error": "Import failed",
+      "importFailedDetail": "Import failed: {error}",
+      "deleteSourceTitle": "Delete Source",
+      "confirmDeleteSource": "Remove \"{name}\" from the knowledge base? The associated vector indexes will also be deleted.",
+      "deleteFailed": "Delete failed: {error}",
+      "importHint": "Supports .txt, .md, .pdf, .epub; AI can reference document content via semantic search after import",
+      "importProgress": "Processing {source}: {processed}/{total} segments"
     },
     "automation": {
       "subTabs": {
@@ -191,11 +310,39 @@
         "cancel": "Cancel",
         "noJobs": "No cron jobs",
         "saveToMemory": "Save result to long-term memory",
-        "notify": "Send system notification"
+        "notify": "Send system notification",
+        "validation": {
+          "requiredFields": "Name, Cron expression, and Prompt are required",
+          "invalidCron": "Invalid cron expression: expected 5 or 6 fields, or @every/@daily mnemonics"
+        },
+        "deleteJobTitle": "Delete Job",
+        "confirmDelete": "Delete job \"{name}\"?",
+        "statusEnabled": "Running",
+        "statusDisabled": "Disabled",
+        "triggered": "Triggered",
+        "triggerFailed": "Trigger failed: {error}",
+        "saving": "Saving...",
+        "enable": "Enable",
+        "disable": "Disable",
+        "lastRun": "Last run: {time}",
+        "nextRun": "Next run: {time}",
+        "placeholder": {
+          "name": "Morning Briefing",
+          "description": "Optional description",
+          "schedule": "0 8 * * *",
+          "prompt": "Instructions to send to the AI at the scheduled time, e.g.: Summarize today's news for me"
+        },
+        "scheduleHint": "5-field cron format (min hour day month weekday), e.g. 0 8 * * * = daily at 8am; also supports @daily, @hourly, etc.",
+        "notifyHint": "Send macOS system notification after execution",
+        "saveToMemoryHint": "Save result to long-term memory after successful execution"
       },
       "proactive": {
         "noItems": "No pending items",
-        "delete": "Delete"
+        "delete": "Delete",
+        "refresh": "Refresh",
+        "loadFailed": "Load failed",
+        "deleteTitle": "Delete Reminder",
+        "confirmDelete": "Delete reminder \"{name}\"?"
       }
     },
     "lark": {
@@ -204,7 +351,20 @@
       "notInstalled": "Not Installed",
       "installPrompt": "Please install lark-cli first",
       "command": "Run Command",
-      "run": "Run"
+      "run": "Run",
+      "detecting": "Detecting...",
+      "pathHint": "lark-cli path is auto-detected from PATH",
+      "guide": "Quick Guide",
+      "guideSteps": {
+        "step1Title": "Install CLI",
+        "step2Title": "Install CLI SKILL (Required)",
+        "step3Title": "Configure App Credentials (one-time, interactive setup)",
+        "step4Title": "Login & Authorize (--recommend picks commonly used permissions)",
+        "step5Title": "Click \"Lark Status\" to verify when done"
+      },
+      "hint": "Once configured, the AI can operate Lark via lark-cli: send messages, check calendars, read docs, and more.",
+      "hintNotePrefix": "Note: ",
+      "hintNote": "You need to add the Lark Skills path (usually {path}) in the Skills Directories under the Chat tab."
     },
     "sms": {
       "watcher": "SMS Watcher",
@@ -213,7 +373,17 @@
       "status": "Status",
       "running": "Running",
       "stopped": "Stopped",
-      "allMessages": "Forward all SMS (including non-verification) to notifications"
+      "allMessages": "Forward all SMS (including non-verification) to notifications",
+      "processing": "Processing...",
+      "desc1": "Monitor SMS messages received by the macOS Messages app, automatically extract verification codes and copy to clipboard, and push notification bubbles.",
+      "desc2Prefix": "Required Permission: ",
+      "desc2": "System Settings > Privacy & Security > Full Disk Access > Add Aiko.",
+      "guideSteps": {
+        "step1Title": "Grant Full Disk Access",
+        "step1Desc": "System Settings > Privacy & Security > Full Disk Access > Click \"+\" and add Aiko",
+        "step2Title": "Click \"Start\" to begin listening",
+        "step2Desc": "When an SMS with a verification code is received, the code is automatically copied to clipboard and a notification bubble appears - no manual copy needed."
+      }
     },
     "about": {
       "version": "Version",
@@ -223,21 +393,46 @@
       "newVersion": "New version available",
       "installing": "Installing update...",
       "releaseNotes": "Release Notes",
-      "github": "GitHub"
+      "github": "GitHub",
+      "checking": "Checking...",
+      "installNow": "Install Now",
+      "noDownload": "No download available",
+      "preparing": "Preparing...",
+      "retry": "Retry",
+      "checkFailed": "Check failed: {error}",
+      "installFailed": "Install failed: {error}",
+      "poweredBy": "Powered by eino · Built with Wails"
     },
     "save": "Save",
     "saving": "Saving...",
     "saved": "Saved",
-    "search": "Search settings..."
+    "done": "Done",
+    "search": "Search settings...",
+    "noResults": "No matching results",
+    "resizeAriaLabel": "Resize Window",
+    "selectFileTitle": "Select Document",
+    "tabMeta": {
+      "general": "General",
+      "appearance": "Appearance",
+      "model": "Model",
+      "ai": "Chat",
+      "tools": "Tools",
+      "knowledge": "Knowledge",
+      "automation": "Automation",
+      "lark": "Lark",
+      "sms": "SMS",
+      "pomodoro": "Pomodoro",
+      "about": "About"
+    }
   },
   "chat": {
     "placeholder": "Type a message...",
     "send": "Send",
-    "sendHint": "⌘↩ Send · ↩ New line",
+    "sendHint": "Cmd+Return Send, Return New line",
     "stop": "Stop",
     "stopAriaLabel": "Stop generating",
     "sendAriaLabel": "Send",
-    "sendTitle": "Send (⌘Enter)",
+    "sendTitle": "Send (Cmd+Enter)",
     "thinkingLevel": "Thinking Level",
     "useKnowledge": "Search knowledge base for this query",
     "useMemory": "Search long-term memory for this query",
@@ -286,7 +481,26 @@
     "searchMatches": "matches",
     "searchClose": "Close search",
     "searchNoResults": "No matching messages found",
-    "searchNoResultsHint": "Try different keywords or check your spelling"
+    "searchNoResultsHint": "Try different keywords or check your spelling",
+    "system": {
+      "welcome": "Hello! I'm your AI desktop pet.\n\nI support:\n- Natural language chat\n- Tool calling (time queries, system info, network status, etc.)\n- Knowledge base Q&A (import documents in Settings)\n\nQuick tips:\n- Right-click me -> Switch expression / Change model / Open settings\n- Right-click chat bubble -> Export chat history\n\nPlease configure the LLM model in Settings first to start chatting.",
+      "error": "Error: {error}",
+      "voiceError": "Voice recognition failed",
+      "voiceErrorMicDenied": "Please allow Aiko to use the microphone in System Preferences.",
+      "voiceErrorSpeechDenied": "Please allow Aiko to use speech recognition in System Preferences.",
+      "voiceErrorUnknown": "Voice recognition error: {error}",
+      "updateFailed": "Update failed: {error}",
+      "regenerateFailed": "Regeneration failed: {error}",
+      "fileTooBig": "File too large (max 200KB): {name}",
+      "fileUnsupportedType": "Unsupported file type, text files only: {name}",
+      "fileReadError": "File read error: {name}",
+      "sendFailed": "Send failed: {error}"
+    },
+    "lightbox": {
+      "zoomOut": "Zoom out (-)",
+      "zoomIn": "Zoom in (+)",
+      "reset": "Reset (double-click image)"
+    }
   },
   "chatBubble": {
     "fullscreen": "Fullscreen",
@@ -319,10 +533,31 @@
     "approve": "Approve",
     "installUpdate": "Install Update",
     "editBeforeRun": "Edit before running",
-    "appUpdate": "App Update"
+    "appUpdate": "App Update",
+    "languageLabel": {
+      "shell": "Shell",
+      "python": "Python",
+      "node": "Node.js",
+      "ruby": "Ruby",
+      "bash": "Bash"
+    }
   },
   "notification": {
-    "close": "Dismiss"
+    "close": "Dismiss",
+    "fallbackTitle": "Notification"
+  },
+  "petMenu": {
+    "switchExpression": "Switch Expression",
+    "switchModel": "Switch Model",
+    "openSettings": "Open Settings",
+    "quitApp": "Quit"
+  },
+  "app": {
+    "welcomeTitle": "Hello! I'm your desktop pet",
+    "welcomeMessage": "Please configure the LLM in Settings to start chatting~",
+    "pendingNotification": "(=^.^=)",
+    "errorTitle": "Something went wrong",
+    "updateInstalling": "Installing update v{version}, app will restart soon..."
   },
   "execution": {
     "running": "Running...",
@@ -330,28 +565,28 @@
     "done": "Complete",
     "kill": "Terminate"
   },
-"pomodoro": {
-  "focus": "Focusing",
-  "shortBreak": "Short Break",
-  "longBreak": "Long Break",
-  "done": "Done ✓",
-  "round": "Round {current} / {total}",
-  "start": "Start",
-  "pause": "Pause",
-  "resume": "Resume",
-  "stop": "Stop",
-  "menuLabel": "Pomodoro",
-  "settings": {
-    "title": "Timer Settings",
-    "focusDuration": "Focus Duration (min)",
-    "focusDurationDesc": "Length of each focus session, default 25",
-    "shortBreakDuration": "Short Break Duration (min)",
-    "shortBreakDurationDesc": "Break between focus sessions, default 5",
-    "longBreakDuration": "Long Break Duration (min)",
-    "longBreakDurationDesc": "Extended break after N rounds, default 15",
-    "roundsBeforeLongBreak": "Rounds Before Long Break",
-    "roundsBeforeLongBreakDesc": "Number of focus rounds before a long break, default 4",
-    "hint": "Changes take effect immediately and do not affect the active timer."
+  "pomodoro": {
+    "focus": "Focusing",
+    "shortBreak": "Short Break",
+    "longBreak": "Long Break",
+    "done": "Done",
+    "round": "Round {current} / {total}",
+    "start": "Start",
+    "pause": "Pause",
+    "resume": "Resume",
+    "stop": "Stop",
+    "menuLabel": "Pomodoro",
+    "settings": {
+      "title": "Timer Settings",
+      "focusDuration": "Focus Duration (min)",
+      "focusDurationDesc": "Length of each focus session, default 25",
+      "shortBreakDuration": "Short Break Duration (min)",
+      "shortBreakDurationDesc": "Break between focus sessions, default 5",
+      "longBreakDuration": "Long Break Duration (min)",
+      "longBreakDurationDesc": "Extended break after N rounds, default 15",
+      "roundsBeforeLongBreak": "Rounds Before Long Break",
+      "roundsBeforeLongBreakDesc": "Number of focus rounds before a long break, default 4",
+      "hint": "Changes take effect immediately and do not affect the active timer."
+    }
   }
-}
 }

@@ -34,19 +34,34 @@
       "shortcutCmdEnter": "メッセージボックス内で改行",
       "shortcutCmdV": "画像をメッセージボックスに貼り付け（スクリーンショット対応）",
       "shortcutDrag": "フローティングボールをドラッグ — ペットを再配置",
-      "shortcutRightClick": "チャットバブルを右クリック — 履歴エクスポート、クリア、設定を開く"
+      "shortcutRightClick": "チャットバブルを右クリック — 履歴エクスポート、クリア、設定を開く",
+      "languageDefaultDesc": "デフォルトでシステムに従う",
+      "shortcutHoldLabel": "1秒長押し",
+      "shortcutReleaseLabel": "⌥ を離す",
+      "shortcutDragLabel": "ドラッグ",
+      "shortcutRightClickLabel": "右クリック"
     },
     "appearance": {
       "petModel": "ペットモデル",
       "renderMode": "レンダリングモード",
+      "renderModeLive2D": "Live2D（2D）",
+      "renderModeVRM": "VRM（3D）",
       "vrmModel": "VRMモデル",
       "vrmDelete": "削除",
       "vrmImport": "VRMファイルをインポート",
       "vrmUserImported": "ユーザーインポート",
       "vrmBuiltin": "内蔵",
       "vrmDeleteModel": "このモデルを削除",
+      "vrmUploading": "アップロード中…",
+      "vrmAnimPreview": "アニメーションプレビュー",
+      "live2DModel": "Live2Dモデル",
       "petSize": "ペットサイズ",
       "petSizeDesc": "ピクセルサイズ、0は自動",
+      "petSizeAuto": "自動",
+      "chatSizeDefault": "デフォルト",
+      "resetToAuto": "自動にリセット",
+      "resetToDefault": "デフォルトにリセット",
+      "currentScreen": "現在の画面：{width}×{height}",
       "chatSize": "チャットバブルサイズ",
       "chatWidth": "幅",
       "chatHeight": "高さ",
@@ -54,22 +69,38 @@
       "resetBallDesc": "フローティングボールをデフォルト位置に戻す",
       "voice": "音声とサウンド",
       "voiceAutoSend": "音声認識後に自動送信",
+      "voiceAutoSendDesc": "Optionキーを離した後、認識完了時に自動的にメッセージを送信します",
       "soundsEnabled": "チャット効果音",
+      "soundsEnabledDesc": "送信、受信、エラー時に軽やかな効果音を再生します",
       "ttsAutoPlay": "AI返信後に自動読み上げ",
+      "ttsAutoPlayDesc": "AIの返信を自動的に音声で読み上げます（モデル設定で音声合成エンジンを選択する必要があります）",
       "ttsSummarizeThreshold": "要約文字数閾値",
       "ttsSummarizeThresholdDesc": "この文字数を超えるメッセージは要約後に読み上げ、0は無効",
       "avatar": "アバター設定",
       "aiAvatar": "AIアバター",
       "userAvatar": "ユーザーアバター",
       "resetAvatar": "リセット",
-      "change": "変更"
+      "change": "変更",
+      "vrmAnimLabels": {
+        "waiting": "待機",
+        "wave": "手を振る",
+        "nod": "うなずき",
+        "curious": "好奇心",
+        "stretch": "伸び",
+        "sleepy": "眠い",
+        "talk": "話す",
+        "awkward": "気まずい",
+        "sad": "悲しい",
+        "tsundere": "ツンデレ",
+        "surprised": "驚き",
+        "appear": "登場"
+      }
     },
     "model": {
       "title": "モデルプロファイル",
       "addProfile": "プロファイル追加",
       "noProfile": "モデルが設定されていません。下のボタンをクリックして追加してください。",
       "activate": "有効化",
-      "activateDesc": "有効化",
       "activated": "有効済み",
       "edit": "編集",
       "delete": "削除",
@@ -91,7 +122,54 @@
       "supportsVision": "画像入力対応",
       "saveProfile": "保存",
       "cancel": "キャンセル",
-      "fetchOpenRouter": "OpenRouterモデル一覧を取得"
+      "fetchOpenRouter": "OpenRouterモデル一覧を取得",
+      "restartingAgent": "Agentを再起動中…",
+      "profileSwitched": "プロファイルを切り替えました",
+      "noModelsFetched": "モデルリストを取得できませんでした",
+      "fetchModelsFailed": "モデル取得失敗: {error}",
+      "saveFailed": "保存失敗: {error}",
+      "switchFailed": "切り替え失敗: {error}",
+      "deleteFailed": "削除失敗: {error}",
+      "deleteProfileTitle": "プロファイルを削除",
+      "confirmDeleteProfile": "プロファイル「{name}」を削除しますか？この操作は元に戻せません。",
+      "deleteVRMTitle": "モデルを削除",
+      "confirmDeleteVRM": "\"{name}\" を削除しますか？この操作は元に戻せません。",
+      "validation": {
+        "nameRequired": "プロファイル名を入力してください",
+        "modelRequired": "モデル名を入力してください",
+        "baseUrlRequired": "Base URLを入力してください"
+      },
+      "fetchingModels": "取得中...",
+      "fetchModels": "モデルを取得",
+      "saving": "保存中…",
+      "providerLabels": {
+        "openai": "OpenAI互換API",
+        "openrouter": "OpenRouter"
+      },
+      "placeholder": {
+        "profileName": "My OpenAI",
+        "baseURL": "http://localhost:11434/v1",
+        "baseURLOpenRouter": "https://openrouter.ai/api/v1（空欄でデフォルト）",
+        "apiKeyOptional": "（任意）",
+        "selectModel": "-- モデルを選択 --",
+        "model": "gpt-4o",
+        "embeddingModel": "text-embedding-3-small（任意）",
+        "embeddingDisable": "-- 無効（ナレッジ検索をオフ）--",
+        "embeddingBaseURL": "https://api.openai.com/v1"
+      },
+      "embeddingInheritHint": "同じBase URLとAPIキーを使用",
+      "embeddingDimHint": "選択したベクトルモデルと一致させる必要があります、デフォルト1536",
+      "supportsVisionHint": "有効にするとモデルに画像を送信できます、マルチモーダルモデルのみ有効",
+      "ttsBackendOptions": {
+        "systemVoice": "システム音声（macOS内蔵）",
+        "kokoro": "Kokoro-82M（ローカルオフライン、アニメ中国語スタイル）"
+      },
+      "kokoro": {
+        "install": "Kokoro環境のインストール/確認",
+        "installing": "インストール中…",
+        "installFailed": "インストール失敗: {error}",
+        "retry": "再試行"
+      }
     },
     "ai": {
       "systemPrompt": "システムプロンプト",
@@ -102,12 +180,15 @@
       "nudgeIntervalDesc": "Nラウンドごとに記憶定着プロンプトをトリガー、0はデフォルト",
       "skillsDirs": "スキルディレクトリ",
       "skillsDirsDesc": "1行に1つのディレクトリパス、YAMLスキルファイルを含む",
+      "skillsDirsPlaceholder": "~/.aiko/auto-skills",
       "thinkingLevel": "思考レベル",
       "default": "デフォルト",
       "off": "オフ",
       "low": "低",
       "medium": "中",
-      "high": "高"
+      "high": "高",
+      "memoryAndGrowth": "記憶と成長",
+      "skillsSection": "スキルと拡張"
     },
     "tools": {
       "subTabs": {
@@ -125,7 +206,15 @@
         "revoke": "取り消し",
         "confirmPrompt": "毎回確認",
         "autoApprove": "自動承認",
-        "disabled": "無効"
+        "disabled": "無効",
+        "noTools": "ツール情報なし",
+        "publicTitle": "常時有効（認証不要）",
+        "protectedTitle": "センシティブツール（個別切替可能）",
+        "jinaPlaceholder": "jina_xxxxxxxxxxxx（空欄でデフォルト）",
+        "jinaHint": "任意、取得クォータを増加（空欄で無料枠使用）",
+        "tavilyPlaceholder": "tvly-xxxxxxxxxxxx（空欄でDuckDuckGoにフォールバック）",
+        "tavilyHint": "任意、Tavilyを有効化（時間フィルタ対応）、空欄でDuckDuckGoにフォールバック",
+        "updatePermFailed": "権限更新失敗: {error}"
       },
       "mcp": {
         "addServer": "MCPサーバー追加",
@@ -140,7 +229,25 @@
         "save": "保存",
         "cancel": "キャンセル",
         "delete": "削除",
-        "noServers": "MCPサーバーがありません"
+        "noServers": "MCPサーバーがありません",
+        "sectionTitle": "MCP拡張ツール",
+        "enabledStatus": "有効",
+        "disabledStatus": "無効",
+        "saving": "保存中…",
+        "argsHint": "スペース区切り",
+        "headersHint": "1行に1つ、形式：Key: Value",
+        "validation": {
+          "nameRequired": "名前を入力してください",
+          "commandRequired": "実行コマンドを入力してください",
+          "urlRequired": "URLを入力してください"
+        },
+        "deleteServerTitle": "MCPサーバーを削除",
+        "confirmDelete": "「{name}」を削除しますか？エージェントはこのサーバーが提供するツールを使用できなくなります。",
+        "placeholder": {
+          "command": "/usr/local/bin/mcp-server",
+          "args": "--flag value",
+          "url": "http://localhost:8080/sse"
+        }
       },
       "settings": {
         "shellTimeout": "シェルタイムアウト (秒)",
@@ -151,7 +258,13 @@
         "allowedPathsDesc": "1行に1つのディレクトリパス、空はすべてのパスを拒否",
         "addPath": "追加",
         "trustedCommands": "信頼済みコマンド",
-        "trustedCommandsDesc": "1行に1つのコマンドプレフィックス、一致するコマンドは確認不要"
+        "trustedCommandsDesc": "1行に1つのコマンドプレフィックス、一致するコマンドは確認不要",
+        "noPaths": "許可されたパスがありません。ファイルの読み書きは無効です",
+        "noCommands": "信頼済みコマンドがありません。すべてのシェルコマンドに確認が必要です",
+        "pathPlaceholder": "/Users/me/projects または /tmp/*",
+        "cmdPlaceholder": "git",
+        "timeoutSection": "タイムアウト制限",
+        "remove": "削除"
       }
     },
     "knowledge": {
@@ -170,7 +283,13 @@
       "tavilyAPIKeyDesc": "空のままにするとDuckDuckGoフォールバックを使用",
       "progress": "インポート中...",
       "done": "インポート完了",
-      "error": "インポート失敗"
+      "error": "インポート失敗",
+      "importFailedDetail": "インポート失敗: {error}",
+      "deleteSourceTitle": "ソースを削除",
+      "confirmDeleteSource": "「{name}」をナレッジベースから削除しますか？関連するベクトルインデックスも削除されます。",
+      "deleteFailed": "削除失敗: {error}",
+      "importHint": ".txt、.md、.pdf、.epubをサポート；インポート後、AIはセマンティック検索でドキュメント内容を参照できます",
+      "importProgress": "{source} を処理中：{processed}/{total} セグメント"
     },
     "automation": {
       "subTabs": {
@@ -191,11 +310,39 @@
         "cancel": "キャンセル",
         "noJobs": "Cronジョブがありません",
         "saveToMemory": "結果を長期記憶に保存",
-        "notify": "システム通知を送信"
+        "notify": "システム通知を送信",
+        "validation": {
+          "requiredFields": "名前、Cron式、トリガープロンプトは必須です",
+          "invalidCron": "無効なCron式：5または6フィールド、または@every/@dailyなどのニーモニックが必要です"
+        },
+        "deleteJobTitle": "ジョブを削除",
+        "confirmDelete": "ジョブ「{name}」を削除しますか？",
+        "statusEnabled": "実行中",
+        "statusDisabled": "無効",
+        "triggered": "実行トリガー済み",
+        "triggerFailed": "トリガー失敗: {error}",
+        "saving": "保存中…",
+        "enable": "有効化",
+        "disable": "無効化",
+        "lastRun": "前回実行: {time}",
+        "nextRun": "次回実行: {time}",
+        "placeholder": {
+          "name": "朝のニュース",
+          "description": "任意の説明",
+          "schedule": "0 8 * * *",
+          "prompt": "スケジュール時刻にAIに送信する指示、例：今日のニュースをまとめて"
+        },
+        "scheduleHint": "5フィールドcron形式（分 時 日 月 曜日）、例：0 8 * * * = 毎日8時；@daily、@hourlyなどもサポート",
+        "notifyHint": "実行完了後にmacOSシステム通知を送信",
+        "saveToMemoryHint": "実行成功後に結果を長期記憶に保存"
       },
       "proactive": {
         "noItems": "保留中のアイテムはありません",
-        "delete": "削除"
+        "delete": "削除",
+        "refresh": "更新",
+        "loadFailed": "読み込み失敗",
+        "deleteTitle": "リマインダーを削除",
+        "confirmDelete": "リマインダー「{name}」を削除しますか？"
       }
     },
     "lark": {
@@ -204,7 +351,20 @@
       "notInstalled": "未インストール",
       "installPrompt": "lark-cliを先にインストールしてください",
       "command": "コマンド実行",
-      "run": "実行"
+      "run": "実行",
+      "detecting": "検出中...",
+      "pathHint": "lark-cliのパスはPATHから自動検出されます",
+      "guide": "クイックガイド",
+      "guideSteps": {
+        "step1Title": "CLIをインストール",
+        "step2Title": "CLI SKILLをインストール（必須）",
+        "step3Title": "アプリ認証情報を設定（初回のみ、対話式セットアップ）",
+        "step4Title": "ログイン認証（--recommendで一般的な権限を選択）",
+        "step5Title": "完了後「Larkステータス」をクリックして確認"
+      },
+      "hint": "設定完了後、AIはlark-cli経由でLarkを操作できます：メッセージ送信、カレンダー確認、ドキュメント閲覧など。",
+      "hintNotePrefix": "注意：",
+      "hintNote": "「会話」タブの「スキルディレクトリ」にLark Skillsパス（通常 {path}）を追加する必要があります。"
     },
     "sms": {
       "watcher": "SMS監視",
@@ -213,7 +373,17 @@
       "status": "状態",
       "running": "実行中",
       "stopped": "停止中",
-      "allMessages": "すべてのSMS（認証コード以外も）を通知に転送"
+      "allMessages": "すべてのSMS（認証コード以外も）を通知に転送",
+      "processing": "処理中...",
+      "desc1": "macOS「メッセージ」Appで受信したSMSを監視し、認証コードを自動抽出してクリップボードにコピーし、通知バブルを表示します。",
+      "desc2Prefix": "必要な権限：",
+      "desc2": "システム設定 → プライバシーとセキュリティ → フルディスクアクセス → Aikoを追加。",
+      "guideSteps": {
+        "step1Title": "フルディスクアクセスを許可",
+        "step1Desc": "システム設定 → プライバシーとセキュリティ → フルディスクアクセス → 「+」をクリックしてAikoを追加",
+        "step2Title": "「開始」をクリックして監視を開始",
+        "step2Desc": "認証コードを含むSMSを受信すると、コードが自動的にクリップボードにコピーされ、通知バブルが表示されます。手動コピーは不要です。"
+      }
     },
     "about": {
       "version": "バージョン",
@@ -223,12 +393,37 @@
       "newVersion": "新しいバージョンがあります",
       "installing": "アップデートをインストール中...",
       "releaseNotes": "リリースノート",
-      "github": "GitHub"
+      "github": "GitHub",
+      "checking": "確認中…",
+      "installNow": "今すぐ更新",
+      "noDownload": "ダウンロード不可",
+      "preparing": "準備中…",
+      "retry": "再試行",
+      "checkFailed": "確認失敗: {error}",
+      "installFailed": "インストール失敗: {error}",
+      "poweredBy": "Powered by eino · Built with Wails"
     },
     "save": "保存",
     "saving": "保存中...",
     "saved": "保存済み",
-    "search": "設定を検索..."
+    "done": "完了",
+    "search": "設定を検索...",
+    "noResults": "一致する結果がありません",
+    "resizeAriaLabel": "ウィンドウサイズを変更",
+    "selectFileTitle": "ドキュメントを選択",
+    "tabMeta": {
+      "general": "一般",
+      "appearance": "外観",
+      "model": "モデル",
+      "ai": "会話",
+      "tools": "ツール",
+      "knowledge": "ナレッジ",
+      "automation": "自動化",
+      "lark": "Lark",
+      "sms": "SMS",
+      "pomodoro": "ポモドーロ",
+      "about": "について"
+    }
   },
   "chat": {
     "placeholder": "メッセージを入力...",
@@ -286,7 +481,26 @@
     "searchMatches": "件",
     "searchClose": "検索を閉じる",
     "searchNoResults": "一致するメッセージが見つかりません",
-    "searchNoResultsHint": "別のキーワードを試すか、スペルを確認してください"
+    "searchNoResultsHint": "別のキーワードを試すか、スペルを確認してください",
+    "system": {
+      "welcome": "こんにちは！デスクトップペットです。\n\n機能：\n- 自然な会話\n- ツール呼び出し（時刻、システム情報、ネットワーク状態など）\n- ナレッジベースQ&A（設定でドキュメントをインポート）\n\nクイックヒント：\n- 右クリック → 表情切替 / モデル切替 / 設定を開く\n- チャットバブルを右クリック → チャット履歴をエクスポート\n\n設定でLLMモデルを構成してからチャットを開始してください。",
+      "error": "エラー: {error}",
+      "voiceError": "音声認識に失敗しました",
+      "voiceErrorMicDenied": "システム環境設定でAikoにマイクの使用を許可してください。",
+      "voiceErrorSpeechDenied": "システム環境設定でAikoに音声認識の使用を許可してください。",
+      "voiceErrorUnknown": "音声認識エラー: {error}",
+      "updateFailed": "更新失敗: {error}",
+      "regenerateFailed": "再生成失敗: {error}",
+      "fileTooBig": "ファイルが大きすぎます（最大200KB）: {name}",
+      "fileUnsupportedType": "未対応のファイルタイプ、テキストファイルのみ: {name}",
+      "fileReadError": "ファイル読み取りエラー: {name}",
+      "sendFailed": "送信失敗: {error}"
+    },
+    "lightbox": {
+      "zoomOut": "縮小 (-)",
+      "zoomIn": "拡大 (+)",
+      "reset": "リセット（画像をダブルクリック）"
+    }
   },
   "chatBubble": {
     "fullscreen": "フルスクリーン",
@@ -319,10 +533,31 @@
     "approve": "承認",
     "installUpdate": "アップデートをインストール",
     "editBeforeRun": "編集してから実行",
-    "appUpdate": "アプリアップデート"
+    "appUpdate": "アプリアップデート",
+    "languageLabel": {
+      "shell": "Shell",
+      "python": "Python",
+      "node": "Node.js",
+      "ruby": "Ruby",
+      "bash": "Bash"
+    }
   },
   "notification": {
-    "close": "閉じる"
+    "close": "閉じる",
+    "fallbackTitle": "通知"
+  },
+  "petMenu": {
+    "switchExpression": "表情切替",
+    "switchModel": "モデル切替",
+    "openSettings": "設定を開く",
+    "quitApp": "終了"
+  },
+  "app": {
+    "welcomeTitle": "こんにちは！デスクトップペットです",
+    "welcomeMessage": "設定でLLMを構成してからチャットを開始してください~",
+    "pendingNotification": "(=^・ω・^=)",
+    "errorTitle": "エラーが発生しました",
+    "updateInstalling": "アップデート v{version} をインストール中、アプリがまもなく再起動します…"
   },
   "execution": {
     "running": "実行中...",
@@ -330,28 +565,28 @@
     "done": "完了",
     "kill": "停止"
   },
-"pomodoro": {
-  "focus": "集中",
-  "shortBreak": "小休憩",
-  "longBreak": "長休憩",
-  "done": "完了 ✓",
-  "round": "第 {current} / {total} ラウンド",
-  "start": "開始",
-  "pause": "一時停止",
-  "resume": "再開",
-  "stop": "終了",
-  "menuLabel": "ポモドーロ",
-  "settings": {
-    "title": "タイマー設定",
-    "focusDuration": "集中時間（分）",
-    "focusDurationDesc": "各集中セッションの長さ、デフォルト 25",
-    "shortBreakDuration": "小休憩時間（分）",
-    "shortBreakDurationDesc": "集中セッション間の休憩、デフォルト 5",
-    "longBreakDuration": "長休憩時間（分）",
-    "longBreakDurationDesc": "Nラウンド後の延長休憩、デフォルト 15",
-    "roundsBeforeLongBreak": "長休憩までのラウンド数",
-    "roundsBeforeLongBreakDesc": "長休憩前の集中ラウンド数、デフォルト 4",
-    "hint": "変更はすぐに反映され、実行中のタイマーには影響しません。"
+  "pomodoro": {
+    "focus": "集中",
+    "shortBreak": "小休憩",
+    "longBreak": "長休憩",
+    "done": "完了",
+    "round": "第 {current} / {total} ラウンド",
+    "start": "開始",
+    "pause": "一時停止",
+    "resume": "再開",
+    "stop": "終了",
+    "menuLabel": "ポモドーロ",
+    "settings": {
+      "title": "タイマー設定",
+      "focusDuration": "集中時間（分）",
+      "focusDurationDesc": "各集中セッションの長さ、デフォルト 25",
+      "shortBreakDuration": "小休憩時間（分）",
+      "shortBreakDurationDesc": "集中セッション間の休憩、デフォルト 5",
+      "longBreakDuration": "長休憩時間（分）",
+      "longBreakDurationDesc": "Nラウンド後の延長休憩、デフォルト 15",
+      "roundsBeforeLongBreak": "長休憩までのラウンド数",
+      "roundsBeforeLongBreakDesc": "長休憩前の集中ラウンド数、デフォルト 4",
+      "hint": "変更はすぐに反映され、実行中のタイマーには影響しません。"
+    }
   }
-}
 }

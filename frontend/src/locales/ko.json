@@ -34,19 +34,34 @@
       "shortcutCmdEnter": "메시지 상자에서 줄바꿈",
       "shortcutCmdV": "메시지 상자에 이미지 붙여넣기 (스크린샷 지원)",
       "shortcutDrag": "플로팅 볼 드래그 — 펫 위치 변경",
-      "shortcutRightClick": "채팅 버블 우클릭 — 기록 내보내기, 지우기, 설정 열기"
+      "shortcutRightClick": "채팅 버블 우클릭 — 기록 내보내기, 지우기, 설정 열기",
+      "languageDefaultDesc": "기본적으로 시스템 따르기",
+      "shortcutHoldLabel": "1초 길게 누르기",
+      "shortcutReleaseLabel": "⌥ 놓기",
+      "shortcutDragLabel": "드래그",
+      "shortcutRightClickLabel": "우클릭"
     },
     "appearance": {
       "petModel": "펫 모델",
       "renderMode": "렌더링 모드",
+      "renderModeLive2D": "Live2D (2D)",
+      "renderModeVRM": "VRM (3D)",
       "vrmModel": "VRM 모델",
       "vrmDelete": "삭제",
       "vrmImport": "VRM 파일 가져오기",
       "vrmUserImported": "사용자 가져오기",
       "vrmBuiltin": "내장",
       "vrmDeleteModel": "이 모델 삭제",
+      "vrmUploading": "업로드 중…",
+      "vrmAnimPreview": "애니메이션 미리보기",
+      "live2DModel": "Live2D 모델",
       "petSize": "펫 크기",
       "petSizeDesc": "픽셀 크기, 0은 자동",
+      "petSizeAuto": "자동",
+      "chatSizeDefault": "기본값",
+      "resetToAuto": "자동으로 초기화",
+      "resetToDefault": "기본값으로 초기화",
+      "currentScreen": "현재 화면: {width}×{height}",
       "chatSize": "채팅 버블 크기",
       "chatWidth": "너비",
       "chatHeight": "높이",
@@ -54,22 +69,38 @@
       "resetBallDesc": "플로팅 볼을 기본 위치로 이동",
       "voice": "음성 및 사운드",
       "voiceAutoSend": "음성 인식 후 자동 전송",
+      "voiceAutoSendDesc": "Option 키를 놓은 후 인식 완료 시 자동으로 메시지를 전송합니다",
       "soundsEnabled": "채팅 효과음",
+      "soundsEnabledDesc": "메시지 전송, 수신, 오류 시 부드러운 효과음을 재생합니다",
       "ttsAutoPlay": "AI 응답 후 자동 읽기",
+      "ttsAutoPlayDesc": "AI 응답을 자동으로 음성으로 읽어줍니다 (모델 설정에서 TTS 엔진 선택 필요)",
       "ttsSummarizeThreshold": "요약 글자 수 임계값",
       "ttsSummarizeThresholdDesc": "이 글자 수를 초과하는 메시지는 요약 후 읽기, 0은 비활성화",
       "avatar": "아바타 설정",
       "aiAvatar": "AI 아바타",
       "userAvatar": "사용자 아바타",
       "resetAvatar": "초기화",
-      "change": "변경"
+      "change": "변경",
+      "vrmAnimLabels": {
+        "waiting": "대기",
+        "wave": "손 흔들기",
+        "nod": "끄덕임",
+        "curious": "호기심",
+        "stretch": "기지개",
+        "sleepy": "졸림",
+        "talk": "말하기",
+        "awkward": "어색함",
+        "sad": "슬픔",
+        "tsundere": "츤데레",
+        "surprised": "놀람",
+        "appear": "등장"
+      }
     },
     "model": {
       "title": "모델 프로필",
       "addProfile": "프로필 추가",
       "noProfile": "모델이 구성되지 않았습니다. 아래 버튼을 클릭하여 추가하세요.",
       "activate": "활성화",
-      "activateDesc": "활성화",
       "activated": "활성화됨",
       "edit": "편집",
       "delete": "삭제",
@@ -91,7 +122,54 @@
       "supportsVision": "이미지 입력 지원",
       "saveProfile": "저장",
       "cancel": "취소",
-      "fetchOpenRouter": "OpenRouter 모델 목록 가져오기"
+      "fetchOpenRouter": "OpenRouter 모델 목록 가져오기",
+      "restartingAgent": "Agent 재시작 중…",
+      "profileSwitched": "프로필 전환됨",
+      "noModelsFetched": "모델 목록을 가져오지 못했습니다",
+      "fetchModelsFailed": "모델 가져오기 실패: {error}",
+      "saveFailed": "저장 실패: {error}",
+      "switchFailed": "전환 실패: {error}",
+      "deleteFailed": "삭제 실패: {error}",
+      "deleteProfileTitle": "프로필 삭제",
+      "confirmDeleteProfile": "프로필 \"{name}\"을(를) 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.",
+      "deleteVRMTitle": "모델 삭제",
+      "confirmDeleteVRM": "\"{name}\"을(를) 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.",
+      "validation": {
+        "nameRequired": "프로필 이름을 입력하세요",
+        "modelRequired": "모델 이름을 입력하세요",
+        "baseUrlRequired": "Base URL을 입력하세요"
+      },
+      "fetchingModels": "가져오는 중...",
+      "fetchModels": "모델 가져오기",
+      "saving": "저장 중…",
+      "providerLabels": {
+        "openai": "OpenAI 호환 API",
+        "openrouter": "OpenRouter"
+      },
+      "placeholder": {
+        "profileName": "My OpenAI",
+        "baseURL": "http://localhost:11434/v1",
+        "baseURLOpenRouter": "https://openrouter.ai/api/v1 (비워두면 기본값)",
+        "apiKeyOptional": "(선택 사항)",
+        "selectModel": "-- 모델 선택 --",
+        "model": "gpt-4o",
+        "embeddingModel": "text-embedding-3-small (선택 사항)",
+        "embeddingDisable": "-- 비활성화 (지식 검색 끄기) --",
+        "embeddingBaseURL": "https://api.openai.com/v1"
+      },
+      "embeddingInheritHint": "동일한 Base URL 및 API 키 사용",
+      "embeddingDimHint": "선택한 벡터 모델과 일치해야 함, 기본값 1536",
+      "supportsVisionHint": "활성화하면 모델에 이미지를 보낼 수 있습니다, 멀티모달 모델에만 유효",
+      "ttsBackendOptions": {
+        "systemVoice": "시스템 음성 (macOS 내장)",
+        "kokoro": "Kokoro-82M (로컬 오프라인, 애니메이션 중국어 스타일)"
+      },
+      "kokoro": {
+        "install": "Kokoro 환경 설치/확인",
+        "installing": "설치 중…",
+        "installFailed": "설치 실패: {error}",
+        "retry": "재시도"
+      }
     },
     "ai": {
       "systemPrompt": "시스템 프롬프트",
@@ -102,12 +180,15 @@
       "nudgeIntervalDesc": "N 라운드마다 기억 통합 프롬프트 트리거, 0은 기본값",
       "skillsDirs": "스킬 디렉토리",
       "skillsDirsDesc": "한 줄에 하나의 디렉토리 경로, YAML 스킬 파일 포함",
+      "skillsDirsPlaceholder": "~/.aiko/auto-skills",
       "thinkingLevel": "사고 레벨",
       "default": "기본",
       "off": "끄기",
       "low": "낮음",
       "medium": "중간",
-      "high": "높음"
+      "high": "높음",
+      "memoryAndGrowth": "기억과 성장",
+      "skillsSection": "스킬과 확장"
     },
     "tools": {
       "subTabs": {
@@ -125,7 +206,15 @@
         "revoke": "취소",
         "confirmPrompt": "매번 확인",
         "autoApprove": "자동 승인",
-        "disabled": "비활성화"
+        "disabled": "비활성화",
+        "noTools": "도구 정보 없음",
+        "publicTitle": "항상 켜짐 (인증 불필요)",
+        "protectedTitle": "민감한 도구 (개별 전환 가능)",
+        "jinaPlaceholder": "jina_xxxxxxxxxxxx (비워두면 기본값)",
+        "jinaHint": "선택 사항, 가져오기 할당량 증가 (비워두면 무료 티어)",
+        "tavilyPlaceholder": "tvly-xxxxxxxxxxxx (비워두면 DuckDuckGo 폴백)",
+        "tavilyHint": "선택 사항, 시간 필터링이 포함된 Tavily 활성화; 비워두면 DuckDuckGo 폴백",
+        "updatePermFailed": "권한 업데이트 실패: {error}"
       },
       "mcp": {
         "addServer": "MCP 서버 추가",
@@ -140,7 +229,25 @@
         "save": "저장",
         "cancel": "취소",
         "delete": "삭제",
-        "noServers": "MCP 서버 없음"
+        "noServers": "MCP 서버 없음",
+        "sectionTitle": "MCP 확장 도구",
+        "enabledStatus": "활성화됨",
+        "disabledStatus": "비활성화됨",
+        "saving": "저장 중…",
+        "argsHint": "공백으로 구분",
+        "headersHint": "한 줄에 하나, 형식: Key: Value",
+        "validation": {
+          "nameRequired": "이름을 입력하세요",
+          "commandRequired": "실행 명령어를 입력하세요",
+          "urlRequired": "URL을 입력하세요"
+        },
+        "deleteServerTitle": "MCP 서버 삭제",
+        "confirmDelete": "\"{name}\"을(를) 삭제하시겠습니까? 에이전트가 이 서버에서 제공하는 도구를 더 이상 사용할 수 없습니다.",
+        "placeholder": {
+          "command": "/usr/local/bin/mcp-server",
+          "args": "--flag value",
+          "url": "http://localhost:8080/sse"
+        }
       },
       "settings": {
         "shellTimeout": "셸 타임아웃 (초)",
@@ -151,7 +258,13 @@
         "allowedPathsDesc": "한 줄에 하나의 디렉토리 경로, 비워두면 모든 경로 거부",
         "addPath": "추가",
         "trustedCommands": "신뢰된 명령어",
-        "trustedCommandsDesc": "한 줄에 하나의 명령어 접두사, 일치하는 명령어는 확인 불필요"
+        "trustedCommandsDesc": "한 줄에 하나의 명령어 접두사, 일치하는 명령어는 확인 불필요",
+        "noPaths": "허용된 경로가 없습니다. 파일 읽기/쓰기가 비활성화되었습니다",
+        "noCommands": "신뢰된 명령어가 없습니다. 모든 셸 명령어에 확인이 필요합니다",
+        "pathPlaceholder": "/Users/me/projects 또는 /tmp/*",
+        "cmdPlaceholder": "git",
+        "timeoutSection": "타임아웃 제한",
+        "remove": "삭제"
       }
     },
     "knowledge": {
@@ -170,7 +283,13 @@
       "tavilyAPIKeyDesc": "비워두면 DuckDuckGo 폴백 사용",
       "progress": "가져오는 중...",
       "done": "가져오기 완료",
-      "error": "가져오기 실패"
+      "error": "가져오기 실패",
+      "importFailedDetail": "가져오기 실패: {error}",
+      "deleteSourceTitle": "소스 삭제",
+      "confirmDeleteSource": "지식 베이스에서 \"{name}\"을(를) 제거하시겠습니까? 관련 벡터 인덱스도 함께 삭제됩니다.",
+      "deleteFailed": "삭제 실패: {error}",
+      "importHint": ".txt, .md, .pdf, .epub 지원; 가져오기 후 AI가 의미 검색을 통해 문서 내용을 참조할 수 있습니다",
+      "importProgress": "{source} 처리 중: {processed}/{total} 세그먼트"
     },
     "automation": {
       "subTabs": {
@@ -191,11 +310,39 @@
         "cancel": "취소",
         "noJobs": "Cron 작업 없음",
         "saveToMemory": "결과를 장기 기억에 저장",
-        "notify": "시스템 알림 전송"
+        "notify": "시스템 알림 전송",
+        "validation": {
+          "requiredFields": "이름, Cron 표현식 및 트리거 프롬프트는 필수입니다",
+          "invalidCron": "유효하지 않은 Cron 표현식: 5개 또는 6개 필드, 또는 @every/@daily 등의 니모닉이 필요합니다"
+        },
+        "deleteJobTitle": "작업 삭제",
+        "confirmDelete": "작업 \"{name}\"을(를) 삭제하시겠습니까?",
+        "statusEnabled": "실행 중",
+        "statusDisabled": "비활성화됨",
+        "triggered": "실행 트리거됨",
+        "triggerFailed": "트리거 실패: {error}",
+        "saving": "저장 중…",
+        "enable": "활성화",
+        "disable": "비활성화",
+        "lastRun": "마지막 실행: {time}",
+        "nextRun": "다음 실행: {time}",
+        "placeholder": {
+          "name": "아침 브리핑",
+          "description": "선택적 설명",
+          "schedule": "0 8 * * *",
+          "prompt": "예약된 시간에 AI에게 보낼 지시사항, 예: 오늘의 뉴스를 요약해줘"
+        },
+        "scheduleHint": "5필드 cron 형식 (분 시 일 월 요일), 예: 0 8 * * * = 매일 오전 8시; @daily, @hourly 등도 지원",
+        "notifyHint": "실행 완료 후 macOS 시스템 알림 전송",
+        "saveToMemoryHint": "실행 성공 후 결과를 장기 기억에 저장"
       },
       "proactive": {
         "noItems": "대기 중인 항목 없음",
-        "delete": "삭제"
+        "delete": "삭제",
+        "refresh": "새로고침",
+        "loadFailed": "로드 실패",
+        "deleteTitle": "알림 삭제",
+        "confirmDelete": "알림 \"{name}\"을(를) 삭제하시겠습니까?"
       }
     },
     "lark": {
@@ -204,7 +351,20 @@
       "notInstalled": "설치되지 않음",
       "installPrompt": "lark-cli를 먼저 설치하세요",
       "command": "명령 실행",
-      "run": "실행"
+      "run": "실행",
+      "detecting": "감지 중...",
+      "pathHint": "lark-cli 경로는 PATH에서 자동 감지됩니다",
+      "guide": "빠른 가이드",
+      "guideSteps": {
+        "step1Title": "CLI 설치",
+        "step2Title": "CLI SKILL 설치 (필수)",
+        "step3Title": "앱 자격 증명 구성 (최초 1회, 대화형 설정)",
+        "step4Title": "로그인 및 인증 (--recommend가 일반 권한 선택)",
+        "step5Title": "완료 후 \"Lark 상태\"를 클릭하여 확인"
+      },
+      "hint": "구성이 완료되면 AI가 lark-cli를 통해 Lark를 조작할 수 있습니다: 메시지 전송, 캘린더 확인, 문서 읽기 등.",
+      "hintNotePrefix": "참고: ",
+      "hintNote": "\"대화\" 탭의 \"스킬 디렉토리\"에 Lark Skills 경로(일반적으로 {path})를 추가해야 합니다."
     },
     "sms": {
       "watcher": "SMS 감시",
@@ -213,7 +373,17 @@
       "status": "상태",
       "running": "실행 중",
       "stopped": "중지됨",
-      "allMessages": "모든 SMS(인증 코드 외 포함)를 알림으로 전달"
+      "allMessages": "모든 SMS(인증 코드 외 포함)를 알림으로 전달",
+      "processing": "처리 중...",
+      "desc1": "macOS 메시지 앱에서 수신된 SMS를 감시하고, 인증 코드를 자동으로 추출하여 클립보드에 복사하고 알림 버블을 표시합니다.",
+      "desc2Prefix": "필요한 권한: ",
+      "desc2": "시스템 설정 → 개인정보 보호 및 보안 → 전체 디스크 접근 → Aiko 추가.",
+      "guideSteps": {
+        "step1Title": "전체 디스크 접근 권한 부여",
+        "step1Desc": "시스템 설정 → 개인정보 보호 및 보안 → 전체 디스크 접근 → \"+\" 클릭 후 Aiko 추가",
+        "step2Title": "\"시작\"을 클릭하여 감시 시작",
+        "step2Desc": "인증 코드가 포함된 SMS를 받으면 코드가 자동으로 클립보드에 복사되고 알림 버블이 표시됩니다. 수동 복사가 필요 없습니다."
+      }
     },
     "about": {
       "version": "버전",
@@ -223,12 +393,37 @@
       "newVersion": "새 버전 있음",
       "installing": "업데이트 설치 중...",
       "releaseNotes": "릴리스 노트",
-      "github": "GitHub"
+      "github": "GitHub",
+      "checking": "확인 중…",
+      "installNow": "지금 업데이트",
+      "noDownload": "다운로드 불가",
+      "preparing": "준비 중…",
+      "retry": "재시도",
+      "checkFailed": "확인 실패: {error}",
+      "installFailed": "설치 실패: {error}",
+      "poweredBy": "Powered by eino · Built with Wails"
     },
     "save": "저장",
     "saving": "저장 중...",
     "saved": "저장됨",
-    "search": "설정 검색..."
+    "done": "완료",
+    "search": "설정 검색...",
+    "noResults": "일치하는 결과 없음",
+    "resizeAriaLabel": "창 크기 조정",
+    "selectFileTitle": "문서 선택",
+    "tabMeta": {
+      "general": "일반",
+      "appearance": "외관",
+      "model": "모델",
+      "ai": "대화",
+      "tools": "도구",
+      "knowledge": "지식",
+      "automation": "자동화",
+      "lark": "Lark",
+      "sms": "SMS",
+      "pomodoro": "뽀모도로",
+      "about": "정보"
+    }
   },
   "chat": {
     "placeholder": "메시지 입력...",
@@ -286,7 +481,26 @@
     "searchMatches": "건",
     "searchClose": "검색 닫기",
     "searchNoResults": "일치하는 메시지가 없습니다",
-    "searchNoResultsHint": "다른 키워드를 시도하거나 철자를 확인하세요"
+    "searchNoResultsHint": "다른 키워드를 시도하거나 철자를 확인하세요",
+    "system": {
+      "welcome": "안녕하세요! 데스크톱 펫입니다.\n\n지원 기능:\n- 자연어 대화\n- 도구 호출 (시간, 시스템 정보, 네트워크 상태 등)\n- 지식 베이스 Q&A (설정에서 문서 가져오기)\n\n빠른 팁:\n- 우클릭 → 표정 변경 / 모델 변경 / 설정 열기\n- 채팅 버블 우클릭 → 채팅 기록 내보내기\n\n설정에서 LLM 모델을 구성한 후 채팅을 시작하세요.",
+      "error": "오류: {error}",
+      "voiceError": "음성 인식 실패",
+      "voiceErrorMicDenied": "시스템 환경설정에서 Aiko의 마이크 사용을 허용해 주세요.",
+      "voiceErrorSpeechDenied": "시스템 환경설정에서 Aiko의 음성 인식 사용을 허용해 주세요.",
+      "voiceErrorUnknown": "음성 인식 오류: {error}",
+      "updateFailed": "업데이트 실패: {error}",
+      "regenerateFailed": "재생성 실패: {error}",
+      "fileTooBig": "파일이 너무 큽니다 (최대 200KB): {name}",
+      "fileUnsupportedType": "지원되지 않는 파일 형식, 텍스트 파일만: {name}",
+      "fileReadError": "파일 읽기 오류: {name}",
+      "sendFailed": "전송 실패: {error}"
+    },
+    "lightbox": {
+      "zoomOut": "축소 (-)",
+      "zoomIn": "확대 (+)",
+      "reset": "초기화 (이미지 더블클릭)"
+    }
   },
   "chatBubble": {
     "fullscreen": "전체 화면",
@@ -296,7 +510,7 @@
     "clearHistory": "채팅 기록 지우기",
     "openSettings": "설정 열기",
     "chat": "채팅",
-    "latencyAriaLabel": "LLM 지연시간",
+    "latencyAriaLabel": "LLM 레이턴시",
     "search": "채팅 기록 검색"
   },
   "toolConfirm": {
@@ -319,10 +533,31 @@
     "approve": "승인",
     "installUpdate": "업데이트 설치",
     "editBeforeRun": "편집 후 실행",
-    "appUpdate": "앱 업데이트"
+    "appUpdate": "앱 업데이트",
+    "languageLabel": {
+      "shell": "Shell",
+      "python": "Python",
+      "node": "Node.js",
+      "ruby": "Ruby",
+      "bash": "Bash"
+    }
   },
   "notification": {
-    "close": "닫기"
+    "close": "닫기",
+    "fallbackTitle": "알림"
+  },
+  "petMenu": {
+    "switchExpression": "표정 변경",
+    "switchModel": "모델 변경",
+    "openSettings": "설정 열기",
+    "quitApp": "종료"
+  },
+  "app": {
+    "welcomeTitle": "안녕하세요! 데스크톱 펫입니다",
+    "welcomeMessage": "설정에서 LLM을 구성한 후 채팅을 시작하세요~",
+    "pendingNotification": "(=^・ω・^=)",
+    "errorTitle": "오류 발생",
+    "updateInstalling": "업데이트 v{version} 설치 중, 앱이 곧 재시작됩니다…"
   },
   "execution": {
     "running": "실행 중...",
@@ -330,28 +565,28 @@
     "done": "완료",
     "kill": "중지"
   },
-"pomodoro": {
-  "focus": "집중",
-  "shortBreak": "짧은 휴식",
-  "longBreak": "긴 휴식",
-  "done": "완료 ✓",
-  "round": "{current} / {total} 라운드",
-  "start": "시작",
-  "pause": "일시정지",
-  "resume": "계속",
-  "stop": "종료",
-  "menuLabel": "뽀모도로",
-  "settings": {
-    "title": "타이머 설정",
-    "focusDuration": "집중 시간 (분)",
-    "focusDurationDesc": "각 집중 세션의 길이, 기본값 25",
-    "shortBreakDuration": "짧은 휴식 시간 (분)",
-    "shortBreakDurationDesc": "집중 세션 사이의 휴식, 기본값 5",
-    "longBreakDuration": "긴 휴식 시간 (분)",
-    "longBreakDurationDesc": "N 라운드 후 연장 휴식, 기본값 15",
-    "roundsBeforeLongBreak": "긴 휴식 전 라운드",
-    "roundsBeforeLongBreakDesc": "긴 휴식 전 집중 라운드 수, 기본값 4",
-    "hint": "변경 사항은 즉시 적용되며 실행 중인 타이머에 영향을 주지 않습니다."
+  "pomodoro": {
+    "focus": "집중",
+    "shortBreak": "짧은 휴식",
+    "longBreak": "긴 휴식",
+    "done": "완료",
+    "round": "{current} / {total} 라운드",
+    "start": "시작",
+    "pause": "일시정지",
+    "resume": "계속",
+    "stop": "종료",
+    "menuLabel": "뽀모도로",
+    "settings": {
+      "title": "타이머 설정",
+      "focusDuration": "집중 시간 (분)",
+      "focusDurationDesc": "각 집중 세션의 길이, 기본값 25",
+      "shortBreakDuration": "짧은 휴식 시간 (분)",
+      "shortBreakDurationDesc": "집중 세션 사이의 휴식, 기본값 5",
+      "longBreakDuration": "긴 휴식 시간 (분)",
+      "longBreakDurationDesc": "N 라운드 후 연장 휴식, 기본값 15",
+      "roundsBeforeLongBreak": "긴 휴식 전 라운드",
+      "roundsBeforeLongBreakDesc": "긴 휴식 전 집중 라운드 수, 기본값 4",
+      "hint": "변경 사항은 즉시 적용되며 실행 중인 타이머에 영향을 주지 않습니다."
+    }
   }
-}
 }

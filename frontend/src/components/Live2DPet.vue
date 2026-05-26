@@ -66,13 +66,13 @@ async function switchToNextModel() {
 const { t } = useI18n()
 
 const petMenuItems = computed(() => [
-  { iconSvg: ICON_FACE,    label: '切换表情', action: cycleExpression },
-  { iconSvg: ICON_SHIRT,   label: '更换模型', action: switchToNextModel },
+  { iconSvg: ICON_FACE,    label: t('petMenu.switchExpression'), action: cycleExpression },
+  { iconSvg: ICON_SHIRT,   label: t('petMenu.switchModel'), action: switchToNextModel },
   { iconSvg: ICON_POMODORO, label: t('pomodoro.menuLabel'), action: () => emit('open-pomodoro'), disabled: props.pomodoroPanelOpen },
   { divider: true },
-  { iconSvg: ICON_SETTING, label: '打开设置', action: () => emit('open-settings') },
+  { iconSvg: ICON_SETTING, label: t('petMenu.openSettings'), action: () => emit('open-settings') },
   { divider: true },
-  { iconSvg: ICON_POWER,   label: '退出程序', action: () => Quit(), danger: true },
+  { iconSvg: ICON_POWER,   label: t('petMenu.quitApp'), action: () => Quit(), danger: true },
 ])
 
 /** onContextMenu shows the pet right-click menu. */

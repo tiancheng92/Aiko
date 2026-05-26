@@ -16,9 +16,8 @@ const submitting = ref(false)
 const languageLabel = computed(() => {
   if (!request.value) return ''
   if (request.value.tool_type === 'update') return t('toolConfirm.appUpdate')
-  if (request.value.tool_type === 'shell') return 'Shell'
-  const map = { python: 'Python', node: 'Node.js', ruby: 'Ruby', bash: 'Bash' }
-  return map[request.value.language] || request.value.language
+  if (request.value.tool_type === 'shell') return t('toolConfirm.languageLabel.shell')
+  return t(`toolConfirm.languageLabel.${request.value.language}`) || request.value.language
 })
 
 /** Risk warning text shown below the editor. */
@@ -66,7 +65,7 @@ onMounted(() => {
   offConfirm = EventsOn('tool:confirm', onConfirmEvent)
   offRestarting = EventsOn('app:restarting', ({ version }) => {
     visible.value = false
-    EventsEmit('chat:system:inject', `正在安装更新 v${version}，应用即将重启…`)
+    EventsEmit('chat:system:inject', t('app.updateInstalling', { version }))
   })
 })
 onUnmounted(() => {

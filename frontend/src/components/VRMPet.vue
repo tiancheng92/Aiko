@@ -477,18 +477,18 @@ function onContextMenu(e) {
 const { t } = useI18n()
 
 const petMenuItems = computed(() => [
-  { iconSvg: ICON_SHIRT, label: "更换模型", action: switchToNextVRMModel },
+  { iconSvg: ICON_SHIRT, label: t('petMenu.switchModel'), action: switchToNextVRMModel },
   { iconSvg: ICON_POMODORO, label: t('pomodoro.menuLabel'), action: () => emit("open-pomodoro"), disabled: props.pomodoroPanelOpen },
   { divider: true },
   {
     iconSvg: ICON_SETTING,
-    label: "打开设置",
+    label: t('petMenu.openSettings'),
     action: () => emit("open-settings"),
   },
   { divider: true },
   {
     iconSvg: ICON_POWER,
-    label: "退出程序",
+    label: t('petMenu.quitApp'),
     action: () => Quit(),
     danger: true,
   },

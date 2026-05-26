@@ -9,9 +9,11 @@ import PomodoroPanel from './components/PomodoroPanel.vue'
 import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize, GetConfig, SetChatVisible } from '../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../wailsjs/runtime/runtime'
 import { springAnimate } from './composables/useSpring'
+import { useI18n } from 'vue-i18n'
 
 const bubbleOpen = ref(false)
 watch(bubbleOpen, (v) => { SetChatVisible(v) })
+const { t } = useI18n()
 const renderBackend = ref('live2d')
 const settingsOpen = ref(false)
 const pomodoroPanelOpen = ref(false)
@@ -341,8 +343,8 @@ onMounted(async () => {
   if (firstLaunch) {
     await MarkWelcomeShown()
     EventsEmit('notification:show', {
-      title: '你好！我是你的桌面宠物 ✨',
-      message: '请先在设置中配置 LLM 接口，然后就可以开始聊天了~',
+      title: t('app.welcomeTitle'),
+      message: t('app.welcomeMessage'),
     })
   }
   offToggle = EventsOn('bubble:toggle', () => {
@@ -380,14 +382,14 @@ onMounted(async () => {
   })
   offDone = EventsOn('chat:done', () => {
     if (!bubbleOpen.value && pendingTokens.trim()) {
-      EventsEmit('notification:show', { title: '✨ (=^･ω･^=)', message: pendingTokens.trim() })
+      EventsEmit('notification:show', { title: t('app.pendingNotification'), message: pendingTokens.trim() })
     }
     pendingTokens = ''
   })
   offError = EventsOn('chat:error', (err) => {
     if (!bubbleOpen.value) {
       pendingTokens = ''
-      EventsEmit('notification:show', { title: '😿 出错了', message: err })
+      EventsEmit('notification:show', { title: t('app.errorTitle'), message: err })
     }
   })
   offPomodoroState = EventsOn('pomodoro:state:changed', onPomodoroStateChanged)

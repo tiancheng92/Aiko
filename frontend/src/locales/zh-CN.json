@@ -34,19 +34,34 @@
       "shortcutCmdEnter": "消息框内换行",
       "shortcutCmdV": "粘贴图片到消息框（支持截图直接粘贴）",
       "shortcutDrag": "拖动悬浮球 — 重新定位桌宠",
-      "shortcutRightClick": "右键聊天框 — 导出记录、清空历史、打开设置"
+      "shortcutRightClick": "右键聊天框 — 导出记录、清空历史、打开设置",
+      "languageDefaultDesc": "默认跟随系统",
+      "shortcutHoldLabel": "长按 1s",
+      "shortcutReleaseLabel": "松开 ⌥",
+      "shortcutDragLabel": "拖拽",
+      "shortcutRightClickLabel": "右键"
     },
     "appearance": {
       "petModel": "桌宠模型",
       "renderMode": "渲染模式",
+      "renderModeLive2D": "Live2D（2D）",
+      "renderModeVRM": "VRM（3D）",
       "vrmModel": "VRM 模型",
       "vrmDelete": "删除",
       "vrmImport": "导入 VRM 文件",
       "vrmUserImported": "用户导入",
       "vrmBuiltin": "内置",
       "vrmDeleteModel": "删除此模型",
+      "vrmUploading": "上传中…",
+      "vrmAnimPreview": "动画预览",
+      "live2DModel": "Live2D 模型",
       "petSize": "宠物尺寸",
       "petSizeDesc": "像素大小，0 表示自动",
+      "petSizeAuto": "自动",
+      "chatSizeDefault": "默认",
+      "resetToAuto": "重置为自动",
+      "resetToDefault": "重置为默认",
+      "currentScreen": "当前屏幕：{width}×{height}",
       "chatSize": "聊天框尺寸",
       "chatWidth": "宽度",
       "chatHeight": "高度",
@@ -54,22 +69,38 @@
       "resetBallDesc": "将悬浮球移回默认位置",
       "voice": "语音与音效",
       "voiceAutoSend": "语音识别后自动发送",
+      "voiceAutoSendDesc": "松开 Option 键后，识别完成时自动发送消息，无需手动确认",
       "soundsEnabled": "聊天音效",
+      "soundsEnabledDesc": "发送、收到消息或出错时播放轻柔提示音",
       "ttsAutoPlay": "AI 回复后自动朗读",
+      "ttsAutoPlayDesc": "收到 AI 回复后自动语音播放（需在模型配置中选择语音合成引擎）",
       "ttsSummarizeThreshold": "摘要字数阈值",
       "ttsSummarizeThresholdDesc": "超过此字数的消息生成摘要后朗读，0 表示禁用摘要",
       "avatar": "头像设置",
       "aiAvatar": "AI 头像",
       "userAvatar": "用户头像",
       "resetAvatar": "还原",
-      "change": "更换"
+      "change": "更换",
+      "vrmAnimLabels": {
+        "waiting": "待机",
+        "wave": "挥手",
+        "nod": "点头",
+        "curious": "好奇",
+        "stretch": "伸懒腰",
+        "sleepy": "困倦",
+        "talk": "说话",
+        "awkward": "尴尬",
+        "sad": "悲伤",
+        "tsundere": "傲娇",
+        "surprised": "惊讶",
+        "appear": "登场"
+      }
     },
     "model": {
       "title": "模型配置",
       "addProfile": "新增配置",
       "noProfile": "未配置模型，请点击下方按钮添加",
       "activate": "激活",
-      "activateDesc": "已激活",
       "activated": "已激活",
       "edit": "编辑",
       "delete": "删除",
@@ -91,7 +122,54 @@
       "supportsVision": "支持图片输入",
       "saveProfile": "保存",
       "cancel": "取消",
-      "fetchOpenRouter": "获取 OpenRouter 模型列表"
+      "fetchOpenRouter": "获取 OpenRouter 模型列表",
+      "restartingAgent": "正在重启 Agent…",
+      "profileSwitched": "已切换模型配置",
+      "noModelsFetched": "未获取到模型列表",
+      "fetchModelsFailed": "获取模型失败: {error}",
+      "saveFailed": "保存失败: {error}",
+      "switchFailed": "切换失败: {error}",
+      "deleteFailed": "删除失败: {error}",
+      "deleteProfileTitle": "删除模型配置",
+      "confirmDeleteProfile": "确认删除配置「{name}」？此操作不可撤销。",
+      "deleteVRMTitle": "删除模型",
+      "confirmDeleteVRM": "确认删除 \"{name}\"？此操作不可撤销。",
+      "validation": {
+        "nameRequired": "请输入配置名称",
+        "modelRequired": "请输入模型名称",
+        "baseUrlRequired": "请输入 Base URL"
+      },
+      "fetchingModels": "获取中...",
+      "fetchModels": "获取模型",
+      "saving": "保存中…",
+      "providerLabels": {
+        "openai": "OpenAI 兼容接口",
+        "openrouter": "OpenRouter"
+      },
+      "placeholder": {
+        "profileName": "我的 OpenAI",
+        "baseURL": "http://localhost:11434/v1",
+        "baseURLOpenRouter": "https://openrouter.ai/api/v1（留空使用默认）",
+        "apiKeyOptional": "（可选）",
+        "selectModel": "-- 请选择模型 --",
+        "model": "gpt-4o",
+        "embeddingModel": "text-embedding-3-small（可选）",
+        "embeddingDisable": "-- 不启用（关闭知识库检索）--",
+        "embeddingBaseURL": "https://api.openai.com/v1"
+      },
+      "embeddingInheritHint": "使用相同的 Base URL 和 API Key",
+      "embeddingDimHint": "与所选向量模型保持一致，默认 1536",
+      "supportsVisionHint": "启用后可以向模型发送图片，仅对支持多模态的模型有效",
+      "ttsBackendOptions": {
+        "systemVoice": "系统语音（macOS 内置）",
+        "kokoro": "Kokoro-82M（本地离线，动漫中文风格）"
+      },
+      "kokoro": {
+        "install": "安装 / 检查 Kokoro 环境",
+        "installing": "安装中…",
+        "installFailed": "安装失败: {error}",
+        "retry": "重试"
+      }
     },
     "ai": {
       "systemPrompt": "系统提示词",
@@ -102,12 +180,15 @@
       "nudgeIntervalDesc": "每隔 N 轮触发一次记忆沉淀提示，0 使用默认值",
       "skillsDirs": "技能目录",
       "skillsDirsDesc": "每行一个目录路径，存放 YAML 技能文件",
+      "skillsDirsPlaceholder": "~/.aiko/auto-skills",
       "thinkingLevel": "思考等级",
       "default": "默认",
       "off": "关闭",
       "low": "低",
       "medium": "中",
-      "high": "高"
+      "high": "高",
+      "memoryAndGrowth": "记忆与成长",
+      "skillsSection": "技能与扩展"
     },
     "tools": {
       "subTabs": {
@@ -125,7 +206,15 @@
         "revoke": "撤销",
         "confirmPrompt": "每次弹出确认框",
         "autoApprove": "自动批准",
-        "disabled": "禁用"
+        "disabled": "禁用",
+        "noTools": "暂无工具信息",
+        "publicTitle": "始终开启（无需授权）",
+        "protectedTitle": "敏感工具（可单独开关）",
+        "jinaPlaceholder": "jina_xxxxxxxxxxxx（留空即可）",
+        "jinaHint": "可选，提升抓取额度（留空使用免费模式）",
+        "tavilyPlaceholder": "tvly-xxxxxxxxxxxx（留空则使用 DuckDuckGo）",
+        "tavilyHint": "可选，设置后使用 Tavily（支持时效过滤），留空自动退回 DuckDuckGo",
+        "updatePermFailed": "权限更新失败: {error}"
       },
       "mcp": {
         "addServer": "添加 MCP 服务器",
@@ -140,7 +229,25 @@
         "save": "保存",
         "cancel": "取消",
         "delete": "删除",
-        "noServers": "暂无 MCP 服务器"
+        "noServers": "暂无 MCP 服务器",
+        "sectionTitle": "MCP 扩展工具",
+        "enabledStatus": "已启用",
+        "disabledStatus": "已禁用",
+        "saving": "保存中…",
+        "argsHint": "空格分隔",
+        "headersHint": "每行一个，格式：Key: Value",
+        "validation": {
+          "nameRequired": "请输入名称",
+          "commandRequired": "请输入可执行命令",
+          "urlRequired": "请输入 URL"
+        },
+        "deleteServerTitle": "删除 MCP 服务器",
+        "confirmDelete": "确认删除「{name}」？Agent 将无法再调用该服务器提供的工具。",
+        "placeholder": {
+          "command": "/usr/local/bin/mcp-server",
+          "args": "--flag value",
+          "url": "http://localhost:8080/sse"
+        }
       },
       "settings": {
         "shellTimeout": "Shell 超时 (秒)",
@@ -151,7 +258,13 @@
         "allowedPathsDesc": "每行一个目录路径，空表示禁止所有路径",
         "addPath": "添加",
         "trustedCommands": "免确认命令",
-        "trustedCommandsDesc": "每行一个命令前缀，匹配的命令无需弹窗确认"
+        "trustedCommandsDesc": "每行一个命令前缀，匹配的命令无需弹窗确认",
+        "noPaths": "暂无允许路径，文件读写已禁用",
+        "noCommands": "暂无免确认命令，所有 Shell 命令均需二次确认",
+        "pathPlaceholder": "/Users/me/projects 或 /tmp/*",
+        "cmdPlaceholder": "git",
+        "timeoutSection": "超时限制",
+        "remove": "删除"
       }
     },
     "knowledge": {
@@ -170,7 +283,13 @@
       "tavilyAPIKeyDesc": "留空使用 DuckDuckGo 后备搜索",
       "progress": "导入中...",
       "done": "导入完成",
-      "error": "导入失败"
+      "error": "导入失败",
+      "importFailedDetail": "导入失败: {error}",
+      "deleteSourceTitle": "删除知识源",
+      "confirmDeleteSource": "确认从知识库中移除「{name}」？对应的向量索引会一并删除。",
+      "deleteFailed": "删除失败: {error}",
+      "importHint": "支持 .txt、.md、.pdf、.epub；导入后 AI 可通过语义检索引用文档内容",
+      "importProgress": "正在处理 {source}：{processed}/{total} 段"
     },
     "automation": {
       "subTabs": {
@@ -191,11 +310,39 @@
         "cancel": "取消",
         "noJobs": "暂无定时任务",
         "saveToMemory": "结果存入长期记忆",
-        "notify": "发送系统通知"
+        "notify": "发送系统通知",
+        "validation": {
+          "requiredFields": "名称、Cron 表达式和触发提示词为必填项",
+          "invalidCron": "Cron 表达式格式错误：应为 5 或 6 个字段，或 @every/@daily 等助记符"
+        },
+        "deleteJobTitle": "删除定时任务",
+        "confirmDelete": "确认删除任务「{name}」？",
+        "statusEnabled": "启用中",
+        "statusDisabled": "已禁用",
+        "triggered": "已触发执行",
+        "triggerFailed": "触发失败: {error}",
+        "saving": "保存中…",
+        "enable": "启用",
+        "disable": "禁用",
+        "lastRun": "上次执行：{time}",
+        "nextRun": "下次执行：{time}",
+        "placeholder": {
+          "name": "每日早报",
+          "description": "可选说明",
+          "schedule": "0 8 * * *",
+          "prompt": "到达时间时发给 AI 的指令，如：帮我总结今日新闻"
+        },
+        "scheduleHint": "5 段 cron 格式（分 时 日 月 周），如 0 8 * * * = 每天 8 点；也支持 @daily、@hourly 等",
+        "notifyHint": "执行完成后发送 macOS 系统通知",
+        "saveToMemoryHint": "执行成功后将结果写入长期记忆"
       },
       "proactive": {
         "noItems": "无待触发项",
-        "delete": "删除"
+        "delete": "删除",
+        "refresh": "刷新",
+        "loadFailed": "加载失败",
+        "deleteTitle": "删除提醒",
+        "confirmDelete": "确认删除提醒「{name}」？"
       }
     },
     "lark": {
@@ -204,7 +351,20 @@
       "notInstalled": "未安装",
       "installPrompt": "请先安装 lark-cli",
       "command": "执行命令",
-      "run": "运行"
+      "run": "运行",
+      "detecting": "检测中...",
+      "pathHint": "lark-cli 路径由 PATH 自动查找",
+      "guide": "快速引导",
+      "guideSteps": {
+        "step1Title": "安装 CLI",
+        "step2Title": "安装 CLI SKILL（必需）",
+        "step3Title": "配置应用凭证（仅需一次，交互式引导完成）",
+        "step4Title": "登录授权（--recommend 自动选择常用权限）",
+        "step5Title": "完成后点击\"检测状态\"验证"
+      },
+      "hint": "配置完成后，AI 可通过 lark-cli 操作飞书，例如：发消息、查日历、读文档等。",
+      "hintNotePrefix": "注意：",
+      "hintNote": "需在「对话」标签页的「技能目录」中添加飞书 Skills 路径（通常为 {path}）。"
     },
     "sms": {
       "watcher": "短信监听",
@@ -213,7 +373,17 @@
       "status": "状态",
       "running": "运行中",
       "stopped": "已停止",
-      "allMessages": "推送所有短信（含非验证码）到通知栏"
+      "allMessages": "推送所有短信（含非验证码）到通知栏",
+      "processing": "处理中...",
+      "desc1": "监听 macOS「信息」App 收到的短信，自动提取验证码并复制到剪贴板，同时推送通知气泡。",
+      "desc2Prefix": "所需权限：",
+      "desc2": "系统设置 → 隐私与安全性 → 完全磁盘访问权限 → 添加 Aiko。",
+      "guideSteps": {
+        "step1Title": "授予完全磁盘访问权限",
+        "step1Desc": "系统设置 → 隐私与安全性 → 完全磁盘访问权限 → 点击「+」添加 Aiko",
+        "step2Title": "点击「开启监听」",
+        "step2Desc": "收到含验证码的短信后，验证码自动写入剪贴板并弹出通知气泡，无需手动复制。"
+      }
     },
     "about": {
       "version": "版本",
@@ -223,12 +393,37 @@
       "newVersion": "发现新版本",
       "installing": "正在安装更新...",
       "releaseNotes": "更新日志",
-      "github": "GitHub"
+      "github": "GitHub",
+      "checking": "正在检查…",
+      "installNow": "立即更新",
+      "noDownload": "无可用下载",
+      "preparing": "准备中…",
+      "retry": "重试",
+      "checkFailed": "检查失败: {error}",
+      "installFailed": "安装失败: {error}",
+      "poweredBy": "Powered by eino · Built with Wails"
     },
     "save": "保存",
     "saving": "保存中...",
     "saved": "已保存",
-    "search": "搜索设置..."
+    "done": "完成",
+    "search": "搜索设置...",
+    "noResults": "无匹配结果",
+    "resizeAriaLabel": "调整窗口大小",
+    "selectFileTitle": "选择文档",
+    "tabMeta": {
+      "general": "通用",
+      "appearance": "外观",
+      "model": "模型",
+      "ai": "对话",
+      "tools": "工具",
+      "knowledge": "知识库",
+      "automation": "自动化",
+      "lark": "飞书",
+      "sms": "短信",
+      "pomodoro": "番茄钟",
+      "about": "关于"
+    }
   },
   "chat": {
     "placeholder": "发消息...",
@@ -286,7 +481,26 @@
     "searchMatches": "条匹配",
     "searchClose": "关闭搜索",
     "searchNoResults": "未找到匹配的消息",
-    "searchNoResultsHint": "尝试其他关键词或检查拼写"
+    "searchNoResultsHint": "尝试其他关键词或检查拼写",
+    "system": {
+      "welcome": "你好！👋 我是你的 AI 桌面宠物。\n\n我支持：\n- 💬 **自然语言对话**\n- 🔧 **工具调用**（查询时间、系统信息、网络状态等）\n- 📚 **知识库问答**（在设置中导入文档）\n\n**快速操作提示：**\n- 右键点击我 → 切换表情 / 更换模型 / 打开设置\n- 右键点击聊天框 → 导出聊天记录\n\n请先在 ⚙️ **设置** 中配置 LLM 模型后开始聊天。",
+      "error": "错误: {error}",
+      "voiceError": "🎙️ 语音识别失败",
+      "voiceErrorMicDenied": "请在系统偏好设置中允许 Aiko 使用麦克风。",
+      "voiceErrorSpeechDenied": "请在系统偏好设置中允许 Aiko 使用语音识别。",
+      "voiceErrorUnknown": "语音识别出错：{error}",
+      "updateFailed": "⚠️ 更新失败: {error}",
+      "regenerateFailed": "重新生成失败: {error}",
+      "fileTooBig": "文件过大（最大 200KB）：{name}",
+      "fileUnsupportedType": "不支持此文件类型，仅支持文本文件：{name}",
+      "fileReadError": "文件读取失败：{name}",
+      "sendFailed": "发送失败: {error}"
+    },
+    "lightbox": {
+      "zoomOut": "缩小 (-)",
+      "zoomIn": "放大 (+)",
+      "reset": "重置（双击图片）"
+    }
   },
   "chatBubble": {
     "fullscreen": "全屏",
@@ -319,10 +533,31 @@
     "approve": "批准",
     "installUpdate": "安装更新",
     "editBeforeRun": "编辑后再执行",
-    "appUpdate": "应用更新"
+    "appUpdate": "应用更新",
+    "languageLabel": {
+      "shell": "Shell",
+      "python": "Python",
+      "node": "Node.js",
+      "ruby": "Ruby",
+      "bash": "Bash"
+    }
   },
   "notification": {
-    "close": "关闭通知"
+    "close": "关闭通知",
+    "fallbackTitle": "通知"
+  },
+  "petMenu": {
+    "switchExpression": "切换表情",
+    "switchModel": "更换模型",
+    "openSettings": "打开设置",
+    "quitApp": "退出程序"
+  },
+  "app": {
+    "welcomeTitle": "你好！我是你的桌面宠物 ✨",
+    "welcomeMessage": "请先在设置中配置 LLM 接口，然后就可以开始聊天了~",
+    "pendingNotification": "✨ (=^･ω･^=)",
+    "errorTitle": "😿 出错了",
+    "updateInstalling": "正在安装更新 v{version}，应用即将重启…"
   },
   "execution": {
     "running": "执行中...",
@@ -330,28 +565,28 @@
     "done": "执行完成",
     "kill": "终止"
   },
-"pomodoro": {
-  "focus": "专注中",
-  "shortBreak": "短休息",
-  "longBreak": "长休息",
-  "done": "完成 ✓",
-  "round": "第 {current} / {total} 轮",
-  "start": "开始",
-  "pause": "暂停",
-  "resume": "继续",
-  "stop": "结束",
-  "menuLabel": "番茄钟",
-  "settings": {
-    "title": "计时设置",
-    "focusDuration": "专注时长（分钟）",
-    "focusDurationDesc": "单次专注会话的时长，默认 25",
-    "shortBreakDuration": "短休息时长（分钟）",
-    "shortBreakDurationDesc": "专注之间的短暂休息，默认 5",
-    "longBreakDuration": "长休息时长（分钟）",
-    "longBreakDurationDesc": "完成 N 轮后的较长休息，默认 15",
-    "roundsBeforeLongBreak": "长休息间隔（轮）",
-    "roundsBeforeLongBreakDesc": "几轮专注后触发长休息，默认 4",
-    "hint": "修改即时生效，不影响正在进行的番茄钟。"
+  "pomodoro": {
+    "focus": "专注中",
+    "shortBreak": "短休息",
+    "longBreak": "长休息",
+    "done": "完成 ✓",
+    "round": "第 {current} / {total} 轮",
+    "start": "开始",
+    "pause": "暂停",
+    "resume": "继续",
+    "stop": "结束",
+    "menuLabel": "番茄钟",
+    "settings": {
+      "title": "计时设置",
+      "focusDuration": "专注时长（分钟）",
+      "focusDurationDesc": "单次专注会话的时长，默认 25",
+      "shortBreakDuration": "短休息时长（分钟）",
+      "shortBreakDurationDesc": "专注之间的短暂休息，默认 5",
+      "longBreakDuration": "长休息时长（分钟）",
+      "longBreakDurationDesc": "完成 N 轮后的较长休息，默认 15",
+      "roundsBeforeLongBreak": "长休息间隔（轮）",
+      "roundsBeforeLongBreakDesc": "几轮专注后触发长休息，默认 4",
+      "hint": "修改即时生效，不影响正在进行的番茄钟。"
+    }
   }
-}
 }
