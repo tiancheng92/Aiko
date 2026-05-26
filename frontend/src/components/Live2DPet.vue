@@ -8,12 +8,13 @@ import { debounce } from '../utils/timing.js'
 import { usePetState } from '../composables/usePetState.js'
 import { useModelPath } from '../composables/useModelPath.js'
 import ContextMenu from './ContextMenu.vue'
-import { ICON_FACE, ICON_SHIRT, ICON_SETTING, ICON_POWER } from '../utils/icons'
+import { ICON_FACE, ICON_SHIRT, ICON_SETTING, ICON_POWER, ICON_POMODORO } from '../utils/icons'
 
-const emit = defineEmits(['click', 'position', 'ball-size', 'open-settings'])
+const emit = defineEmits(['click', 'position', 'ball-size', 'open-settings', 'open-pomodoro'])
 
 const props = defineProps({
   activeScreen: { type: Object, default: () => ({ width: 0, height: 0 }) },
+  pomodoroPanelOpen: { type: Boolean, default: false },
 })
 
 const pos = ref(null)
@@ -64,6 +65,7 @@ async function switchToNextModel() {
 const petMenuItems = [
   { iconSvg: ICON_FACE,    label: '切换表情', action: cycleExpression },
   { iconSvg: ICON_SHIRT,   label: '更换模型', action: switchToNextModel },
+  { iconSvg: ICON_POMODORO, label: '番茄钟', action: () => emit('open-pomodoro'), disabled: props.pomodoroPanelOpen },
   { divider: true },
   { iconSvg: ICON_SETTING, label: '打开设置', action: () => emit('open-settings') },
   { divider: true },

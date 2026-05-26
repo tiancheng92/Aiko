@@ -33,12 +33,13 @@ import { debounce } from "../utils/timing.js";
 import { useEmotionEvents } from "../composables/useEmotionEvents.js";
 import { usePetState } from "../composables/usePetState.js";
 import { useVRMModel } from "../composables/useVRMModel.js";
-import { ICON_POWER, ICON_SETTING, ICON_SHIRT } from "../utils/icons";
+import { ICON_POWER, ICON_SETTING, ICON_SHIRT, ICON_POMODORO } from "../utils/icons";
 import ContextMenu from "./ContextMenu.vue";
 
-const emit = defineEmits(["click", "position", "ball-size", "open-settings"]);
+const emit = defineEmits(["click", "position", "ball-size", "open-settings", "open-pomodoro"]);
 const props = defineProps({
   activeScreen: { type: Object, default: () => ({ width: 0, height: 0 }) },
+  pomodoroPanelOpen: { type: Boolean, default: false },
 });
 
 const canvasRef = ref(null);
@@ -474,6 +475,7 @@ function onContextMenu(e) {
 
 const petMenuItems = [
   { iconSvg: ICON_SHIRT, label: "更换模型", action: switchToNextVRMModel },
+  { iconSvg: ICON_POMODORO, label: "番茄钟", action: () => emit("open-pomodoro"), disabled: props.pomodoroPanelOpen },
   { divider: true },
   {
     iconSvg: ICON_SETTING,
