@@ -17,7 +17,8 @@ import {
   WebGLRenderer,
 } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { nextTick, onMounted, onUnmounted, ref, watch, computed } from "vue";
+import { useI18n } from 'vue-i18n'
 import {
   GetBallPosition,
   GetConfig,
@@ -473,9 +474,11 @@ function onContextMenu(e) {
   petMenuRef.value?.show(e.clientX, e.clientY);
 }
 
-const petMenuItems = [
+const { t } = useI18n()
+
+const petMenuItems = computed(() => [
   { iconSvg: ICON_SHIRT, label: "更换模型", action: switchToNextVRMModel },
-  { iconSvg: ICON_POMODORO, label: "番茄钟", action: () => emit("open-pomodoro"), disabled: props.pomodoroPanelOpen },
+  { iconSvg: ICON_POMODORO, label: t('pomodoro.menuLabel'), action: () => emit("open-pomodoro"), disabled: props.pomodoroPanelOpen },
   { divider: true },
   {
     iconSvg: ICON_SETTING,
@@ -489,7 +492,7 @@ const petMenuItems = [
     action: () => Quit(),
     danger: true,
   },
-];
+]);
 
 // ── Drag Handling ────────────────────────────────────────────────────────────
 

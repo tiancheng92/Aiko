@@ -1,5 +1,6 @@
 <script setup>
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, watch, nextTick, onMounted, onUnmounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import * as PIXI from 'pixi.js'
 import { Live2DModel, MotionPriority } from 'pixi-live2d-display/cubism4'
 import { GetBallPosition, SaveBallPosition, GetScreenSize, GetConfig, SaveConfig, GetMousePosition, GetPetSize } from '../../wailsjs/go/main/App'
@@ -62,15 +63,17 @@ async function switchToNextModel() {
   }
 }
 
-const petMenuItems = [
+const { t } = useI18n()
+
+const petMenuItems = computed(() => [
   { iconSvg: ICON_FACE,    label: '切换表情', action: cycleExpression },
   { iconSvg: ICON_SHIRT,   label: '更换模型', action: switchToNextModel },
-  { iconSvg: ICON_POMODORO, label: '番茄钟', action: () => emit('open-pomodoro'), disabled: props.pomodoroPanelOpen },
+  { iconSvg: ICON_POMODORO, label: t('pomodoro.menuLabel'), action: () => emit('open-pomodoro'), disabled: props.pomodoroPanelOpen },
   { divider: true },
   { iconSvg: ICON_SETTING, label: '打开设置', action: () => emit('open-settings') },
   { divider: true },
   { iconSvg: ICON_POWER,   label: '退出程序', action: () => Quit(), danger: true },
-]
+])
 
 /** onContextMenu shows the pet right-click menu. */
 function onContextMenu(e) {

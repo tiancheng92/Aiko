@@ -329,5 +329,29 @@
     "executing": "Executing tool...",
     "done": "Complete",
     "kill": "Terminate"
+  },
+"pomodoro": {
+  "focus": "Focusing",
+  "shortBreak": "Short Break",
+  "longBreak": "Long Break",
+  "done": "Done ✓",
+  "round": "Round {current} / {total}",
+  "start": "Start",
+  "pause": "Pause",
+  "resume": "Resume",
+  "stop": "Stop",
+  "menuLabel": "Pomodoro",
+  "settings": {
+    "title": "Timer Settings",
+    "focusDuration": "Focus Duration (min)",
+    "focusDurationDesc": "Length of each focus session, default 25",
+    "shortBreakDuration": "Short Break Duration (min)",
+    "shortBreakDurationDesc": "Break between focus sessions, default 5",
+    "longBreakDuration": "Long Break Duration (min)",
+    "longBreakDurationDesc": "Extended break after N rounds, default 15",
+    "roundsBeforeLongBreak": "Rounds Before Long Break",
+    "roundsBeforeLongBreakDesc": "Number of focus rounds before a long break, default 4",
+    "hint": "Changes take effect immediately and do not affect the active timer."
   }
+}
 }

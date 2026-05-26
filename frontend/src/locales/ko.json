@@ -329,5 +329,29 @@
     "executing": "도구 실행 중...",
     "done": "완료",
     "kill": "중지"
+  },
+"pomodoro": {
+  "focus": "집중",
+  "shortBreak": "짧은 휴식",
+  "longBreak": "긴 휴식",
+  "done": "완료 ✓",
+  "round": "{current} / {total} 라운드",
+  "start": "시작",
+  "pause": "일시정지",
+  "resume": "계속",
+  "stop": "종료",
+  "menuLabel": "뽀모도로",
+  "settings": {
+    "title": "타이머 설정",
+    "focusDuration": "집중 시간 (분)",
+    "focusDurationDesc": "각 집중 세션의 길이, 기본값 25",
+    "shortBreakDuration": "짧은 휴식 시간 (분)",
+    "shortBreakDurationDesc": "집중 세션 사이의 휴식, 기본값 5",
+    "longBreakDuration": "긴 휴식 시간 (분)",
+    "longBreakDurationDesc": "N 라운드 후 연장 휴식, 기본값 15",
+    "roundsBeforeLongBreak": "긴 휴식 전 라운드",
+    "roundsBeforeLongBreakDesc": "긴 휴식 전 집중 라운드 수, 기본값 4",
+    "hint": "변경 사항은 즉시 적용되며 실행 중인 타이머에 영향을 주지 않습니다."
   }
+}
 }

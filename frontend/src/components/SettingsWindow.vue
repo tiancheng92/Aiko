@@ -2232,12 +2232,12 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
         <!-- 番茄钟 -->
         <div v-if="activeTab === 'pomodoro'" class="tab-pane">
-          <div class="group-label">计时设置</div>
+          <div class="group-label">{{ $t('pomodoro.settings.title') }}</div>
           <div class="settings-group">
             <div class="settings-row">
               <div class="row-body">
-                <span class="row-title">专注时长（分钟）</span>
-                <span class="row-desc">单次专注会话的时长，默认 25</span>
+                <span class="row-title">{{ $t('pomodoro.settings.focusDuration') }}</span>
+                <span class="row-desc">{{ $t('pomodoro.settings.focusDurationDesc') }}</span>
               </div>
               <input
                 v-model.number="cfg.PomodoroFocusDuration"
@@ -2250,8 +2250,8 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
             <div class="settings-row">
               <div class="row-body">
-                <span class="row-title">短休息时长（分钟）</span>
-                <span class="row-desc">专注之间的短暂休息，默认 5</span>
+                <span class="row-title">{{ $t('pomodoro.settings.shortBreakDuration') }}</span>
+                <span class="row-desc">{{ $t('pomodoro.settings.shortBreakDurationDesc') }}</span>
               </div>
               <input
                 v-model.number="cfg.PomodoroShortBreakDuration"
@@ -2264,8 +2264,8 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
             <div class="settings-row">
               <div class="row-body">
-                <span class="row-title">长休息时长（分钟）</span>
-                <span class="row-desc">完成 N 轮后的较长休息，默认 15</span>
+                <span class="row-title">{{ $t('pomodoro.settings.longBreakDuration') }}</span>
+                <span class="row-desc">{{ $t('pomodoro.settings.longBreakDurationDesc') }}</span>
               </div>
               <input
                 v-model.number="cfg.PomodoroLongBreakDuration"
@@ -2278,8 +2278,8 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
             <div class="settings-row">
               <div class="row-body">
-                <span class="row-title">长休息间隔（轮）</span>
-                <span class="row-desc">几轮专注后触发长休息，默认 4</span>
+                <span class="row-title">{{ $t('pomodoro.settings.roundsBeforeLongBreak') }}</span>
+                <span class="row-desc">{{ $t('pomodoro.settings.roundsBeforeLongBreakDesc') }}</span>
               </div>
               <input
                 v-model.number="cfg.PomodoroRoundsBeforeLongBreak"
@@ -2290,7 +2290,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               />
             </div>
           </div>
-          <p class="hint-text" style="margin-top: 12px; font-size: 11px; color: var(--text-secondary);">修改即时生效，不影响正在进行的番茄钟。</p>
+          <p class="hint-text" style="margin-top: 12px; font-size: 11px; color: var(--text-secondary);">{{ $t('pomodoro.settings.hint') }}</p>
         </div>
 
         <!-- 关于 -->

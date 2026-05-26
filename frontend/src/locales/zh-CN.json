@@ -329,5 +329,29 @@
     "executing": "正在执行工具…",
     "done": "执行完成",
     "kill": "终止"
+  },
+"pomodoro": {
+  "focus": "专注中",
+  "shortBreak": "短休息",
+  "longBreak": "长休息",
+  "done": "完成 ✓",
+  "round": "第 {current} / {total} 轮",
+  "start": "开始",
+  "pause": "暂停",
+  "resume": "继续",
+  "stop": "结束",
+  "menuLabel": "番茄钟",
+  "settings": {
+    "title": "计时设置",
+    "focusDuration": "专注时长（分钟）",
+    "focusDurationDesc": "单次专注会话的时长，默认 25",
+    "shortBreakDuration": "短休息时长（分钟）",
+    "shortBreakDurationDesc": "专注之间的短暂休息，默认 5",
+    "longBreakDuration": "长休息时长（分钟）",
+    "longBreakDurationDesc": "完成 N 轮后的较长休息，默认 15",
+    "roundsBeforeLongBreak": "长休息间隔（轮）",
+    "roundsBeforeLongBreakDesc": "几轮专注后触发长休息，默认 4",
+    "hint": "修改即时生效，不影响正在进行的番茄钟。"
   }
+}
 }

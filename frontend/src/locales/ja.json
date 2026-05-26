@@ -329,5 +329,29 @@
     "executing": "ツールを実行中...",
     "done": "完了",
     "kill": "停止"
+  },
+"pomodoro": {
+  "focus": "集中",
+  "shortBreak": "小休憩",
+  "longBreak": "長休憩",
+  "done": "完了 ✓",
+  "round": "第 {current} / {total} ラウンド",
+  "start": "開始",
+  "pause": "一時停止",
+  "resume": "再開",
+  "stop": "終了",
+  "menuLabel": "ポモドーロ",
+  "settings": {
+    "title": "タイマー設定",
+    "focusDuration": "集中時間（分）",
+    "focusDurationDesc": "各集中セッションの長さ、デフォルト 25",
+    "shortBreakDuration": "小休憩時間（分）",
+    "shortBreakDurationDesc": "集中セッション間の休憩、デフォルト 5",
+    "longBreakDuration": "長休憩時間（分）",
+    "longBreakDurationDesc": "Nラウンド後の延長休憩、デフォルト 15",
+    "roundsBeforeLongBreak": "長休憩までのラウンド数",
+    "roundsBeforeLongBreakDesc": "長休憩前の集中ラウンド数、デフォルト 4",
+    "hint": "変更はすぐに反映され、実行中のタイマーには影響しません。"
   }
+}
 }

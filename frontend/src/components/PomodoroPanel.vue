@@ -22,7 +22,7 @@
         <!-- Right side: info + buttons -->
         <div class="timer-info">
           <div class="round-info">
-            <span class="round-text">第 {{ round }} / {{ totalRounds }} 轮</span>
+            <span class="round-text">{{ $t('pomodoro.round', { current: round, total: totalRounds }) }}</span>
             <div class="round-dots">
               <span
                 v-for="i in totalRounds"
@@ -38,22 +38,22 @@
               v-if="state === 'idle'"
               class="pomo-btn start"
               @click="onStart"
-            >开始</button>
+            >{{ $t('pomodoro.start') }}</button>
             <button
               v-if="state === 'running'"
               class="pomo-btn pause"
               @click="onPause"
-            >暂停</button>
+            >{{ $t('pomodoro.pause') }}</button>
             <button
               v-if="state === 'paused'"
               class="pomo-btn resume"
               @click="onResume"
-            >继续</button>
+            >{{ $t('pomodoro.resume') }}</button>
             <button
               v-if="state !== 'idle'"
               class="pomo-btn stop"
               @click="onStop"
-            >结束</button>
+            >{{ $t('pomodoro.stop') }}</button>
           </div>
         </div>
       </div>
@@ -63,6 +63,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import {
   StartPomodoro,
@@ -78,6 +79,7 @@ const props = defineProps({
   petSize: { type: Number, default: 160 },
 })
 
+const { t } = useI18n()
 const emit = defineEmits(['close'])
 
 const visible = ref(false)
@@ -103,10 +105,10 @@ const formattedTime = computed(() => {
 
 const phaseLabel = computed(() => {
   switch (phase.value) {
-    case 'focus': return '专注中'
-    case 'short_break': return '短休息'
-    case 'long_break': return '长休息'
-    case 'done': return '完成 ✓'
+    case 'focus': return t('pomodoro.focus')
+    case 'short_break': return t('pomodoro.shortBreak')
+    case 'long_break': return t('pomodoro.longBreak')
+    case 'done': return t('pomodoro.done')
     default: return ''
   }
 })
