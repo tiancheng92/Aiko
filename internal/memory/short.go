@@ -22,6 +22,7 @@ type Message struct {
 	ThinkingContent string   // LLM reasoning/thinking process, empty for most messages
 	Images          []string // data URLs, empty for most messages
 	Files           []string // attached file names (no content), empty for most messages
+	MigratedToLong  bool     // already persisted to long-term vector memory
 	CreatedAt       string
 }
 
@@ -31,11 +32,11 @@ type ShortStore struct{ db *sql.DB }
 // NewShortStore creates a ShortStore.
 func NewShortStore(db *sql.DB) *ShortStore { return &ShortStore{db: db} }
 
-// scanMessage scans a row that selects id, role, content, thinking_content, images, files, created_at.
+// scanMessage scans a row that selects id, role, content, thinking_content, images, files, migrated_to_long, created_at.
 func scanMessage(scan func(...any) error) (Message, error) {
 	var m Message
 	var imagesJSON, filesJSON string
-	if err := scan(&m.ID, &m.Role, &m.Content, &m.ThinkingContent, &imagesJSON, &filesJSON, &m.CreatedAt); err != nil {
+	if err := scan(&m.ID, &m.Role, &m.Content, &m.ThinkingContent, &imagesJSON, &filesJSON, &m.MigratedToLong, &m.CreatedAt); err != nil {
 		return m, err
 	}
 	if imagesJSON != "" {
@@ -54,7 +55,7 @@ func scanMessage(scan func(...any) error) (Message, error) {
 // Recent returns the most recent n messages in chronological order.
 func (s *ShortStore) Recent(n int) ([]Message, error) {
 	rows, err := s.db.Query(`
-		SELECT id, role, content, thinking_content, images, files, created_at
+		SELECT id, role, content, thinking_content, images, files, migrated_to_long, created_at
 		FROM messages
 		ORDER BY id DESC
 		LIMIT ?`, n)
@@ -128,7 +129,7 @@ func (s *ShortStore) AddWithImagesAndFiles(role, content string, images []string
 // BeforeID returns up to n messages with id < beforeID in chronological order.
 func (s *ShortStore) BeforeID(beforeID int64, n int) ([]Message, error) {
 	rows, err := s.db.Query(`
-		SELECT id, role, content, thinking_content, images, files, created_at
+		SELECT id, role, content, thinking_content, images, files, migrated_to_long, created_at
 		FROM messages
 		WHERE id < ?
 		ORDER BY id DESC
@@ -162,11 +163,46 @@ func (s *ShortStore) Count() (int, error) {
 	return n, err
 }
 
+// CountUnmigrated returns the number of messages not yet migrated to long-term memory.
+func (s *ShortStore) CountUnmigrated() (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM messages WHERE migrated_to_long = 0`).Scan(&n)
+	return n, err
+}
+
 // OldestN returns the oldest n messages in chronological order.
 func (s *ShortStore) OldestN(n int) ([]Message, error) {
 	rows, err := s.db.Query(`
-		SELECT id, role, content, thinking_content, images, files, created_at
+		SELECT id, role, content, thinking_content, images, files, migrated_to_long, created_at
 		FROM messages
+		ORDER BY id ASC
+		LIMIT ?`, n)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var msgs []Message
+	for rows.Next() {
+		m, err := scanMessage(rows.Scan)
+		if err != nil {
+			return nil, err
+		}
+		msgs = append(msgs, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return msgs, nil
+}
+
+// OldestUnmigratedN returns the oldest n messages that haven't been migrated to
+// long-term memory, in chronological order.
+func (s *ShortStore) OldestUnmigratedN(n int) ([]Message, error) {
+	rows, err := s.db.Query(`
+		SELECT id, role, content, thinking_content, images, files, migrated_to_long, created_at
+		FROM messages
+		WHERE migrated_to_long = 0
 		ORDER BY id ASC
 		LIMIT ?`, n)
 	if err != nil {
@@ -194,14 +230,39 @@ func (s *ShortStore) DeleteAll() error {
 	return err
 }
 
-// RecentMessages returns the most recent n messages as schema.Message objects,
-// suitable for passing directly to runner.Run as multi-turn history.
-// Images and file attachments are omitted — the LLM has already processed them.
+// RecentMessages returns the most recent n unmigrated messages as schema.Message
+// objects, suitable for passing directly to runner.Run as multi-turn history.
+// Messages already persisted to long-term memory are excluded — the LLM receives
+// those via SearchSplit instead. Images and file attachments are omitted — the
+// LLM has already processed them.
 func (s *ShortStore) RecentMessages(n int) ([]*schema.Message, error) {
-	msgs, err := s.Recent(n)
+	rows, err := s.db.Query(`
+		SELECT id, role, content, thinking_content, images, files, migrated_to_long, created_at
+		FROM messages
+		WHERE migrated_to_long = 0
+		ORDER BY id DESC
+		LIMIT ?`, n)
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
+
+	var msgs []Message
+	for rows.Next() {
+		m, err := scanMessage(rows.Scan)
+		if err != nil {
+			return nil, err
+		}
+		msgs = append(msgs, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// reverse to chronological order
+	for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
+		msgs[i], msgs[j] = msgs[j], msgs[i]
+	}
+
 	out := make([]*schema.Message, 0, len(msgs))
 	for i := range msgs {
 		if msgs[i].Content == "" {
@@ -235,19 +296,38 @@ func (s *ShortStore) DeleteByIDs(ids []int64) error {
 	return nil
 }
 
+// MarkMigrated marks messages with the given IDs as migrated to long-term memory.
+func (s *ShortStore) MarkMigrated(ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := strings.Repeat("?,", len(ids))
+	placeholders = placeholders[:len(placeholders)-1]
+	query := "UPDATE messages SET migrated_to_long = 1 WHERE id IN (" + placeholders + ")"
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	_, err := s.db.Exec(query, args...)
+	if err != nil {
+		return fmt.Errorf("mark migrated: %w", err)
+	}
+	return nil
+}
+
 // DeleteLastAssistantMessage removes the most recent assistant message from
 // the store and returns it so the caller can re-use its preceding user message.
 // Returns sql.ErrNoRows if no assistant message exists.
 func (s *ShortStore) DeleteLastAssistantMessage() (Message, error) {
 	var m Message
 	err := s.db.QueryRow(`
-		SELECT id, role, content, thinking_content, images, files, created_at
+		SELECT id, role, content, thinking_content, images, files, migrated_to_long, created_at
 		FROM messages
 		WHERE role = 'assistant'
 		ORDER BY id DESC
 		LIMIT 1`).Scan(
 		&m.ID, &m.Role, &m.Content, &m.ThinkingContent,
-		new(string), new(string), &m.CreatedAt,
+		new(string), new(string), &m.MigratedToLong, &m.CreatedAt,
 	)
 	if err != nil {
 		return m, err
@@ -260,7 +340,7 @@ func (s *ShortStore) DeleteLastAssistantMessage() (Message, error) {
 // Returns sql.ErrNoRows if none exists.
 func (s *ShortStore) LastUserMessage() (Message, error) {
 	rows, err := s.db.Query(`
-		SELECT id, role, content, thinking_content, images, files, created_at
+		SELECT id, role, content, thinking_content, images, files, migrated_to_long, created_at
 		FROM messages
 		WHERE role = 'user'
 		ORDER BY id DESC

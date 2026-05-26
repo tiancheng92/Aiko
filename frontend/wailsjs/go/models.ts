@@ -325,6 +325,7 @@ export namespace memory {
 	    ThinkingContent: string;
 	    Images: string[];
 	    Files: string[];
+	    MigratedToLong: boolean;
 	    CreatedAt: string;
 	
 	    static createFrom(source: any = {}) {
@@ -339,6 +340,7 @@ export namespace memory {
 	        this.ThinkingContent = source["ThinkingContent"];
 	        this.Images = source["Images"];
 	        this.Files = source["Files"];
+	        this.MigratedToLong = source["MigratedToLong"];
 	        this.CreatedAt = source["CreatedAt"];
 	    }
 	}

@@ -23,8 +23,10 @@ func newTestShortStore(t *testing.T) *memory.ShortStore {
 		thinking_content TEXT NOT NULL DEFAULT '',
 		images TEXT NOT NULL DEFAULT '',
 		files TEXT NOT NULL DEFAULT '',
+		migrated_to_long INTEGER NOT NULL DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	)`)
+
 	if err != nil {
 		t.Fatal(err)
 	}

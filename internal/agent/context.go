@@ -221,9 +221,9 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userIma
 		limit = 30
 	}
 
-	count, err := a.shortMem.Count()
+	count, err := a.shortMem.CountUnmigrated()
 	if err != nil {
-		log.Error().Err(err).Msg("count messages failed")
+		log.Error().Err(err).Msg("count unmigrated messages failed")
 		return
 	}
 
@@ -232,9 +232,9 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userIma
 		return
 	}
 
-	oldest, err := a.shortMem.OldestN(excess)
+	oldest, err := a.shortMem.OldestUnmigratedN(excess)
 	if err != nil {
-		log.Error().Err(err).Msg("get oldest messages failed")
+		log.Error().Err(err).Msg("get oldest unmigrated messages failed")
 		return
 	}
 	if len(oldest) == 0 {
@@ -246,16 +246,16 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userIma
 		block := memory.FormatBlock(oldest)
 		if err := a.longMem.Store(ctx, block); err != nil {
 			log.Error().Err(err).Msg("store long-term memory failed")
-			// Don't return — still delete from short-term.
+			// Don't return — still mark as migrated.
 		}
 	}
 
-	// Delete the migrated messages from short-term store.
+	// Mark messages as migrated instead of deleting them.
 	ids := make([]int64, len(oldest))
 	for i, m := range oldest {
 		ids[i] = m.ID
 	}
-	if err := a.shortMem.DeleteByIDs(ids); err != nil {
-		log.Error().Err(err).Msg("delete migrated messages failed")
+	if err := a.shortMem.MarkMigrated(ids); err != nil {
+		log.Error().Err(err).Msg("mark migrated messages failed")
 	}
 }
