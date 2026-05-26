@@ -9,7 +9,6 @@
         v-if="visible"
         class="pomodoro-panel"
         :style="panelStyle"
-        @mousedown.stop
       >
         <!-- Circular progress ring -->
         <div class="timer-ring" :style="ringStyle">
@@ -29,6 +28,7 @@
                 :key="i"
                 class="dot"
                 :class="{ done: i < round, current: i === round && state === 'running' }"
+                :style="i === round && state === 'running' ? { background: phaseColor, boxShadow: `0 0 6px ${phaseColor}` } : {}"
               />
             </div>
           </div>
@@ -36,22 +36,26 @@
           <div class="timer-actions">
             <button
               v-if="state === 'idle'"
-              class="pomo-btn start"
+              type="button"
+              class="pomo-btn primary start-btn"
               @click="onStart"
             >{{ $t('pomodoro.start') }}</button>
             <button
               v-if="state === 'running'"
-              class="pomo-btn pause"
+              type="button"
+              class="pomo-btn primary pause-btn"
               @click="onPause"
             >{{ $t('pomodoro.pause') }}</button>
             <button
               v-if="state === 'paused'"
-              class="pomo-btn resume"
+              type="button"
+              class="pomo-btn primary resume-btn"
               @click="onResume"
             >{{ $t('pomodoro.resume') }}</button>
             <button
               v-if="state !== 'idle'"
-              class="pomo-btn stop"
+              type="button"
+              class="pomo-btn secondary"
               @click="onStop"
             >{{ $t('pomodoro.stop') }}</button>
           </div>
@@ -115,10 +119,10 @@ const phaseLabel = computed(() => {
 
 const phaseColor = computed(() => {
   switch (phase.value) {
-    case 'focus': return '#ff6b6b'
-    case 'short_break': return '#51cf66'
-    case 'long_break': return '#339af0'
-    default: return '#ff6b6b'
+    case 'focus': return '#EF4444'
+    case 'short_break': return '#10B981'
+    case 'long_break': return '#60A5FA'
+    default: return '#EF4444'
   }
 })
 
@@ -128,11 +132,12 @@ const progress = computed(() => {
 })
 
 const ringStyle = computed(() => ({
-  background: `conic-gradient(${phaseColor.value} ${progress.value * 360}deg, #333 ${progress.value * 360}deg)`,
+  background: `conic-gradient(${phaseColor.value} ${progress.value * 360}deg, rgba(255,255,255,0.06) ${progress.value * 360}deg)`,
+  boxShadow: `0 0 16px ${phaseColor.value}33, inset 0 0 16px ${phaseColor.value}1a`,
 }))
 
-const panelWidth = 230 // approximate panel width in px
-const panelHeight = 140 // approximate panel height in px
+const panelWidth = 230
+const panelHeight = 140
 
 const panelStyle = computed(() => {
   const x = props.petPos.x + props.petSize / 2
@@ -150,26 +155,23 @@ const panelStyle = computed(() => {
 // ── methods ──
 
 async function onStart() {
-  await StartPomodoro()
+  try { await StartPomodoro() } catch (e) { console.error('pomodoro start failed:', e) }
 }
 
 async function onPause() {
-  await PausePomodoro()
+  try { await PausePomodoro() } catch (e) { console.error('pomodoro pause failed:', e) }
 }
 
 async function onResume() {
-  await ResumePomodoro()
+  try { await ResumePomodoro() } catch (e) { console.error('pomodoro resume failed:', e) }
 }
 
 async function onStop() {
-  await StopPomodoro()
+  try { await StopPomodoro() } catch (e) { console.error('pomodoro stop failed:', e) }
   visible.value = false
   emit('close')
 }
 
-/**
- * Show the panel and fetch current status from the backend.
- */
 function show() {
   visible.value = true
   GetPomodoroStatus().then((st) => {
@@ -193,7 +195,14 @@ function phaseDuration(p, cfg) {
 
 // ── animation ──
 
+const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
 function onEnter(el, done) {
+  if (prefersReduced) {
+    el.style.opacity = '1'
+    done()
+    return
+  }
   cancelAnim = springAnimate({
     from: 0,
     to: 1,
@@ -205,6 +214,11 @@ function onEnter(el, done) {
 }
 
 function onLeave(el, done) {
+  if (prefersReduced) {
+    el.style.opacity = '0'
+    done()
+    return
+  }
   cancelAnim = springAnimate({
     from: 1,
     to: 0,
@@ -252,14 +266,16 @@ defineExpose({ show })
   align-items: center;
   gap: 20px;
   padding: 18px 22px;
-  background: rgba(26, 26, 46, 0.88);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   user-select: none;
 }
+
+/* ── Ring ── */
 
 .timer-ring {
   width: 100px;
@@ -269,13 +285,14 @@ defineExpose({ show })
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: background 0.3s ease, box-shadow 0.3s ease;
 }
 
 .timer-inner {
-  width: 86px;
-  height: 86px;
+  width: 84px;
+  height: 84px;
   border-radius: 50%;
-  background: #1a1a2e;
+  background: #0F172A;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -283,17 +300,22 @@ defineExpose({ show })
 }
 
 .timer-time {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
   color: #fff;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
   line-height: 1;
 }
 
 .timer-label {
-  font-size: 10px;
-  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-top: 3px;
+  letter-spacing: 0.02em;
 }
+
+/* ── Info ── */
 
 .timer-info {
   display: flex;
@@ -304,34 +326,32 @@ defineExpose({ show })
 .round-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .round-text {
   font-size: 12px;
-  color: #aaa;
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .round-dots {
   display: flex;
-  gap: 4px;
+  gap: 5px;
 }
 
 .dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: #444;
+  background: rgba(255, 255, 255, 0.1);
+  transition: background 0.3s ease, box-shadow 0.3s ease;
 }
 
 .dot.done {
-  background: var(--phase-color, #ff6b6b);
+  background: rgba(255, 255, 255, 0.25);
 }
 
-.dot.current {
-  background: var(--phase-color, #ff6b6b);
-  box-shadow: 0 0 6px var(--phase-color, #ff6b6b);
-}
+/* ── Buttons ── */
 
 .timer-actions {
   display: flex;
@@ -340,34 +360,62 @@ defineExpose({ show })
 }
 
 .pomo-btn {
-  width: 72px;
-  padding: 6px 12px;
+  width: 84px;
+  padding: 7px 14px;
   border: none;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 500;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  color: #fff;
-  transition: opacity 0.15s;
+  letter-spacing: 0.01em;
+  transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
 .pomo-btn:hover {
-  opacity: 0.85;
+  opacity: 0.88;
 }
 
-.pomo-btn.start {
-  background: #ff6b6b;
+.pomo-btn:active {
+  transform: scale(0.96);
 }
 
-.pomo-btn.pause {
-  background: rgba(255, 255, 255, 0.12);
+.pomo-btn.primary {
+  color: #fff;
 }
 
-.pomo-btn.resume {
-  background: #51cf66;
-}
-
-.pomo-btn.stop {
+.pomo-btn.secondary {
   background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.pomo-btn.secondary:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.pomo-btn.start-btn {
+  background: #EF4444;
+}
+
+.pomo-btn.pause-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.pomo-btn.resume-btn {
+  background: #10B981;
+}
+
+/* ── Reduced motion ── */
+
+@media (prefers-reduced-motion: reduce) {
+  .timer-ring,
+  .dot {
+    transition: none;
+  }
+
+  .pomo-btn {
+    transition: none;
+  }
 }
 </style>

@@ -11,7 +11,8 @@
       "automation": "自动化",
       "lark": "飞书",
       "sms": "短信",
-      "about": "关于"
+      "about": "关于",
+      "pomodoro": "番茄钟"
     },
     "language": {
       "label": "语言",
@@ -575,7 +576,8 @@
     "pause": "暂停",
     "resume": "继续",
     "stop": "结束",
-    "menuLabel": "番茄钟",
+    "menuLabelShow": "显示番茄钟",
+    "menuLabelHide": "隐藏番茄钟",
     "settings": {
       "title": "计时设置",
       "focusDuration": "专注时长（分钟）",

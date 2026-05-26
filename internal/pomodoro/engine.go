@@ -5,9 +5,13 @@
 // transitions. It uses wall-clock time (endTime) rather than a monotonic
 // ticker, so system sleep is handled correctly: on wake the remaining time
 // is recalculated and overdue phases auto-advance.
+//
+// Callbacks are always invoked without holding the internal mutex, so they
+// may safely call exported methods like Status() without deadlocking.
 package pomodoro
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -68,12 +72,13 @@ type StatusPayload struct {
 
 // Engine drives the Pomodoro countdown lifecycle.
 type Engine struct {
-	mu           sync.Mutex
-	cfg          Config
-	state        State
-	phase        Phase
-	currentRound int
-	endTime      time.Time // wall-clock time when current phase ends
+	mu              sync.Mutex
+	cfg             Config
+	state           State
+	phase           Phase
+	currentRound    int
+	endTime         time.Time // wall-clock time when current phase ends
+	phaseStartedAt  time.Time // wall-clock time when current phase was started
 
 	ticker *time.Ticker
 	done   chan struct{}
@@ -96,44 +101,54 @@ func New(cfg Config) *Engine {
 // Start begins or resumes countdown from the current phase.
 func (e *Engine) Start() {
 	e.mu.Lock()
-	defer e.mu.Unlock()
 
 	switch e.state {
 	case StateRunning:
+		e.mu.Unlock()
 		return
 	case StatePaused:
 		remaining := time.Until(e.endTime)
 		if remaining <= 0 {
 			remaining = 0
 		}
+		// Compute elapsed so phaseStartedAt accounts for pause gap.
+		elapsed := e.phaseDuration() - remaining
+		if elapsed < 0 {
+			elapsed = 0
+		}
+		e.phaseStartedAt = time.Now().Add(-elapsed)
 		e.endTime = time.Now().Add(remaining)
 	default:
 		e.phase = PhaseFocus
 		e.currentRound = 1
-		e.endTime = time.Now().Add(time.Duration(e.cfg.FocusDuration) * time.Minute)
+		e.phaseStartedAt = time.Now()
+		e.endTime = e.phaseStartedAt.Add(time.Duration(e.cfg.FocusDuration) * time.Minute)
 	}
 
 	e.state = StateRunning
 	e.startTicker()
+	onStateChange := e.OnStateChange
+	e.mu.Unlock()
 
-	if e.OnStateChange != nil {
-		e.OnStateChange(StatePayload{State: string(StateRunning)})
+	if onStateChange != nil {
+		onStateChange(StatePayload{State: string(StateRunning)})
 	}
 }
 
 // Pause suspends the countdown without resetting.
 func (e *Engine) Pause() {
 	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	if e.state != StateRunning {
+		e.mu.Unlock()
 		return
 	}
 	e.state = StatePaused
 	e.stopTicker()
+	onStateChange := e.OnStateChange
+	e.mu.Unlock()
 
-	if e.OnStateChange != nil {
-		e.OnStateChange(StatePayload{State: string(StatePaused)})
+	if onStateChange != nil {
+		onStateChange(StatePayload{State: string(StatePaused)})
 	}
 }
 
@@ -145,15 +160,52 @@ func (e *Engine) Resume() {
 // Stop ends the current session and resets to idle.
 func (e *Engine) Stop() {
 	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	e.stopTicker()
 	e.state = StateIdle
 	e.phase = PhaseFocus
 	e.currentRound = 1
+	onStateChange := e.OnStateChange
+	e.mu.Unlock()
 
-	if e.OnStateChange != nil {
-		e.OnStateChange(StatePayload{State: string(StateIdle)})
+	if onStateChange != nil {
+		onStateChange(StatePayload{State: string(StateIdle)})
+	}
+}
+
+// phaseDuration returns the configured duration for the current phase in nanoseconds.
+func (e *Engine) phaseDuration() time.Duration {
+	switch e.phase {
+	case PhaseFocus:
+		return time.Duration(e.cfg.FocusDuration) * time.Minute
+	case PhaseShortBreak:
+		return time.Duration(e.cfg.ShortBreakDuration) * time.Minute
+	case PhaseLongBreak:
+		return time.Duration(e.cfg.LongBreakDuration) * time.Minute
+	default:
+		return 25 * time.Minute
+	}
+}
+
+// UpdateConfig applies new config settings. If the timer is running or paused,
+// the current phase end time is recalculated so the new duration takes effect
+// immediately for the current phase. Elapsed time is preserved.
+func (e *Engine) UpdateConfig(cfg Config) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.state == StateRunning || e.state == StatePaused {
+		elapsed := e.phaseDuration() - time.Until(e.endTime)
+		if elapsed < 0 {
+			elapsed = 0
+		}
+		e.cfg = cfg
+		newDur := e.phaseDuration()
+		e.endTime = time.Now().Add(newDur - elapsed)
+		if time.Until(e.endTime) < 0 {
+			e.endTime = time.Now() // phase expired, next tick will advance
+		}
+	} else {
+		e.cfg = cfg
 	}
 }
 
@@ -181,8 +233,6 @@ func (e *Engine) Status() StatusPayload {
 func (e *Engine) startTicker() {
 	e.done = make(chan struct{})
 	e.ticker = time.NewTicker(time.Second)
-	// Capture channel references locally so the goroutine is safe even if
-	// stopTicker nils e.ticker before the goroutine notices the closed done.
 	tickerC := e.ticker.C
 	done := e.done
 
@@ -200,7 +250,6 @@ func (e *Engine) startTicker() {
 
 // stopTicker stops the tick loop. Must be called under mu.
 func (e *Engine) stopTicker() {
-	// Close done first to signal the goroutine to exit before we nil the ticker.
 	if e.done != nil {
 		close(e.done)
 		e.done = nil
@@ -212,11 +261,11 @@ func (e *Engine) stopTicker() {
 }
 
 // tick handles one tick: emit tick event, check for phase expiry.
+// Callbacks are invoked without holding mu to avoid reentrant deadlocks.
 func (e *Engine) tick() {
 	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	if e.state != StateRunning {
+		e.mu.Unlock()
 		return
 	}
 
@@ -225,46 +274,63 @@ func (e *Engine) tick() {
 		remaining = 0
 	}
 
-	if e.OnTick != nil {
-		e.OnTick(TickPayload{
+	onTick := e.OnTick
+	phase := e.phase
+	round := e.currentRound
+	needAdvance := remaining <= 0
+	e.mu.Unlock()
+
+	if onTick != nil {
+		onTick(TickPayload{
 			Remaining: remaining,
-			Phase:     string(e.phase),
-			Round:     e.currentRound,
+			Phase:     string(phase),
+			Round:     round,
 		})
 	}
 
-	if remaining <= 0 {
+	if needAdvance {
 		e.advancePhase()
 	}
 }
 
-// advancePhase transitions to the next phase. Must be called under mu.
+// advancePhase transitions to the next phase. Callbacks are invoked without
+// holding mu so they can safely call exported methods.
 func (e *Engine) advancePhase() {
+	e.mu.Lock()
+
+	var onPhaseChange func(PhasePayload)
+	var onStateChange func(StatePayload)
+
 	switch e.phase {
 	case PhaseFocus:
 		if e.currentRound >= e.cfg.RoundsBeforeLongBreak {
 			e.phase = PhaseLongBreak
-			e.endTime = time.Now().Add(time.Duration(e.cfg.LongBreakDuration) * time.Minute)
+			e.phaseStartedAt = time.Now()
+			e.endTime = e.phaseStartedAt.Add(time.Duration(e.cfg.LongBreakDuration) * time.Minute)
 		} else {
 			e.phase = PhaseShortBreak
-			e.endTime = time.Now().Add(time.Duration(e.cfg.ShortBreakDuration) * time.Minute)
+			e.phaseStartedAt = time.Now()
+			e.endTime = e.phaseStartedAt.Add(time.Duration(e.cfg.ShortBreakDuration) * time.Minute)
 		}
-		if e.OnPhaseChange != nil {
-			e.OnPhaseChange(PhasePayload{
-				Phase:   string(e.phase),
-				Message: phaseMessage(e.phase, e.currentRound, e.cfg.RoundsBeforeLongBreak),
-			})
+		onPhaseChange = e.OnPhaseChange
+		msg := phaseMessage(e.phase, e.currentRound, e.cfg)
+		e.mu.Unlock()
+
+		if onPhaseChange != nil {
+			onPhaseChange(PhasePayload{Phase: string(e.phase), Message: msg})
 		}
 
 	case PhaseShortBreak:
 		e.currentRound++
 		e.phase = PhaseFocus
-		e.endTime = time.Now().Add(time.Duration(e.cfg.FocusDuration) * time.Minute)
-		if e.OnPhaseChange != nil {
-			e.OnPhaseChange(PhasePayload{
-				Phase:   string(e.phase),
-				Message: phaseMessage(e.phase, e.currentRound, e.cfg.RoundsBeforeLongBreak),
-			})
+		e.phaseStartedAt = time.Now()
+			e.endTime = e.phaseStartedAt.Add(time.Duration(e.cfg.FocusDuration) * time.Minute)
+		onPhaseChange = e.OnPhaseChange
+		msg := phaseMessage(e.phase, e.currentRound, e.cfg)
+		e.mu.Unlock()
+
+		if onPhaseChange != nil {
+			onPhaseChange(PhasePayload{Phase: string(e.phase), Message: msg})
 		}
 
 	case PhaseLongBreak:
@@ -272,28 +338,29 @@ func (e *Engine) advancePhase() {
 		e.state = StateIdle
 		e.phase = PhaseFocus
 		e.currentRound = 1
-		if e.OnPhaseChange != nil {
-			e.OnPhaseChange(PhasePayload{
-				Phase:   "done",
-				Message: "全部完成！今天效率很高！",
-			})
+		onPhaseChange = e.OnPhaseChange
+		onStateChange = e.OnStateChange
+		e.mu.Unlock()
+
+		if onPhaseChange != nil {
+			onPhaseChange(PhasePayload{Phase: "done", Message: "全部完成！今天效率很高！"})
 		}
-		if e.OnStateChange != nil {
-			e.OnStateChange(StatePayload{State: string(StateIdle)})
+		if onStateChange != nil {
+			onStateChange(StatePayload{State: string(StateIdle)})
 		}
 	}
 }
 
 // phaseMessage returns the pet speech text for a phase transition.
-func phaseMessage(p Phase, round, total int) string {
+func phaseMessage(p Phase, round int, cfg Config) string {
 	switch p {
 	case PhaseShortBreak:
-		return "休息一下！5 分钟后继续。"
+		return fmt.Sprintf("休息一下！%d 分钟后继续。", cfg.ShortBreakDuration)
 	case PhaseLongBreak:
-		return "已经完成多轮了，好好休息 15 分钟吧！"
+		return fmt.Sprintf("已经完成多轮了，好好休息 %d 分钟吧！", cfg.LongBreakDuration)
 	case PhaseFocus:
 		if round == 1 {
-			return "开始专注！25 分钟后休息~"
+			return fmt.Sprintf("开始专注！%d 分钟后休息~", cfg.FocusDuration)
 		}
 		return "继续加油！"
 	default:

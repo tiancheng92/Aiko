@@ -67,6 +67,7 @@ type App struct {
 	isChatVisible        bool               // tracks whether the chat panel is open; guarded by mu
 	proactiveEngine      *proactive.ProactiveEngine
 	pomodoroEngine       *pomodoro.Engine
+	shuttingDown         atomic.Bool                // set true at shutdown start; guards pomodoro callbacks
 	mcpClosers           []io.Closer                // guarded by mu; closed and rebuilt on initLLMComponents
 	llmTransport         *llm.ErrorBodyTransport    // captures raw error bodies from the active LLM HTTP client; guarded by mu
 	chatModel            model.ToolCallingChatModel // current chat model; guarded by mu; reused by rebuildAgentTools
@@ -180,10 +181,10 @@ func (a *App) startup(ctx context.Context) {
 
 	// Initialize pomodoro engine (independent of LLM).
 	pomoCfg := pomodoro.Config{
-		FocusDuration:          a.cfg.PomodoroFocusDuration,
-		ShortBreakDuration:     a.cfg.PomodoroShortBreakDuration,
-		LongBreakDuration:      a.cfg.PomodoroLongBreakDuration,
-		RoundsBeforeLongBreak:  a.cfg.PomodoroRoundsBeforeLongBreak,
+		FocusDuration:         a.cfg.PomodoroFocusDuration,
+		ShortBreakDuration:    a.cfg.PomodoroShortBreakDuration,
+		LongBreakDuration:     a.cfg.PomodoroLongBreakDuration,
+		RoundsBeforeLongBreak: a.cfg.PomodoroRoundsBeforeLongBreak,
 	}
 	a.mu.Lock()
 	a.pomodoroEngine = pomodoro.New(pomoCfg)
@@ -191,9 +192,15 @@ func (a *App) startup(ctx context.Context) {
 	a.mu.Unlock()
 
 	engine.OnTick = func(p pomodoro.TickPayload) {
+		if a.shuttingDown.Load() {
+			return
+		}
 		a.EmitEvent("pomodoro:tick", p)
 	}
 	engine.OnPhaseChange = func(p pomodoro.PhasePayload) {
+		if a.shuttingDown.Load() {
+			return
+		}
 		a.EmitEvent("pomodoro:phase:changed", p)
 		a.EmitEvent("notification:show", map[string]any{
 			"title":   "番茄钟",
@@ -201,6 +208,9 @@ func (a *App) startup(ctx context.Context) {
 		})
 	}
 	engine.OnStateChange = func(p pomodoro.StatePayload) {
+		if a.shuttingDown.Load() {
+			return
+		}
 		a.EmitEvent("pomodoro:state:changed", p)
 		switch {
 		case p.State == "running" && engine.Status().Phase == "focus":
@@ -618,6 +628,8 @@ func (a *App) domReady(_ context.Context) {
 }
 
 func (a *App) shutdown(_ context.Context) {
+	a.shuttingDown.Store(true)
+
 	// Cancel all in-flight requests first — a.ctx is context.Background() and is
 	// never cancelled by Wails itself, so the LLM/TTS goroutines would otherwise
 	// keep blocking on their HTTP streams until the server closes the connection,
@@ -657,10 +669,11 @@ func (a *App) shutdown(_ context.Context) {
 		sched.Stop()
 	}
 	a.mu.RLock()
-	if a.pomodoroEngine != nil {
-		a.pomodoroEngine.Stop()
-	}
+	engine := a.pomodoroEngine
 	a.mu.RUnlock()
+	if engine != nil {
+		engine.Stop()
+	}
 	// Close MCP client connections accumulated across initLLMComponents calls.
 	for _, c := range closers {
 		if err := c.Close(); err != nil {

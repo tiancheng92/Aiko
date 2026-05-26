@@ -11,7 +11,8 @@
       "automation": "自動化",
       "lark": "Lark",
       "sms": "SMS",
-      "about": "について"
+      "about": "について",
+      "pomodoro": "ポモドーロ"
     },
     "language": {
       "label": "言語",
@@ -575,7 +576,8 @@
     "pause": "一時停止",
     "resume": "再開",
     "stop": "終了",
-    "menuLabel": "ポモドーロ",
+    "menuLabelShow": "ポモドーロを表示",
+    "menuLabelHide": "ポモドーロを非表示",
     "settings": {
       "title": "タイマー設定",
       "focusDuration": "集中時間（分）",

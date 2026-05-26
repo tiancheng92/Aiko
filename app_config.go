@@ -14,6 +14,7 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"aiko/internal/config"
+	"aiko/internal/pomodoro"
 	"aiko/internal/tts"
 )
 
@@ -67,7 +68,18 @@ func (a *App) SaveConfig(cfg *config.Config) error {
 
 	a.mu.Lock()
 	*a.cfg = *cfg // update in-place so existing tool pointers see the new values
+	engine := a.pomodoroEngine
 	a.mu.Unlock()
+
+	// Propagate pomodoro config changes to the running engine immediately.
+	if engine != nil {
+		engine.UpdateConfig(pomodoro.Config{
+			FocusDuration:         cfg.PomodoroFocusDuration,
+			ShortBreakDuration:    cfg.PomodoroShortBreakDuration,
+			LongBreakDuration:     cfg.PomodoroLongBreakDuration,
+			RoundsBeforeLongBreak: cfg.PomodoroRoundsBeforeLongBreak,
+		})
+	}
 
 	go func() {
 		if err := a.initLLMComponents(a.ctx); err != nil {

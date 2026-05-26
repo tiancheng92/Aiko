@@ -11,7 +11,8 @@
       "automation": "자동화",
       "lark": "Lark",
       "sms": "SMS",
-      "about": "정보"
+      "about": "정보",
+      "pomodoro": "뽀모도로"
     },
     "language": {
       "label": "언어",
@@ -575,7 +576,8 @@
     "pause": "일시정지",
     "resume": "계속",
     "stop": "종료",
-    "menuLabel": "뽀모도로",
+    "menuLabelShow": "뽀모도로 표시",
+    "menuLabelHide": "뽀모도로 숨기기",
     "settings": {
       "title": "타이머 설정",
       "focusDuration": "집중 시간 (분)",

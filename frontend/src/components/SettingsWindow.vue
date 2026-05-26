@@ -2244,7 +2244,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 type="number"
                 min="1"
                 max="120"
-                class="field-input number"
+                style="width:72px;text-align:center"
               />
             </div>
 
@@ -2258,7 +2258,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 type="number"
                 min="1"
                 max="30"
-                class="field-input number"
+                style="width:72px;text-align:center"
               />
             </div>
 
@@ -2272,7 +2272,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 type="number"
                 min="1"
                 max="60"
-                class="field-input number"
+                style="width:72px;text-align:center"
               />
             </div>
 
@@ -2286,7 +2286,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 type="number"
                 min="1"
                 max="10"
-                class="field-input number"
+                style="width:72px;text-align:center"
               />
             </div>
           </div>

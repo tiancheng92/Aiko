@@ -11,7 +11,8 @@
       "automation": "Automation",
       "lark": "Lark",
       "sms": "SMS",
-      "about": "About"
+      "about": "About",
+      "pomodoro": "Pomodoro"
     },
     "language": {
       "label": "Language",
@@ -575,7 +576,8 @@
     "pause": "Pause",
     "resume": "Resume",
     "stop": "Stop",
-    "menuLabel": "Pomodoro",
+    "menuLabelShow": "Show Pomodoro",
+    "menuLabelHide": "Hide Pomodoro",
     "settings": {
       "title": "Timer Settings",
       "focusDuration": "Focus Duration (min)",

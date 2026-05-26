@@ -68,7 +68,7 @@ const { t } = useI18n()
 const petMenuItems = computed(() => [
   { iconSvg: ICON_FACE,    label: t('petMenu.switchExpression'), action: cycleExpression },
   { iconSvg: ICON_SHIRT,   label: t('petMenu.switchModel'), action: switchToNextModel },
-  { iconSvg: ICON_POMODORO, label: t('pomodoro.menuLabel'), action: () => emit('open-pomodoro'), disabled: props.pomodoroPanelOpen },
+  { iconSvg: ICON_POMODORO, label: props.pomodoroPanelOpen ? t('pomodoro.menuLabelHide') : t('pomodoro.menuLabelShow'), action: () => emit('open-pomodoro') },
   { divider: true },
   { iconSvg: ICON_SETTING, label: t('petMenu.openSettings'), action: () => emit('open-settings') },
   { divider: true },

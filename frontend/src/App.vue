@@ -19,6 +19,7 @@ const settingsOpen = ref(false)
 const pomodoroPanelOpen = ref(false)
 const pomodoroRunning = ref(false)
 const pomodoroPanelRef = ref(null)
+const pomodoroPanelWasOpen = ref(false)
 const ballPos  = ref({ x: -1, y: -1 })
 const ballSize = ref(160)
 const chatBubbleRef = ref(null)
@@ -408,21 +409,38 @@ onUnmounted(() => {
 
 /** toggleBubble flips the chat bubble open/close state. */
 function toggleBubble() {
-  if (!bubbleOpen.value && pomodoroRunning.value) {
-    return
-  }
   bubbleOpen.value = !bubbleOpen.value
   if (bubbleOpen.value) {
+    // Hide pomodoro panel when opening chat.
+    if (pomodoroPanelOpen.value) {
+      pomodoroPanelWasOpen.value = true
+      pomodoroPanelOpen.value = false
+    }
     pendingTokens = ''
     nextTick(() => {
       chatBubbleRef.value?.focusInput()
       chatBubbleRef.value?.scrollToBottom()
     })
+  } else {
+    // Restore pomodoro panel when closing chat.
+    if (pomodoroPanelWasOpen.value) {
+      pomodoroPanelWasOpen.value = false
+      pomodoroPanelOpen.value = true
+      nextTick(() => {
+        pomodoroPanelRef.value?.show()
+      })
+    }
   }
 }
 
+/** openPomodoro toggles the pomodoro panel visibility. */
 function openPomodoro() {
+  if (pomodoroPanelOpen.value) {
+    pomodoroPanelOpen.value = false
+    return
+  }
   pomodoroPanelOpen.value = true
+  pomodoroPanelWasOpen.value = false
   nextTick(() => {
     pomodoroPanelRef.value?.show()
   })
@@ -434,9 +452,6 @@ function closePomodoro() {
 
 function onPomodoroStateChanged(payload) {
   pomodoroRunning.value = payload.state === 'running'
-  if (payload.state === 'running' && bubbleOpen.value) {
-    bubbleOpen.value = false
-  }
 }
 
 /** openSettings opens the settings window. */
