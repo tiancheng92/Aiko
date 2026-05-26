@@ -118,6 +118,10 @@ export function GetPetSize(arg1, arg2) {
   return window['go']['main']['App']['GetPetSize'](arg1, arg2);
 }
 
+export function GetPomodoroStatus() {
+  return window['go']['main']['App']['GetPomodoroStatus']();
+}
+
 export function GetSMSAllMessagesEnabled() {
   return window['go']['main']['App']['GetSMSAllMessagesEnabled']();
 }
@@ -238,6 +242,10 @@ export function OpenFileDialog(arg1, arg2) {
   return window['go']['main']['App']['OpenFileDialog'](arg1, arg2);
 }
 
+export function PausePomodoro() {
+  return window['go']['main']['App']['PausePomodoro']();
+}
+
 export function PingLLM() {
   return window['go']['main']['App']['PingLLM']();
 }
@@ -260,6 +268,10 @@ export function ResetAvatar(arg1) {
 
 export function ResetBallPosition(arg1, arg2) {
   return window['go']['main']['App']['ResetBallPosition'](arg1, arg2);
+}
+
+export function ResumePomodoro() {
+  return window['go']['main']['App']['ResumePomodoro']();
 }
 
 export function RunCronJobNow(arg1) {
@@ -346,12 +358,20 @@ export function SpeakText(arg1) {
   return window['go']['main']['App']['SpeakText'](arg1);
 }
 
+export function StartPomodoro() {
+  return window['go']['main']['App']['StartPomodoro']();
+}
+
 export function StartSMSWatcher() {
   return window['go']['main']['App']['StartSMSWatcher']();
 }
 
 export function StopGeneration() {
   return window['go']['main']['App']['StopGeneration']();
+}
+
+export function StopPomodoro() {
+  return window['go']['main']['App']['StopPomodoro']();
 }
 
 export function StopSMSWatcher() {

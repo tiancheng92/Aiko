@@ -6,6 +6,7 @@ import {main} from '../models';
 import {scheduler} from '../models';
 import {config} from '../models';
 import {memory} from '../models';
+import {pomodoro} from '../models';
 import {tools} from '../models';
 import {proactive} from '../models';
 import {frontend} from '../models';
@@ -68,6 +69,8 @@ export function GetMousePosition():Promise<main.MousePosition>;
 
 export function GetPetSize(arg1:number,arg2:number):Promise<number>;
 
+export function GetPomodoroStatus():Promise<pomodoro.StatusPayload>;
+
 export function GetSMSAllMessagesEnabled():Promise<boolean>;
 
 export function GetScreenList():Promise<Array<main.ScreenInfo>>;
@@ -128,6 +131,8 @@ export function OpenDirectoryDialog(arg1:string):Promise<string>;
 
 export function OpenFileDialog(arg1:string,arg2:Array<frontend.FileFilter>):Promise<string>;
 
+export function PausePomodoro():Promise<void>;
+
 export function PingLLM():Promise<number>;
 
 export function ReadClipboard():Promise<string>;
@@ -139,6 +144,8 @@ export function ReleaseKeyWindow():Promise<void>;
 export function ResetAvatar(arg1:string):Promise<void>;
 
 export function ResetBallPosition(arg1:number,arg2:number):Promise<void>;
+
+export function ResumePomodoro():Promise<void>;
 
 export function RunCronJobNow(arg1:number):Promise<void>;
 
@@ -182,9 +189,13 @@ export function SetupKokoroTTS():Promise<void>;
 
 export function SpeakText(arg1:string):Promise<void>;
 
+export function StartPomodoro():Promise<void>;
+
 export function StartSMSWatcher():Promise<void>;
 
 export function StopGeneration():Promise<void>;
+
+export function StopPomodoro():Promise<void>;
 
 export function StopSMSWatcher():Promise<void>;
 
