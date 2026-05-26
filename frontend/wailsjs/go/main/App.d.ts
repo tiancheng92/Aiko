@@ -62,6 +62,8 @@ export function GetMessages(arg1:number):Promise<Array<memory.Message>>;
 
 export function GetMessagesBeforeID(arg1:number,arg2:number):Promise<Array<memory.Message>>;
 
+export function GetMessagesFromNewestToID(arg1:number):Promise<Array<memory.Message>>;
+
 export function GetMousePosition():Promise<main.MousePosition>;
 
 export function GetPetSize(arg1:number,arg2:number):Promise<number>;
@@ -147,6 +149,8 @@ export function SaveConfig(arg1:config.Config):Promise<void>;
 export function SaveModelProfile(arg1:config.ModelProfile):Promise<config.ModelProfile>;
 
 export function SavePetSize(arg1:number,arg2:number,arg3:number):Promise<void>;
+
+export function SearchMessages(arg1:string):Promise<Array<memory.Message>>;
 
 export function SendMessage(arg1:string,arg2:main.ChatOptions):Promise<void>;
 

@@ -331,6 +331,18 @@ func (a *App) GetMessagesBeforeID(beforeID int64, limit int) ([]memory.Message, 
 	return a.shortMem.BeforeID(beforeID, limit)
 }
 
+// SearchMessages returns all messages whose content matches the FTS5 query.
+// Returns empty slice for empty query.
+func (a *App) SearchMessages(query string) ([]memory.Message, error) {
+	return a.shortMem.Search(query)
+}
+
+// GetMessagesFromNewestToID loads messages from newest backwards until the page
+// containing targetID is reached. Used for jump-to-message after search.
+func (a *App) GetMessagesFromNewestToID(targetID int64) ([]memory.Message, error) {
+	return a.shortMem.GetNewestToID(targetID, 10)
+}
+
 // ClearChatHistory deletes all short-term messages from SQLite and all
 // long-term memory vectors from the chromem collection.
 func (a *App) ClearChatHistory() error {

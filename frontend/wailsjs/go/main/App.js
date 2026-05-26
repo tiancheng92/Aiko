@@ -106,6 +106,10 @@ export function GetMessagesBeforeID(arg1, arg2) {
   return window['go']['main']['App']['GetMessagesBeforeID'](arg1, arg2);
 }
 
+export function GetMessagesFromNewestToID(arg1) {
+  return window['go']['main']['App']['GetMessagesFromNewestToID'](arg1);
+}
+
 export function GetMousePosition() {
   return window['go']['main']['App']['GetMousePosition']();
 }
@@ -276,6 +280,10 @@ export function SaveModelProfile(arg1) {
 
 export function SavePetSize(arg1, arg2, arg3) {
   return window['go']['main']['App']['SavePetSize'](arg1, arg2, arg3);
+}
+
+export function SearchMessages(arg1) {
+  return window['go']['main']['App']['SearchMessages'](arg1);
 }
 
 export function SendMessage(arg1, arg2) {
