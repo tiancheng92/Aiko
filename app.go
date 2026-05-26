@@ -29,6 +29,7 @@ import (
 	"aiko/internal/mcp"
 	"aiko/internal/memory"
 	"aiko/internal/notify"
+	"aiko/internal/pomodoro"
 	"aiko/internal/proactive"
 	"aiko/internal/scheduler"
 	"aiko/internal/skill"
@@ -65,6 +66,7 @@ type App struct {
 	ttsGeneration        uint64             // incremented on each SpeakText call; used to avoid stale cancel nils
 	isChatVisible        bool               // tracks whether the chat panel is open; guarded by mu
 	proactiveEngine      *proactive.ProactiveEngine
+	pomodoroEngine       *pomodoro.Engine
 	mcpClosers           []io.Closer                // guarded by mu; closed and rebuilt on initLLMComponents
 	llmTransport         *llm.ErrorBodyTransport    // captures raw error bodies from the active LLM HTTP client; guarded by mu
 	chatModel            model.ToolCallingChatModel // current chat model; guarded by mu; reused by rebuildAgentTools
