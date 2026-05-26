@@ -170,6 +170,13 @@ func (s *ShortStore) CountUnmigrated() (int, error) {
 	return n, err
 }
 
+// sanitizeFTS5Query wraps the user query in double quotes to escape FTS5
+// special characters, treating the entire input as a literal phrase.
+// Doubles any embedded double-quote characters so they don't break the quoting.
+func sanitizeFTS5Query(q string) string {
+	return `"` + strings.ReplaceAll(q, `"`, `""`) + `"`
+}
+
 // Search returns all messages whose content matches the FTS5 query, newest first.
 // Returns empty slice (not error) for empty query.
 func (s *ShortStore) Search(query string) ([]Message, error) {
@@ -181,7 +188,7 @@ func (s *ShortStore) Search(query string) ([]Message, error) {
 		FROM messages m
 		JOIN messages_fts fts ON m.id = fts.rowid
 		WHERE messages_fts MATCH ?
-		ORDER BY m.id DESC`, query)
+		ORDER BY m.id DESC`, sanitizeFTS5Query(query))
 	if err != nil {
 		return nil, fmt.Errorf("search messages: %w", err)
 	}

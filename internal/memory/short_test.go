@@ -211,6 +211,24 @@ func TestSearch_EmptyQuery(t *testing.T) {
 	}
 }
 
+func TestSearch_SpecialCharacters(t *testing.T) {
+	s := newTestShortStoreWithFTS(t)
+	s.Add("user", "hello world!")
+	s.Add("user", "hello (parens)")
+
+	// Query with special chars should not error
+	results, err := s.Search("world!")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Content != "hello world!" {
+		t.Errorf("want 'hello world!', got %q", results[0].Content)
+	}
+}
+
 func TestGetNewestToID_IncludesTarget(t *testing.T) {
 	s := newTestShortStoreWithFTS(t)
 	var ids []int64
