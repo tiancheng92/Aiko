@@ -118,6 +118,10 @@ export function GetPetSize(arg1, arg2) {
   return window['go']['main']['App']['GetPetSize'](arg1, arg2);
 }
 
+export function GetSMSAllMessagesEnabled() {
+  return window['go']['main']['App']['GetSMSAllMessagesEnabled']();
+}
+
 export function GetScreenList() {
   return window['go']['main']['App']['GetScreenList']();
 }
@@ -312,6 +316,10 @@ export function SetChatVisible(arg1) {
 
 export function SetCronJobEnabled(arg1, arg2) {
   return window['go']['main']['App']['SetCronJobEnabled'](arg1, arg2);
+}
+
+export function SetSMSAllMessagesEnabled(arg1) {
+  return window['go']['main']['App']['SetSMSAllMessagesEnabled'](arg1);
 }
 
 export function SetSoundsEnabled(arg1) {

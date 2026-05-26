@@ -17,6 +17,7 @@ import {
   GetPetSize, GetChatSize,
   ResetBallPosition,
   StartSMSWatcher, StopSMSWatcher, IsSMSWatcherRunning,
+  GetSMSAllMessagesEnabled, SetSMSAllMessagesEnabled,
   GetVoiceAutoSend, SetVoiceAutoSend,
   GetSoundsEnabled, SetSoundsEnabled,
   GetKokoroTTSVoices, SetTTSAutoPlay, SetupKokoroTTS,
@@ -102,8 +103,6 @@ let saveTimer = null
 const activeTab = ref('general')  // 'general' | 'appearance' | 'model' | 'ai' | 'tools' | 'knowledge' | 'automation' | 'lark' | 'sms' | 'about'
 const toolsSubTab = ref('permissions')  // 'mcp' | 'permissions' | 'settings'
 const automationSubTab = ref('cron')   // 'cron' | 'proactive'
-const toolsSubTabIndex = computed(() => ['permissions', 'mcp', 'settings'].indexOf(toolsSubTab.value))
-const automationSubTabIndex = computed(() => ['cron', 'proactive'].indexOf(automationSubTab.value))
 const newPathInput = ref('')           // input buffer for adding allowed paths
 const newTrustedCmdInput = ref('') // input buffer for adding trusted commands
 
@@ -150,6 +149,7 @@ const autoLaunch = ref(false)
 const smsWatcherRunning = ref(false)
 const smsWatcherLoading = ref(false)
 const smsWatcherError = ref('')
+const smsAllMessagesEnabled = ref(false)
 
 // Escape closes each open form dialog (does nothing if closed).
 useEscapeKey(() => { showProfileForm.value = false }, showProfileForm)
@@ -277,25 +277,25 @@ function onModalLeave(el, done) {
  * label/keywords on every keystroke.
  */
 const tabMeta = [
-  { id: 'general',    label: '通用',   iconSvg: ICON_TAB_GENERAL,    iconBg: '#636366',
+  { id: 'general',    label: '通用',   iconSvg: ICON_TAB_GENERAL,    iconBg: 'var(--cat-general)',
     keywords: 'theme launch autostart 主题 启动 风格 自启 开机自启 液态玻璃 毛玻璃 frosted liquid glass 界面主题 深色 暗色' },
-  { id: 'appearance', label: '外观',   iconSvg: ICON_TAB_APPEARANCE, iconBg: '#FF375F',
+  { id: 'appearance', label: '外观',   iconSvg: ICON_TAB_APPEARANCE, iconBg: 'var(--cat-appearance)',
     keywords: 'live2d vrm pet size chat 模型 大小 尺寸 语音 音效 朗读 桌宠 渲染 宠物 聊天框 头像 avatar 语音识别 自动发送 提示音 声音 自动朗读 TTS播放 动画' },
-  { id: 'model',      label: '模型',   iconSvg: ICON_TAB_MODEL,      iconBg: '#007AFF',
+  { id: 'model',      label: '模型',   iconSvg: ICON_TAB_MODEL,      iconBg: 'var(--cat-model)',
     keywords: 'model profile openai openrouter deepseek provider key base url api embedding tts kokoro 模型 配置 接入 语音合成 声线 语速 摘要 向量 配置文件 激活' },
-  { id: 'ai',         label: '对话',   iconSvg: ICON_TAB_AI,         iconBg: '#5E5CE6',
+  { id: 'ai',         label: '对话',   iconSvg: ICON_TAB_AI,         iconBg: 'var(--cat-ai)',
     keywords: 'prompt system memory skill nudge 提示词 系统提示 记忆 长期记忆 短期记忆 技能 技能目录 上下文 轮数 自我成长 用户画像 沉淀' },
-  { id: 'tools',      label: '工具',   iconSvg: ICON_TAB_TOOLS,      iconBg: '#FF9F0A',
+  { id: 'tools',      label: '工具',   iconSvg: ICON_TAB_TOOLS,      iconBg: 'var(--cat-tools)',
     keywords: 'mcp permission shell code path tool server 权限 服务器 执行 白名单 路径 内置工具 免确认 超时 allowed trusted shell timeout 安全 扩展' },
-  { id: 'knowledge',  label: '知识库', iconSvg: ICON_TAB_KNOWLEDGE,  iconBg: '#34C759',
+  { id: 'knowledge',  label: '知识库', iconSvg: ICON_TAB_KNOWLEDGE,  iconBg: 'var(--cat-knowledge)',
     keywords: 'knowledge rag document import vector jina tavily 文档 导入 向量 知识 检索 RAG 搜索 API key' },
-  { id: 'automation', label: '自动化', iconSvg: ICON_TAB_AUTOMATION, iconBg: '#32ADE6',
+  { id: 'automation', label: '自动化', iconSvg: ICON_TAB_AUTOMATION, iconBg: 'var(--cat-automation)',
     keywords: 'cron schedule proactive reminder followup 定时 任务 计划 提醒 待触发 follow-up 自动' },
-  { id: 'lark',       label: '飞书',   iconSvg: ICON_TAB_LARK,       iconBg: '#00C7BE',
+  { id: 'lark',       label: '飞书',   iconSvg: ICON_TAB_LARK,       iconBg: 'var(--cat-lark)',
     keywords: 'lark feishu cli command 飞书 命令 lark-cli' },
-  { id: 'sms',        label: '短信',   iconSvg: ICON_TAB_SMS,        iconBg: '#30D158',
+  { id: 'sms',        label: '短信',   iconSvg: ICON_TAB_SMS,        iconBg: 'var(--cat-sms)',
     keywords: 'sms message verification code imessage chat.db 短信 验证码 监听 iMessage 短信监听' },
-  { id: 'about',      label: '关于',   iconSvg: ICON_TAB_ABOUT,      iconBg: '#5856D6',
+  { id: 'about',      label: '关于',   iconSvg: ICON_TAB_ABOUT,      iconBg: 'var(--cat-about)',
     keywords: 'version update about github release 版本 更新 关于 下载' },
 ].map(t => ({ ...t, _haystack: (t.label + ' ' + t.keywords).toLowerCase() }))
 
@@ -364,6 +364,7 @@ onMounted(async () => {
   if (chat?.[0] > 0) cfg.value.ChatWidth = chat[0]
   if (chat?.[1] > 0) cfg.value.ChatHeight = chat[1]
   smsWatcherRunning.value = sms
+  smsAllMessagesEnabled.value = cfg.value.SMSAllMessagesEnabled || false
   try {
     availableVRMModels.value = await ListVRMModels()
   } catch (e) {
@@ -1091,6 +1092,16 @@ async function toggleSMSWatcher() {
   }
 }
 
+/** toggleSMSAllMessages persists the all-messages setting and restarts the watcher. */
+async function toggleSMSAllMessages() {
+  try {
+    await SetSMSAllMessagesEnabled(smsAllMessagesEnabled.value)
+  } catch (e) {
+    smsWatcherError.value = String(e)
+    smsAllMessagesEnabled.value = !smsAllMessagesEnabled.value
+  }
+}
+
 /** toggleVoiceAutoSend updates voice auto-send setting immediately and notifies ChatPanel. */
 async function toggleVoiceAutoSend() {
   try {
@@ -1782,7 +1793,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
         <!-- 工具 -->
         <div v-if="activeTab === 'tools'" class="tab-pane">
-          <div class="sub-tab-bar" :style="{ '--active-idx': toolsSubTabIndex, '--tab-count': 3 }">
+          <div class="sub-tab-bar">
             <button :class="{ active: toolsSubTab === 'permissions' }" @click="toolsSubTab = 'permissions'">{{ $t('settings.tools.subTabs.permissions') }}</button>
             <button :class="{ active: toolsSubTab === 'mcp' }" @click="toolsSubTab = 'mcp'">{{ $t('settings.tools.subTabs.mcp') }}</button>
             <button :class="{ active: toolsSubTab === 'settings' }" @click="toolsSubTab = 'settings'">{{ $t('settings.tools.subTabs.settings') }}</button>
@@ -1980,7 +1991,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
         <!-- 自动化 -->
         <div v-if="activeTab === 'automation'" class="tab-pane">
-          <div class="sub-tab-bar" :style="{ '--active-idx': automationSubTabIndex, '--tab-count': 2 }">
+          <div class="sub-tab-bar">
             <button :class="{ active: automationSubTab === 'cron' }" @click="automationSubTab = 'cron'">{{ $t('settings.automation.subTabs.cron') }}</button>
             <button :class="{ active: automationSubTab === 'proactive' }" @click="automationSubTab = 'proactive'">{{ $t('settings.automation.subTabs.proactive') }}</button>
           </div>
@@ -2106,7 +2117,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
         <!-- 飞书 lark-cli -->
         <div v-if="activeTab === 'lark'" class="tab-pane">
           <div class="url-row" style="margin-bottom:8px">
-            <span style="flex:1;font-size:12px;color:#9ca3af">lark-cli 路径由 PATH 自动查找</span>
+            <span style="flex:1;font-size:12px;color:var(--text-tertiary)">lark-cli 路径由 PATH 自动查找</span>
             <button class="fetch-btn" @click="fetchLarkStatus" :disabled="larkStatusLoading">
               {{ larkStatusLoading ? '检测中...' : $t('settings.lark.status') }}
             </button>
@@ -2174,8 +2185,10 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           </p>
 
           <div class="sms-toggle-row">
-            <span class="sms-status-dot" :class="smsWatcherRunning ? 'dot-on' : 'dot-off'"></span>
-            <span class="sms-status-label">{{ smsWatcherRunning ? $t('settings.sms.running') : $t('settings.sms.stopped') }}</span>
+            <span class="sms-status-group">
+              <span class="sms-status-dot" :class="smsWatcherRunning ? 'dot-on' : 'dot-off'"></span>
+              <span class="sms-status-label">{{ smsWatcherRunning ? $t('settings.sms.running') : $t('settings.sms.stopped') }}</span>
+            </span>
             <button class="fetch-btn" @click="toggleSMSWatcher" :disabled="smsWatcherLoading">
               {{ smsWatcherLoading ? '处理中...' : (smsWatcherRunning ? $t('settings.sms.stop') : $t('settings.sms.start')) }}
             </button>
@@ -2183,6 +2196,17 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
 
           <div v-if="smsWatcherError" class="lark-status lark-status--err" style="margin-top:8px">
             {{ smsWatcherError }}
+          </div>
+
+          <div v-if="smsWatcherRunning" class="sms-toggle-row" style="margin-top:12px">
+            <span class="sms-status-label">{{ $t('settings.sms.allMessages') }}</span>
+            <button
+              class="toggle-switch"
+              :class="{ 'toggle-switch--on': smsAllMessagesEnabled }"
+              role="switch"
+              :aria-checked="smsAllMessagesEnabled"
+              @click="smsAllMessagesEnabled = !smsAllMessagesEnabled; toggleSMSAllMessages()"
+            ><span class="toggle-thumb"></span></button>
           </div>
 
           <div class="sms-guide">
@@ -3320,13 +3344,13 @@ ul { list-style: none; padding: 0; margin: 0; }
 .mcp-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   padding: 12px 14px;
   background: var(--surface-card);
   border: 1px solid var(--lg-border-subtle);
   border-radius: var(--r-card);
   margin-bottom: 6px;
-  gap: 10px;
+  gap: 12px;
   transition: background 0.18s, border-color 0.18s, transform 0.22s cubic-bezier(0.34, 1.2, 0.64, 1), box-shadow 0.22s;
 }
 .mcp-row:hover {
@@ -3339,9 +3363,17 @@ ul { list-style: none; padding: 0; margin: 0; }
   .mcp-row { transition: background 0.12s; }
   .mcp-row:hover { transform: none; box-shadow: none; }
 }
-.mcp-info { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.mcp-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
 .mcp-name { font-weight: 600; font-size: 13px; color: var(--text-primary); }
 .mcp-transport {
+  align-self: flex-start;
   font-size: 10px;
   color: var(--text-tertiary);
   text-transform: uppercase;
@@ -3356,7 +3388,12 @@ ul { list-style: none; padding: 0; margin: 0; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.mcp-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.mcp-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
 .mcp-form {
   margin-top: 12px;
   padding: 16px;
@@ -3657,12 +3694,14 @@ ul { list-style: none; padding: 0; margin: 0; }
 .sms-toggle-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
   background: var(--surface-card);
   border: 1px solid var(--lg-border-subtle);
   border-radius: var(--r-card);
 }
+.sms-status-group { display: flex; align-items: center; gap: 8px; }
 .sms-status-dot {
   width: 8px;
   height: 8px;
@@ -3678,6 +3717,7 @@ ul { list-style: none; padding: 0; margin: 0; }
 .tab-pane > .sms-toggle-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
   padding: 14px 16px;
   background: var(--surface-card);
@@ -3691,7 +3731,7 @@ ul { list-style: none; padding: 0; margin: 0; }
 /* Proactive reminders */
 .proactive-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   padding: 12px 14px;
   background: var(--surface-card);
@@ -3711,7 +3751,7 @@ ul { list-style: none; padding: 0; margin: 0; }
   .proactive-row { transition: none; }
   .proactive-row:hover { transform: none; box-shadow: none; }
 }
-.proactive-info { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.proactive-info { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; text-align: left; }
 .proactive-time {
   font-size: 11px;
   color: var(--accent);
@@ -3726,57 +3766,42 @@ ul { list-style: none; padding: 0; margin: 0; }
   text-overflow: ellipsis;
 }
 
-/* Sub-tab bar — iOS/macOS style segment control with animated sliding pill */
+/* Sub-tab bar — segment control, active state on button itself */
 .sub-tab-bar {
-  position: relative;
   display: flex;
   align-self: flex-start;
+  gap: 2px;
   margin-bottom: 18px;
   padding: 3px;
-  background: rgba(0, 0, 0, 0.28);
+  background: var(--lg-surface-input);
   border: 1px solid var(--lg-border-subtle);
   border-radius: 8px;
 }
 
-/* Sliding pill indicator — moves via CSS custom property set by Vue */
-.sub-tab-bar::before {
-  content: '';
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  bottom: 3px;
-  width: calc((100% - 6px) / var(--tab-count, 3));
-  transform: translateX(calc(var(--active-idx, 0) * 100%));
-  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-  background: rgba(255, 255, 255, 0.11);
-  border-radius: 5px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28), inset 0 0.5px 0 rgba(255, 255, 255, 0.10);
-  pointer-events: none;
-}
-
 .sub-tab-bar button {
-  position: relative;
-  z-index: 1;
   flex: 1;
-  padding: 5px 14px;
+  padding: 6px 16px;
   border: none;
-  border-radius: 5px;
+  border-radius: 6px;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
   white-space: nowrap;
-  transition: color 0.15s;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
+  -webkit-appearance: none;
+  appearance: none;
 }
 .sub-tab-bar button:hover { color: var(--text-primary); }
 .sub-tab-bar button.active {
   color: var(--text-primary);
   font-weight: 600;
-}
-@media (prefers-reduced-motion: reduce) {
-  .sub-tab-bar::before { transition: none; }
+  background: var(--lg-surface-elevated);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    0 0 0 0.5px rgba(255, 255, 255, 0.08);
 }
 
 /* Tools / path white-list */

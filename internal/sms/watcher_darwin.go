@@ -25,8 +25,10 @@ import (
 // codePattern matches 4–8 digit verification codes.
 var codePattern = regexp.MustCompile(`\b(\d{4,8})\b`)
 
-// Event carries a detected verification code and its context.
+// Event carries a detected SMS message. Kind is "code" for verification
+// code messages or "message" for regular SMS.
 type Event struct {
+	Kind   string `json:"kind"`
 	Code   string `json:"code"`
 	Sender string `json:"sender"`
 	Text   string `json:"text"`
@@ -38,18 +40,26 @@ type Handler func(Event)
 // Watcher monitors ~/Library/Messages/chat.db for new SMS messages
 // and extracts verification codes via fsnotify on the parent directory.
 type Watcher struct {
-	handler   Handler
-	dbDir     string // ~/Library/Messages/
-	dbPath    string
-	walPath   string
-	lastRowID int64
-	mu        sync.Mutex
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
+	handler     Handler
+	dbDir       string // ~/Library/Messages/
+	dbPath      string
+	walPath     string
+	lastRowID   int64
+	allMessages bool // report all messages, not just verification codes
+	mu          sync.Mutex
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
 }
 
-// NewWatcher creates a Watcher that calls handler for each detected code.
+// NewWatcher creates a Watcher that calls handler for each detected verification code.
 func NewWatcher(handler Handler) (*Watcher, error) {
+	return NewWatcherWithOptions(handler, false)
+}
+
+// NewWatcherWithOptions creates a Watcher with the given options.
+// When allMessages is true, handler is called for every SMS message,
+// not just those containing verification codes.
+func NewWatcherWithOptions(handler Handler, allMessages bool) (*Watcher, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("sms watcher: get home dir: %w", err)
@@ -57,10 +67,11 @@ func NewWatcher(handler Handler) (*Watcher, error) {
 	dbDir := filepath.Join(home, "Library", "Messages")
 	dbPath := filepath.Join(dbDir, "chat.db")
 	return &Watcher{
-		handler: handler,
-		dbDir:   dbDir,
-		dbPath:  dbPath,
-		walPath: dbPath + "-wal",
+		handler:     handler,
+		dbDir:       dbDir,
+		dbPath:      dbPath,
+		walPath:     dbPath + "-wal",
+		allMessages: allMessages,
 	}, nil
 }
 
@@ -225,12 +236,14 @@ func (w *Watcher) poll() {
 			continue
 		}
 		code := extractCode(text)
-		log.Info().Int64("rowid", rowID).Str("sender", sender).Str("text", text).Str("code", code).Msg("sms watcher: new message")
-		if code == "" {
-			continue
+		if code != "" {
+			log.Info().Int64("rowid", rowID).Str("sender", sender).Str("text", text).Str("code", code).Msg("sms watcher: new message")
+			log.Info().Str("sender", sender).Str("code", code).Msg("sms watcher: verification code detected")
+			w.handler(Event{Kind: "code", Code: code, Sender: sender, Text: text})
+		} else if w.allMessages {
+			log.Info().Int64("rowid", rowID).Str("sender", sender).Str("text", text).Msg("sms watcher: new message")
+			w.handler(Event{Kind: "message", Sender: sender, Text: text})
 		}
-		log.Info().Str("sender", sender).Str("code", code).Msg("sms watcher: verification code detected")
-		w.handler(Event{Code: code, Sender: sender, Text: text})
 	}
 
 	if newMax > lastID {

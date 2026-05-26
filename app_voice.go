@@ -47,18 +47,31 @@ func (a *App) SetSoundsEnabled(enabled bool) error {
 // events to the frontend and copying the code to the clipboard.
 // Caller must NOT hold a.mu.
 func (a *App) startSMSWatcher() error {
-	w, err := sms.NewWatcher(func(evt sms.Event) {
-		wailsruntime.ClipboardSetText(a.ctx, evt.Code)
-		wailsruntime.EventsEmit(a.ctx, "sms:verification_code", map[string]any{
-			"code":   evt.Code,
-			"sender": evt.Sender,
-			"text":   evt.Text,
-		})
-		wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
-			"title":   "📱 验证码：" + evt.Code,
-			"message": evt.Sender + "：" + evt.Text,
-		})
-	})
+	allMessages := a.cfg.SMSAllMessagesEnabled
+	w, err := sms.NewWatcherWithOptions(func(evt sms.Event) {
+		switch evt.Kind {
+		case "code":
+			wailsruntime.ClipboardSetText(a.ctx, evt.Code)
+			wailsruntime.EventsEmit(a.ctx, "sms:verification_code", map[string]any{
+				"code":   evt.Code,
+				"sender": evt.Sender,
+				"text":   evt.Text,
+			})
+			wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
+				"title":   "📱 验证码：" + evt.Code,
+				"message": evt.Sender + "：" + evt.Text,
+			})
+		case "message":
+			wailsruntime.EventsEmit(a.ctx, "sms:message", map[string]any{
+				"sender": evt.Sender,
+				"text":   evt.Text,
+			})
+			wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
+				"title":   "📱 " + evt.Sender,
+				"message": evt.Text,
+			})
+		}
+	}, allMessages)
 	if err != nil {
 		return err
 	}
@@ -107,6 +120,41 @@ func (a *App) IsSMSWatcherRunning() bool {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.smsWatcher != nil
+}
+
+// GetSMSAllMessagesEnabled returns whether all SMS messages (not just
+// verification codes) are forwarded to the frontend.
+func (a *App) GetSMSAllMessagesEnabled() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.cfg.SMSAllMessagesEnabled
+}
+
+// SetSMSAllMessagesEnabled persists the setting and restarts the watcher if
+// it is currently running so the change takes effect immediately.
+func (a *App) SetSMSAllMessagesEnabled(enabled bool) error {
+	a.mu.Lock()
+	a.cfg.SMSAllMessagesEnabled = enabled
+	wasRunning := a.smsWatcher != nil
+	oldWatcher := a.smsWatcher
+	a.smsWatcher = nil
+	cfgCopy := *a.cfg
+	a.mu.Unlock()
+
+	if oldWatcher != nil {
+		oldWatcher.Stop()
+	}
+
+	if err := a.configStore.Save(&cfgCopy); err != nil {
+		return fmt.Errorf("save config: %w", err)
+	}
+
+	if wasRunning {
+		if err := a.startSMSWatcher(); err != nil {
+			return fmt.Errorf("restart sms watcher: %w", err)
+		}
+	}
+	return nil
 }
 
 // IsFirstLaunch reports whether the welcome message has never been shown.

@@ -145,6 +145,21 @@ html[data-theme="frosted"] {
   --warning:      #FF9F0A;
   --warning-bg:   rgba(255, 159, 10, 0.14);
 
+  /* Text on accent — used on accent/danger button backgrounds */
+  --text-on-accent: #fff;
+
+  /* Category colours — decorative tab/category icon backgrounds */
+  --cat-general:    #636366;
+  --cat-appearance: #FF375F;
+  --cat-model:      #007AFF;
+  --cat-ai:         #5E5CE6;
+  --cat-tools:      #FF9F0A;
+  --cat-knowledge:  #34C759;
+  --cat-automation: #32ADE6;
+  --cat-lark:       #00C7BE;
+  --cat-sms:        #30D158;
+  --cat-about:      #5856D6;
+
   /* Thinking-block cool-blue palette */
   --thinking-fg:        rgba(160, 205, 255, 0.88);  /* label text            */
   --thinking-fg-dim:    rgba(185, 215, 255, 0.72);  /* body text             */

@@ -28,7 +28,8 @@ type Config struct {
 	ShellTimeout  int      // execute_shell timeout in seconds; default 30
 	ShellTrustedCommands []string // 免确认的命令前缀列表
 	CodeTimeout   int      // execute_code timeout in seconds; default 60
-	SMSWatcherEnabled bool   // 是否启用 SMS 短信监听（macOS 仅支持）
+	SMSWatcherEnabled     bool // 是否启用 SMS 短信监听（macOS 仅支持）
+	SMSAllMessagesEnabled bool // 是否推送所有短信（含非验证码）到前端
 	VoiceAutoSend      bool   // 语音识别完成后是否自动发送消息
 	SoundsEnabled       bool   // 是否启用聊天音效
 	SkillsDirs     []string // skills 目录列表，支持多个路径
@@ -124,6 +125,7 @@ func (s *Store) Load() (*Config, error) {
 	cfg.ChatHeight = parseInt(m["chat_height"], 0)
 	cfg.ActiveProfileID = int64(parseInt(m["active_profile_id"], 0))
 	cfg.SMSWatcherEnabled = m["sms_watcher_enabled"] == "true"
+	cfg.SMSAllMessagesEnabled = m["sms_all_messages_enabled"] == "true"
 	cfg.VoiceAutoSend = m["voice_auto_send"] == "true"
 	cfg.SoundsEnabled = m["sounds_enabled"] == "true"
 	cfg.TTSAutoPlay = m["tts_auto_play"] == "true"
@@ -164,7 +166,8 @@ func (s *Store) Save(cfg *Config) error {
 		"chat_width":        strconv.Itoa(cfg.ChatWidth),
 		"chat_height":       strconv.Itoa(cfg.ChatHeight),
 		"active_profile_id": strconv.FormatInt(cfg.ActiveProfileID, 10),
-		"sms_watcher_enabled": strconv.FormatBool(cfg.SMSWatcherEnabled),
+		"sms_watcher_enabled":     strconv.FormatBool(cfg.SMSWatcherEnabled),
+		"sms_all_messages_enabled": strconv.FormatBool(cfg.SMSAllMessagesEnabled),
 		"voice_auto_send": strconv.FormatBool(cfg.VoiceAutoSend),
 		"sounds_enabled": strconv.FormatBool(cfg.SoundsEnabled),
 		"tts_auto_play":            strconv.FormatBool(cfg.TTSAutoPlay),

@@ -67,21 +67,21 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: var(--lg-surface-hover);
+  border: 1px solid var(--lg-border-subtle);
   border-radius: 8px;
   padding: 8px 14px;
   margin: 4px 0;
   font-size: 13px;
-  color: #ccc;
+  color: var(--text-secondary);
 }
 
-/* Animated spinner replacing the static emoji */
+/* Animated spinner */
 .exec-spinner {
   width: 14px;
   height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  border-top-color: rgba(255, 255, 255, 0.6);
+  border: 2px solid var(--lg-border);
+  border-top-color: var(--text-secondary);
   border-radius: 50%;
   flex-shrink: 0;
   animation: exec-spin 0.8s linear infinite;
@@ -89,19 +89,19 @@ onUnmounted(() => {
 @keyframes exec-spin { to { transform: rotate(360deg); } }
 
 .exec-label { flex: 1; }
-.exec-timer { color: #888; font-family: monospace; }
+.exec-timer { color: var(--text-tertiary); font-family: monospace; }
 
 .exec-kill {
   padding: 3px 10px;
   border-radius: 4px;
-  border: 1px solid rgba(255, 80, 80, 0.4);
-  background: rgba(255, 80, 80, 0.1);
-  color: #ff6b6b;
+  border: 1px solid rgba(255, 69, 58, 0.4);
+  background: var(--danger-bg);
+  color: var(--danger);
   cursor: pointer;
   font-size: 12px;
   transition: background 0.12s, transform 0.08s;
 }
-.exec-kill:hover  { background: rgba(255, 80, 80, 0.22); }
+.exec-kill:hover  { background: rgba(255, 69, 58, 0.22); }
 .exec-kill:active { transform: scale(0.96); }
 
 /* TransitionGroup: slide-down + fade on enter, fade on leave */

@@ -522,6 +522,11 @@ defineExpose({ focusInput, scrollToBottom })
     height        0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94),
     border-radius 0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
+@media (prefers-reduced-motion: reduce) {
+  .chat-bubble {
+    transition: none;
+  }
+}
 
 .chat-bubble.no-transition {
   transition: none !important;

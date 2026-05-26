@@ -83,19 +83,18 @@ function hideFavicon(e) {
   margin-top: 8px;
   border-radius: 10px;
   overflow: hidden;
-  background: rgba(15, 20, 35, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: var(--lg-surface-elevated);
+  border: 1px solid var(--lg-border-subtle);
   cursor: pointer;
   max-width: 100%;
   transition: border-color 0.15s, background 0.15s;
-  backdrop-filter: blur(12px);
-  /* blue left accent when no image */
-  border-left: 3px solid rgba(3, 105, 161, 0.7);
+  backdrop-filter: var(--lg-blur-sm);
+  border-left: 3px solid var(--accent);
 }
 
 .link-preview:hover {
-  background: rgba(3, 105, 161, 0.08);
-  border-color: rgba(3, 105, 161, 0.45);
+  background: var(--accent-alpha-08);
+  border-color: var(--accent-alpha-20);
 }
 
 /* ── Body ──────────────────────────────────────────────────── */
@@ -110,7 +109,7 @@ function hideFavicon(e) {
 .lp-title {
   font-size: 13px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--text-primary);
   line-height: 1.35;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -119,8 +118,8 @@ function hideFavicon(e) {
 }
 
 .lp-desc {
-  font-size: 11.5px;
-  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  color: var(--text-body-muted);
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -146,7 +145,7 @@ function hideFavicon(e) {
 
 .lp-site {
   font-size: 11px;
-  color: rgba(3, 105, 161, 0.9);
+  color: var(--accent);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -157,13 +156,13 @@ function hideFavicon(e) {
 .lp-ext-icon {
   width: 10px;
   height: 10px;
-  color: rgba(255, 255, 255, 0.25);
+  color: var(--text-tertiary);
   flex-shrink: 0;
   margin-left: auto;
 }
 
 .link-preview:hover .lp-ext-icon {
-  color: rgba(3, 105, 161, 0.7);
+  color: var(--accent);
 }
 
 /* Mount animation: fade + slide up from 6px below */

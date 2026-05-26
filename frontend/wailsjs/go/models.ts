@@ -21,6 +21,7 @@ export namespace config {
 	    ShellTrustedCommands: string[];
 	    CodeTimeout: number;
 	    SMSWatcherEnabled: boolean;
+	    SMSAllMessagesEnabled: boolean;
 	    VoiceAutoSend: boolean;
 	    SoundsEnabled: boolean;
 	    SkillsDirs: string[];
@@ -71,6 +72,7 @@ export namespace config {
 	        this.ShellTrustedCommands = source["ShellTrustedCommands"];
 	        this.CodeTimeout = source["CodeTimeout"];
 	        this.SMSWatcherEnabled = source["SMSWatcherEnabled"];
+	        this.SMSAllMessagesEnabled = source["SMSAllMessagesEnabled"];
 	        this.VoiceAutoSend = source["VoiceAutoSend"];
 	        this.SoundsEnabled = source["SoundsEnabled"];
 	        this.SkillsDirs = source["SkillsDirs"];

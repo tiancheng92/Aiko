@@ -212,7 +212,8 @@
       "stop": "停止",
       "status": "状態",
       "running": "実行中",
-      "stopped": "停止中"
+      "stopped": "停止中",
+      "allMessages": "すべてのSMS（認証コード以外も）を通知に転送"
     },
     "about": {
       "version": "バージョン",

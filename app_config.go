@@ -38,6 +38,7 @@ func (a *App) SaveConfig(cfg *config.Config) error {
 	// across a potentially slow DB transaction.
 	a.mu.RLock()
 	cfg.SMSWatcherEnabled = a.cfg.SMSWatcherEnabled
+	cfg.SMSAllMessagesEnabled = a.cfg.SMSAllMessagesEnabled
 	cfg.VoiceAutoSend = a.cfg.VoiceAutoSend
 	cfg.SoundsEnabled = a.cfg.SoundsEnabled
 	cfg.TTSAutoPlay = a.cfg.TTSAutoPlay

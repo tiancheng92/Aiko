@@ -212,7 +212,8 @@
       "stop": "중지",
       "status": "상태",
       "running": "실행 중",
-      "stopped": "중지됨"
+      "stopped": "중지됨",
+      "allMessages": "모든 SMS(인증 코드 외 포함)를 알림으로 전달"
     },
     "about": {
       "version": "버전",

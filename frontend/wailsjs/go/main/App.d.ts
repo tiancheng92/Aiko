@@ -68,6 +68,8 @@ export function GetMousePosition():Promise<main.MousePosition>;
 
 export function GetPetSize(arg1:number,arg2:number):Promise<number>;
 
+export function GetSMSAllMessagesEnabled():Promise<boolean>;
+
 export function GetScreenList():Promise<Array<main.ScreenInfo>>;
 
 export function GetScreenSize():Promise<Array<number>>;
@@ -165,6 +167,8 @@ export function SetAvatar(arg1:string,arg2:string):Promise<void>;
 export function SetChatVisible(arg1:boolean):Promise<void>;
 
 export function SetCronJobEnabled(arg1:number,arg2:boolean):Promise<void>;
+
+export function SetSMSAllMessagesEnabled(arg1:boolean):Promise<void>;
 
 export function SetSoundsEnabled(arg1:boolean):Promise<void>;
 

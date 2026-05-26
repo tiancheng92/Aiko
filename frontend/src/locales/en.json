@@ -212,7 +212,8 @@
       "stop": "Stop",
       "status": "Status",
       "running": "Running",
-      "stopped": "Stopped"
+      "stopped": "Stopped",
+      "allMessages": "Forward all SMS (including non-verification) to notifications"
     },
     "about": {
       "version": "Version",

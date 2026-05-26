@@ -362,7 +362,7 @@ useEscapeKey(reject, visible)
 
 .btn-approve {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
   border: 1px solid transparent;
   font-weight: 600;
 }

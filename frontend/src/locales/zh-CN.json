@@ -212,7 +212,8 @@
       "stop": "停止",
       "status": "状态",
       "running": "运行中",
-      "stopped": "已停止"
+      "stopped": "已停止",
+      "allMessages": "推送所有短信（含非验证码）到通知栏"
     },
     "about": {
       "version": "版本",

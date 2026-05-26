@@ -99,17 +99,12 @@ defineExpose({ show, hide })
 
 <style scoped>
 .ctx-menu {
-  --surface: rgba(38, 38, 44, 0.78);
-  --text-primary: rgba(255, 255, 255, 0.92);
-  --text-secondary: rgba(255, 255, 255, 0.62);
-  --border-subtle: rgba(255, 255, 255, 0.10);
-
   position: fixed;
   z-index: 99999;
-  background: var(--surface);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
-  border: 1px solid var(--border-subtle);
+  background: var(--lg-surface-elevated);
+  backdrop-filter: var(--lg-blur);
+  -webkit-backdrop-filter: var(--lg-blur);
+  border: 1px solid var(--lg-border);
   border-radius: 10px;
   padding: 4px;
   min-width: 180px;
@@ -146,14 +141,14 @@ defineExpose({ show, hide })
 .ctx-item:focus-visible,
 .ctx-item.hovered {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
   outline: none;
   transform: translateX(2px);
 }
 .ctx-item:active { transform: translateX(1px) scale(0.98); }
 .ctx-item:hover .ctx-icon-wrap,
 .ctx-item:focus-visible .ctx-icon-wrap,
-.ctx-item.hovered .ctx-icon-wrap { color: #fff; }
+.ctx-item.hovered .ctx-icon-wrap { color: var(--text-on-accent); }
 
 .ctx-item.disabled { opacity: 0.38; cursor: not-allowed; }
 .ctx-item.disabled:hover,
@@ -164,7 +159,7 @@ defineExpose({ show, hide })
 .ctx-item.danger:focus-visible,
 .ctx-item.danger.hovered {
   background: var(--danger);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 .ctx-icon-wrap {
@@ -189,7 +184,7 @@ defineExpose({ show, hide })
 
 .ctx-divider {
   height: 1px;
-  background: var(--border-subtle);
+  background: var(--lg-border-subtle);
   margin: 4px 6px;
 }
 
