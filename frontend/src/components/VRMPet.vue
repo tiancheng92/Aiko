@@ -34,13 +34,14 @@ import { debounce } from "../utils/timing.js";
 import { useEmotionEvents } from "../composables/useEmotionEvents.js";
 import { usePetState } from "../composables/usePetState.js";
 import { useVRMModel } from "../composables/useVRMModel.js";
-import { ICON_POWER, ICON_SETTING, ICON_SHIRT, ICON_POMODORO } from "../utils/icons";
+import { ICON_POWER, ICON_SETTING, ICON_SHIRT, ICON_POMODORO, ICON_CPU } from "../utils/icons";
 import ContextMenu from "./ContextMenu.vue";
 
-const emit = defineEmits(["click", "position", "ball-size", "open-settings", "open-pomodoro"]);
+const emit = defineEmits(["click", "position", "ball-size", "open-settings", "open-pomodoro", "toggle-system-panel"]);
 const props = defineProps({
   activeScreen: { type: Object, default: () => ({ width: 0, height: 0 }) },
   pomodoroPanelOpen: { type: Boolean, default: false },
+  systemPanelOpen: { type: Boolean, default: true },
 });
 
 const canvasRef = ref(null);
@@ -479,6 +480,7 @@ const { t } = useI18n()
 const petMenuItems = computed(() => [
   { iconSvg: ICON_SHIRT, label: t('petMenu.switchModel'), action: switchToNextVRMModel },
   { iconSvg: ICON_POMODORO, label: props.pomodoroPanelOpen ? t('pomodoro.menuLabelHide') : t('pomodoro.menuLabelShow'), action: () => emit("open-pomodoro") },
+  { iconSvg: ICON_CPU,   label: props.systemPanelOpen ? t('system.hidePanel') : t('system.showPanel'), action: () => emit('toggle-system-panel') },
   { divider: true },
   {
     iconSvg: ICON_SETTING,
