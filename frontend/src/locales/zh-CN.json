@@ -589,19 +589,19 @@
       "roundsBeforeLongBreak": "长休息间隔（轮）",
       "roundsBeforeLongBreakDesc": "几轮专注后触发长休息，默认 4",
       "hint": "修改即时生效，不影响正在进行的番茄钟。"
-    },
-    "system": {
-      "showPanel": "显示系统资源",
-      "hidePanel": "隐藏系统资源",
-      "cpu": "CPU",
-      "memory": "内存",
-      "disk": "磁盘",
-      "usedTotal": "{used} / {total}",
-      "settings": {
-        "title": "系统资源",
-        "interval": "刷新间隔",
-        "intervalDesc": "CPU、内存、磁盘使用率的数据刷新频率"
-      }
+    }
+  },
+  "system": {
+    "showPanel": "显示系统资源",
+    "hidePanel": "隐藏系统资源",
+    "cpu": "CPU",
+    "memory": "内存",
+    "disk": "磁盘",
+    "usedTotal": "{used} / {total}",
+    "settings": {
+      "title": "系统资源",
+      "interval": "刷新间隔",
+      "intervalDesc": "CPU、内存、磁盘使用率的数据刷新频率"
     }
   }
 }

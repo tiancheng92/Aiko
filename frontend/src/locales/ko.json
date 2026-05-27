@@ -589,19 +589,19 @@
       "roundsBeforeLongBreak": "긴 휴식 전 라운드",
       "roundsBeforeLongBreakDesc": "긴 휴식 전 집중 라운드 수, 기본값 4",
       "hint": "변경 사항은 즉시 적용되며 실행 중인 타이머에 영향을 주지 않습니다."
-    },
-    "system": {
-      "showPanel": "시스템 리소스 표시",
-      "hidePanel": "시스템 리소스 숨기기",
-      "cpu": "CPU",
-      "memory": "메모리",
-      "disk": "디스크",
-      "usedTotal": "{used} / {total}",
-      "settings": {
-        "title": "시스템 리소스",
-        "interval": "새로고침 간격",
-        "intervalDesc": "CPU, 메모리, 디스크 사용량 데이터 새로고침 빈도"
-      }
+    }
+  },
+  "system": {
+    "showPanel": "시스템 리소스 표시",
+    "hidePanel": "시스템 리소스 숨기기",
+    "cpu": "CPU",
+    "memory": "메모리",
+    "disk": "디스크",
+    "usedTotal": "{used} / {total}",
+    "settings": {
+      "title": "시스템 리소스",
+      "interval": "새로고침 간격",
+      "intervalDesc": "CPU, 메모리, 디스크 사용량 데이터 새로고침 빈도"
     }
   }
 }

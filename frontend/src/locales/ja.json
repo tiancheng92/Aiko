@@ -589,19 +589,19 @@
       "roundsBeforeLongBreak": "長休憩までのラウンド数",
       "roundsBeforeLongBreakDesc": "長休憩前の集中ラウンド数、デフォルト 4",
       "hint": "変更はすぐに反映され、実行中のタイマーには影響しません。"
-    },
-    "system": {
-      "showPanel": "システムリソースを表示",
-      "hidePanel": "システムリソースを非表示",
-      "cpu": "CPU",
-      "memory": "メモリ",
-      "disk": "ディスク",
-      "usedTotal": "{used} / {total}",
-      "settings": {
-        "title": "システムリソース",
-        "interval": "更新間隔",
-        "intervalDesc": "CPU、メモリ、ディスク使用率のデータ更新頻度"
-      }
+    }
+  },
+  "system": {
+    "showPanel": "システムリソースを表示",
+    "hidePanel": "システムリソースを非表示",
+    "cpu": "CPU",
+    "memory": "メモリ",
+    "disk": "ディスク",
+    "usedTotal": "{used} / {total}",
+    "settings": {
+      "title": "システムリソース",
+      "interval": "更新間隔",
+      "intervalDesc": "CPU、メモリ、ディスク使用率のデータ更新頻度"
     }
   }
 }
