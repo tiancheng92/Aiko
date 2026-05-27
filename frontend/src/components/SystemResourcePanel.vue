@@ -81,12 +81,13 @@ let offStatsUpdate = null
 let cancelAnim = null
 
 const panelWidth = 170
+const panelHeight = 108
 
 const panelStyle = computed(() => {
   const x = props.petPos.x - panelWidth - 6
-  const y = props.petPos.y + props.petSize / 2
+  const y = props.petPos.y + props.petSize - panelHeight
   const clampedX = Math.min(Math.max(x, 8), window.innerWidth - panelWidth - 8)
-  const clampedY = Math.min(Math.max(y - 54, 38), window.innerHeight - 108 - 8)
+  const clampedY = Math.min(Math.max(y, 38), window.innerHeight - panelHeight - 8)
   return {
     left: `${clampedX}px`,
     top: `${clampedY}px`,
