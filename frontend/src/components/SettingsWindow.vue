@@ -21,7 +21,7 @@ import {
   GetVoiceAutoSend, SetVoiceAutoSend,
   GetSoundsEnabled, SetSoundsEnabled,
   GetKokoroTTSVoices, SetTTSAutoPlay, SetupKokoroTTS,
-  GetVersion, CheckUpdate, InstallUpdate,
+  GetVersion, CheckUpdate, InstallUpdate, RestartStatsTicker,
   ListVRMModels, ImportVRMFile, DeleteVRMModel,
   GetAutoLaunch, SetAutoLaunch,
   SetAvatar, ResetAvatar,
@@ -746,6 +746,7 @@ async function save() {
       ActiveProfileID: activeProfileID.value,
     }
     await SaveConfig(payload)
+    await RestartStatsTicker()
   } catch (e) {
     console.error('auto-save failed:', e)
   } finally {
@@ -1614,6 +1615,27 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
               <div class="shortcut-row">
                 <div class="shortcut-keys"><span class="shortcut-rc">{{ $t('settings.general.shortcutRightClickLabel') }}</span></div>
                 <span class="shortcut-desc">{{ $t('settings.general.shortcutRightClick') }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 系统资源 -->
+          <div class="group-label">{{ $t('system.settings.title') }}</div>
+          <div class="settings-group">
+            <div class="settings-row">
+              <div class="row-body">
+                <span class="row-title">{{ $t('system.settings.interval') }}</span>
+                <span class="row-desc">{{ $t('system.settings.intervalDesc') }}</span>
+              </div>
+              <div class="row-ctrl">
+                <input
+                  v-model.number="cfg.SystemStatsInterval"
+                  type="number"
+                  min="1"
+                  max="60"
+                  class="input-int"
+                />
+                <span class="row-unit">s</span>
               </div>
             </div>
           </div>
