@@ -6,6 +6,7 @@ import ChatBubble from './components/ChatBubble.vue'
 const SettingsWindow = defineAsyncComponent(() => import('./components/SettingsWindow.vue'))
 import NotificationBubble from './components/NotificationBubble.vue'
 import PomodoroPanel from './components/PomodoroPanel.vue'
+import SystemResourcePanel from './components/SystemResourcePanel.vue'
 import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize, GetConfig, SetChatVisible } from '../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../wailsjs/runtime/runtime'
 import { springAnimate } from './composables/useSpring'
@@ -20,6 +21,9 @@ const pomodoroPanelOpen = ref(false)
 const pomodoroRunning = ref(false)
 const pomodoroPanelRef = ref(null)
 const pomodoroPanelWasOpen = ref(false)
+const systemPanelOpen = ref(true)
+const systemPanelRef = ref(null)
+const systemPanelWasOpen = ref(false)
 const ballPos  = ref({ x: -1, y: -1 })
 const ballSize = ref(160)
 const chatBubbleRef = ref(null)
@@ -416,6 +420,10 @@ function toggleBubble() {
       pomodoroPanelWasOpen.value = true
       pomodoroPanelOpen.value = false
     }
+    if (systemPanelOpen.value) {
+      systemPanelWasOpen.value = true
+      systemPanelOpen.value = false
+    }
     pendingTokens = ''
     nextTick(() => {
       chatBubbleRef.value?.focusInput()
@@ -429,6 +437,11 @@ function toggleBubble() {
       nextTick(() => {
         pomodoroPanelRef.value?.show()
       })
+    }
+    if (systemPanelWasOpen.value) {
+      systemPanelWasOpen.value = false
+      systemPanelOpen.value = true
+      nextTick(() => { systemPanelRef.value?.show() })
     }
   }
 }
@@ -448,6 +461,23 @@ function openPomodoro() {
 
 function closePomodoro() {
   pomodoroPanelOpen.value = false
+}
+
+/** toggleSystemPanel toggles the system resource panel visibility. */
+function toggleSystemPanel() {
+  if (systemPanelOpen.value) {
+    systemPanelOpen.value = false
+    return
+  }
+  systemPanelOpen.value = true
+  systemPanelWasOpen.value = false
+  nextTick(() => {
+    systemPanelRef.value?.show()
+  })
+}
+
+function closeSystemPanel() {
+  systemPanelOpen.value = false
 }
 
 function onPomodoroStateChanged(payload) {
@@ -562,21 +592,25 @@ function onSettingsLeave(el, done) {
     v-if="renderBackend === 'live2d'"
     :active-screen="activeScreen"
     :pomodoro-panel-open="pomodoroPanelOpen"
+    :system-panel-open="systemPanelOpen"
     @click="toggleBubble"
     @position="p => ballPos = p"
     @ball-size="s => ballSize = s"
     @open-settings="openSettings"
     @open-pomodoro="openPomodoro"
+    @toggle-system-panel="toggleSystemPanel"
   />
   <VRMPet
     v-else-if="renderBackend === 'vrm'"
     :active-screen="activeScreen"
     :pomodoro-panel-open="pomodoroPanelOpen"
+    :system-panel-open="systemPanelOpen"
     @click="toggleBubble"
     @position="p => ballPos = p"
     @ball-size="s => ballSize = s"
     @open-settings="openSettings"
     @open-pomodoro="openPomodoro"
+    @toggle-system-panel="toggleSystemPanel"
   />
   <Transition :css="false" @enter="onBubbleEnter" @leave="onBubbleLeave">
     <ChatBubble
@@ -607,6 +641,13 @@ function onSettingsLeave(el, done) {
     :pet-pos="ballPos"
     :pet-size="ballSize"
     @close="closePomodoro"
+  />
+  <SystemResourcePanel
+    v-if="systemPanelOpen"
+    ref="systemPanelRef"
+    :pet-pos="ballPos"
+    :pet-size="ballSize"
+    @close="closeSystemPanel"
   />
 
   <!--
