@@ -76,6 +76,8 @@ type App struct {
 	pendingConfirms      sync.Map
 	watcherWG            sync.WaitGroup     // tracks background watchers started in startup
 	cancelWatcher        context.CancelFunc // cancels the screen-watcher goroutine on shutdown
+	cancelStats          context.CancelFunc // cancels the stats polling goroutine on shutdown
+	statsWG              sync.WaitGroup     // tracks the stats polling goroutine
 	pendingUpdateVersion string             // non-empty when a successful update marker was found on startup
 	dataDir              string             // ~/.aiko; set once in startup, read-only thereafter
 	startupErr           string             // non-empty when startup failed; read in domReady to show notification

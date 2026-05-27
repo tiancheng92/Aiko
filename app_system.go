@@ -22,6 +22,7 @@ import (
 	"aiko/internal/execenv"
 	"aiko/internal/lark"
 	internaltools "aiko/internal/tools"
+	toolsystem "aiko/internal/tools/system"
 )
 
 // LinkPreview holds the Open Graph / meta data extracted from a URL.
@@ -677,4 +678,108 @@ func run(name string, args ...string) error {
 		return fmt.Errorf("%s: %w\n%s", name, err, stderr.String())
 	}
 	return nil
+}
+
+// SystemStats holds real-time CPU, memory, and disk usage data.
+type SystemStats struct {
+	CPU    float64     `json:"cpu"`
+	Memory MemoryStats `json:"memory"`
+	Disk   DiskStats   `json:"disk"`
+}
+
+// MemoryStats holds memory usage data.
+type MemoryStats struct {
+	Used    uint64  `json:"used"`
+	Total   uint64  `json:"total"`
+	Percent float64 `json:"percent"`
+}
+
+// DiskStats holds disk usage data.
+type DiskStats struct {
+	Used    uint64  `json:"used"`
+	Total   uint64  `json:"total"`
+	Percent float64 `json:"percent"`
+}
+
+// GetSystemStats returns current CPU, memory, and disk usage.
+func (a *App) GetSystemStats() SystemStats {
+	var stats SystemStats
+
+	cpu, err := toolsystem.GetCPUUsage()
+	if err != nil {
+		log.Warn().Err(err).Msg("GetSystemStats: CPU")
+	} else {
+		stats.CPU = cpu
+	}
+
+	memUsed, memTotal, err := toolsystem.GetMemoryUsage()
+	if err != nil {
+		log.Warn().Err(err).Msg("GetSystemStats: memory")
+	} else {
+		stats.Memory.Used = memUsed
+		stats.Memory.Total = memTotal
+		if memTotal > 0 {
+			stats.Memory.Percent = float64(memUsed) / float64(memTotal) * 100
+		}
+	}
+
+	diskUsed, diskTotal, err := toolsystem.GetDiskUsage("/")
+	if err != nil {
+		log.Warn().Err(err).Msg("GetSystemStats: disk")
+	} else {
+		stats.Disk.Used = diskUsed
+		stats.Disk.Total = diskTotal
+		if diskTotal > 0 {
+			stats.Disk.Percent = float64(diskUsed) / float64(diskTotal) * 100
+		}
+	}
+
+	return stats
+}
+
+// startStatsTicker begins a goroutine that polls system stats at the configured
+// interval and emits "stats:update" Wails events.
+func (a *App) startStatsTicker() {
+	a.mu.RLock()
+	interval := a.cfg.SystemStatsInterval
+	a.mu.RUnlock()
+
+	ctx, cancel := context.WithCancel(a.ctx)
+	a.mu.Lock()
+	a.cancelStats = cancel
+	a.mu.Unlock()
+
+	a.statsWG.Add(1)
+	go func() {
+		defer a.statsWG.Done()
+		defer cancel()
+		ticker := time.NewTicker(time.Duration(interval) * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				stats := a.GetSystemStats()
+				wailsruntime.EventsEmit(a.ctx, "stats:update", stats)
+			}
+		}
+	}()
+}
+
+// stopStatsTicker cancels the stats polling goroutine and waits for it to exit.
+func (a *App) stopStatsTicker() {
+	a.mu.Lock()
+	if a.cancelStats != nil {
+		a.cancelStats()
+	}
+	a.mu.Unlock()
+	a.statsWG.Wait()
+}
+
+// RestartStatsTicker restarts the stats polling goroutine with a new interval.
+// Called after the user changes the interval in settings.
+func (a *App) RestartStatsTicker() {
+	a.stopStatsTicker()
+	a.startStatsTicker()
 }
