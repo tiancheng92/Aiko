@@ -20,8 +20,8 @@
                 :style="{ width: cpu + '%', background: barColor(cpu) }"
               />
             </div>
-            <div class="stat-detail">{{ cpu.toFixed(0) }}%</div>
           </div>
+          <div class="stat-value" :style="{ color: barColor(cpu) }">{{ cpu.toFixed(0) }}%</div>
         </div>
 
         <!-- Memory -->
