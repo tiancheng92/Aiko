@@ -593,6 +593,10 @@
     "system": {
       "showPanel": "システムリソースを表示",
       "hidePanel": "システムリソースを非表示",
+      "cpu": "CPU",
+      "memory": "メモリ",
+      "disk": "ディスク",
+      "usedTotal": "{used} / {total}",
       "settings": {
         "title": "システムリソース",
         "interval": "更新間隔",

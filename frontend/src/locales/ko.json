@@ -593,6 +593,10 @@
     "system": {
       "showPanel": "시스템 리소스 표시",
       "hidePanel": "시스템 리소스 숨기기",
+      "cpu": "CPU",
+      "memory": "메모리",
+      "disk": "디스크",
+      "usedTotal": "{used} / {total}",
       "settings": {
         "title": "시스템 리소스",
         "interval": "새로고침 간격",

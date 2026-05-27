@@ -593,6 +593,10 @@
     "system": {
       "showPanel": "显示系统资源",
       "hidePanel": "隐藏系统资源",
+      "cpu": "CPU",
+      "memory": "内存",
+      "disk": "磁盘",
+      "usedTotal": "{used} / {total}",
       "settings": {
         "title": "系统资源",
         "interval": "刷新间隔",

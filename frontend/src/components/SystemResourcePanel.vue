@@ -12,7 +12,7 @@
       >
         <!-- CPU -->
         <div class="stat-row">
-          <div class="stat-label-label">CPU</div>
+          <div class="stat-label-label">{{ $t('system.cpu') }}</div>
           <div class="stat-info">
             <div class="stat-bar-track">
               <div
@@ -20,13 +20,13 @@
                 :style="{ width: cpu + '%', background: barColor(cpu) }"
               />
             </div>
+            <div class="stat-detail">{{ cpu.toFixed(0) }}%</div>
           </div>
-          <div class="stat-value" :style="{ color: barColor(cpu) }">{{ cpu.toFixed(0) }}%</div>
         </div>
 
         <!-- Memory -->
         <div class="stat-row">
-          <div class="stat-label-label">MEM</div>
+          <div class="stat-label-label">{{ $t('system.memory') }}</div>
           <div class="stat-info">
             <div class="stat-bar-track">
               <div
@@ -34,13 +34,14 @@
                 :style="{ width: memory.percent + '%', background: barColor(memory.percent) }"
               />
             </div>
+            <div class="stat-detail">{{ $t('system.usedTotal', { used: formatBytes(memory.used), total: formatBytes(memory.total) }) }}</div>
           </div>
           <div class="stat-value" :style="{ color: barColor(memory.percent) }">{{ memory.percent.toFixed(0) }}%</div>
         </div>
 
         <!-- Disk -->
         <div class="stat-row">
-          <div class="stat-label-label">DSK</div>
+          <div class="stat-label-label">{{ $t('system.disk') }}</div>
           <div class="stat-info">
             <div class="stat-bar-track">
               <div
@@ -48,6 +49,7 @@
                 :style="{ width: disk.percent + '%', background: barColor(disk.percent) }"
               />
             </div>
+            <div class="stat-detail">{{ $t('system.usedTotal', { used: formatBytes(disk.used), total: formatBytes(disk.total) }) }}</div>
           </div>
           <div class="stat-value" :style="{ color: barColor(disk.percent) }">{{ disk.percent.toFixed(0) }}%</div>
         </div>
@@ -58,6 +60,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { GetSystemStats } from '../../wailsjs/go/main/App'
 import { springAnimate } from '../composables/useSpring'
@@ -66,6 +69,8 @@ const props = defineProps({
   petPos: { type: Object, required: true },
   petSize: { type: Number, default: 160 },
 })
+
+const { t } = useI18n()
 
 const visible = ref(false)
 const cpu = ref(0)
@@ -76,18 +81,28 @@ let offStatsUpdate = null
 let cancelAnim = null
 
 const panelWidth = 170
-const panelHeight = 108
 
 const panelStyle = computed(() => {
-  const x = props.petPos.x - panelWidth - 12
+  const x = props.petPos.x - panelWidth - 6
   const y = props.petPos.y + props.petSize / 2
   const clampedX = Math.min(Math.max(x, 8), window.innerWidth - panelWidth - 8)
-  const clampedY = Math.min(Math.max(y - panelHeight / 2, 38), window.innerHeight - panelHeight - 8)
+  const clampedY = Math.min(Math.max(y - 54, 38), window.innerHeight - 108 - 8)
   return {
     left: `${clampedX}px`,
     top: `${clampedY}px`,
   }
 })
+
+/**
+ * formatBytes converts a byte count to a human-readable string (e.g. "8.5G", "256M").
+ */
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return '0'
+  if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + 'G'
+  if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + 'M'
+  if (bytes >= 1024) return (bytes / 1024).toFixed(0) + 'K'
+  return bytes + 'B'
+}
 
 function barColor(pct) {
   if (pct >= 90) return '#EF4444'
@@ -125,6 +140,7 @@ function onLeave(el, done) {
 }
 
 onMounted(() => {
+  show()
   offStatsUpdate = EventsOn('stats:update', (st) => {
     cpu.value = st.cpu
     memory.value = st.memory
@@ -146,8 +162,8 @@ defineExpose({ show })
   z-index: 2001;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
+  gap: 6px;
+  padding: 10px 14px;
   background: rgba(15, 23, 42, 0.92);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
@@ -160,7 +176,7 @@ defineExpose({ show })
 .stat-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .stat-label-label {
@@ -175,6 +191,9 @@ defineExpose({ show })
 .stat-info {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .stat-bar-track {
@@ -189,6 +208,12 @@ defineExpose({ show })
   height: 100%;
   border-radius: 2px;
   transition: width 0.4s ease, background 0.3s ease;
+}
+
+.stat-detail {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.35);
+  line-height: 1;
 }
 
 .stat-value {
