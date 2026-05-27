@@ -4,6 +4,7 @@ package system
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"net"
 	"os/exec"
@@ -11,10 +12,13 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
+	"golang.org/x/sys/unix"
 
 	"aiko/internal/bytesconv"
 	"aiko/internal/tools/base"
@@ -266,55 +270,36 @@ func getRootDiskSize() (uint64, error) {
 	return sizeKB * 1024, nil // Convert KB to bytes
 }
 
-// GetCPUUsage returns the current CPU usage percentage (0–100).
+// GetCPUUsage returns the current CPU usage percentage (0–100) with sub-percent
+// precision. On macOS it uses host_statistics (Mach) to sample cumulative CPU
+// ticks and computes the delta since the last call — the same approach as
+// Activity Monitor. The first call returns 0 (no baseline yet).
 func GetCPUUsage() (float64, error) {
 	if runtime.GOOS == "darwin" {
-		// iostat output (macOS):
-		//           disk0       cpu     load average
-		//     KB/t  tps  MB/s  us sy id   1m   5m  15m
-		//    34.12    5  0.17   3  5 92  1.23 1.45 1.67
-		// Data row fields: KB/t(0) tps(1) MB/s(2) us(3) sy(4) id(5) ...
-		out, err := exec.Command("iostat", "-c", "1", "-n", "1").Output()
-		if err != nil {
-			return 0, err
-		}
-		for _, line := range strings.Split(bytesconv.BytesToString(out), "\n") {
-			fields := strings.Fields(line)
-			if len(fields) < 6 {
-				continue
-			}
-			// Data rows start with a float (KB/t); header rows start with letters.
-			if _, err := strconv.ParseFloat(fields[0], 64); err != nil {
-				continue
-			}
-			// fields[5] is the idle percentage
-			if idle, err := strconv.ParseFloat(fields[5], 64); err == nil {
-				return 100.0 - idle, nil
-			}
-		}
+		return SampleCPUDelta(), nil
 	}
 	return 0, fmt.Errorf("not supported on %s", runtime.GOOS)
 }
 
 // GetMemoryUsage returns used and total memory in bytes.
+//
+// Formula matches Activity Monitor: used = active + inactive + wired + compressed.
+// This matches top's PhysMem line (e.g. "74G used (6606M wired, 0B compressor)").
 func GetMemoryUsage() (used, total uint64, err error) {
 	if runtime.GOOS == "darwin" {
-		// Get total memory
 		total, err = getTotalMemory()
 		if err != nil {
 			return 0, 0, err
 		}
 
-		// Get memory pressure using vm_stat
 		out, err := exec.Command("vm_stat").Output()
 		if err != nil {
 			return 0, 0, err
 		}
 
-		var pageSize, freePages, inactivePages uint64 = 4096, 0, 0 // Default 4KB pages
+		var pageSize, activePages, inactivePages, wiredPages, compressorPages uint64 = 4096, 0, 0, 0, 0
 
-		lines := strings.Split(bytesconv.BytesToString(out), "\n")
-		for _, line := range lines {
+		for _, line := range strings.Split(bytesconv.BytesToString(out), "\n") {
 			if strings.Contains(line, "page size of") {
 				parts := strings.Fields(line)
 				if len(parts) >= 8 {
@@ -322,34 +307,38 @@ func GetMemoryUsage() (used, total uint64, err error) {
 						pageSize = size
 					}
 				}
-			} else if strings.Contains(line, "Pages free:") {
-				parts := strings.Fields(line)
-				if len(parts) >= 3 {
-					pageStr := strings.TrimRight(parts[2], ".")
-					if pages, err := strconv.ParseUint(pageStr, 10, 64); err == nil {
-						freePages = pages
-					}
-				}
+			} else if strings.Contains(line, "Pages active:") {
+				activePages = parseVMStatLine(line)
 			} else if strings.Contains(line, "Pages inactive:") {
-				parts := strings.Fields(line)
-				if len(parts) >= 3 {
-					pageStr := strings.TrimRight(parts[2], ".")
-					if pages, err := strconv.ParseUint(pageStr, 10, 64); err == nil {
-						inactivePages = pages
-					}
-				}
+				inactivePages = parseVMStatLine(line)
+			} else if strings.Contains(line, "Pages wired down:") {
+				wiredPages = parseVMStatLine(line)
+			} else if strings.Contains(line, "Pages occupied by compressor:") {
+				compressorPages = parseVMStatLine(line)
 			}
 		}
 
-		freeMemory := (freePages + inactivePages) * pageSize
-		if freeMemory >= total {
-			used = 0
-		} else {
-			used = total - freeMemory
-		}
+		usedPages := activePages + inactivePages + wiredPages + compressorPages
+		used = usedPages * pageSize
+
 		return used, total, nil
 	}
 	return 0, 0, fmt.Errorf("not supported on %s", runtime.GOOS)
+}
+
+// parseVMStatLine extracts the page count from a vm_stat line like
+// "Pages active: 2383049." or "Pages wired down: 408334."
+func parseVMStatLine(line string) uint64 {
+	parts := strings.Fields(line)
+	if len(parts) < 3 {
+		return 0
+	}
+	pageStr := strings.TrimRight(parts[len(parts)-1], ".")
+	v, err := strconv.ParseUint(pageStr, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return v
 }
 
 // GetDiskUsage returns used and total disk bytes for the given path.
@@ -407,65 +396,70 @@ type NetworkStats struct {
 	UpRate   float64 `json:"upRate"`
 }
 
-var (
-	prevNetBytesIn  uint64
-	prevNetBytesOut uint64
-	prevNetTime     time.Time
-)
-
-// GetNetworkRate returns the current network bandwidth rate (bytes/sec) by
-// sampling cumulative interface counters from netstat -ib and diffing against
-// the previous sample.
-func GetNetworkRate() NetworkStats {
+// SampleNetworkBytes returns the current cumulative bytes received and
+// transmitted across all non-loopback network interfaces via sysctl
+// NET_RT_IFLIST2 (the same 64-bit kernel counters Activity Monitor uses).
+// It is stateless — the caller computes rates from successive samples.
+func SampleNetworkBytes() (bytesIn, bytesOut uint64) {
 	if runtime.GOOS != "darwin" {
-		return NetworkStats{}
+		return 0, 0
 	}
 
-	out, err := exec.Command("netstat", "-ib").Output()
-	if err != nil {
-		return NetworkStats{}
+	// net.route sysctl must be called with an explicit MIB because
+	// unix.SysctlRaw's nametomib cannot resolve "net.route".
+	mib := []int32{unix.CTL_NET, unix.AF_ROUTE, 0, 0, unix.NET_RT_IFLIST2, 0}
+
+	// Find buffer size.
+	var n uintptr
+	_, _, errno := syscall.Syscall6(
+		syscall.SYS___SYSCTL,
+		uintptr(unsafe.Pointer(&mib[0])),
+		uintptr(len(mib)),
+		0,
+		uintptr(unsafe.Pointer(&n)),
+		0,
+		0,
+	)
+	if errno != 0 {
+		return 0, 0
+	}
+	if n == 0 {
+		return 0, 0
 	}
 
-	var bytesIn, bytesOut uint64
-	for _, line := range strings.Split(bytesconv.BytesToString(out), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 10 {
-			continue
-		}
-		// Only count first line per interface (<Link#N>), skip loopback and
-		// inactive interfaces (name ending with *).
-		name := fields[0]
-		if name == "lo0" || strings.HasSuffix(name, "*") {
-			continue
-		}
-		if !strings.Contains(fields[2], "Link#") {
-			continue
-		}
-		ib, err := strconv.ParseUint(fields[6], 10, 64)
-		if err != nil {
-			continue
-		}
-		ob, err := strconv.ParseUint(fields[9], 10, 64)
-		if err != nil {
-			continue
-		}
-		bytesIn += ib
-		bytesOut += ob
+	buf := make([]byte, n)
+	_, _, errno = syscall.Syscall6(
+		syscall.SYS___SYSCTL,
+		uintptr(unsafe.Pointer(&mib[0])),
+		uintptr(len(mib)),
+		uintptr(unsafe.Pointer(&buf[0])),
+		uintptr(unsafe.Pointer(&n)),
+		0,
+		0,
+	)
+	if errno != 0 {
+		return 0, 0
 	}
+	buf = buf[:n]
 
-	now := time.Now()
-	var ns NetworkStats
-	if !prevNetTime.IsZero() {
-		elapsed := now.Sub(prevNetTime).Seconds()
-		if elapsed > 0 && bytesIn >= prevNetBytesIn && bytesOut >= prevNetBytesOut {
-			ns.DownRate = float64(bytesIn-prevNetBytesIn) / elapsed
-			ns.UpRate = float64(bytesOut-prevNetBytesOut) / elapsed
+	for len(buf) > 4 {
+		msglen := int(binary.LittleEndian.Uint16(buf[:2]))
+		if msglen < 4 || msglen > len(buf) {
+			break
 		}
+
+		// RTM_IFINFO2 (0x12) carries 64-bit interface counters via if_data64.
+		// Skip non-IFINFO2 messages and loopback (ifm_index == 1 at offset 12).
+		if buf[3] == 0x12 && msglen >= 112 && binary.LittleEndian.Uint16(buf[12:14]) != 1 {
+			// if_data64 starts at byte 32 in the message.
+			// ifi_ibytes at 32+64=96, ifi_obytes at 32+72=104.
+			bytesIn += binary.LittleEndian.Uint64(buf[96:104])
+			bytesOut += binary.LittleEndian.Uint64(buf[104:112])
+		}
+
+		buf = buf[msglen:]
 	}
-	prevNetBytesIn = bytesIn
-	prevNetBytesOut = bytesOut
-	prevNetTime = now
-	return ns
+	return bytesIn, bytesOut
 }
 
 // ProcessInfo holds basic info for a single process.

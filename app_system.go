@@ -742,7 +742,9 @@ func (a *App) GetSystemStats() SystemStats {
 		}
 	}
 
-	stats.Network = toolsystem.GetNetworkRate()
+	a.mu.RLock()
+	stats.Network = a.lastNetwork
+	a.mu.RUnlock()
 
 	return stats
 }
@@ -765,11 +767,32 @@ func (a *App) startStatsTicker() {
 		defer cancel()
 		ticker := time.NewTicker(time.Duration(interval) * time.Second)
 		defer ticker.Stop()
+
+		// Prime the CPU ticker so the first stats:update has a real value.
+		toolsystem.SampleCPUDelta()
+
+		// Initial sample so the first tick has a baseline.
+		prevIn, prevOut := toolsystem.SampleNetworkBytes()
+		prevTime := time.Now()
+
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				in, out := toolsystem.SampleNetworkBytes()
+				elapsed := time.Since(prevTime).Seconds()
+				var ns toolsystem.NetworkStats
+				if elapsed > 0 && in >= prevIn && out >= prevOut {
+					ns.DownRate = float64(in-prevIn) / elapsed
+					ns.UpRate = float64(out-prevOut) / elapsed
+				}
+				prevIn, prevOut, prevTime = in, out, time.Now()
+
+				a.mu.Lock()
+				a.lastNetwork = ns
+				a.mu.Unlock()
+
 				stats := a.GetSystemStats()
 				wailsruntime.EventsEmit(a.ctx, "stats:update", stats)
 			}

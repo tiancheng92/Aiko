@@ -35,6 +35,7 @@ import (
 	"aiko/internal/skill"
 	"aiko/internal/sms"
 	internaltools "aiko/internal/tools"
+	toolsystem "aiko/internal/tools/system"
 	"aiko/internal/tts"
 )
 
@@ -77,7 +78,8 @@ type App struct {
 	watcherWG            sync.WaitGroup     // tracks background watchers started in startup
 	cancelWatcher        context.CancelFunc // cancels the screen-watcher goroutine on shutdown
 	cancelStats          context.CancelFunc // cancels the stats polling goroutine on shutdown
-	statsWG              sync.WaitGroup     // tracks the stats polling goroutine
+	statsWG              sync.WaitGroup              // tracks the stats polling goroutine
+	lastNetwork          toolsystem.NetworkStats      // last computed network rate, updated by ticker
 	pendingUpdateVersion string             // non-empty when a successful update marker was found on startup
 	dataDir              string             // ~/.aiko; set once in startup, read-only thereafter
 	startupErr           string             // non-empty when startup failed; read in domReady to show notification

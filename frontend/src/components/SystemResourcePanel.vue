@@ -4,7 +4,13 @@
       <div v-if="visible" ref="panelRef" class="system-panel" :style="panelStyle">
         <!-- CPU -->
         <div class="stat-row">
-          <div class="stat-label-label">{{ $t("system.cpu") }}</div>
+          <div class="stat-label">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2"/>
+              <path d="M9 1v3m6-3v3M9 20v3m6-3v3M1 9h3m16 0h3M1 15h3m16 0h3"/>
+            </svg>
+            <span>{{ $t("system.cpu") }}</span>
+          </div>
           <div class="stat-info">
             <div class="stat-bar-track">
               <div
@@ -15,13 +21,19 @@
             <div class="stat-detail">{{ cpuModel }}</div>
           </div>
           <div class="stat-value" :style="{ color: barColor(cpu) }">
-            {{ cpu.toFixed(0) }}%
+            {{ cpu.toFixed(2) }}%
           </div>
         </div>
 
         <!-- Memory -->
         <div class="stat-row">
-          <div class="stat-label-label">{{ $t("system.memory") }}</div>
+          <div class="stat-label">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <path d="M7 8h10M7 12h10M7 16h6"/>
+            </svg>
+            <span>{{ $t("system.memory") }}</span>
+          </div>
           <div class="stat-info">
             <div class="stat-bar-track">
               <div
@@ -42,13 +54,20 @@
             </div>
           </div>
           <div class="stat-value" :style="{ color: barColor(memory.percent) }">
-            {{ memory.percent.toFixed(0) }}%
+            {{ memory.percent.toFixed(2) }}%
           </div>
         </div>
 
         <!-- Disk -->
         <div class="stat-row">
-          <div class="stat-label-label">{{ $t("system.disk") }}</div>
+          <div class="stat-label">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <ellipse cx="12" cy="12" rx="9" ry="9"/>
+              <ellipse cx="12" cy="12" rx="3" ry="3"/>
+              <path d="M12 3v18"/>
+            </svg>
+            <span>{{ $t("system.disk") }}</span>
+          </div>
           <div class="stat-info">
             <div class="stat-bar-track">
               <div
@@ -69,16 +88,32 @@
             </div>
           </div>
           <div class="stat-value" :style="{ color: barColor(disk.percent) }">
-            {{ disk.percent.toFixed(0) }}%
+            {{ disk.percent.toFixed(2) }}%
           </div>
         </div>
 
         <!-- Network -->
         <div class="stat-row">
-          <div class="stat-label-label">{{ $t("system.network") }}</div>
+          <div class="stat-label">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="6" cy="12" r="3"/>
+              <circle cx="18" cy="6" r="3"/>
+              <circle cx="18" cy="18" r="3"/>
+              <path d="M8.7 10.7l6.6-3.4M8.7 13.3l6.6 3.4"/>
+            </svg>
+            <span>{{ $t("system.network") }}</span>
+          </div>
           <div class="stat-info">
-            <div class="stat-detail network-rate">
-              {{ formatRate(network.downRate) }} ↓ / {{ formatRate(network.upRate) }} ↑
+            <div class="network-rates">
+              <svg width="10" height="10" viewBox="0 0 10 10" class="network-arrow down">
+                <path d="M5 1v7M2 6l3 3 3-3" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span class="network-val down">{{ formatRate(network.downRate) }}</span>
+              <span class="network-sep">/</span>
+              <svg width="10" height="10" viewBox="0 0 10 10" class="network-arrow up">
+                <path d="M5 9V2M2 4l3-3 3 3" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span class="network-val up">{{ formatRate(network.upRate) }}</span>
             </div>
           </div>
         </div>
@@ -157,7 +192,7 @@ const baseHeight = ref(116);
 let offStatsUpdate = null;
 let cancelAnim = null;
 
-const panelWidth = 240;
+const panelWidth = 280;
 
 const panelStyle = computed(() => {
   const h = baseHeight.value + expandedHeight.value;
@@ -320,7 +355,7 @@ defineExpose({ show });
   z-index: 2001;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   padding: 12px 16px;
   box-sizing: border-box;
   overflow: hidden;
@@ -341,14 +376,15 @@ defineExpose({ show });
   gap: 8px;
 }
 
-.stat-label-label {
-  width: 30px;
-  font-size: 11px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.55);
+.stat-label {
+  width: 52px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   flex-shrink: 0;
-  text-align: right;
-  letter-spacing: 0.02em;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.45);
 }
 
 .stat-info {
@@ -370,25 +406,78 @@ defineExpose({ show });
 .stat-bar-fill {
   height: 100%;
   border-radius: 3px;
+  position: relative;
+  overflow: hidden;
   transition:
     width 0.4s ease,
     background 0.3s ease;
 }
 
+.stat-bar-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.25) 50%,
+    transparent 100%
+  );
+  animation: barShimmer 2s ease-in-out infinite;
+}
+
+@keyframes barShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
 .stat-detail {
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.5);
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 
-.network-rate {
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.55);
+.network-rates {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.network-arrow {
+  flex-shrink: 0;
+}
+
+.network-arrow.down {
+  color: #34D399;
+}
+
+.network-arrow.up {
+  color: #FBBF24;
+}
+
+.network-val {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.network-val.down {
+  color: #34D399;
+}
+
+.network-val.up {
+  color: #FBBF24;
+}
+
+.network-sep {
+  color: rgba(255, 255, 255, 0.25);
+  font-size: 11px;
 }
 
 .stat-value {
-  width: 36px;
+  width: 52px;
   font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -402,18 +491,20 @@ defineExpose({ show });
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: 3px 0 1px;
+  padding: 4px 0 2px;
   margin: 0;
   border: none;
-  background: none;
-  color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.4);
   cursor: pointer;
-  transition: color 0.2s;
+  transition: background 0.2s, color 0.2s;
   line-height: 1;
 }
 
 .expand-toggle:hover {
-  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.75);
 }
 
 .expand-toggle svg {
@@ -441,9 +532,10 @@ defineExpose({ show });
 .process-label {
   font-size: 10px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.45);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
+  margin-bottom: 1px;
 }
 
 .process-row {
@@ -451,11 +543,19 @@ defineExpose({ show });
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+  padding: 2px 6px;
+  margin: 0 -6px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.process-row:hover {
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .process-name {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.78);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -467,7 +567,7 @@ defineExpose({ show });
 .process-val {
   font-size: 11px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.6);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 }
