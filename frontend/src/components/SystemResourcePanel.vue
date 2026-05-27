@@ -12,9 +12,8 @@
       >
         <!-- CPU -->
         <div class="stat-row">
-          <div class="stat-icon" v-html="ICON_CPU" />
+          <div class="stat-label-label">CPU</div>
           <div class="stat-info">
-            <div class="stat-label">CPU</div>
             <div class="stat-bar-track">
               <div
                 class="stat-bar-fill"
@@ -27,7 +26,7 @@
 
         <!-- Memory -->
         <div class="stat-row">
-          <div class="stat-label mem-label">MEM</div>
+          <div class="stat-label-label">MEM</div>
           <div class="stat-info">
             <div class="stat-bar-track">
               <div
@@ -41,7 +40,7 @@
 
         <!-- Disk -->
         <div class="stat-row">
-          <div class="stat-label disk-label">DSK</div>
+          <div class="stat-label-label">DSK</div>
           <div class="stat-info">
             <div class="stat-bar-track">
               <div
@@ -62,7 +61,6 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { GetSystemStats } from '../../wailsjs/go/main/App'
 import { springAnimate } from '../composables/useSpring'
-import { ICON_CPU } from '../utils/icons'
 
 const props = defineProps({
   petPos: { type: Object, required: true },
@@ -165,19 +163,7 @@ defineExpose({ show })
   gap: 8px;
 }
 
-.stat-icon {
-  width: 16px;
-  height: 16px;
-  color: rgba(255, 255, 255, 0.5);
-  flex-shrink: 0;
-}
-
-.stat-icon :deep(svg) {
-  width: 16px;
-  height: 16px;
-}
-
-.stat-label {
+.stat-label-label {
   width: 28px;
   font-size: 10px;
   font-weight: 600;

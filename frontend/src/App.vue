@@ -647,7 +647,6 @@ function onSettingsLeave(el, done) {
     ref="systemPanelRef"
     :pet-pos="ballPos"
     :pet-size="ballSize"
-    @close="closeSystemPanel"
   />
 
   <!--

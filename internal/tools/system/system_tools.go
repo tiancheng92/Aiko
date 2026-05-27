@@ -114,7 +114,7 @@ func (t *GetSystemStatsTool) InvokableRun(ctx context.Context, _ string, _ ...to
 	}
 
 	// Memory usage
-	if memUsed, memTotal, err := GetMemoryUsage(); err == nil {
+	if memUsed, memTotal, err := GetMemoryUsage(); err == nil && memTotal > 0 {
 		usedPercent := float64(memUsed) / float64(memTotal) * 100
 		lines = append(lines,
 			fmt.Sprintf("内存: 已用 %s / 共 %s（%.1f%%）",
@@ -124,7 +124,7 @@ func (t *GetSystemStatsTool) InvokableRun(ctx context.Context, _ string, _ ...to
 	}
 
 	// Disk usage for root partition
-	if diskUsed, diskTotal, err := GetDiskUsage("/"); err == nil {
+	if diskUsed, diskTotal, err := GetDiskUsage("/"); err == nil && diskTotal > 0 {
 		usedPercent := float64(diskUsed) / float64(diskTotal) * 100
 		lines = append(lines,
 			fmt.Sprintf("磁盘 /: 已用 %s / 共 %s（%.1f%%）",
