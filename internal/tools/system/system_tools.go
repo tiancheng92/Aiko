@@ -86,7 +86,7 @@ func (t *GetHardwareInfoTool) InvokableRun(_ context.Context, _ string, _ ...too
 	lines = append(lines, fmt.Sprintf("CPU 逻辑核心数: %d", runtime.NumCPU()))
 
 	// CPU model (macOS only)
-	if model, err := getCPUModel(); err == nil && model != "" {
+	if model, err := GetCPUModel(); err == nil && model != "" {
 		lines = append(lines, fmt.Sprintf("CPU 型号: %s", model))
 	}
 
@@ -233,7 +233,8 @@ func getTotalMemory() (uint64, error) {
 	return 0, fmt.Errorf("not supported on %s", runtime.GOOS)
 }
 
-func getCPUModel() (string, error) {
+// GetCPUModel returns the CPU brand string (e.g. "Apple M3 Pro").
+func GetCPUModel() (string, error) {
 	if runtime.GOOS == "darwin" {
 		out, err := exec.Command("sysctl", "-n", "machdep.cpu.brand_string").Output()
 		if err != nil {

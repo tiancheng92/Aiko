@@ -12,6 +12,7 @@
                 :style="{ width: cpu + '%', background: barColor(cpu) }"
               />
             </div>
+            <div class="stat-detail">{{ cpuModel }}</div>
           </div>
           <div class="stat-value" :style="{ color: barColor(cpu) }">
             {{ cpu.toFixed(0) }}%
@@ -92,6 +93,7 @@ const { t } = useI18n();
 
 const visible = ref(false);
 const cpu = ref(0);
+const cpuModel = ref("");
 const memory = ref({ used: 0, total: 0, percent: 0 });
 const disk = ref({ used: 0, total: 0, percent: 0 });
 
@@ -137,6 +139,7 @@ function show() {
   GetSystemStats()
     .then((st) => {
       cpu.value = st.cpu;
+      cpuModel.value = st.cpuModel || "";
       memory.value = st.memory;
       disk.value = st.disk;
     })
@@ -193,6 +196,7 @@ onMounted(() => {
   show();
   offStatsUpdate = EventsOn("stats:update", (st) => {
     cpu.value = st.cpu;
+    cpuModel.value = st.cpuModel || "";
     memory.value = st.memory;
     disk.value = st.disk;
   });

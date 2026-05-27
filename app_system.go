@@ -682,9 +682,10 @@ func run(name string, args ...string) error {
 
 // SystemStats holds real-time CPU, memory, and disk usage data.
 type SystemStats struct {
-	CPU    float64     `json:"cpu"`
-	Memory MemoryStats `json:"memory"`
-	Disk   DiskStats   `json:"disk"`
+	CPU      float64     `json:"cpu"`
+	CPUModel string      `json:"cpuModel"`
+	Memory   MemoryStats `json:"memory"`
+	Disk     DiskStats   `json:"disk"`
 }
 
 // MemoryStats holds memory usage data.
@@ -710,6 +711,12 @@ func (a *App) GetSystemStats() SystemStats {
 		log.Warn().Err(err).Msg("GetSystemStats: CPU")
 	} else {
 		stats.CPU = cpu
+	}
+
+	if model, err := toolsystem.GetCPUModel(); err != nil {
+		log.Warn().Err(err).Msg("GetSystemStats: CPU model")
+	} else {
+		stats.CPUModel = model
 	}
 
 	memUsed, memTotal, err := toolsystem.GetMemoryUsage()

@@ -290,6 +290,7 @@ export namespace main {
 	}
 	export class SystemStats {
 	    cpu: number;
+	    cpuModel: string;
 	    memory: MemoryStats;
 	    disk: DiskStats;
 	
@@ -300,6 +301,7 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.cpu = source["cpu"];
+	        this.cpuModel = source["cpuModel"];
 	        this.memory = this.convertValues(source["memory"], MemoryStats);
 	        this.disk = this.convertValues(source["disk"], DiskStats);
 	    }
