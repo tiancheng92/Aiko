@@ -41,6 +41,7 @@ type Config struct {
 	PomodoroShortBreakDuration    int // default 5
 	PomodoroLongBreakDuration     int // default 15
 	PomodoroRoundsBeforeLongBreak int // default 4
+	SystemStatsInterval int          // seconds between system stats polls; default 2
 	ActiveProfileID int64 // 当前激活的 ModelProfile ID，0 表示未设置
 	TTSModelDir           string  // kokoro 模型目录（空则使用默认 ~/aiko-tts-venv/models）
 	TTSVoice              string  // 声线名
@@ -132,6 +133,10 @@ func (s *Store) Load() (*Config, error) {
 	cfg.PomodoroShortBreakDuration = parseInt(m["pomodoro_short_break_duration"], 5)
 	cfg.PomodoroLongBreakDuration = parseInt(m["pomodoro_long_break_duration"], 15)
 	cfg.PomodoroRoundsBeforeLongBreak = parseInt(m["pomodoro_rounds_before_long_break"], 4)
+	cfg.SystemStatsInterval = parseInt(m["system_stats_interval"], 2)
+	if cfg.SystemStatsInterval < 1 {
+		cfg.SystemStatsInterval = 2
+	}
 	cfg.ActiveProfileID = int64(parseInt(m["active_profile_id"], 0))
 	cfg.SMSWatcherEnabled = m["sms_watcher_enabled"] == "true"
 	cfg.SMSAllMessagesEnabled = m["sms_all_messages_enabled"] == "true"
@@ -197,6 +202,7 @@ func (s *Store) Save(cfg *Config) error {
 		"pomodoro_short_break_duration":     strconv.Itoa(cfg.PomodoroShortBreakDuration),
 		"pomodoro_long_break_duration":      strconv.Itoa(cfg.PomodoroLongBreakDuration),
 		"pomodoro_rounds_before_long_break": strconv.Itoa(cfg.PomodoroRoundsBeforeLongBreak),
+		"system_stats_interval":           strconv.Itoa(cfg.SystemStatsInterval),
 		"language":                          cfg.Language,
 	}
 	tx, err := s.db.Begin()
