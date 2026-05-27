@@ -247,6 +247,9 @@ func (a *App) startup(ctx context.Context) {
 	// Watch for mouse moving to a different screen and migrate the window.
 	a.startScreenWatcher()
 
+	// Start system stats polling ticker.
+	a.startStatsTicker()
+
 	// On system wake, trigger an immediate poll so jobs/reminders due during
 	// sleep are delivered within seconds rather than waiting up to 1 minute.
 	// The poll-based schedulers already use wall-clock timestamps in the DB, so
@@ -652,6 +655,9 @@ func (a *App) shutdown(_ context.Context) {
 	if a.cancelWatcher != nil {
 		a.cancelWatcher()
 	}
+
+	// Stop system stats polling.
+	a.stopStatsTicker()
 
 	a.mu.Lock()
 	w := a.smsWatcher
