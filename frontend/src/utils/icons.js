@@ -38,4 +38,7 @@ export const ICON_MEMORY    = SVG('<ellipse cx="12" cy="5" rx="9" ry="3"/><path 
 
 // Pomodoro
 export const ICON_POMODORO     = SVG('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>')
+
+// System resource panel
+export const ICON_CPU     = SVG('<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M20 9h2M20 15h2M2 9h2M2 15h2"/>')
 export const ICON_TAB_POMODORO = SVG('<path d="M12 2c-3 0-8 2-8 8 0 5 3 10 8 12 5-2 8-7 8-12 0-6-5-8-8-8z"/><path d="M12 6v2"/>', 1.5)
