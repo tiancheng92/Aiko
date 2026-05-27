@@ -109,12 +109,12 @@ func (t *GetSystemStatsTool) InvokableRun(ctx context.Context, _ string, _ ...to
 	var lines []string
 
 	// CPU usage
-	if cpu, err := getCPUUsage(); err == nil {
+	if cpu, err := GetCPUUsage(); err == nil {
 		lines = append(lines, fmt.Sprintf("CPU 使用率: %.1f%%", cpu))
 	}
 
 	// Memory usage
-	if memUsed, memTotal, err := getMemoryUsage(); err == nil {
+	if memUsed, memTotal, err := GetMemoryUsage(); err == nil {
 		usedPercent := float64(memUsed) / float64(memTotal) * 100
 		lines = append(lines,
 			fmt.Sprintf("内存: 已用 %s / 共 %s（%.1f%%）",
@@ -124,7 +124,7 @@ func (t *GetSystemStatsTool) InvokableRun(ctx context.Context, _ string, _ ...to
 	}
 
 	// Disk usage for root partition
-	if diskUsed, diskTotal, err := getDiskUsage("/"); err == nil {
+	if diskUsed, diskTotal, err := GetDiskUsage("/"); err == nil {
 		usedPercent := float64(diskUsed) / float64(diskTotal) * 100
 		lines = append(lines,
 			fmt.Sprintf("磁盘 /: 已用 %s / 共 %s（%.1f%%）",
@@ -264,8 +264,8 @@ func getRootDiskSize() (uint64, error) {
 	return sizeKB * 1024, nil // Convert KB to bytes
 }
 
-// getCPUUsage returns the current CPU usage percentage (0–100).
-func getCPUUsage() (float64, error) {
+// GetCPUUsage returns the current CPU usage percentage (0–100).
+func GetCPUUsage() (float64, error) {
 	if runtime.GOOS == "darwin" {
 		// iostat output (macOS):
 		//           disk0       cpu     load average
@@ -294,7 +294,8 @@ func getCPUUsage() (float64, error) {
 	return 0, fmt.Errorf("not supported on %s", runtime.GOOS)
 }
 
-func getMemoryUsage() (used, total uint64, err error) {
+// GetMemoryUsage returns used and total memory in bytes.
+func GetMemoryUsage() (used, total uint64, err error) {
 	if runtime.GOOS == "darwin" {
 		// Get total memory
 		total, err = getTotalMemory()
@@ -349,7 +350,8 @@ func getMemoryUsage() (used, total uint64, err error) {
 	return 0, 0, fmt.Errorf("not supported on %s", runtime.GOOS)
 }
 
-func getDiskUsage(path string) (used, total uint64, err error) {
+// GetDiskUsage returns used and total disk bytes for the given path.
+func GetDiskUsage(path string) (used, total uint64, err error) {
 	out, err := exec.Command("df", "-k", path).Output()
 	if err != nil {
 		return 0, 0, err
