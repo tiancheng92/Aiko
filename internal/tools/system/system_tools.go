@@ -361,7 +361,7 @@ func GetDiskUsage(path string) (used, total uint64, err error) {
 		return 0, 0, fmt.Errorf("unexpected df output")
 	}
 	fields := strings.Fields(lines[1])
-	if len(fields) < 4 {
+	if len(fields) < 5 {
 		return 0, 0, fmt.Errorf("unexpected df fields")
 	}
 
@@ -369,11 +369,14 @@ func GetDiskUsage(path string) (used, total uint64, err error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	usedKB, err := strconv.ParseUint(fields[2], 10, 64)
+	availKB, err := strconv.ParseUint(fields[3], 10, 64)
 	if err != nil {
 		return 0, 0, err
 	}
 
+	// used = total - available (more accurate than the Used column on APFS,
+	// which can be inflated by snapshots and purgable space).
+	usedKB := totalKB - availKB
 	return usedKB * 1024, totalKB * 1024, nil // Convert KB to bytes
 }
 
