@@ -138,6 +138,10 @@ export function GetSoundsEnabled() {
   return window['go']['main']['App']['GetSoundsEnabled']();
 }
 
+export function GetSystemStats() {
+  return window['go']['main']['App']['GetSystemStats']();
+}
+
 export function GetTTSAutoPlay() {
   return window['go']['main']['App']['GetTTSAutoPlay']();
 }
@@ -268,6 +272,10 @@ export function ResetAvatar(arg1) {
 
 export function ResetBallPosition(arg1, arg2) {
   return window['go']['main']['App']['ResetBallPosition'](arg1, arg2);
+}
+
+export function RestartStatsTicker() {
+  return window['go']['main']['App']['RestartStatsTicker']();
 }
 
 export function ResumePomodoro() {

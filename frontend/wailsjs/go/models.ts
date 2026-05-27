@@ -32,6 +32,7 @@ export namespace config {
 	    PomodoroShortBreakDuration: number;
 	    PomodoroLongBreakDuration: number;
 	    PomodoroRoundsBeforeLongBreak: number;
+	    SystemStatsInterval: number;
 	    ActiveProfileID: number;
 	    TTSModelDir: string;
 	    TTSVoice: string;
@@ -87,6 +88,7 @@ export namespace config {
 	        this.PomodoroShortBreakDuration = source["PomodoroShortBreakDuration"];
 	        this.PomodoroLongBreakDuration = source["PomodoroLongBreakDuration"];
 	        this.PomodoroRoundsBeforeLongBreak = source["PomodoroRoundsBeforeLongBreak"];
+	        this.SystemStatsInterval = source["SystemStatsInterval"];
 	        this.ActiveProfileID = source["ActiveProfileID"];
 	        this.TTSModelDir = source["TTSModelDir"];
 	        this.TTSVoice = source["TTSVoice"];
@@ -190,6 +192,22 @@ export namespace main {
 	        this.useMemory = source["useMemory"];
 	    }
 	}
+	export class DiskStats {
+	    used: number;
+	    total: number;
+	    percent: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DiskStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.used = source["used"];
+	        this.total = source["total"];
+	        this.percent = source["percent"];
+	    }
+	}
 	export class FileAttachment {
 	    name: string;
 	    mimeType: string;
@@ -226,6 +244,22 @@ export namespace main {
 	        this.siteName = source["siteName"];
 	    }
 	}
+	export class MemoryStats {
+	    used: number;
+	    total: number;
+	    percent: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MemoryStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.used = source["used"];
+	        this.total = source["total"];
+	        this.percent = source["percent"];
+	    }
+	}
 	export class MousePosition {
 	    x: number;
 	    y: number;
@@ -253,6 +287,40 @@ export namespace main {
 	        this.width = source["width"];
 	        this.height = source["height"];
 	    }
+	}
+	export class SystemStats {
+	    cpu: number;
+	    memory: MemoryStats;
+	    disk: DiskStats;
+	
+	    static createFrom(source: any = {}) {
+	        return new SystemStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.cpu = source["cpu"];
+	        this.memory = this.convertValues(source["memory"], MemoryStats);
+	        this.disk = this.convertValues(source["disk"], DiskStats);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class UpdateInfo {
 	    current_version: string;

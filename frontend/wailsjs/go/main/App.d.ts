@@ -79,6 +79,8 @@ export function GetScreenSize():Promise<Array<number>>;
 
 export function GetSoundsEnabled():Promise<boolean>;
 
+export function GetSystemStats():Promise<main.SystemStats>;
+
 export function GetTTSAutoPlay():Promise<boolean>;
 
 export function GetToolPermissions():Promise<Array<tools.PermissionRow>>;
@@ -144,6 +146,8 @@ export function ReleaseKeyWindow():Promise<void>;
 export function ResetAvatar(arg1:string):Promise<void>;
 
 export function ResetBallPosition(arg1:number,arg2:number):Promise<void>;
+
+export function RestartStatsTicker():Promise<void>;
 
 export function ResumePomodoro():Promise<void>;
 
