@@ -589,6 +589,15 @@
       "roundsBeforeLongBreak": "Rounds Before Long Break",
       "roundsBeforeLongBreakDesc": "Number of focus rounds before a long break, default 4",
       "hint": "Changes take effect immediately and do not affect the active timer."
+    },
+    "system": {
+      "showPanel": "Show System Panel",
+      "hidePanel": "Hide System Panel",
+      "settings": {
+        "title": "System Resource",
+        "interval": "Refresh Interval",
+        "intervalDesc": "How often to refresh CPU, memory, and disk usage data"
+      }
     }
   }
 }
