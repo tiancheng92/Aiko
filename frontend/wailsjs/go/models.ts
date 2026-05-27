@@ -293,6 +293,7 @@ export namespace main {
 	    cpuModel: string;
 	    memory: MemoryStats;
 	    disk: DiskStats;
+	    network: system.NetworkStats;
 	
 	    static createFrom(source: any = {}) {
 	        return new SystemStats(source);
@@ -304,6 +305,7 @@ export namespace main {
 	        this.cpuModel = source["cpuModel"];
 	        this.memory = this.convertValues(source["memory"], MemoryStats);
 	        this.disk = this.convertValues(source["disk"], DiskStats);
+	        this.network = this.convertValues(source["network"], system.NetworkStats);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -546,6 +548,75 @@ export namespace scheduler {
 	        this.NextRunAt = source["NextRunAt"];
 	        this.CreatedAt = source["CreatedAt"];
 	    }
+	}
+
+}
+
+export namespace system {
+	
+	export class NetworkStats {
+	    downRate: number;
+	    upRate: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new NetworkStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.downRate = source["downRate"];
+	        this.upRate = source["upRate"];
+	    }
+	}
+	export class ProcessInfo {
+	    pid: number;
+	    name: string;
+	    cpu: number;
+	    memory: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProcessInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.pid = source["pid"];
+	        this.name = source["name"];
+	        this.cpu = source["cpu"];
+	        this.memory = source["memory"];
+	    }
+	}
+	export class TopProcesses {
+	    topCpu: ProcessInfo[];
+	    topMemory: ProcessInfo[];
+	
+	    static createFrom(source: any = {}) {
+	        return new TopProcesses(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.topCpu = this.convertValues(source["topCpu"], ProcessInfo);
+	        this.topMemory = this.convertValues(source["topMemory"], ProcessInfo);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }

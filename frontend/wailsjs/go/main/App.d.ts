@@ -8,6 +8,7 @@ import {config} from '../models';
 import {memory} from '../models';
 import {pomodoro} from '../models';
 import {tools} from '../models';
+import {system} from '../models';
 import {proactive} from '../models';
 import {frontend} from '../models';
 
@@ -84,6 +85,8 @@ export function GetSystemStats():Promise<main.SystemStats>;
 export function GetTTSAutoPlay():Promise<boolean>;
 
 export function GetToolPermissions():Promise<Array<tools.PermissionRow>>;
+
+export function GetTopProcesses():Promise<system.TopProcesses>;
 
 export function GetVRMPath(arg1:string):Promise<string>;
 

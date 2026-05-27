@@ -598,6 +598,11 @@
     "memory": "MEM",
     "disk": "DSK",
     "usedTotal": "{used} / {total}",
+    "expand": "Show top processes",
+    "collapse": "Hide top processes",
+    "topCpu": "CPU Top 5 (per core)",
+    "topMemory": "MEM Top 5",
+    "network": "NET",
     "settings": {
       "title": "System Resource",
       "interval": "Refresh Interval",

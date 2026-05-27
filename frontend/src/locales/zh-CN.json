@@ -598,6 +598,11 @@
     "memory": "内存",
     "disk": "磁盘",
     "usedTotal": "{used} / {total}",
+    "expand": "展开进程列表",
+    "collapse": "收起进程列表",
+    "topCpu": "CPU 前五 (单核%)",
+    "topMemory": "内存 前五",
+    "network": "网络",
     "settings": {
       "title": "系统资源",
       "interval": "刷新间隔",

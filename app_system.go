@@ -680,12 +680,13 @@ func run(name string, args ...string) error {
 	return nil
 }
 
-// SystemStats holds real-time CPU, memory, and disk usage data.
+// SystemStats holds real-time CPU, memory, disk, and network usage data.
 type SystemStats struct {
-	CPU      float64     `json:"cpu"`
-	CPUModel string      `json:"cpuModel"`
-	Memory   MemoryStats `json:"memory"`
-	Disk     DiskStats   `json:"disk"`
+	CPU      float64          `json:"cpu"`
+	CPUModel string           `json:"cpuModel"`
+	Memory   MemoryStats      `json:"memory"`
+	Disk     DiskStats        `json:"disk"`
+	Network  toolsystem.NetworkStats `json:"network"`
 }
 
 // MemoryStats holds memory usage data.
@@ -741,6 +742,8 @@ func (a *App) GetSystemStats() SystemStats {
 		}
 	}
 
+	stats.Network = toolsystem.GetNetworkRate()
+
 	return stats
 }
 
@@ -789,4 +792,14 @@ func (a *App) stopStatsTicker() {
 func (a *App) RestartStatsTicker() {
 	a.stopStatsTicker()
 	a.startStatsTicker()
+}
+
+// GetTopProcesses returns the top 5 processes by CPU and the top 5 by memory usage.
+func (a *App) GetTopProcesses() toolsystem.TopProcesses {
+	top, err := toolsystem.GetTopProcesses()
+	if err != nil {
+		log.Warn().Err(err).Msg("GetTopProcesses")
+		return toolsystem.TopProcesses{}
+	}
+	return *top
 }

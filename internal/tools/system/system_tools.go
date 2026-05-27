@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -398,6 +399,144 @@ func fmtBytes(b uint64) string {
 	default:
 		return fmt.Sprintf("%d B", b)
 	}
+}
+
+// NetworkStats holds download and upload rates in bytes per second.
+type NetworkStats struct {
+	DownRate float64 `json:"downRate"`
+	UpRate   float64 `json:"upRate"`
+}
+
+var (
+	prevNetBytesIn  uint64
+	prevNetBytesOut uint64
+	prevNetTime     time.Time
+)
+
+// GetNetworkRate returns the current network bandwidth rate (bytes/sec) by
+// sampling cumulative interface counters from netstat -ib and diffing against
+// the previous sample.
+func GetNetworkRate() NetworkStats {
+	if runtime.GOOS != "darwin" {
+		return NetworkStats{}
+	}
+
+	out, err := exec.Command("netstat", "-ib").Output()
+	if err != nil {
+		return NetworkStats{}
+	}
+
+	var bytesIn, bytesOut uint64
+	for _, line := range strings.Split(bytesconv.BytesToString(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 10 {
+			continue
+		}
+		// Only count first line per interface (<Link#N>), skip loopback and
+		// inactive interfaces (name ending with *).
+		name := fields[0]
+		if name == "lo0" || strings.HasSuffix(name, "*") {
+			continue
+		}
+		if !strings.Contains(fields[2], "Link#") {
+			continue
+		}
+		ib, err := strconv.ParseUint(fields[6], 10, 64)
+		if err != nil {
+			continue
+		}
+		ob, err := strconv.ParseUint(fields[9], 10, 64)
+		if err != nil {
+			continue
+		}
+		bytesIn += ib
+		bytesOut += ob
+	}
+
+	now := time.Now()
+	var ns NetworkStats
+	if !prevNetTime.IsZero() {
+		elapsed := now.Sub(prevNetTime).Seconds()
+		if elapsed > 0 && bytesIn >= prevNetBytesIn && bytesOut >= prevNetBytesOut {
+			ns.DownRate = float64(bytesIn-prevNetBytesIn) / elapsed
+			ns.UpRate = float64(bytesOut-prevNetBytesOut) / elapsed
+		}
+	}
+	prevNetBytesIn = bytesIn
+	prevNetBytesOut = bytesOut
+	prevNetTime = now
+	return ns
+}
+
+// ProcessInfo holds basic info for a single process.
+type ProcessInfo struct {
+	PID    int     `json:"pid"`
+	Name   string  `json:"name"`
+	CPU    float64 `json:"cpu"`
+	Memory float64 `json:"memory"`
+}
+
+// TopProcesses holds top CPU and memory consuming processes.
+type TopProcesses struct {
+	TopCPU    []ProcessInfo `json:"topCpu"`
+	TopMemory []ProcessInfo `json:"topMemory"`
+}
+
+// GetTopProcesses returns the top 5 processes by CPU and memory usage via ps.
+// Runs two separate ps commands with native sorting, piped to head, so only
+// the needed rows are parsed and no Go-side sorting is required.
+func GetTopProcesses() (*TopProcesses, error) {
+	if runtime.GOOS != "darwin" {
+		return nil, fmt.Errorf("not supported on %s", runtime.GOOS)
+	}
+
+	cpuOut, err := exec.Command("sh", "-c", "ps -eo pid,%cpu,%mem,comm -r | head -6").Output()
+	if err != nil {
+		return nil, fmt.Errorf("ps cpu: %w", err)
+	}
+
+	memOut, err := exec.Command("sh", "-c", "ps -eo pid,%cpu,%mem,comm -m | head -6").Output()
+	if err != nil {
+		return nil, fmt.Errorf("ps mem: %w", err)
+	}
+
+	return &TopProcesses{
+		TopCPU:    parseTopProcesses(cpuOut),
+		TopMemory: parseTopProcesses(memOut),
+	}, nil
+}
+
+// parseTopProcesses parses ps output with columns pid,%cpu,%mem,comm where comm
+// is the last field and may contain spaces.
+func parseTopProcesses(out []byte) []ProcessInfo {
+	lines := strings.Split(bytesconv.BytesToString(out), "\n")
+	procs := make([]ProcessInfo, 0, 5)
+	for _, line := range lines[1:] {
+		fields := strings.Fields(line)
+		if len(fields) < 4 {
+			continue
+		}
+		pid, err := strconv.Atoi(fields[0])
+		if err != nil {
+			continue
+		}
+		cpu, err := strconv.ParseFloat(fields[1], 64)
+		if err != nil {
+			continue
+		}
+		mem, err := strconv.ParseFloat(fields[2], 64)
+		if err != nil {
+			continue
+		}
+		name := strings.Join(fields[3:], " ")
+		procs = append(procs, ProcessInfo{
+			PID:    pid,
+			Name:   filepath.Base(name),
+			CPU:    cpu,
+			Memory: mem,
+		})
+	}
+	return procs
 }
 
 // fmtDuration formats a duration as "Xd Xh Xm".

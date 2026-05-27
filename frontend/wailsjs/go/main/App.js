@@ -150,6 +150,10 @@ export function GetToolPermissions() {
   return window['go']['main']['App']['GetToolPermissions']();
 }
 
+export function GetTopProcesses() {
+  return window['go']['main']['App']['GetTopProcesses']();
+}
+
 export function GetVRMPath(arg1) {
   return window['go']['main']['App']['GetVRMPath'](arg1);
 }
