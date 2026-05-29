@@ -177,6 +177,8 @@
       "systemPromptDesc": "AI의 동작과 성격을 정의합니다",
       "shortTermLimit": "단기 기억 라운드 수",
       "shortTermLimitDesc": "최근 N 라운드의 대화를 컨텍스트로 유지",
+      "maxContextTokens": "컨텍스트 토큰 한도",
+      "maxContextTokensDesc": "컨텍스트가 이 토큰 수를 초과하면 대화 기록을 압축합니다 (0 = 비활성화)",
       "nudgeInterval": "자기 성장 알림 간격",
       "nudgeIntervalDesc": "N 라운드마다 기억 통합 프롬프트 트리거, 0은 기본값",
       "skillsDirs": "스킬 디렉토리",

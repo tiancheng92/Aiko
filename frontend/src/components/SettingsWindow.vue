@@ -74,7 +74,7 @@ const props = defineProps({
 const cfg = ref({
   LLMBaseURL: '', LLMAPIKey: '', LLMModel: '', EmbeddingModel: '',
   Live2DModel: 'hiyori',
-  SystemPrompt: '', ShortTermLimit: 30, NudgeInterval: 5, SkillsDirs: '',
+  SystemPrompt: '', ShortTermLimit: 30, NudgeInterval: 5, MaxContextTokens: 10000, SkillsDirs: '',
   EmbeddingDim: 1536,
   PetSize: 0,
   ChatWidth: 0,
@@ -1501,6 +1501,13 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                 <div class="row-desc">{{ $t('settings.ai.shortTermLimitDesc') }}</div>
               </div>
               <input type="number" v-model.number="cfg.ShortTermLimit" min="1" max="100" style="width:72px;text-align:center" />
+            </div>
+            <div class="settings-row">
+              <div class="row-body">
+                <div class="row-title">{{ $t('settings.ai.maxContextTokens') }}</div>
+                <div class="row-desc">{{ $t('settings.ai.maxContextTokensDesc') }}</div>
+              </div>
+              <input type="number" v-model.number="cfg.MaxContextTokens" min="0" step="1000" style="width:72px;text-align:center" />
             </div>
             <div class="settings-row">
               <div class="row-body">

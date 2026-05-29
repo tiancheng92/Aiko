@@ -177,6 +177,8 @@
       "systemPromptDesc": "AIの動作と個性を定義します",
       "shortTermLimit": "短期記憶ラウンド数",
       "shortTermLimitDesc": "直近Nラウンドの会話をコンテキストとして保持",
+      "maxContextTokens": "コンテキストトークン上限",
+      "maxContextTokensDesc": "コンテキストがこのトークン数を超えた場合、会話履歴を圧縮します（0 = 無効）",
       "nudgeInterval": "自己成長ナッジ間隔",
       "nudgeIntervalDesc": "Nラウンドごとに記憶定着プロンプトをトリガー、0はデフォルト",
       "skillsDirs": "スキルディレクトリ",

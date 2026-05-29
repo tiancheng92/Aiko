@@ -177,6 +177,8 @@
       "systemPromptDesc": "Define the AI's behavior and personality",
       "shortTermLimit": "Short-term Memory Rounds",
       "shortTermLimitDesc": "Keep the most recent N conversation rounds as context",
+      "maxContextTokens": "Context Token Limit",
+      "maxContextTokensDesc": "Compress conversation history when context exceeds this token count (0 = disabled)",
       "nudgeInterval": "Self-growth Nudge Interval",
       "nudgeIntervalDesc": "Trigger memory consolidation every N rounds, 0 for default",
       "skillsDirs": "Skills Directories",

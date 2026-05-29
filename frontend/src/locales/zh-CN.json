@@ -177,6 +177,8 @@
       "systemPromptDesc": "设定 AI 的行为和个性",
       "shortTermLimit": "短期记忆轮数",
       "shortTermLimitDesc": "保留最近 N 轮对话作为上下文",
+      "maxContextTokens": "上下文 Token 上限",
+      "maxContextTokensDesc": "超过此 token 数时提前压缩对话历史（0 = 禁用）",
       "nudgeInterval": "自我成长提示间隔",
       "nudgeIntervalDesc": "每隔 N 轮触发一次记忆沉淀提示，0 使用默认值",
       "skillsDirs": "技能目录",
