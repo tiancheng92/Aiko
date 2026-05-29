@@ -42,6 +42,7 @@ import (
 // App is the main application struct. All exported methods are Wails bindings.
 type App struct {
 	ctx          context.Context
+	cancelCtx    context.CancelFunc // cancels a.ctx on shutdown to unblock in-flight LLM streams
 	sqlDB        *sql.DB
 	configStore  *config.Store
 	profileStore *config.ProfileStore
@@ -89,7 +90,7 @@ type App struct {
 func NewApp() *App { return &App{} }
 
 func (a *App) startup(ctx context.Context) {
-	a.ctx = ctx
+	a.ctx, a.cancelCtx = context.WithCancel(ctx)
 
 	// Register the macOS UserNotifications sender and kick off the
 	// authorization prompt *before* the scheduler/proactive engine start —
@@ -631,10 +632,12 @@ func (a *App) domReady(_ context.Context) {
 func (a *App) shutdown(_ context.Context) {
 	a.shuttingDown.Store(true)
 
-	// Cancel all in-flight requests first — a.ctx is context.Background() and is
-	// never cancelled by Wails itself, so the LLM/TTS goroutines would otherwise
-	// keep blocking on their HTTP streams until the server closes the connection,
-	// holding up process exit.
+	// Cancel a.ctx first — this unblocks any goroutine reading from an LLM/TTS
+	// HTTP stream (chatCancel and ttsCancel are derived from a.ctx so they are
+	// implicitly cancelled too, but calling them explicitly clears the fields).
+	if a.cancelCtx != nil {
+		a.cancelCtx()
+	}
 	a.mu.Lock()
 	if a.chatCancel != nil {
 		a.chatCancel()
