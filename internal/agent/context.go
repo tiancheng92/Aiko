@@ -17,7 +17,6 @@ import (
 
 	"aiko/internal/bytesconv"
 	"aiko/internal/knowledge"
-	"aiko/internal/memory"
 )
 
 // userProfileCache holds a recently-read USER.md to avoid redundant disk reads on every turn.
@@ -281,21 +280,9 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userIma
 		return
 	}
 
-	// Store the block in long-term memory (only if available).
-	if a.longMem != nil {
-		block := memory.FormatBlock(oldest)
-		if err := a.longMem.Store(ctx, block); err != nil {
-			log.Error().Err(err).Msg("store long-term memory failed")
-			// Don't return — still mark as migrated.
-		}
-	}
-
-	// Mark messages as migrated instead of deleting them.
-	ids := make([]int64, len(oldest))
-	for i, m := range oldest {
-		ids[i] = m.ID
-	}
-	if err := a.shortMem.MarkMigrated(ids); err != nil {
-		log.Error().Err(err).Msg("mark migrated messages failed")
+	// Summarise and migrate the excess messages. runSummary stores to long-term
+	// memory and updates the rolling summary concurrently, then marks migrated.
+	if err := a.runSummary(ctx, oldest); err != nil {
+		log.Error().Err(err).Msg("persistAndMigrate: runSummary failed")
 	}
 }
