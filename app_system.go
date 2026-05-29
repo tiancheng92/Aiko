@@ -495,18 +495,29 @@ func (a *App) doInstallUpdate(downloadURL string) error {
 		_ = os.WriteFile(markerPath, fmt.Appendf(nil, `{"version":%q}`, latestTag), 0o644)
 	}
 
-	// 8. Write a tiny restart script and run it detached.
+	// 8. Write a tiny restart script and run it fully detached.
+	// Redirect stdin/stdout/stderr to /dev/null so the child is not killed
+	// by SIGHUP when the parent's file descriptors close on exit.
 	emit(95, "准备重启…")
-	script := fmt.Sprintf("#!/bin/sh\nsleep 1\nopen %q\n", appBundle)
+	script := fmt.Sprintf("#!/bin/sh\nsleep 2\nopen %q\n", appBundle)
 	scriptPath := filepath.Join(os.TempDir(), "aiko-restart.sh")
 	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
 		return fmt.Errorf("写入重启脚本失败: %w", err)
 	}
+	devNull, err := os.Open(os.DevNull)
+	if err != nil {
+		return fmt.Errorf("打开 /dev/null 失败: %w", err)
+	}
 	restartCmd := exec.Command("/bin/sh", scriptPath)
 	restartCmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	restartCmd.Stdin = devNull
+	restartCmd.Stdout = devNull
+	restartCmd.Stderr = devNull
 	if err := restartCmd.Start(); err != nil {
+		_ = devNull.Close()
 		return fmt.Errorf("启动重启脚本失败: %w", err)
 	}
+	_ = devNull.Close()
 
 	emit(100, "正在重启…")
 	go func() {
