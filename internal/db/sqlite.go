@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	_ "modernc.org/sqlite"
 )
 
@@ -33,26 +32,34 @@ func Open(dataDir string) (*sql.DB, error) {
 	return db, nil
 }
 
-// migrate creates all tables and applies idempotent column patches for DBs
-// created before certain schema additions.
+// migrate creates all tables and indexes. CREATE TABLE/INDEX IF NOT EXISTS
+// makes every statement a no-op on databases that already have the object.
 func migrate(db *sql.DB) error {
-	// Create all tables in one shot with the current complete schema.
-	// CREATE TABLE IF NOT EXISTS is a no-op for tables that already exist.
 	_, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS messages (
-			id         INTEGER PRIMARY KEY AUTOINCREMENT,
-			role       TEXT NOT NULL,
-			content    TEXT NOT NULL,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			id               INTEGER PRIMARY KEY AUTOINCREMENT,
+			role             TEXT    NOT NULL,
+			content          TEXT    NOT NULL,
+			thinking_content TEXT    NOT NULL DEFAULT '',
+			images           TEXT    NOT NULL DEFAULT '',
+			files            TEXT    NOT NULL DEFAULT '',
+			migrated_to_long INTEGER NOT NULL DEFAULT 0,
+			created_at       DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
+		CREATE INDEX IF NOT EXISTS idx_messages_id      ON messages(id DESC);
+		CREATE INDEX IF NOT EXISTS idx_messages_role    ON messages(role);
+		CREATE INDEX IF NOT EXISTS idx_messages_role_id ON messages(role, id DESC);
+
 		CREATE TABLE IF NOT EXISTS settings (
 			key   TEXT PRIMARY KEY,
 			value TEXT NOT NULL
 		);
+
 		CREATE TABLE IF NOT EXISTS knowledge_sources (
 			source   TEXT PRIMARY KEY,
 			added_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
+
 		CREATE TABLE IF NOT EXISTS tool_permissions (
 			tool_name        TEXT PRIMARY KEY,
 			permission_level TEXT NOT NULL DEFAULT 'public',
@@ -60,146 +67,68 @@ func migrate(db *sql.DB) error {
 			granted_at       DATETIME,
 			last_used        DATETIME
 		);
-		CREATE INDEX IF NOT EXISTS idx_messages_id      ON messages(id DESC);
-		CREATE INDEX IF NOT EXISTS idx_messages_role    ON messages(role);
-		CREATE INDEX IF NOT EXISTS idx_messages_role_id ON messages(role, id DESC);
+
 		CREATE TABLE IF NOT EXISTS cron_jobs (
-			id          INTEGER PRIMARY KEY AUTOINCREMENT,
-			name        TEXT NOT NULL,
-			description TEXT NOT NULL,
-			schedule    TEXT NOT NULL,
-			prompt      TEXT NOT NULL,
-			enabled     INTEGER NOT NULL DEFAULT 1,
-			last_run    DATETIME,
-			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+			id            INTEGER PRIMARY KEY AUTOINCREMENT,
+			name          TEXT    NOT NULL,
+			description   TEXT    NOT NULL,
+			schedule      TEXT    NOT NULL,
+			prompt        TEXT    NOT NULL,
+			enabled       INTEGER NOT NULL DEFAULT 1,
+			save_to_memory INTEGER NOT NULL DEFAULT 0,
+			notify        INTEGER NOT NULL DEFAULT 1,
+			next_run_at   DATETIME,
+			last_run      DATETIME,
+			created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
-		CREATE INDEX IF NOT EXISTS idx_cron_enabled    ON cron_jobs(enabled);
+		CREATE INDEX IF NOT EXISTS idx_cron_enabled ON cron_jobs(enabled);
+
 		CREATE TABLE IF NOT EXISTS mcp_servers (
-			id          INTEGER PRIMARY KEY AUTOINCREMENT,
-			name        TEXT NOT NULL UNIQUE,
-			transport   TEXT NOT NULL,
-			command     TEXT,
-			args        TEXT,
-			url         TEXT,
-			headers     TEXT,
-			enabled     INTEGER NOT NULL DEFAULT 1,
-			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			name       TEXT    NOT NULL UNIQUE,
+			transport  TEXT    NOT NULL,
+			command    TEXT,
+			args       TEXT,
+			url        TEXT,
+			headers    TEXT,
+			enabled    INTEGER NOT NULL DEFAULT 1,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
+
 		CREATE TABLE IF NOT EXISTS model_profiles (
-			id              INTEGER PRIMARY KEY AUTOINCREMENT,
-			name            TEXT NOT NULL UNIQUE,
-			provider        TEXT NOT NULL DEFAULT 'openai',
-			base_url        TEXT NOT NULL DEFAULT '',
-			api_key         TEXT NOT NULL DEFAULT '',
-			model           TEXT NOT NULL DEFAULT '',
-			embedding_model TEXT NOT NULL DEFAULT '',
-			embedding_dim   INTEGER NOT NULL DEFAULT 1536,
-			tts_model       TEXT NOT NULL DEFAULT '',
-			tts_voice       TEXT NOT NULL DEFAULT '',
-			tts_speed       REAL NOT NULL DEFAULT 1.0,
-			tts_backend     TEXT NOT NULL DEFAULT '',
-			supports_vision INTEGER NOT NULL DEFAULT 0,
-			created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+			id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+			name                TEXT    NOT NULL UNIQUE,
+			provider            TEXT    NOT NULL DEFAULT 'openai',
+			base_url            TEXT    NOT NULL DEFAULT '',
+			api_key             TEXT    NOT NULL DEFAULT '',
+			model               TEXT    NOT NULL DEFAULT '',
+			embedding_model     TEXT    NOT NULL DEFAULT '',
+			embedding_dim       INTEGER NOT NULL DEFAULT 1536,
+			embedding_inherit   INTEGER NOT NULL DEFAULT 1,
+			embedding_provider  TEXT    NOT NULL DEFAULT 'openai',
+			embedding_base_url  TEXT    NOT NULL DEFAULT '',
+			embedding_api_key   TEXT    NOT NULL DEFAULT '',
+			tts_model           TEXT    NOT NULL DEFAULT '',
+			tts_voice           TEXT    NOT NULL DEFAULT '',
+			tts_speed           REAL    NOT NULL DEFAULT 1.0,
+			tts_backend         TEXT    NOT NULL DEFAULT '',
+			supports_vision     INTEGER NOT NULL DEFAULT 0,
+			created_at          DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
+
 		CREATE TABLE IF NOT EXISTS proactive_items (
 			id         INTEGER PRIMARY KEY AUTOINCREMENT,
 			trigger_at DATETIME NOT NULL,
-			prompt     TEXT NOT NULL,
+			prompt     TEXT     NOT NULL,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 		CREATE INDEX IF NOT EXISTS idx_proactive_trigger ON proactive_items(trigger_at ASC);
+
 		CREATE TABLE IF NOT EXISTS summary (
 			id         INTEGER PRIMARY KEY CHECK (id = 1),
 			content    TEXT    NOT NULL DEFAULT '',
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 	`)
-	if err != nil {
-		return err
-	}
-
-	// Idempotent column patches for databases created before schema additions.
-	patches := []string{
-		// v2: store images as JSON array of data URLs alongside each message.
-		`ALTER TABLE messages ADD COLUMN images TEXT NOT NULL DEFAULT ''`,
-		// v3: store attached file names as JSON array alongside each message.
-		`ALTER TABLE messages ADD COLUMN files TEXT NOT NULL DEFAULT ''`,
-		// v4: per-job flags — save result to long-term memory, send system notification.
-		`ALTER TABLE cron_jobs ADD COLUMN save_to_memory INTEGER NOT NULL DEFAULT 0`,
-		`ALTER TABLE cron_jobs ADD COLUMN notify INTEGER NOT NULL DEFAULT 1`,
-		// v5: wall-clock next fire time; enables poll-based scheduling (immune to sleep/wake drift).
-		`ALTER TABLE cron_jobs ADD COLUMN next_run_at DATETIME`,
-		// v6: embedding model may use a separate base_url and api_key.
-		`ALTER TABLE model_profiles ADD COLUMN embedding_inherit  INTEGER NOT NULL DEFAULT 1`,
-		`ALTER TABLE model_profiles ADD COLUMN embedding_base_url TEXT    NOT NULL DEFAULT ''`,
-		`ALTER TABLE model_profiles ADD COLUMN embedding_api_key  TEXT    NOT NULL DEFAULT ''`,
-		// v7: embedding model may use a different provider (openai-compat vs openrouter).
-		`ALTER TABLE model_profiles ADD COLUMN embedding_provider TEXT    NOT NULL DEFAULT 'openai'`,
-		// v8: store LLM reasoning/thinking content alongside each assistant message.
-		`ALTER TABLE messages ADD COLUMN thinking_content TEXT NOT NULL DEFAULT ''`,
-		// v9: model_profiles can indicate whether this model supports vision/image inputs.
-		`ALTER TABLE model_profiles ADD COLUMN supports_vision INTEGER NOT NULL DEFAULT 0`,
-		// v10: UI language preference (empty = follow system).
-		`ALTER TABLE settings ADD COLUMN language TEXT NOT NULL DEFAULT ''`,
-		// v11: mark messages that have been migrated to long-term memory.
-		`ALTER TABLE messages ADD COLUMN migrated_to_long INTEGER NOT NULL DEFAULT 0`,
-	}
-	for _, p := range patches {
-		if _, err := db.Exec(p); err != nil {
-			// SQLite returns "duplicate column name" when the column already
-			// exists; treat that as a no-op.
-			if !isDuplicateColumnErr(err) {
-				return fmt.Errorf("patch %q: %w", p, err)
-			}
-		}
-	}
-
-	// Remove legacy objects added in experimental builds and never used in
-	// production. IF EXISTS guards make DROP TRIGGER/TABLE no-ops on clean DBs.
-	for _, stmt := range []string{
-		// FTS5 virtual table + triggers added then removed before release.
-		// The triggers crash on any messages DELETE/UPDATE when the table is gone.
-		`DROP TRIGGER IF EXISTS messages_fts_ai`,
-		`DROP TRIGGER IF EXISTS messages_fts_ad`,
-		`DROP TRIGGER IF EXISTS messages_fts_au`,
-		`DROP TABLE IF EXISTS messages_fts`,
-	} {
-		if _, err := db.Exec(stmt); err != nil {
-			return fmt.Errorf("cleanup legacy: %w", err)
-		}
-	}
-
-	// settings is a key-value store; these columns were mistakenly added via
-	// ALTER TABLE and are never read. DROP COLUMN IF EXISTS requires SQLite
-	// ≥ 3.35 which modernc.org/sqlite does not guarantee, so ignore "no such
-	// column" errors instead.
-	for _, col := range []string{"language", "max_context_tokens"} {
-		if _, err := db.Exec(`ALTER TABLE settings DROP COLUMN ` + col); err != nil {
-			if !isNoSuchColumnErr(err) {
-				return fmt.Errorf("drop settings column %s: %w", col, err)
-			}
-		}
-	}
-
-	return nil
-}
-
-// isDuplicateColumnErr reports whether err is the SQLite "duplicate column
-// name" error returned when ALTER TABLE ADD COLUMN is run on an existing col.
-func isDuplicateColumnErr(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "duplicate column name") ||
-		strings.Contains(msg, "already exists")
-}
-
-// isNoSuchColumnErr reports whether err is the SQLite "no such column" error
-// returned when ALTER TABLE DROP COLUMN is run on a non-existent column.
-func isNoSuchColumnErr(err error) bool {
-	if err == nil {
-		return false
-	}
-	return strings.Contains(err.Error(), "no such column")
+	return err
 }
