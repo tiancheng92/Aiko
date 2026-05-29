@@ -34,7 +34,7 @@ func (a *Agent) checkAndSummarize(ctx context.Context) {
 		return
 	}
 
-	msgs, err := a.shortMem.OldestUnmigratedN(10000) // effectively "all"
+	msgs, err := a.shortMem.OldestUnmigratedAll()
 	if err != nil {
 		log.Warn().Err(err).Msg("checkAndSummarize: load unmigrated messages failed")
 		return

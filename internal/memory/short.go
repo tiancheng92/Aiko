@@ -310,6 +310,33 @@ func (s *ShortStore) OldestUnmigratedN(n int) ([]Message, error) {
 	return msgs, nil
 }
 
+// OldestUnmigratedAll returns all messages that haven't been migrated to
+// long-term memory, in chronological order.
+func (s *ShortStore) OldestUnmigratedAll() ([]Message, error) {
+	rows, err := s.db.Query(`
+		SELECT id, role, content, thinking_content, images, files, migrated_to_long, created_at
+		FROM messages
+		WHERE migrated_to_long = 0
+		ORDER BY id ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var msgs []Message
+	for rows.Next() {
+		m, err := scanMessage(rows.Scan)
+		if err != nil {
+			return nil, err
+		}
+		msgs = append(msgs, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return msgs, nil
+}
+
 // DeleteAll removes all messages from the short-term store.
 func (s *ShortStore) DeleteAll() error {
 	_, err := s.db.Exec(`DELETE FROM messages`)

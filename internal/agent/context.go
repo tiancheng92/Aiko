@@ -165,7 +165,7 @@ func (a *Agent) buildContext(ctx context.Context, userInput string, useKnowledge
 			summaryText + "\n[End of summary]"
 		msgs = append(msgs,
 			&schema.Message{Role: schema.User, Content: summary},
-			&schema.Message{Role: schema.Assistant, Content: "Got it."},
+			&schema.Message{Role: schema.Assistant, Content: "Understood."},
 		)
 	}
 
