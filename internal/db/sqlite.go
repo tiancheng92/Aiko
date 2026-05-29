@@ -143,8 +143,6 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE settings ADD COLUMN language TEXT NOT NULL DEFAULT ''`,
 		// v11: mark messages that have been migrated to long-term memory.
 		`ALTER TABLE messages ADD COLUMN migrated_to_long INTEGER NOT NULL DEFAULT 0`,
-		// v12: per-conversation context token limit for early summarisation.
-		`ALTER TABLE settings ADD COLUMN max_context_tokens INTEGER NOT NULL DEFAULT 10000`,
 	}
 	for _, p := range patches {
 		if _, err := db.Exec(p); err != nil {
