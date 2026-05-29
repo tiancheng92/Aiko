@@ -156,6 +156,21 @@ func migrate(db *sql.DB) error {
 		}
 	}
 
+	// Drop FTS5 triggers and virtual table that were added in an experimental
+	// build and removed before release. Old databases may still carry them;
+	// the triggers fire on every messages DELETE/UPDATE and reference the
+	// virtual table — if the table is gone the triggers crash at runtime.
+	for _, stmt := range []string{
+		`DROP TRIGGER IF EXISTS messages_fts_ai`,
+		`DROP TRIGGER IF EXISTS messages_fts_ad`,
+		`DROP TRIGGER IF EXISTS messages_fts_au`,
+		`DROP TABLE IF EXISTS messages_fts`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("cleanup fts: %w", err)
+		}
+	}
+
 	return nil
 }
 

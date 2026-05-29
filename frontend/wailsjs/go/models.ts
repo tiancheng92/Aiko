@@ -15,6 +15,7 @@ export namespace config {
 	    EmbeddingAPIKey: string;
 	    SystemPrompt: string;
 	    ShortTermLimit: number;
+	    MaxContextTokens: number;
 	    NudgeInterval: number;
 	    AllowedPaths: string[];
 	    ShellTimeout: number;
@@ -71,6 +72,7 @@ export namespace config {
 	        this.EmbeddingAPIKey = source["EmbeddingAPIKey"];
 	        this.SystemPrompt = source["SystemPrompt"];
 	        this.ShortTermLimit = source["ShortTermLimit"];
+	        this.MaxContextTokens = source["MaxContextTokens"];
 	        this.NudgeInterval = source["NudgeInterval"];
 	        this.AllowedPaths = source["AllowedPaths"];
 	        this.ShellTimeout = source["ShellTimeout"];
