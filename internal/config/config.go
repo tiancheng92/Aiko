@@ -23,6 +23,10 @@ type Config struct {
 	EmbeddingAPIKey   string
 	SystemPrompt     string
 	ShortTermLimit int
+	// MaxContextTokens is the estimated token threshold that triggers early summarisation
+	// before sending context to the LLM. 0 disables token-based triggering.
+	// Default: 10000.
+	MaxContextTokens int
 	NudgeInterval  int      // 每隔多少轮触发一次 self-growth nudge，0 表示使用默认值 5
 	AllowedPaths  []string // file system path whitelist; empty = deny all
 	ShellTimeout  int      // execute_shell timeout in seconds; default 30
@@ -112,6 +116,7 @@ func (s *Store) Load() (*Config, error) {
 	}
 	cfg.EmbeddingDim = parseInt(m["embedding_dim"], 1536)
 	cfg.ShortTermLimit = parseInt(m["short_term_limit"], 30)
+	cfg.MaxContextTokens = parseInt(m["max_context_tokens"], 10000)
 	cfg.NudgeInterval = parseInt(m["nudge_interval"], 5)
 	if cfg.NudgeInterval <= 0 {
 		cfg.NudgeInterval = 5
@@ -171,6 +176,7 @@ func (s *Store) Save(cfg *Config) error {
 		"embedding_dim":     strconv.Itoa(cfg.EmbeddingDim),
 		"system_prompt":     cfg.SystemPrompt,
 		"short_term_limit":  strconv.Itoa(cfg.ShortTermLimit),
+		"max_context_tokens": strconv.Itoa(cfg.MaxContextTokens),
 		"nudge_interval":    strconv.Itoa(cfg.NudgeInterval),
 		"skills_dirs":       joinLines(cfg.SkillsDirs),
 		"live2d_model":      cfg.Live2DModel,
