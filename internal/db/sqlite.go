@@ -155,7 +155,7 @@ func migrate(db *sql.DB) error {
 	}
 
 	// Remove legacy objects added in experimental builds and never used in
-	// production. Each statement is safe to run on a clean database.
+	// production. IF EXISTS guards make DROP TRIGGER/TABLE no-ops on clean DBs.
 	for _, stmt := range []string{
 		// FTS5 virtual table + triggers added then removed before release.
 		// The triggers crash on any messages DELETE/UPDATE when the table is gone.
@@ -163,13 +163,21 @@ func migrate(db *sql.DB) error {
 		`DROP TRIGGER IF EXISTS messages_fts_ad`,
 		`DROP TRIGGER IF EXISTS messages_fts_au`,
 		`DROP TABLE IF EXISTS messages_fts`,
-		// settings is a key-value store; these columns were mistakenly added
-		// via ALTER TABLE and are never read by the application.
-		`ALTER TABLE settings DROP COLUMN IF EXISTS language`,
-		`ALTER TABLE settings DROP COLUMN IF EXISTS max_context_tokens`,
 	} {
 		if _, err := db.Exec(stmt); err != nil {
 			return fmt.Errorf("cleanup legacy: %w", err)
+		}
+	}
+
+	// settings is a key-value store; these columns were mistakenly added via
+	// ALTER TABLE and are never read. DROP COLUMN IF EXISTS requires SQLite
+	// ≥ 3.35 which modernc.org/sqlite does not guarantee, so ignore "no such
+	// column" errors instead.
+	for _, col := range []string{"language", "max_context_tokens"} {
+		if _, err := db.Exec(`ALTER TABLE settings DROP COLUMN ` + col); err != nil {
+			if !isNoSuchColumnErr(err) {
+				return fmt.Errorf("drop settings column %s: %w", col, err)
+			}
 		}
 	}
 
@@ -185,4 +193,13 @@ func isDuplicateColumnErr(err error) bool {
 	msg := err.Error()
 	return strings.Contains(msg, "duplicate column name") ||
 		strings.Contains(msg, "already exists")
+}
+
+// isNoSuchColumnErr reports whether err is the SQLite "no such column" error
+// returned when ALTER TABLE DROP COLUMN is run on a non-existent column.
+func isNoSuchColumnErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "no such column")
 }
