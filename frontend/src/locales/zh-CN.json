@@ -335,7 +335,7 @@
           "schedule": "0 8 * * *",
           "prompt": "到达时间时发给 AI 的指令，如：帮我总结今日新闻"
         },
-        "scheduleHint": "5 段 cron 格式（分 时 日 月 周），如 0 8 * * * = 每天 8 点；也支持 @daily、@hourly 等",
+        "scheduleHint": "5 段 cron 格式（分 时 日 月 周），如 0 8 * * * = 每天 8 点；也支持 @​daily、@​hourly 等助记符",
         "notifyHint": "执行完成后发送 macOS 系统通知",
         "saveToMemoryHint": "执行成功后将结果写入长期记忆"
       },

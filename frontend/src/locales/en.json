@@ -335,7 +335,7 @@
           "schedule": "0 8 * * *",
           "prompt": "Instructions to send to the AI at the scheduled time, e.g.: Summarize today's news for me"
         },
-        "scheduleHint": "5-field cron format (min hour day month weekday), e.g. 0 8 * * * = daily at 8am; also supports @daily, @hourly, etc.",
+        "scheduleHint": "5-field cron (min hour day month weekday), e.g. 0 8 * * * = daily at 8am; shortcuts like @​daily and @​hourly are also supported",
         "notifyHint": "Send macOS system notification after execution",
         "saveToMemoryHint": "Save result to long-term memory after successful execution"
       },

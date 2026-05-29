@@ -335,7 +335,7 @@
           "schedule": "0 8 * * *",
           "prompt": "スケジュール時刻にAIに送信する指示、例：今日のニュースをまとめて"
         },
-        "scheduleHint": "5フィールドcron形式（分 時 日 月 曜日）、例：0 8 * * * = 毎日8時；@daily、@hourlyなどもサポート",
+        "scheduleHint": "5フィールドcron形式（分 時 日 月 曜日）、例：0 8 * * * = 毎日8時；@​daily、@​hourlyなどの省略形もサポート",
         "notifyHint": "実行完了後にmacOSシステム通知を送信",
         "saveToMemoryHint": "実行成功後に結果を長期記憶に保存"
       },
