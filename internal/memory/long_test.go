@@ -2,13 +2,11 @@ package memory_test
 
 import (
 	"context"
-	"database/sql"
 	"sync"
 	"testing"
 
 	"github.com/cloudwego/eino/components/embedding"
 	chromem "github.com/philippgille/chromem-go"
-	_ "modernc.org/sqlite"
 
 	"aiko/internal/memory"
 )
@@ -49,56 +47,30 @@ func (e *stubEmbedder) EmbedStrings(_ context.Context, texts []string, _ ...embe
 // newTestLongStore creates a LongStore backed by in-memory chromem and SQLite.
 func newTestLongStore(t *testing.T) *memory.LongStore {
 	t.Helper()
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS memory_segments (
-			id          INTEGER PRIMARY KEY AUTOINCREMENT,
-			vector_id   TEXT NOT NULL UNIQUE,
-			raw_content TEXT NOT NULL,
-			summary     TEXT,
-			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
-		)
-	`)
-	if err != nil {
-		t.Fatalf("create table: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-
 	vectorDB := chromem.NewDB()
 	embedder := newStubEmbedder(16)
-	store, err := memory.NewLongStore(vectorDB, db, embedder, nil)
+	store, err := memory.NewLongStore(vectorDB, embedder)
 	if err != nil {
 		t.Fatalf("NewLongStore: %v", err)
 	}
 	return store
 }
 
-// TestSearchSplit_EmptyCollection verifies that SearchSplit on an empty store
+// TestSearch_EmptyCollection verifies that Search on an empty store
 // returns an empty result without error.
-func TestSearchSplit_EmptyCollection(t *testing.T) {
+func TestSearch_EmptyCollection(t *testing.T) {
 	db := chromem.NewDB()
-	store, err := memory.NewLongStore(db, nil, nil, nil)
+	store, err := memory.NewLongStore(db, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err := store.SearchSplit(context.Background(), "anything", 3)
+	res, err := store.Search(context.Background(), "anything", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Summaries) != 0 || len(res.Raws) != 0 {
-		t.Errorf("expected empty result, got %+v", res)
+	if len(res) != 0 {
+		t.Errorf("expected empty result, got %v", res)
 	}
-}
-
-// TestSearchSplit_InterfaceCompliance is a compile-time check that SearchSplit
-// exists with the right signature.
-func TestSearchSplit_InterfaceCompliance(t *testing.T) {
-	var _ interface {
-		SearchSplit(ctx context.Context, query string, k int) (memory.MemorySearchResult, error)
-	} = (*memory.LongStore)(nil)
 }
 
 // TestLongStore_InterfaceCompleteness is a compile-time check that LongStore
@@ -107,7 +79,6 @@ func TestLongStore_InterfaceCompleteness(t *testing.T) {
 	type longStoreIface interface {
 		Store(ctx context.Context, text string) error
 		Search(ctx context.Context, query string, k int) ([]string, error)
-		SearchSplit(ctx context.Context, query string, k int) (memory.MemorySearchResult, error)
 	}
 	var _ longStoreIface = (*memory.LongStore)(nil)
 }
@@ -184,16 +155,4 @@ func TestConcurrentStore(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-}
-
-// TestMemorySearchResult_ZeroValue verifies the zero value of MemorySearchResult
-// has nil slices (safe to range over).
-func TestMemorySearchResult_ZeroValue(t *testing.T) {
-	var res memory.MemorySearchResult
-	if len(res.Summaries) != 0 {
-		t.Error("zero-value Summaries should be empty")
-	}
-	if len(res.Raws) != 0 {
-		t.Error("zero-value Raws should be empty")
-	}
 }

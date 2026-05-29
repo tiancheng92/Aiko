@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/adk/prebuilt/deep"
@@ -19,7 +18,6 @@ import (
 	"aiko/internal/config"
 	"aiko/internal/knowledge"
 	"aiko/internal/memory"
-	internaltools "aiko/internal/tools"
 )
 
 // emotionPromptSuffix is appended to the system prompt to instruct the LLM
@@ -115,29 +113,6 @@ func (s *memCheckPointStore) Set(_ context.Context, key string, value []byte) er
 // is briefly slow to consume tokens.
 const streamResultBufSize = 64
 
-// locationCache caches the IP-based location string to avoid a network call every turn.
-var locationCache struct {
-	sync.Mutex
-	value     string
-	fetchedAt time.Time
-}
-
-const locationCacheTTL = 30 * time.Minute
-
-// cachedLocation returns the cached location string, refreshing via IP geolocation when stale.
-func cachedLocation() string {
-	locationCache.Lock()
-	defer locationCache.Unlock()
-	if locationCache.value != "" && time.Since(locationCache.fetchedAt) < locationCacheTTL {
-		return locationCache.value
-	}
-	loc := internaltools.FetchLocation()
-	if loc != "" {
-		locationCache.value = loc
-		locationCache.fetchedAt = time.Now()
-	}
-	return loc
-}
 
 // Agent wraps an eino ReAct agent with short/long-term memory integration.
 type Agent struct {
@@ -151,6 +126,8 @@ type Agent struct {
 	nudgeInterval   int                             // how often to trigger self-growth nudge
 	pendingConfirms *sync.Map                       // map[string]chan ToolConfirmResponse; bridged from App
 	emitEvent       func(event string, data ...any) // Wails EventsEmit
+	summaryStore    *memory.SummaryStore            // nil means summary disabled
+	chatModel       model.ToolCallingChatModel      // retained for summarisation calls
 
 	// self-growth
 	hasSkills     bool        // true if auto-skills/ directory has any *.md files at startup
@@ -226,6 +203,7 @@ func New(
 	chatModel model.ToolCallingChatModel,
 	shortMem *memory.ShortStore,
 	longMem *memory.LongStore,
+	summaryStore *memory.SummaryStore,
 	knowledgeSt *knowledge.Store,
 	tools []tool.BaseTool,
 	cfg *config.Config,
@@ -259,6 +237,8 @@ func New(
 		runner:          runner,
 		shortMem:        shortMem,
 		longMem:         longMem,
+		summaryStore:    summaryStore,
+		chatModel:       chatModel,
 		knowledgeSt:     knowledgeSt,
 		cfg:             cfg,
 		dataDir:         dataDir,

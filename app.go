@@ -353,14 +353,6 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		return fmt.Errorf("new chat model: %w", err)
 	}
 
-	// Create optional summarizer.
-	summarizer, err := llm.NewSummarizer(ctx, cfg)
-	if err != nil {
-		// Non-fatal: proceed without summarization.
-		log.Warn().Err(err).Msg("summarizer init failed, continuing without summarization")
-		summarizer = nil
-	}
-
 	embedder, err := llm.NewEmbedder(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("new embedder: %w", err)
@@ -369,7 +361,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 	var longMem *memory.LongStore
 	var knowledgeSt *knowledge.Store
 	if embedder != nil {
-		longMem, err = memory.NewLongStore(a.vectorDB, a.sqlDB, embedder, summarizer)
+		longMem, err = memory.NewLongStore(a.vectorDB, embedder)
 		if err != nil {
 			return fmt.Errorf("new long store: %w", err)
 		}

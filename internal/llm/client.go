@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"sync"
 
 	embeddopenai "github.com/cloudwego/eino-ext/components/embedding/openai"
@@ -14,7 +13,6 @@ import (
 	einoopenrouter "github.com/cloudwego/eino-ext/components/model/openrouter"
 	"github.com/cloudwego/eino/components/embedding"
 	"github.com/cloudwego/eino/components/model"
-	"github.com/cloudwego/eino/schema"
 
 	"aiko/internal/config"
 )
@@ -112,41 +110,3 @@ func NewEmbedder(ctx context.Context, cfg *config.Config) (embedding.Embedder, e
 	})
 }
 
-// Summarizer generates a one-sentence summary of a text block.
-type Summarizer interface {
-	Summarize(ctx context.Context, text string) (string, error)
-}
-
-// llmSummarizer calls the chat model with a fixed summarization prompt.
-type llmSummarizer struct {
-	model model.ToolCallingChatModel
-}
-
-// NewSummarizer creates a Summarizer backed by the chat model.
-// Returns nil if cfg has no LLM configured (so caller can skip summarization).
-func NewSummarizer(ctx context.Context, cfg *config.Config) (Summarizer, error) {
-	if cfg.LLMModel == "" {
-		return nil, nil
-	}
-	m, _, err := NewChatModel(ctx, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("new summarizer model: %w", err)
-	}
-	return &llmSummarizer{model: m}, nil
-}
-
-// Summarize generates a one-sentence summary of text using the chat model.
-func (s *llmSummarizer) Summarize(ctx context.Context, text string) (string, error) {
-	prompt := "请用一句话总结以下对话内容的核心主题，不超过30个字：\n\n" + text
-	msgs := []*schema.Message{
-		{Role: schema.User, Content: prompt},
-	}
-	resp, err := s.model.Generate(ctx, msgs)
-	if err != nil {
-		return "", fmt.Errorf("summarize: %w", err)
-	}
-	if resp == nil || resp.Content == "" {
-		return "", nil
-	}
-	return strings.TrimSpace(resp.Content), nil
-}

@@ -95,8 +95,7 @@ Two independent trigger paths:
 2. Load all unmigrated messages from `shortMem`.
 3. Estimate tokens: `sum(len(msg.Content)) / 4`.
 4. If `MaxContextTokens > 0` and estimated tokens > `MaxContextTokens`:
-   - Take all messages **except** the most recent `ShortTermLimit/2` (keep those as live context).
-   - Run `runSummary(ctx, oldMsgs)` — see below.
+   - Run `runSummary(ctx, allUnmigratedMsgs)` — **all** unmigrated messages are summarised and migrated, none retained.
 5. If `MaxContextTokens == 0`, skip.
 
 ### Path B — Turn limit (post-send, in `persistAndMigrate`)

@@ -46,17 +46,15 @@ func readUserProfile(dataDir string) string {
 	return userProfileCache.content
 }
 
-// gatherContextSources fetches the five context inputs concurrently:
-// user profile, long-term memory search results, knowledge base results,
-// recent short-term messages, and current location.
-// Errors from individual sources are logged and treated as empty (non-fatal)
-// to avoid blocking the chat turn.
+// gatherContextSources fetches context inputs concurrently: user profile,
+// long-term memory search results, knowledge base results, and recent
+// short-term messages. Errors from individual sources are logged and
+// treated as empty (non-fatal) to avoid blocking the chat turn.
 func (a *Agent) gatherContextSources(ctx context.Context, userInput string, useKnowledge, useMemory bool) (
 	profile string,
-	memResult memory.MemorySearchResult,
+	memResults []string,
 	knowledgeResults []knowledge.SearchResult,
 	recentMsgs []*schema.Message,
-	location string,
 	err error,
 ) {
 	g, gctx := errgroup.WithContext(ctx)
@@ -70,12 +68,12 @@ func (a *Agent) gatherContextSources(ctx context.Context, userInput string, useK
 		if a.longMem == nil || !useMemory {
 			return nil
 		}
-		res, err := a.longMem.SearchSplit(gctx, userInput, 5)
+		res, err := a.longMem.Search(gctx, userInput, 5)
 		if err != nil {
-			log.Warn().Err(err).Msg("longMem.SearchSplit failed")
+			log.Warn().Err(err).Msg("longMem.Search failed")
 			return nil
 		}
-		memResult = res
+		memResults = res
 		return nil
 	})
 
@@ -105,11 +103,6 @@ func (a *Agent) gatherContextSources(ctx context.Context, userInput string, useK
 		return nil
 	})
 
-	g.Go(func() error {
-		location = cachedLocation()
-		return nil
-	})
-
 	err = g.Wait()
 	return
 }
@@ -123,48 +116,52 @@ var ctxBufPool = sync.Pool{New: func() any { return new(strings.Builder) }}
 // runner.Run. Errors from individual sources are logged and skipped — a partial context
 // is better than no response.
 func (a *Agent) buildContext(ctx context.Context, userInput string, useKnowledge, useMemory bool) ([]adk.Message, error) {
-	profile, memResult, knowledgeResults, recentMsgs, location, err := a.gatherContextSources(ctx, userInput, useKnowledge, useMemory)
+	profile, memResults, knowledgeResults, recentMsgs, err := a.gatherContextSources(ctx, userInput, useKnowledge, useMemory)
 	if err != nil {
 		return nil, err
 	}
 
 	var msgs []adk.Message
 
-	// Build context pair (user + assistant "Understood.") — always includes current time.
+	// --- Layer 1: static context (rarely changes → high cache hit rate) ---
+	// User profile is stable across turns; keeping it separate from the
+	// dynamic memories/knowledge layer preserves the cache prefix.
+	// Current time and location intentionally omitted — get_current_time and
+	// get_location tools provide them on demand.
 	ctxBuf := ctxBufPool.Get().(*strings.Builder)
 	ctxBuf.Reset()
 	defer func() {
 		ctxBuf.Reset()
 		ctxBufPool.Put(ctxBuf)
 	}()
-	ctxBuf.WriteString("Current time: ")
-	ctxBuf.WriteString(time.Now().Format("2006-01-02 15:04:05 CST"))
-	ctxBuf.WriteByte('\n')
-	if location != "" {
-		ctxBuf.WriteString("Location: ")
-		ctxBuf.WriteString(location)
-		ctxBuf.WriteByte('\n')
-	}
 	if profile != "" {
-		ctxBuf.WriteString("\nUser Profile:\n")
+		ctxBuf.WriteString("User Profile:\n")
 		ctxBuf.WriteString(profile)
 	}
-	if len(memResult.Summaries) > 0 || len(memResult.Raws) > 0 {
-		ctxBuf.WriteString("\n[Long-term memories — retrieved by semantic similarity; may be outdated. Use as background context, not as absolute truth.]\n")
-		if len(memResult.Summaries) > 0 {
-			ctxBuf.WriteString("Relevant memory summaries:\n")
-			for _, s := range memResult.Summaries {
-				ctxBuf.WriteString("- ")
-				ctxBuf.WriteString(s)
-				ctxBuf.WriteByte('\n')
-			}
-		}
-		if len(memResult.Raws) > 0 {
-			ctxBuf.WriteString("Relevant memory details:\n")
-			for _, r := range memResult.Raws {
-				ctxBuf.WriteString(r)
-				ctxBuf.WriteByte('\n')
-			}
+	if ctxBuf.Len() > 0 {
+		msgs = append(msgs,
+			&schema.Message{Role: schema.User, Content: ctxBuf.String()},
+			&schema.Message{Role: schema.Assistant, Content: "Understood."},
+		)
+	}
+
+	// --- History messages ---
+	// Placed before dynamic context so the shared history prefix between
+	// consecutive turns stays cacheable. If dynamic context came first, it
+	// would invalidate the cache for all following history messages.
+	for _, m := range recentMsgs {
+		msgs = append(msgs, m)
+	}
+
+	// --- Layer 2: dynamic context (query-dependent → may miss cache) ---
+	// Positioned just before the current user message (appended by caller)
+	// so retrieval is still query-aware but cache impact is minimized.
+	ctxBuf.Reset()
+	if len(memResults) > 0 {
+		ctxBuf.WriteString("[Long-term memories — retrieved by semantic similarity; may be outdated. Use as background context, not as absolute truth.]\n")
+		for _, r := range memResults {
+			ctxBuf.WriteString(r)
+			ctxBuf.WriteByte('\n')
 		}
 		ctxBuf.WriteString("[End of long-term memories]\n")
 	}
@@ -180,15 +177,9 @@ func (a *Agent) buildContext(ctx context.Context, userInput string, useKnowledge
 		ctxBuf.WriteString("[End of knowledge base results]\n")
 	}
 	if ctxBuf.Len() > 0 {
-		msgs = append(msgs,
-			&schema.Message{Role: schema.User, Content: ctxBuf.String()},
-			&schema.Message{Role: schema.Assistant, Content: "Understood."},
-		)
+		msgs = append(msgs, &schema.Message{Role: schema.User, Content: ctxBuf.String()})
 	}
 
-	for _, m := range recentMsgs {
-		msgs = append(msgs, m)
-	}
 	return msgs, nil
 }
 
