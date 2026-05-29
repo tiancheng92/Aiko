@@ -332,7 +332,9 @@ func (a *App) buildAgent(
 		middleware.ErrorRecovery(),
 	)
 
-	return agent.New(ctx, chatModel, a.shortMem, longMem, knowledgeSt, allTools, a.cfg, mw, skillMW, dataDir,
+	summaryStore := memory.NewSummaryStore(a.sqlDB)
+
+	return agent.New(ctx, chatModel, a.shortMem, longMem, summaryStore, knowledgeSt, allTools, a.cfg, mw, skillMW, dataDir,
 		&a.pendingConfirms,
 		func(event string, data ...any) {
 			wailsruntime.EventsEmit(a.ctx, event, data...)
