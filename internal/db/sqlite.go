@@ -60,14 +60,6 @@ func migrate(db *sql.DB) error {
 			granted_at       DATETIME,
 			last_used        DATETIME
 		);
-		CREATE TABLE IF NOT EXISTS memory_segments (
-			id          INTEGER PRIMARY KEY AUTOINCREMENT,
-			vector_id   TEXT NOT NULL UNIQUE,
-			raw_content TEXT NOT NULL,
-			summary     TEXT,
-			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
-		);
-		CREATE INDEX IF NOT EXISTS idx_memory_segments_created ON memory_segments(created_at DESC);
 		CREATE INDEX IF NOT EXISTS idx_messages_id      ON messages(id DESC);
 		CREATE INDEX IF NOT EXISTS idx_messages_role    ON messages(role);
 		CREATE INDEX IF NOT EXISTS idx_messages_role_id ON messages(role, id DESC);
@@ -116,6 +108,11 @@ func migrate(db *sql.DB) error {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 		CREATE INDEX IF NOT EXISTS idx_proactive_trigger ON proactive_items(trigger_at ASC);
+		CREATE TABLE IF NOT EXISTS summary (
+			id         INTEGER PRIMARY KEY CHECK (id = 1),
+			content    TEXT    NOT NULL DEFAULT '',
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
 	`)
 	if err != nil {
 		return err
@@ -146,6 +143,8 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE settings ADD COLUMN language TEXT NOT NULL DEFAULT ''`,
 		// v11: mark messages that have been migrated to long-term memory.
 		`ALTER TABLE messages ADD COLUMN migrated_to_long INTEGER NOT NULL DEFAULT 0`,
+		// v12: per-conversation context token limit for early summarisation.
+		`ALTER TABLE settings ADD COLUMN max_context_tokens INTEGER NOT NULL DEFAULT 10000`,
 	}
 	for _, p := range patches {
 		if _, err := db.Exec(p); err != nil {
@@ -155,35 +154,6 @@ func migrate(db *sql.DB) error {
 				return fmt.Errorf("patch %q: %w", p, err)
 			}
 		}
-	}
-
-	// v12: FTS5 full-text search index on messages.content (content-sync mode).
-	if _, err := db.Exec(`CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(content, content=messages, content_rowid=id)`); err != nil {
-		if !isDuplicateColumnErr(err) {
-			return fmt.Errorf("patch fts5: %w", err)
-		}
-	}
-	// modernc.org/sqlite does not auto-create the content-sync triggers,
-	// so create them manually (idempotent via IF NOT EXISTS).
-	for _, trig := range []string{
-		`CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages BEGIN
-			INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
-		END`,
-		`CREATE TRIGGER IF NOT EXISTS messages_fts_ad AFTER DELETE ON messages BEGIN
-			INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.id, old.content);
-		END`,
-		`CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE ON messages BEGIN
-			INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.id, old.content);
-			INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
-		END`,
-	} {
-		if _, err := db.Exec(trig); err != nil {
-			return fmt.Errorf("patch fts5 trigger: %w", err)
-		}
-	}
-	// Populate the FTS index with any existing rows.
-	if _, err := db.Exec(`INSERT INTO messages_fts(messages_fts) VALUES('rebuild')`); err != nil {
-		return fmt.Errorf("patch fts5 rebuild: %w", err)
 	}
 
 	return nil
