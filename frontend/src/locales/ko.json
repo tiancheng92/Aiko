@@ -316,7 +316,7 @@
         "notify": "시스템 알림 전송",
         "validation": {
           "requiredFields": "이름, Cron 표현식 및 트리거 프롬프트는 필수입니다",
-          "invalidCron": "유효하지 않은 Cron 표현식: 5개 또는 6개 필드, 또는 @every/@daily 등의 니모닉이 필요합니다"
+          "invalidCron": "유효하지 않은 Cron 표현식: 5개 또는 6개 필드, 또는 @​every/@​daily 등의 니모닉이 필요합니다"
         },
         "deleteJobTitle": "작업 삭제",
         "confirmDelete": "작업 \"{name}\"을(를) 삭제하시겠습니까?",

@@ -316,7 +316,7 @@
         "notify": "发送系统通知",
         "validation": {
           "requiredFields": "名称、Cron 表达式和触发提示词为必填项",
-          "invalidCron": "Cron 表达式格式错误：应为 5 或 6 个字段，或 @every/@daily 等助记符"
+          "invalidCron": "Cron 表达式格式错误：应为 5 或 6 个字段，或 @​every/@​daily 等助记符"
         },
         "deleteJobTitle": "删除定时任务",
         "confirmDelete": "确认删除任务「{name}」？",

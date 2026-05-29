@@ -316,7 +316,7 @@
         "notify": "Send system notification",
         "validation": {
           "requiredFields": "Name, Cron expression, and Prompt are required",
-          "invalidCron": "Invalid cron expression: expected 5 or 6 fields, or @every/@daily mnemonics"
+          "invalidCron": "Invalid cron expression: expected 5 or 6 fields, or @​every/@​daily mnemonics"
         },
         "deleteJobTitle": "Delete Job",
         "confirmDelete": "Delete job \"{name}\"?",

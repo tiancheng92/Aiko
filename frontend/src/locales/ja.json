@@ -316,7 +316,7 @@
         "notify": "システム通知を送信",
         "validation": {
           "requiredFields": "名前、Cron式、トリガープロンプトは必須です",
-          "invalidCron": "無効なCron式：5または6フィールド、または@every/@dailyなどのニーモニックが必要です"
+          "invalidCron": "無効なCron式：5または6フィールド、または@​every/@​dailyなどのニーモニックが必要です"
         },
         "deleteJobTitle": "ジョブを削除",
         "confirmDelete": "ジョブ「{name}」を削除しますか？",
