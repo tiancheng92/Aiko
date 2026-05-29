@@ -55,6 +55,7 @@ func (a *Agent) gatherContextSources(ctx context.Context, userInput string, useK
 	memResults []string,
 	knowledgeResults []knowledge.SearchResult,
 	recentMsgs []*schema.Message,
+	summaryText string,
 	err error,
 ) {
 	g, gctx := errgroup.WithContext(ctx)
@@ -103,6 +104,19 @@ func (a *Agent) gatherContextSources(ctx context.Context, userInput string, useK
 		return nil
 	})
 
+	g.Go(func() error {
+		if a.summaryStore == nil {
+			return nil
+		}
+		s, err := a.summaryStore.Get()
+		if err != nil {
+			log.Warn().Err(err).Msg("summaryStore.Get failed")
+			return nil
+		}
+		summaryText = s
+		return nil
+	})
+
 	err = g.Wait()
 	return
 }
@@ -116,7 +130,8 @@ var ctxBufPool = sync.Pool{New: func() any { return new(strings.Builder) }}
 // runner.Run. Errors from individual sources are logged and skipped — a partial context
 // is better than no response.
 func (a *Agent) buildContext(ctx context.Context, userInput string, useKnowledge, useMemory bool) ([]adk.Message, error) {
-	profile, memResults, knowledgeResults, recentMsgs, err := a.gatherContextSources(ctx, userInput, useKnowledge, useMemory)
+	a.checkAndSummarize(ctx)
+	profile, memResults, knowledgeResults, recentMsgs, summaryText, err := a.gatherContextSources(ctx, userInput, useKnowledge, useMemory)
 	if err != nil {
 		return nil, err
 	}
@@ -142,6 +157,16 @@ func (a *Agent) buildContext(ctx context.Context, userInput string, useKnowledge
 		msgs = append(msgs,
 			&schema.Message{Role: schema.User, Content: ctxBuf.String()},
 			&schema.Message{Role: schema.Assistant, Content: "Understood."},
+		)
+	}
+
+	// --- Layer 1b: rolling summary (compressed earlier turns) ---
+	if summaryText != "" {
+		summary := "[Conversation summary — compressed history from earlier turns:]\n" +
+			summaryText + "\n[End of summary]"
+		msgs = append(msgs,
+			&schema.Message{Role: schema.User, Content: summary},
+			&schema.Message{Role: schema.Assistant, Content: "Got it."},
 		)
 	}
 
