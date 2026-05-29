@@ -91,8 +91,7 @@ func buildReflectionPrompt(userInput, assistantReply string, hints []string) str
 	sb.WriteString("- 解决方案：<一句话>\n")
 	sb.WriteString("- 结果：成功 / 失败 / 部分完成\n\n")
 	sb.WriteString("请选择（可不选）：\n")
-	sb.WriteString("□ save_memory — 有新的具体事实或偏好值得记录\n")
-	sb.WriteString("□ update_user_profile — 发现了用户新的习惯/背景\n")
+	sb.WriteString("□ update_user_profile — 发现了用户新的习惯/背景/偏好/事实\n")
 	sb.WriteString("□ save_skill — 本次解决模式可复用\n")
 	if len(hints) > 0 {
 		sb.WriteString("\n重点提示：\n")

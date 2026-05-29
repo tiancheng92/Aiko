@@ -50,7 +50,7 @@ const toolPolicyPrompt = `
 4. 执行与写入 — 结果不可预测，必须实际调用工具执行后，依据工具返回的真实输出进行报告，禁止提前猜测或伪造结果：
    execute_shell / execute_code / write_file / delete_file / move_file /
    make_directory / write_clipboard / control_app / create_calendar_event /
-   complete_reminder / cron / save_memory / save_skill / update_user_profile /
+   complete_reminder / cron / save_skill / update_user_profile /
    save_image / check_and_update
 
 5. 禁止复用历史工具结果 — 对话历史中出现的工具调用结果是过去某一时刻的快照，不代表当前状态。

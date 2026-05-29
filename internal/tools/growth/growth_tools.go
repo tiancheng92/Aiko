@@ -16,47 +16,6 @@ import (
 	"aiko/internal/tools/base"
 )
 
-// SaveMemoryTool saves a single concrete fact or preference to long-term memory.
-type SaveMemoryTool struct {
-	LongMem *memory.LongStore
-}
-
-// Name returns the tool's stable identifier.
-func (t *SaveMemoryTool) Name() string { return "save_memory" }
-
-// Permission returns the required permission level.
-func (t *SaveMemoryTool) Permission() base.PermissionLevel { return base.PermPublic }
-
-// Info returns the eino tool schema for save_memory.
-func (t *SaveMemoryTool) Info(_ context.Context) (*schema.ToolInfo, error) {
-	return base.InfoFromSchema(t.Name(),
-		"保存单条跨会话事实或临时结论到长期记忆（一两句话），如「用户今天提到了 X」。稳定的用户属性（偏好、习惯、背景）请用 update_user_profile。保存前先用 search_memory 确认尚未存储类似内容。对话历史由系统自动处理，无需摘要。",
-		map[string]*schema.ParameterInfo{
-			"content": {
-				Type:     schema.String,
-				Desc:     "要长期记住的具体事实或临时结论（一两句话）",
-				Required: true,
-			},
-		},
-	), nil
-}
-
-// InvokableRun stores the given content into the long-term memory store.
-func (t *SaveMemoryTool) InvokableRun(ctx context.Context, input string, _ ...tool.Option) (string, error) {
-	if t.LongMem == nil {
-		return "长期记忆未启用（需配置 Embedding 模型）", nil
-	}
-	args := base.ParseArgs(input)
-	content, _ := args["content"].(string)
-	if content == "" {
-		return "请提供要保存的内容", nil
-	}
-	if err := t.LongMem.Store(ctx, content); err != nil {
-		return "", fmt.Errorf("save memory: %w", err)
-	}
-	return fmt.Sprintf("已保存到长期记忆：%s", content), nil
-}
-
 // SearchMemoryTool queries long-term memory for segments relevant to a given topic.
 type SearchMemoryTool struct {
 	LongMem *memory.LongStore
@@ -129,7 +88,7 @@ func (t *UpdateUserProfileTool) Permission() base.PermissionLevel { return base.
 // Info returns the eino tool schema for update_user_profile.
 func (t *UpdateUserProfileTool) Info(_ context.Context) (*schema.ToolInfo, error) {
 	return base.InfoFromSchema(t.Name(),
-		"更新用户画像中的稳定属性（偏好、习惯、背景），如 preferred_language、timezone。已存在的 key 被覆盖，否则追加。临时事实或一次性结论请用 save_memory。",
+		"更新用户画像中的稳定属性（偏好、习惯、背景），如 preferred_language、timezone。已存在的 key 被覆盖，否则追加。",
 		map[string]*schema.ParameterInfo{
 			"key": {
 				Type:     schema.String,
