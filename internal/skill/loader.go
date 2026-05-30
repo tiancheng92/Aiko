@@ -17,7 +17,11 @@ import (
 // NewMiddleware builds a skill.Middleware from all directories in skillsDirs.
 // Directories that do not exist are silently skipped. Returns nil, nil when
 // skillsDirs is empty or no SKILL.md files are found in any directory.
-func NewMiddleware(ctx context.Context, skillsDirs []string) (adk.ChatModelAgentMiddleware, error) {
+//
+// When agentHub is non-nil, skills with context:fork or context:fork_with_context
+// in their frontmatter can execute in an isolated sub-agent. modelHub allows
+// individual skills to specify a different model via the "model" frontmatter field.
+func NewMiddleware(ctx context.Context, skillsDirs []string, agentHub skill.AgentHub, modelHub skill.ModelHub) (adk.ChatModelAgentMiddleware, error) {
 	var backends []skill.Backend
 	for _, dir := range skillsDirs {
 		b := backendForDir(expandHome(dir))
@@ -34,7 +38,51 @@ func NewMiddleware(ctx context.Context, skillsDirs []string) (adk.ChatModelAgent
 		backend = backends[0]
 	}
 
-	return skill.NewMiddleware(ctx, &skill.Config{Backend: backend})
+	return skill.NewMiddleware(ctx, &skill.Config{
+		Backend:  backend,
+		AgentHub: agentHub,
+		ModelHub: modelHub,
+		CustomSystemPrompt: func(ctx context.Context, toolName string) string {
+			return buildSkillSystemPrompt(toolName)
+		},
+		CustomToolDescription: func(ctx context.Context, skills []skill.FrontMatter) string {
+			return buildSkillToolDescription(skills)
+		},
+	})
+}
+
+// buildSkillSystemPrompt returns the Chinese system prompt injected for the
+// skill tool. It instructs the LLM to load and follow skills when they match
+// the user's intent.
+func buildSkillSystemPrompt(toolName string) string {
+	return `调用 ` + toolName + ` 工具可以加载一个 Skill（技能）。Skill 是一段可复用的 Markdown 指令，
+告诉你在特定场景下应该如何工作。
+
+规则：
+- 当用户的任务明显匹配某个 Skill 的描述时，必须调用 ` + toolName + ` 加载该 Skill。
+- 加载后，严格按照 Skill 中的步骤执行。
+- 如果 Skill 的内容不适用或带来限制，退出该 Skill 后自行处理。
+- 不要加载与当前任务无关的 Skill。`
+}
+
+// buildSkillToolDescription returns a description that lists all available
+// skills by name and summary, helping the LLM select the right skill.
+func buildSkillToolDescription(skills []skill.FrontMatter) string {
+	if len(skills) == 0 {
+		return "加载一个 Skill 以获取特定场景的操作指引。当前没有可用 Skill。"
+	}
+	var b strings.Builder
+	b.WriteString("加载一个 Skill 以获取特定场景的操作指引。可用 Skill 列表：\n")
+	for i := range skills {
+		b.WriteString("- ")
+		b.WriteString(skills[i].Name)
+		if skills[i].Description != "" {
+			b.WriteString(" — ")
+			b.WriteString(skills[i].Description)
+		}
+		b.WriteByte('\n')
+	}
+	return b.String()
 }
 
 // backendForDir creates a fault-tolerant skill.Backend for a single directory.
@@ -131,13 +179,12 @@ func parseFrontmatter(data string) (frontmatter, content string, err error) {
 		return "", "", fmt.Errorf("missing frontmatter delimiter")
 	}
 	rest := data[len(delim):]
-	end := strings.Index(rest, "\n"+delim)
-	if end == -1 {
+	fm, after, found := strings.Cut(rest, "\n"+delim)
+	if !found {
 		return "", "", fmt.Errorf("frontmatter closing delimiter not found")
 	}
-	frontmatter = strings.TrimSpace(rest[:end])
-	content = rest[end+len("\n"+delim):]
-	content = strings.TrimPrefix(content, "\n")
+	frontmatter = strings.TrimSpace(fm)
+	content = strings.TrimPrefix(after, "\n")
 	return frontmatter, content, nil
 }
 

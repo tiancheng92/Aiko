@@ -17,6 +17,7 @@ import (
 
 	"aiko/internal/bytesconv"
 	"aiko/internal/knowledge"
+	"aiko/internal/llm"
 )
 
 // userProfileCache holds a recently-read USER.md to avoid redundant disk reads on every turn.
@@ -167,6 +168,14 @@ func (a *Agent) buildContext(ctx context.Context, userInput string, useKnowledge
 			&schema.Message{Role: schema.User, Content: summary},
 			&schema.Message{Role: schema.Assistant, Content: "Understood."},
 		)
+	}
+
+	// Mark the last static-prefix message for prompt caching. The system
+	// prompt (set at agent construction) + USER.md + summary are sent on
+	// every turn and rarely change — caching them saves 50-90% token cost
+	// on repeat prefix sends via OpenRouter / Anthropic-compatible APIs.
+	if len(msgs) > 0 {
+		llm.EnablePromptCaching(msgs[len(msgs)-1])
 	}
 
 	// --- History messages ---

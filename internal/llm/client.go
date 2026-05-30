@@ -7,17 +7,29 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"time"
 
 	embeddopenai "github.com/cloudwego/eino-ext/components/embedding/openai"
 	einoopenai "github.com/cloudwego/eino-ext/components/model/openai"
 	einoopenrouter "github.com/cloudwego/eino-ext/components/model/openrouter"
 	"github.com/cloudwego/eino/components/embedding"
 	"github.com/cloudwego/eino/components/model"
+	"github.com/cloudwego/eino/schema"
 
 	"aiko/internal/config"
 )
 
-// ErrorBodyTransport wraps http.DefaultTransport and stores the raw response
+// sharedTransport is an HTTP transport tuned for LLM API calls: higher
+// per-host connection pool and shorter TLS handshake timeout than
+// http.DefaultTransport (which only keeps 2 idle conns per host).
+var sharedTransport = &http.Transport{
+	MaxIdleConns:        100,
+	MaxIdleConnsPerHost: 20,
+	IdleConnTimeout:     90 * time.Second,
+	TLSHandshakeTimeout: 10 * time.Second,
+}
+
+// ErrorBodyTransport wraps sharedTransport and stores the raw response
 // body of the most recent non-2xx response. This lets callers retrieve the
 // original provider error JSON that go-openai's APIError may not fully expose
 // (e.g. OpenRouter's error.metadata.raw field).
@@ -32,7 +44,7 @@ type ErrorBodyTransport struct {
 func (t *ErrorBodyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	base := t.base
 	if base == nil {
-		base = http.DefaultTransport
+		base = sharedTransport
 	}
 	resp, err := base.RoundTrip(req)
 	if err != nil || resp == nil {
@@ -83,6 +95,10 @@ func NewChatModel(ctx context.Context, cfg *config.Config) (model.ToolCallingCha
 			BaseURL:    cfg.LLMBaseURL,
 			Model:      cfg.LLMModel,
 			HTTPClient: httpClient,
+			// Enable prompt caching at the request level. Static prefix
+			// (system prompt + USER.md + summary) will be cached for 1 hour,
+			// saving ~50-90% token cost on repeat sends.
+			CacheControl: &einoopenrouter.CacheControl{TTL: einoopenrouter.CacheControlTTL1Hour},
 		})
 		return m, transport, err
 	default: // openai-compatible
@@ -104,9 +120,20 @@ func NewEmbedder(ctx context.Context, cfg *config.Config) (embedding.Embedder, e
 		return nil, nil
 	}
 	return embeddopenai.NewEmbedder(ctx, &embeddopenai.EmbeddingConfig{
-		BaseURL: cfg.EmbeddingBaseURL,
-		APIKey:  cfg.EmbeddingAPIKey,
-		Model:   cfg.EmbeddingModel,
+		BaseURL:    cfg.EmbeddingBaseURL,
+		APIKey:     cfg.EmbeddingAPIKey,
+		Model:      cfg.EmbeddingModel,
+		HTTPClient: &http.Client{Transport: sharedTransport},
 	})
+}
+
+// EnablePromptCaching marks a message for prompt caching by attaching an
+// OpenRouter cache_control extra field. For non-OpenRouter providers the
+// extra field is silently ignored by the serialiser, so it is always safe.
+// Messages up to and including the marked message are eligible for caching;
+// mark the last message in the static prefix (e.g. USER.md + summary) so
+// the cache stays valid across turns.
+func EnablePromptCaching(msg *schema.Message) {
+	einoopenrouter.EnableMessageContentCacheControl(msg)
 }
 

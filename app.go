@@ -322,7 +322,8 @@ func (a *App) buildAgent(
 
 	autoSkillsDir := filepath.Join(dataDir, "auto-skills")
 	skillDirs := append(append([]string{}, cfgSkillsDirs...), autoSkillsDir)
-	skillMW, err := skill.NewMiddleware(ctx, skillDirs)
+	agentHub := skill.NewAgentHub(chatModel, a.cfg.SystemPrompt)
+	skillMW, err := skill.NewMiddleware(ctx, skillDirs, agentHub, nil)
 	if err != nil {
 		return nil, fmt.Errorf("load skills: %w", err)
 	}

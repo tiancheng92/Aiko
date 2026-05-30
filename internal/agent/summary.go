@@ -3,7 +3,10 @@ package agent
 import (
 	"context"
 	"fmt"
+	"sync"
+	"unicode"
 
+	"github.com/pkoukk/tiktoken-go"
 	"github.com/cloudwego/eino/schema"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
@@ -11,12 +14,59 @@ import (
 	"aiko/internal/memory"
 )
 
-// estimateTokens approximates the token count for a slice of messages.
-// Uses len(content)/4 as a conservative estimate safe for both English and CJK.
+// tiktokenEnc is a lazily-initialised tiktoken encoder for cl100k_base
+// (used by GPT-4, GPT-3.5-turbo, and text-embedding-ada-002).
+// Initialisation happens once and is safe for concurrent use.
+var (
+	tiktokenEnc     *tiktoken.Tiktoken
+	tiktokenEncErr  error
+	tiktokenEncOnce sync.Once
+)
+
+// getTiktoken returns the shared tiktoken encoder, initialising it on first call.
+// Returns nil if initialisation fails (caller should use the fallback heuristic).
+func getTiktoken() *tiktoken.Tiktoken {
+	tiktokenEncOnce.Do(func() {
+		tiktokenEnc, tiktokenEncErr = tiktoken.GetEncoding("cl100k_base")
+		if tiktokenEncErr != nil {
+			log.Warn().Err(tiktokenEncErr).Msg("tiktoken init failed, using fallback token estimate")
+		}
+	})
+	return tiktokenEnc
+}
+
+// fallbackTokenEstimate provides a CJK-aware token count heuristic for when
+// tiktoken is unavailable. ASCII text ≈ 4 chars/token, CJK ≈ 1.5 chars/token.
+func fallbackTokenEstimate(text string) int {
+	ascii := 0
+	cjk := 0
+	for _, r := range text {
+		if r <= unicode.MaxASCII {
+			ascii++
+		} else if unicode.Is(unicode.Han, r) || unicode.Is(unicode.Hiragana, r) ||
+			unicode.Is(unicode.Katakana, r) || unicode.Is(unicode.Hangul, r) {
+			cjk++
+		} else {
+			// Other non-ASCII (emoji, symbols, etc.) — treat as CJK-like
+			cjk++
+		}
+	}
+	return ascii/4 + cjk*2/3
+}
+
+// estimateTokens returns the approximate token count for a slice of messages.
+// Uses tiktoken (cl100k_base encoding) when available; falls back to a
+// CJK-aware heuristic that is far more accurate than len(content)/4.
 func estimateTokens(msgs []memory.Message) int {
+	enc := getTiktoken()
 	total := 0
 	for i := range msgs {
-		total += len(msgs[i].Content) / 4
+		if enc != nil {
+			tokens := enc.Encode(msgs[i].Content, nil, nil)
+			total += len(tokens)
+		} else {
+			total += fallbackTokenEstimate(msgs[i].Content)
+		}
 	}
 	return total
 }
