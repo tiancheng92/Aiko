@@ -1,5 +1,4 @@
 <template>
-  <Teleport to="body">
     <Transition
       :css="false"
       @enter="onEnter"
@@ -8,7 +7,6 @@
       <div
         v-if="visible"
         class="pomodoro-panel"
-        :style="panelStyle"
       >
         <!-- Circular progress ring -->
         <div class="timer-ring" :style="ringStyle">
@@ -62,7 +60,6 @@
         </div>
       </div>
     </Transition>
-  </Teleport>
 </template>
 
 <script setup>
@@ -77,11 +74,6 @@ import {
   GetPomodoroStatus,
 } from '../../wailsjs/go/main/App'
 import { springAnimate } from '../composables/useSpring'
-
-const props = defineProps({
-  petPos: { type: Object, required: true },
-  petSize: { type: Number, default: 160 },
-})
 
 const { t } = useI18n()
 const emit = defineEmits(['close'])
@@ -135,26 +127,6 @@ const ringStyle = computed(() => ({
   background: `conic-gradient(${phaseColor.value} ${progress.value * 360}deg, rgba(255,255,255,0.06) ${progress.value * 360}deg)`,
   boxShadow: `0 0 16px ${phaseColor.value}33, inset 0 0 16px ${phaseColor.value}1a`,
 }))
-
-const panelWidth = 280
-const panelHeight = 140
-
-// Stack position: pomodoro sits above ClaudeStatusPanel (~60px) + SystemResourcePanel (~116px) + gaps.
-const panelStyle = computed(() => {
-  const sysH = 116   // SystemResourcePanel base height
-  const claudeH = 60 // ClaudeStatusPanel typical height
-  const gap = 8
-  const h = panelHeight
-  const x = props.petPos.x - panelWidth + 50
-  const y = props.petPos.y + props.petSize - sysH - gap - claudeH - gap - h
-  const clampedX = Math.min(Math.max(x, 8), window.innerWidth - panelWidth - 8)
-  const clampedY = Math.min(Math.max(y, 38), window.innerHeight - h - 8)
-  return {
-    left: `${clampedX}px`,
-    top: `${clampedY}px`,
-    width: `${panelWidth}px`,
-  }
-})
 
 // ── methods ──
 
@@ -264,8 +236,8 @@ defineExpose({ show })
 
 <style scoped>
 .pomodoro-panel {
-  position: fixed;
-  z-index: 99998;
+  width: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;

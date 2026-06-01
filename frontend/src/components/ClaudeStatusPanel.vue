@@ -1,14 +1,9 @@
 <!-- frontend/src/components/ClaudeStatusPanel.vue -->
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { EventsOn } from "../../wailsjs/runtime/runtime";
 import { springAnimate } from "../composables/useSpring";
-
-const props = defineProps({
-  petPos: { type: Object, required: true },
-  petSize: { type: Number, default: 160 },
-});
 
 const { t } = useI18n();
 
@@ -17,8 +12,6 @@ const state = ref("idle"); // "idle" | "thinking" | "error"
 const hookEventName = ref("");
 const toolName = ref("");
 const panelRef = ref(null);
-const panelWidth = 280;
-const panelH = ref(0);
 
 let offStatus = null;
 let cancelAnim = null;
@@ -47,16 +40,9 @@ function eventLabel(name) {
  */
 function toolLabel(name) {
   if (!name) return "";
-  // Friendly names for common tools.
   const map = {
-    Bash: "bash",
-    Write: "write",
-    Edit: "edit",
-    Read: "read",
-    Grep: "grep",
-    Glob: "glob",
-    WebFetch: "webFetch",
-    WebSearch: "webSearch",
+    Bash: "bash", Write: "write", Edit: "edit", Read: "read",
+    Grep: "grep", Glob: "glob", WebFetch: "webFetch", WebSearch: "webSearch",
   };
   const key = map[name];
   return key ? t("claudeStatus.tool." + key) : name;
@@ -64,36 +50,14 @@ function toolLabel(name) {
 
 const cfg = computed(() => STATE_CONFIG[state.value] || STATE_CONFIG.idle);
 
-const panelStyle = computed(() => {
-  const h = panelH.value || 56;
-  const sysPanelH = 116; // SystemResourcePanel base height
-  const gap = 8;
-  const x = props.petPos.x - panelWidth + 50;
-  const y = props.petPos.y + props.petSize - sysPanelH - gap - h;
-  const clampedX = Math.min(Math.max(x, 8), window.innerWidth - panelWidth - 8);
-  const clampedY = Math.min(Math.max(y, 38), window.innerHeight - h - 8);
-  return {
-    left: `${clampedX}px`,
-    top: `${clampedY}px`,
-    width: `${panelWidth}px`,
-  };
-});
-
-/** show opens the panel and measures its height. */
+/** show opens the panel. */
 function show() {
   visible.value = true;
-  nextTick(() => {
-    if (panelRef.value) panelH.value = panelRef.value.offsetHeight;
-  });
 }
 
 /** hide closes the panel. */
 function hide() {
   visible.value = false;
-}
-
-function updateHeight() {
-  if (panelRef.value) panelH.value = panelRef.value.offsetHeight;
 }
 
 const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -121,7 +85,6 @@ onMounted(() => {
     state.value = data.state || "idle";
     hookEventName.value = data.hookEventName || "";
     toolName.value = data.toolName || "";
-    nextTick(updateHeight);
   });
 });
 
@@ -134,9 +97,8 @@ defineExpose({ show, hide });
 </script>
 
 <template>
-  <Teleport to="body">
     <Transition :css="false" @enter="onEnter" @leave="onLeave">
-      <div v-if="visible" ref="panelRef" class="claude-panel" :style="panelStyle">
+      <div v-if="visible" ref="panelRef" class="claude-panel">
         <div class="cp-header">
           <span class="cp-dot" :class="cfg.class">{{ cfg.icon }}</span>
           <span class="cp-title">Claude Code</span>
@@ -148,13 +110,12 @@ defineExpose({ show, hide });
         </div>
       </div>
     </Transition>
-  </Teleport>
 </template>
 
 <style scoped>
 .claude-panel {
-  position: fixed;
-  z-index: 99997;
+  width: 100%;
+  box-sizing: border-box;
   background: var(--lg-surface-elevated);
   backdrop-filter: var(--lg-blur);
   -webkit-backdrop-filter: var(--lg-blur);

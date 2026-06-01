@@ -1,7 +1,6 @@
 <template>
-  <Teleport to="body">
     <Transition :css="false" @enter="onEnter" @leave="onLeave">
-      <div v-if="visible" ref="panelRef" class="system-panel" :style="panelStyle">
+      <div v-if="visible" ref="panelRef" class="system-panel">
         <!-- CPU -->
         <div class="stat-row">
           <div class="stat-label">
@@ -158,20 +157,14 @@
         </div>
       </div>
     </Transition>
-  </Teleport>
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { nextTick, onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { GetSystemStats, GetTopProcesses } from "../../wailsjs/go/main/App";
 import { EventsOn } from "../../wailsjs/runtime/runtime";
 import { springAnimate } from "../composables/useSpring";
-
-const props = defineProps({
-  petPos: { type: Object, required: true },
-  petSize: { type: Number, default: 160 },
-});
 
 const { t } = useI18n();
 
@@ -187,25 +180,8 @@ const topMemory = ref([]);
 const panelRef = ref(null);
 const processListsRef = ref(null);
 const expandedHeight = ref(0);
-const baseHeight = ref(116);
-
 let offStatsUpdate = null;
 let cancelAnim = null;
-
-const panelWidth = 280;
-
-const panelStyle = computed(() => {
-  const h = baseHeight.value + expandedHeight.value;
-  const x = props.petPos.x - panelWidth + 50;
-  const y = props.petPos.y + props.petSize - h;
-  const clampedX = Math.min(Math.max(x, 8), window.innerWidth - panelWidth - 8);
-  const clampedY = Math.min(Math.max(y, 38), window.innerHeight - h - 8);
-  return {
-    left: `${clampedX}px`,
-    top: `${clampedY}px`,
-    width: `${panelWidth}px`,
-  };
-});
 
 /**
  * formatBytes converts a byte count to a human-readable string (e.g. "8.5G", "256M").
@@ -233,7 +209,6 @@ function barColor(pct) {
 
 function show() {
   visible.value = true;
-  nextTick(updateBaseHeight);
   GetSystemStats()
     .then((st) => {
       cpu.value = st.cpu;
@@ -243,12 +218,6 @@ function show() {
       network.value = st.network || { downRate: 0, upRate: 0 };
     })
     .catch(() => {});
-}
-
-function updateBaseHeight() {
-  if (panelRef.value) {
-    baseHeight.value = panelRef.value.offsetHeight;
-  }
 }
 
 function fetchTopProcesses() {
@@ -351,8 +320,8 @@ defineExpose({ show });
 
 <style scoped>
 .system-panel {
-  position: fixed;
-  z-index: 99996;
+  width: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 12px;

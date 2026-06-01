@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick, watch, defineAsyncComponent } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch, defineAsyncComponent } from 'vue'
 const Live2DPet = defineAsyncComponent(() => import('./components/Live2DPet.vue'))
 const VRMPet = defineAsyncComponent(() => import('./components/VRMPet.vue'))
 import ChatBubble from './components/ChatBubble.vue'
@@ -497,6 +497,19 @@ function closeSystemPanel() {
   systemPanelOpen.value = false
 }
 
+const panelStackWidth = 280
+const panelStackStyle = computed(() => {
+  const x = ballPos.value.x - panelStackWidth + 50
+  const y = ballPos.value.y + ballSize.value
+  const clampedX = Math.min(Math.max(x, 8), window.innerWidth - panelStackWidth - 8)
+  const clampedY = Math.min(Math.max(y, 38), window.innerHeight - 8)
+  return {
+    left: `${clampedX}px`,
+    top: `${clampedY}px`,
+    width: `${panelStackWidth}px`,
+  }
+})
+
 function onPomodoroStateChanged(payload) {
   pomodoroRunning.value = payload.state === 'running'
 }
@@ -656,25 +669,24 @@ function onSettingsLeave(el, done) {
     :pet-pos="ballPos"
     :pet-size="ballSize"
   />
-  <PomodoroPanel
-    v-if="pomodoroPanelOpen"
-    ref="pomodoroPanelRef"
-    :pet-pos="ballPos"
-    :pet-size="ballSize"
-    @close="closePomodoro"
-  />
-  <ClaudeStatusPanel
-    v-if="claudePanelOpen"
-    ref="claudePanelRef"
-    :pet-pos="ballPos"
-    :pet-size="ballSize"
-  />
-  <SystemResourcePanel
-    v-if="systemPanelOpen"
-    ref="systemPanelRef"
-    :pet-pos="ballPos"
-    :pet-size="ballSize"
-  />
+  <!-- Panel stack: pomodoro → claude status → system resource, bottom-aligned flex column -->
+  <Teleport to="body">
+    <div v-if="pomodoroPanelOpen || claudePanelOpen || systemPanelOpen" class="panel-stack" :style="panelStackStyle">
+      <PomodoroPanel
+        v-if="pomodoroPanelOpen"
+        ref="pomodoroPanelRef"
+        @close="closePomodoro"
+      />
+      <ClaudeStatusPanel
+        v-if="claudePanelOpen"
+        ref="claudePanelRef"
+      />
+      <SystemResourcePanel
+        v-if="systemPanelOpen"
+        ref="systemPanelRef"
+      />
+    </div>
+  </Teleport>
 
   <!--
     Apple Intelligence glow border — 4 canvas elements, each with its own CSS blur.
@@ -706,6 +718,17 @@ function onSettingsLeave(el, done) {
   position: absolute;
   inset: 0;
   pointer-events: none;
+}
+
+/* ── Panel stack: pomodoro → claude → system, bottom-aligned flex column */
+.panel-stack {
+  position: fixed;
+  z-index: 99996;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 /* ── Water ripple canvas ─────────────────────────────────────── */
