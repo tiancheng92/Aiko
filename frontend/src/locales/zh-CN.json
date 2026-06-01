@@ -624,5 +624,26 @@
 		"hookConfigHint": "将以下配置合并到 ~/.claude/settings.json 的 \"hooks\" 字段中",
 		"copy": "复制",
 		"copied": "已复制到剪贴板"
+	},
+	"claudeStatus": {
+		"idle": "空闲",
+		"thinking": "工作中",
+		"error": "错误",
+		"showPanel": "显示 Claude 状态",
+		"hidePanel": "隐藏 Claude 状态",
+		"eventPreToolUse": "执行工具",
+		"eventPermissionRequest": "等待权限",
+		"eventStop": "已完成",
+		"eventStopFailure": "出错",
+		"tool": {
+			"bash": "Bash",
+			"write": "写入",
+			"edit": "编辑",
+			"read": "读取",
+			"grep": "搜索",
+			"glob": "查找",
+			"webFetch": "抓取网页",
+			"webSearch": "搜索网页"
+		}
 	}
 }

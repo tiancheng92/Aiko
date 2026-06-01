@@ -7,6 +7,7 @@ const SettingsWindow = defineAsyncComponent(() => import('./components/SettingsW
 import NotificationBubble from './components/NotificationBubble.vue'
 import PomodoroPanel from './components/PomodoroPanel.vue'
 import SystemResourcePanel from './components/SystemResourcePanel.vue'
+import ClaudeStatusPanel from './components/ClaudeStatusPanel.vue'
 import { MissingRequiredConfig, IsFirstLaunch, MarkWelcomeShown, GetScreenSize, GetConfig, SetChatVisible } from '../wailsjs/go/main/App'
 import { EventsOn, EventsEmit } from '../wailsjs/runtime/runtime'
 import { springAnimate } from './composables/useSpring'
@@ -21,6 +22,9 @@ const pomodoroPanelOpen = ref(false)
 const pomodoroRunning = ref(false)
 const pomodoroPanelRef = ref(null)
 const pomodoroPanelWasOpen = ref(false)
+const claudePanelOpen = ref(false)
+const claudePanelRef = ref(null)
+const claudePanelWasOpen = ref(false)
 const systemPanelOpen = ref(false)
 const systemPanelRef = ref(null)
 const systemPanelWasOpen = ref(false)
@@ -463,6 +467,19 @@ function closePomodoro() {
   pomodoroPanelOpen.value = false
 }
 
+/** toggleClaudePanel toggles the Claude Code status panel visibility. */
+function toggleClaudePanel() {
+  if (claudePanelOpen.value) {
+    claudePanelOpen.value = false
+    return
+  }
+  claudePanelOpen.value = true
+  claudePanelWasOpen.value = false
+  nextTick(() => {
+    claudePanelRef.value?.show()
+  })
+}
+
 /** toggleSystemPanel toggles the system resource panel visibility. */
 function toggleSystemPanel() {
   if (systemPanelOpen.value) {
@@ -592,6 +609,7 @@ function onSettingsLeave(el, done) {
     v-if="renderBackend === 'live2d'"
     :active-screen="activeScreen"
     :pomodoro-panel-open="pomodoroPanelOpen"
+    :claude-panel-open="claudePanelOpen"
     :system-panel-open="systemPanelOpen"
     @click="toggleBubble"
     @position="p => ballPos = p"
@@ -599,11 +617,13 @@ function onSettingsLeave(el, done) {
     @open-settings="openSettings"
     @open-pomodoro="openPomodoro"
     @toggle-system-panel="toggleSystemPanel"
+    @toggle-claude-panel="toggleClaudePanel"
   />
   <VRMPet
     v-else-if="renderBackend === 'vrm'"
     :active-screen="activeScreen"
     :pomodoro-panel-open="pomodoroPanelOpen"
+    :claude-panel-open="claudePanelOpen"
     :system-panel-open="systemPanelOpen"
     @click="toggleBubble"
     @position="p => ballPos = p"
@@ -611,6 +631,7 @@ function onSettingsLeave(el, done) {
     @open-settings="openSettings"
     @open-pomodoro="openPomodoro"
     @toggle-system-panel="toggleSystemPanel"
+    @toggle-claude-panel="toggleClaudePanel"
   />
   <Transition :css="false" @enter="onBubbleEnter" @leave="onBubbleLeave">
     <ChatBubble
@@ -641,6 +662,12 @@ function onSettingsLeave(el, done) {
     :pet-pos="ballPos"
     :pet-size="ballSize"
     @close="closePomodoro"
+  />
+  <ClaudeStatusPanel
+    v-if="claudePanelOpen"
+    ref="claudePanelRef"
+    :pet-pos="ballPos"
+    :pet-size="ballSize"
   />
   <SystemResourcePanel
     v-if="systemPanelOpen"

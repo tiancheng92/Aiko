@@ -43,3 +43,4 @@ export const ICON_POMODORO     = SVG('<circle cx="12" cy="12" r="10"/><polyline 
 export const ICON_CPU     = SVG('<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M20 9h2M20 15h2M2 9h2M2 15h2"/>')
 export const ICON_TAB_POMODORO = SVG('<path d="M12 2c-3 0-8 2-8 8 0 5 3 10 8 12 5-2 8-7 8-12 0-6-5-8-8-8z"/><path d="M12 6v2"/>', 1.5)
 export const ICON_TAB_CLAUDE_CODE = SVG('<path d="M12 2a4 4 0 0 1 4 4v1h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h2V6a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v1h4V6a2 2 0 0 0-2-2z"/><circle cx="12" cy="14" r="1.5" fill="currentColor"/><path d="M11 10h2v3h-2z"/><path d="M8 9h8" stroke="currentColor" stroke-width="1.2" fill="none"/>')
+export const ICON_CLAUDE_CODE = SVG('<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>')

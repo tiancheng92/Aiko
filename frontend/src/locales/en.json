@@ -624,5 +624,26 @@
 		"hookConfigHint": "Merge the following config into ~/.claude/settings.json under the \"hooks\" key",
 		"copy": "Copy",
 		"copied": "Copied to clipboard"
+	},
+	"claudeStatus": {
+		"idle": "Idle",
+		"thinking": "Working",
+		"error": "Error",
+		"showPanel": "Show Claude Status",
+		"hidePanel": "Hide Claude Status",
+		"eventPreToolUse": "Running Tool",
+		"eventPermissionRequest": "Waiting Permission",
+		"eventStop": "Done",
+		"eventStopFailure": "Error",
+		"tool": {
+			"bash": "Bash",
+			"write": "Write",
+			"edit": "Edit",
+			"read": "Read",
+			"grep": "Search",
+			"glob": "Find",
+			"webFetch": "Fetch",
+			"webSearch": "Search"
+		}
 	}
 }

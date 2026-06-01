@@ -619,5 +619,26 @@
 		"hookConfigHint": "다음 설정을 ~/.claude/settings.json의 \"hooks\" 키에 병합하세요",
 		"copy": "복사",
 		"copied": "클립보드에 복사됨"
+	},
+	"claudeStatus": {
+		"idle": "대기 중",
+		"thinking": "작업 중",
+		"error": "오류",
+		"showPanel": "Claude 상태 표시",
+		"hidePanel": "Claude 상태 숨기기",
+		"eventPreToolUse": "도구 실행 중",
+		"eventPermissionRequest": "권한 대기",
+		"eventStop": "완료",
+		"eventStopFailure": "오류",
+		"tool": {
+			"bash": "Bash",
+			"write": "쓰기",
+			"edit": "편집",
+			"read": "읽기",
+			"grep": "검색",
+			"glob": "찾기",
+			"webFetch": "가져오기",
+			"webSearch": "검색"
+		}
 	}
 }

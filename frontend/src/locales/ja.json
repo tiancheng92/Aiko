@@ -619,5 +619,26 @@
 		"hookConfigHint": "以下の設定を ~/.claude/settings.json の \"hooks\" キーにマージしてください",
 		"copy": "コピー",
 		"copied": "クリップボードにコピーしました"
+	},
+	"claudeStatus": {
+		"idle": "待機中",
+		"thinking": "作業中",
+		"error": "エラー",
+		"showPanel": "Claudeステータス表示",
+		"hidePanel": "Claudeステータス非表示",
+		"eventPreToolUse": "ツール実行中",
+		"eventPermissionRequest": "権限待ち",
+		"eventStop": "完了",
+		"eventStopFailure": "エラー",
+		"tool": {
+			"bash": "Bash",
+			"write": "書き込み",
+			"edit": "編集",
+			"read": "読み取り",
+			"grep": "検索",
+			"glob": "検索",
+			"webFetch": "取得",
+			"webSearch": "検索"
+		}
 	}
 }

@@ -138,6 +138,7 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 			s.emit("pet:state:change", "thinking")
 		})
 		s.mu.Unlock()
+		s.emit("claudecco:status", statusPayload("thinking", input))
 
 	case "Stop":
 		// Claude finished a turn — clear thinking, show completion bubble.
@@ -153,6 +154,7 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 			"message":      "Claude Code 已完成",
 			"durationSecs": s.cfg.NotificationSecs,
 		})
+		s.emit("claudecco:status", statusPayload("idle", input))
 
 	case "StopFailure":
 		// API error (rate limit, auth failure, server error, etc.) —
@@ -164,6 +166,7 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		}
 		s.mu.Unlock()
 		s.emit("pet:state:change", "error")
+		s.emit("claudecco:status", statusPayload("error", input))
 
 	default:
 		log.Debug().Str("hook_event_name", input.HookEventName).Msg("claudecco: ignored event")
@@ -172,4 +175,16 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"ok":true}`))
+}
+
+// statusPayload builds the structured status event sent to the ClaudeStatusPanel.
+func statusPayload(state string, input hookInput) map[string]any {
+	p := map[string]any{
+		"state":         state,
+		"hookEventName": input.HookEventName,
+	}
+	if input.ToolName != "" {
+		p["toolName"] = input.ToolName
+	}
+	return p
 }
