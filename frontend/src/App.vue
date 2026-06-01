@@ -419,10 +419,14 @@ onUnmounted(() => {
 function toggleBubble() {
   bubbleOpen.value = !bubbleOpen.value
   if (bubbleOpen.value) {
-    // Hide pomodoro panel when opening chat.
+    // Hide floating panels when opening chat.
     if (pomodoroPanelOpen.value) {
       pomodoroPanelWasOpen.value = true
       pomodoroPanelOpen.value = false
+    }
+    if (claudePanelOpen.value) {
+      claudePanelWasOpen.value = true
+      claudePanelOpen.value = false
     }
     if (systemPanelOpen.value) {
       systemPanelWasOpen.value = true
@@ -434,13 +438,16 @@ function toggleBubble() {
       chatBubbleRef.value?.scrollToBottom()
     })
   } else {
-    // Restore pomodoro panel when closing chat.
+    // Restore panels when closing chat.
     if (pomodoroPanelWasOpen.value) {
       pomodoroPanelWasOpen.value = false
       pomodoroPanelOpen.value = true
-      nextTick(() => {
-        pomodoroPanelRef.value?.show()
-      })
+      nextTick(() => { pomodoroPanelRef.value?.show() })
+    }
+    if (claudePanelWasOpen.value) {
+      claudePanelWasOpen.value = false
+      claudePanelOpen.value = true
+      nextTick(() => { claudePanelRef.value?.show() })
     }
     if (systemPanelWasOpen.value) {
       systemPanelWasOpen.value = false
