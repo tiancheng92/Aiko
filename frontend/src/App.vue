@@ -500,13 +500,17 @@ function closeSystemPanel() {
 const panelStackWidth = 280
 const panelStackStyle = computed(() => {
   const x = ballPos.value.x - panelStackWidth + 50
-  const y = ballPos.value.y + ballSize.value
+  const petBottom = ballPos.value.y + ballSize.value
+  const bottom = window.innerHeight - petBottom
   const clampedX = Math.min(Math.max(x, 8), window.innerWidth - panelStackWidth - 8)
-  const clampedY = Math.min(Math.max(y, 38), window.innerHeight - 8)
+  // Clamp bottom so the stack doesn't overflow past the menu bar when pet is high up.
+  const maxBottom = window.innerHeight - 38
+  const clampedBottom = Math.min(bottom, maxBottom)
   return {
     left: `${clampedX}px`,
-    top: `${clampedY}px`,
+    bottom: `${clampedBottom}px`,
     width: `${panelStackWidth}px`,
+    maxHeight: `${Math.max(0, petBottom - 38)}px`,
   }
 })
 
