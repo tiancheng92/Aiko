@@ -51,6 +51,9 @@ export namespace config {
 	    UseKnowledge: boolean;
 	    UseMemory: boolean;
 	    Language: string;
+	    claude_code_enabled: boolean;
+	    claude_code_port: number;
+	    claude_code_notification_secs: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -108,6 +111,9 @@ export namespace config {
 	        this.UseKnowledge = source["UseKnowledge"];
 	        this.UseMemory = source["UseMemory"];
 	        this.Language = source["Language"];
+	        this.claude_code_enabled = source["claude_code_enabled"];
+	        this.claude_code_port = source["claude_code_port"];
+	        this.claude_code_notification_secs = source["claude_code_notification_secs"];
 	    }
 	}
 	export class ModelProfile {

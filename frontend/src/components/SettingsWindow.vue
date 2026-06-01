@@ -111,18 +111,14 @@ const claudeCodeHookSnippet = computed(() => {
         matcher: "",
         hooks: [{
           type: "http",
-          url: `http://127.0.0.1:${port}/event`,
-          method: "POST",
-          body: "{\"event\":\"thinking\"}"
+          url: `http://127.0.0.1:${port}/event`
         }]
       }],
       Stop: [{
         matcher: "",
         hooks: [{
           type: "http",
-          url: `http://127.0.0.1:${port}/event`,
-          method: "POST",
-          body: "{\"event\":\"done\",\"summary\":\"Claude Code 已完成\"}"
+          url: `http://127.0.0.1:${port}/event`
         }]
       }]
     }

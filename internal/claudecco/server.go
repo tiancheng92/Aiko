@@ -14,10 +14,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Event represents an incoming Claude Code hook event.
-type Event struct {
-	Event   string `json:"event"`
-	Summary string `json:"summary,omitempty"`
+// hookInput is the standard JSON payload that Claude Code sends to HTTP hooks.
+// All hook events share this structure; event type is identified by hook_event_name.
+// Ref: https://code.claude.com/docs/en/hooks
+type hookInput struct {
+	SessionID     string `json:"session_id"`
+	HookEventName string `json:"hook_event_name"`
+	ToolName      string `json:"tool_name,omitempty"`
 }
 
 // Emitter is the interface for emitting Wails events.
@@ -108,16 +111,16 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var evt Event
-	if err := json.NewDecoder(r.Body).Decode(&evt); err != nil {
+	var input hookInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 
-	log.Debug().Str("event", evt.Event).Str("summary", evt.Summary).Msg("claudecco: received event")
+	log.Debug().Str("hook_event_name", input.HookEventName).Str("tool_name", input.ToolName).Msg("claudecco: received event")
 
-	switch evt.Event {
-	case "thinking":
+	switch input.HookEventName {
+	case "PreToolUse":
 		s.mu.Lock()
 		if s.debounce != nil {
 			s.debounce.Stop()
@@ -126,7 +129,7 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 			s.emit("pet:state:change", "thinking")
 		})
 		s.mu.Unlock()
-	case "done":
+	case "Stop":
 		s.mu.Lock()
 		if s.debounce != nil {
 			s.debounce.Stop()
@@ -134,18 +137,14 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		}
 		s.mu.Unlock()
 		s.emit("pet:state:change", "idle")
-		summary := evt.Summary
-		if summary == "" {
-			summary = "Claude Code 已完成"
-		}
 		s.emit("notification:show", map[string]any{
 			"title":        "Claude Code",
-			"message":      summary,
+			"message":      "Claude Code 已完成",
 			"durationSecs": s.cfg.NotificationSecs,
 		})
 	default:
-		http.Error(w, "unknown event", http.StatusBadRequest)
-		return
+		// Unknown event — acknowledge but ignore.
+		log.Debug().Str("hook_event_name", input.HookEventName).Msg("claudecco: ignored event")
 	}
 
 	w.Header().Set("Content-Type", "application/json")
