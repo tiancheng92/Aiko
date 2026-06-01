@@ -239,10 +239,9 @@ defineExpose({ show })
   width: 100%;
   box-sizing: border-box;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 20px;
+  padding: 18px 22px;
   background: var(--lg-surface-elevated);
   backdrop-filter: var(--lg-blur);
   -webkit-backdrop-filter: var(--lg-blur);
