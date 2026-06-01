@@ -352,21 +352,22 @@ defineExpose({ show });
 <style scoped>
 .system-panel {
   position: fixed;
-  z-index: 2001;
+  z-index: 99996;
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 12px 16px;
   box-sizing: border-box;
   overflow: hidden;
-  background: rgba(15, 23, 42, 0.88);
-  backdrop-filter: blur(20px) saturate(140%);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--lg-surface-elevated);
+  backdrop-filter: var(--lg-blur);
+  -webkit-backdrop-filter: var(--lg-blur);
+  border: 1px solid var(--lg-border);
+  border-radius: 10px;
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    0 8px 24px rgba(0, 0, 0, 0.45),
+    0 0 0 0.5px rgba(0, 0, 0, 0.25),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
   user-select: none;
 }
 

@@ -136,19 +136,23 @@ const ringStyle = computed(() => ({
   boxShadow: `0 0 16px ${phaseColor.value}33, inset 0 0 16px ${phaseColor.value}1a`,
 }))
 
-const panelWidth = 230
+const panelWidth = 280
 const panelHeight = 140
 
+// Stack position: pomodoro sits above ClaudeStatusPanel (~60px) + SystemResourcePanel (~116px) + gaps.
 const panelStyle = computed(() => {
-  const x = props.petPos.x + props.petSize / 2
-  const y = props.petPos.y - panelHeight - 8
-  const halfW = panelWidth / 2
-  const clampedX = Math.min(Math.max(x, halfW + 8), window.innerWidth - halfW - 8)
-  const clampedY = Math.min(Math.max(y, 38), window.innerHeight - panelHeight - 8)
+  const sysH = 116   // SystemResourcePanel base height
+  const claudeH = 60 // ClaudeStatusPanel typical height
+  const gap = 8
+  const h = panelHeight
+  const x = props.petPos.x - panelWidth + 50
+  const y = props.petPos.y + props.petSize - sysH - gap - claudeH - gap - h
+  const clampedX = Math.min(Math.max(x, 8), window.innerWidth - panelWidth - 8)
+  const clampedY = Math.min(Math.max(y, 38), window.innerHeight - h - 8)
   return {
     left: `${clampedX}px`,
     top: `${clampedY}px`,
-    transform: 'translate(-50%, 0)',
+    width: `${panelWidth}px`,
   }
 })
 
@@ -261,18 +265,24 @@ defineExpose({ show })
 <style scoped>
 .pomodoro-panel {
   position: fixed;
-  z-index: 2001;
+  z-index: 99998;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 20px;
-  padding: 18px 22px;
-  background: rgba(15, 23, 42, 0.92);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--lg-surface-elevated);
+  backdrop-filter: var(--lg-blur);
+  -webkit-backdrop-filter: var(--lg-blur);
+  border: 1px solid var(--lg-border);
+  border-radius: 10px;
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.45),
+    0 0 0 0.5px rgba(0, 0, 0, 0.25),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
   user-select: none;
+  color: var(--text-primary);
 }
 
 /* ── Ring ── */
