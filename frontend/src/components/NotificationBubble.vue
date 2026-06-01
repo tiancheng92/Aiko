@@ -19,12 +19,12 @@ let hideTimer = null
 let offShow   = null
 
 const GAP = 12
-const AUTO_DISMISS_MS = 15000  // 15s — long enough to glance, short enough to not clutter
+const DEFAULT_DISMISS_MS = 15000  // 15s — long enough to glance, short enough to not clutter
 
 /** scheduleDismiss arms (or re-arms) the auto-dismiss timer. */
-function scheduleDismiss() {
+function scheduleDismiss(durationMs) {
   if (hideTimer) clearTimeout(hideTimer)
-  hideTimer = setTimeout(dismiss, AUTO_DISMISS_MS)
+  hideTimer = setTimeout(dismiss, durationMs || DEFAULT_DISMISS_MS)
 }
 
 /** pauseDismiss cancels the pending auto-dismiss (called on hover). */
@@ -63,11 +63,17 @@ function dismiss() {
 
 onMounted(() => {
   offShow = EventsOn('notification:show', (data) => {
-    notification.value = { title: data.title || t('notification.fallbackTitle'), message: data.message, ts: new Date() }
+    // Replace current notification content and reset timer (no stacking).
+    notification.value = {
+      title: data.title || t('notification.fallbackTitle'),
+      message: data.message,
+      ts: new Date(),
+    }
     nextTick(() => {
       if (bubbleEl.value) bubbleH.value = bubbleEl.value.offsetHeight
     })
-    scheduleDismiss()
+    const durationMs = data.durationSecs ? data.durationSecs * 1000 : DEFAULT_DISMISS_MS
+    scheduleDismiss(durationMs)
   })
 })
 
