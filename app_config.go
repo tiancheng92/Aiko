@@ -13,6 +13,7 @@ import (
 	"github.com/rs/zerolog/log"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"aiko/internal/claudecco"
 	"aiko/internal/config"
 	"aiko/internal/pomodoro"
 	"aiko/internal/tts"
@@ -79,6 +80,40 @@ func (a *App) SaveConfig(cfg *config.Config) error {
 			LongBreakDuration:     cfg.PomodoroLongBreakDuration,
 			RoundsBeforeLongBreak: cfg.PomodoroRoundsBeforeLongBreak,
 		})
+	}
+
+	// Restart Claude Code HTTP server if enabled/port changed.
+	a.mu.Lock()
+	ccSrv := a.claudeccoServer
+	a.mu.Unlock()
+	if cfg.ClaudeCodeEnabled {
+		ccCfg := claudecco.Config{
+			Port:             cfg.ClaudeCodePort,
+			NotificationSecs: cfg.ClaudeCodeNotificationSecs,
+		}
+		if ccSrv == nil {
+			ccSrv = claudecco.New(ccCfg, func(event string, data any) {
+				wailsruntime.EventsEmit(a.ctx, event, data)
+			})
+			if err := ccSrv.Start(); err != nil {
+				log.Warn().Err(err).Msg("claudecco: server start failed")
+			} else {
+				a.mu.Lock()
+				a.claudeccoServer = ccSrv
+				a.mu.Unlock()
+			}
+		} else {
+			if err := ccSrv.UpdateConfig(ccCfg); err != nil {
+				log.Warn().Err(err).Msg("claudecco: server restart failed")
+			}
+		}
+	} else {
+		if ccSrv != nil {
+			ccSrv.Stop()
+			a.mu.Lock()
+			a.claudeccoServer = nil
+			a.mu.Unlock()
+		}
 	}
 
 	go func() {
