@@ -160,6 +160,7 @@ html[data-theme="frosted"] {
   --cat-sms:        #30D158;
   --cat-pomodoro:   #FF3B30;
   --cat-about:      #5856D6;
+  --cat-claude-code: #D97706;
 
   /* Thinking-block cool-blue palette */
   --thinking-fg:        rgba(160, 205, 255, 0.88);  /* label text            */

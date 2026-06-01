@@ -36,6 +36,7 @@ import {
   ICON_TAB_MODEL, ICON_TAB_AI, ICON_TAB_APPEARANCE, ICON_TAB_TOOLS,
   ICON_TAB_KNOWLEDGE, ICON_TAB_AUTOMATION, ICON_TAB_LARK, ICON_TAB_SMS, ICON_TAB_ABOUT,
   ICON_TAB_GENERAL, ICON_TAB_POMODORO,
+  ICON_TAB_CLAUDE_CODE,
 } from '../utils/icons'
 
 const confirm = useConfirm()
@@ -101,6 +102,52 @@ const statusMsg = ref('')   // operation-level feedback (profile switch, trigger
 const mountedReady = ref(false)  // gate to suppress watcher fires during initial load
 let saveTimer = null
 const activeTab = ref('general')  // 'general' | 'appearance' | 'model' | 'ai' | 'tools' | 'knowledge' | 'automation' | 'lark' | 'sms' | 'about'
+
+const claudeCodeHookSnippet = computed(() => {
+  const port = cfg.value.ClaudeCodePort || 9876
+  return JSON.stringify({
+    hooks: {
+      PreToolUse: [{
+        matcher: "",
+        hooks: [{
+          type: "http",
+          url: `http://127.0.0.1:${port}/event`,
+          method: "POST",
+          body: "{\"event\":\"thinking\"}"
+        }]
+      }],
+      Stop: [{
+        matcher: "",
+        hooks: [{
+          type: "http",
+          url: `http://127.0.0.1:${port}/event`,
+          method: "POST",
+          body: "{\"event\":\"done\",\"summary\":\"Claude Code 已完成\"}"
+        }]
+      }]
+    }
+  }, null, 2)
+})
+
+const claudeCodeCopyLabel = ref(t('claudeCode.copy'))
+
+/** debouncedSaveFlush cancels pending debounce and saves immediately.
+ *  Used for settings that need instant server restart (e.g. enabled toggle). */
+function debouncedSaveFlush() {
+  clearTimeout(saveTimer)
+  save()
+}
+
+/** copyClaudeCodeHook copies the hook config snippet to the clipboard. */
+async function copyClaudeCodeHook() {
+  try {
+    await navigator.clipboard.writeText(claudeCodeHookSnippet.value)
+    claudeCodeCopyLabel.value = t('claudeCode.copied')
+    setTimeout(() => { claudeCodeCopyLabel.value = t('claudeCode.copy') }, 2000)
+  } catch {
+    // fallback — clipboard may not be available
+  }
+}
 const toolsSubTab = ref('permissions')  // 'mcp' | 'permissions' | 'settings'
 const automationSubTab = ref('cron')   // 'cron' | 'proactive'
 const newPathInput = ref('')           // input buffer for adding allowed paths
@@ -297,6 +344,8 @@ const tabMeta = [
     keywords: 'sms message verification code imessage chat.db 短信 验证码 监听 iMessage 短信监听' },
   { id: 'pomodoro', label: '番茄钟', iconSvg: ICON_TAB_POMODORO, iconBg: 'var(--cat-pomodoro)',
     keywords: 'pomodoro timer focus break 番茄 计时 专注 休息 时长 轮数' },
+  { id: 'claudeCode', label: 'Claude Code', iconSvg: ICON_TAB_CLAUDE_CODE, iconBg: 'var(--cat-claude-code)',
+    keywords: 'claude code hook sync pet 同步 状态 端口 气泡 通知' },
   { id: 'about',      label: '关于',   iconSvg: ICON_TAB_ABOUT,      iconBg: 'var(--cat-about)',
     keywords: 'version update about github release 版本 更新 关于 下载' },
 ].map(t => ({ ...t, _haystack: (t.label + ' ' + t.keywords).toLowerCase() }))
@@ -2322,6 +2371,67 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
           <p class="hint-text" style="margin-top: 12px; font-size: 11px; color: var(--text-secondary);">{{ $t('pomodoro.settings.hint') }}</p>
         </div>
 
+        <!-- Claude Code -->
+        <div v-if="activeTab === 'claudeCode'" class="tab-pane">
+          <div class="group-label">{{ $t('claudeCode.title') }}</div>
+          <div class="settings-group">
+            <div class="settings-row">
+              <div class="row-body">
+                <div class="row-title">{{ $t('claudeCode.enabled') }}</div>
+                <div class="row-desc">{{ $t('claudeCode.enabledDesc') }}</div>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" v-model="cfg.ClaudeCodeEnabled" @change="debouncedSaveFlush" />
+                <span class="toggle-track" />
+              </label>
+            </div>
+            <div class="settings-row">
+              <div class="row-body">
+                <div class="row-title">{{ $t('claudeCode.port') }}</div>
+                <div class="row-desc">{{ $t('claudeCode.portDesc') }}</div>
+              </div>
+              <div class="row-ctrl">
+                <input
+                  type="number"
+                  class="vrm-input"
+                  style="width:80px"
+                  v-model.number="cfg.ClaudeCodePort"
+                  :disabled="!cfg.ClaudeCodeEnabled"
+                  min="1024" max="65535"
+                />
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="row-body">
+                <div class="row-title">{{ $t('claudeCode.notificationSecs') }}</div>
+                <div class="row-desc">{{ $t('claudeCode.notificationSecsDesc') }}</div>
+              </div>
+              <div class="row-ctrl">
+                <input
+                  type="number"
+                  class="vrm-input"
+                  style="width:80px"
+                  v-model.number="cfg.ClaudeCodeNotificationSecs"
+                  :disabled="!cfg.ClaudeCodeEnabled"
+                  min="5" max="120"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Hook 配置展示区 -->
+          <div class="group-label">{{ $t('claudeCode.hookConfig') }}</div>
+          <div class="settings-group">
+            <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:8px">
+              <div class="row-desc">{{ $t('claudeCode.hookConfigHint') }}</div>
+              <pre class="hook-config-snippet">{{ claudeCodeHookSnippet }}</pre>
+              <button class="btn-on-sm" @click="copyClaudeCodeHook" style="align-self:flex-end">
+                {{ claudeCodeCopyLabel }}
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- 关于 -->
         <div v-if="activeTab === 'about'" class="tab-pane about-pane">
           <div class="section-header"><h3>{{ $t('settings.about.version') }}</h3></div>
@@ -4253,5 +4363,19 @@ kbd {
   font-size: 12px;
   color: var(--text-secondary);
   line-height: 1.4;
+}
+
+.hook-config-snippet {
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--lg-border);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 11px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+  color: var(--text-secondary);
 }
 </style>
