@@ -17,7 +17,10 @@ export function useModelPath() {
   if (!listenerRegistered) {
     listenerRegistered = true
     EventsOn('config:model:changed', (name) => {
-      currentModel.value = name
+      // Ignore nil — the backend emits config:model:changed with nil as an
+      // "agent restart done" signal after SaveConfig / ActivateModelProfile,
+      // but that should not overwrite the Live2D model name set by the frontend.
+      if (name) currentModel.value = name
     })
   }
   /** modelPath is the full URL path to the model3.json file. */
