@@ -117,10 +117,19 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Debug().Str("hook_event_name", input.HookEventName).Str("tool_name", input.ToolName).Msg("claudecco: received event")
+	log.Debug().
+		Str("hook_event_name", input.HookEventName).
+		Str("tool_name", input.ToolName).
+		Msg("claudecco: received event")
 
 	switch input.HookEventName {
-	case "PreToolUse":
+	case "PreToolUse", "PermissionRequest":
+		// Both indicate Claude is actively working — debounce to avoid flickering
+		// across rapid tool calls. Inspired by clawdex's state mapping:
+		//   PreToolUse(Bash/Write/Edit) → running
+		//   PreToolUse(Read/Grep)      → reviewing
+		//   PermissionRequest          → waiting
+		// We unify to "thinking" since Aiko's state system is simpler.
 		s.mu.Lock()
 		if s.debounce != nil {
 			s.debounce.Stop()
@@ -129,7 +138,9 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 			s.emit("pet:state:change", "thinking")
 		})
 		s.mu.Unlock()
+
 	case "Stop":
+		// Claude finished a turn — clear thinking, show completion bubble.
 		s.mu.Lock()
 		if s.debounce != nil {
 			s.debounce.Stop()
@@ -142,8 +153,19 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 			"message":      "Claude Code 已完成",
 			"durationSecs": s.cfg.NotificationSecs,
 		})
+
+	case "StopFailure":
+		// API error (rate limit, auth failure, server error, etc.) —
+		// briefly show error state; usePetState auto-resets to idle after 3s.
+		s.mu.Lock()
+		if s.debounce != nil {
+			s.debounce.Stop()
+			s.debounce = nil
+		}
+		s.mu.Unlock()
+		s.emit("pet:state:change", "error")
+
 	default:
-		// Unknown event — acknowledge but ignore.
 		log.Debug().Str("hook_event_name", input.HookEventName).Msg("claudecco: ignored event")
 	}
 

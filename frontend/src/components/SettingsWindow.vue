@@ -114,7 +114,21 @@ const claudeCodeHookSnippet = computed(() => {
           url: `http://127.0.0.1:${port}/event`
         }]
       }],
+      PermissionRequest: [{
+        matcher: "",
+        hooks: [{
+          type: "http",
+          url: `http://127.0.0.1:${port}/event`
+        }]
+      }],
       Stop: [{
+        matcher: "",
+        hooks: [{
+          type: "http",
+          url: `http://127.0.0.1:${port}/event`
+        }]
+      }],
+      StopFailure: [{
         matcher: "",
         hooks: [{
           type: "http",
