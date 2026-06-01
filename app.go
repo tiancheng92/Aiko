@@ -21,6 +21,7 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"aiko/internal/agent"
+	"aiko/internal/claudecco"
 	"aiko/internal/agent/middleware"
 	"aiko/internal/config"
 	"aiko/internal/db"
@@ -84,6 +85,7 @@ type App struct {
 	pendingUpdateVersion string             // non-empty when a successful update marker was found on startup
 	dataDir              string             // ~/.aiko; set once in startup, read-only thereafter
 	startupErr           string             // non-empty when startup failed; read in domReady to show notification
+	claudeccoServer      *claudecco.Server  // Claude Code hook HTTP server; guarded by mu
 }
 
 // NewApp creates a new App instance.
@@ -275,6 +277,22 @@ func (a *App) startup(ctx context.Context) {
 	if a.cfg.SMSWatcherEnabled {
 		if err := a.startSMSWatcher(); err != nil {
 			log.Warn().Err(err).Msg("SMS watcher start failed")
+		}
+	}
+
+	// Start Claude Code hook HTTP server if enabled.
+	if a.cfg.ClaudeCodeEnabled {
+		ccCfg := claudecco.Config{
+			Port:             a.cfg.ClaudeCodePort,
+			NotificationSecs: a.cfg.ClaudeCodeNotificationSecs,
+		}
+		ccSrv := claudecco.New(ccCfg, func(event string, data any) {
+			wailsruntime.EventsEmit(a.ctx, event, data)
+		})
+		if err := ccSrv.Start(); err != nil {
+			log.Warn().Err(err).Msg("claudecco: server start failed")
+		} else {
+			a.claudeccoServer = ccSrv
 		}
 	}
 }
@@ -681,6 +699,9 @@ func (a *App) shutdown(_ context.Context) {
 	a.mu.RUnlock()
 	if engine != nil {
 		engine.Stop()
+	}
+	if a.claudeccoServer != nil {
+		a.claudeccoServer.Stop()
 	}
 	// Close MCP client connections accumulated across initLLMComponents calls.
 	for _, c := range closers {
