@@ -230,7 +230,7 @@ defineExpose({ show, hide });
           <div class="cp-group-label">{{ cwdLabel(group.cwd) }}</div>
           <template v-for="item in group.items" :key="item.session.id">
             <!-- 主 session 行 -->
-            <div class="cp-row">
+            <div class="cp-row" :class="{ 'cp-row--thinking': item.session.state === 'thinking', 'cp-row--error': item.session.state === 'error' }">
               <div class="cp-row-main">
                 <span class="cp-dot" :class="cfg(item.session.state).class">
                   <svg v-if="item.session.state === 'idle'" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" fill="currentColor"/></svg>
@@ -258,6 +258,7 @@ defineExpose({ show, hide });
               v-for="sub in item.children"
               :key="sub.id"
               class="cp-row cp-row--sub"
+              :class="{ 'cp-row--thinking': sub.state === 'thinking', 'cp-row--error': sub.state === 'error' }"
             >
               <div class="cp-row-main">
                 <span class="cp-sub-indent">└</span>
@@ -371,34 +372,53 @@ defineExpose({ show, hide });
 }
 
 .cp-group-label {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
   color: var(--text-tertiary);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 8px 4px 4px;
-  opacity: 0.7;
+  letter-spacing: 0.07em;
+  padding: 6px 6px 3px;
+  opacity: 0.55;
 }
 
-.cp-group-label:first-child {
-  padding-top: 2px;
+.cp-group-label:first-of-type {
+  padding-top: 4px;
 }
 
 .cp-row {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 4px 4px;
-  border-radius: 6px;
-  transition: background 0.12s var(--ease-enter);
+  padding: 5px 6px;
+  border-radius: 7px;
+  transition: background 0.15s var(--ease-enter);
 }
 
 .cp-row:hover {
   background: var(--lg-surface-hover);
 }
 
-.cp-row + .cp-row {
-  border-top: 1px solid var(--lg-border-subtle);
+/* 父行之间用 margin 间隔，不用 border-top（subagent 行不需要分隔线） */
+.cp-row + .cp-row:not(.cp-row--sub) {
+  margin-top: 2px;
+}
+
+/* thinking 状态行：极淡琥珀底色强化状态感知（补充圆点的颜色语义） */
+.cp-row--thinking {
+  background: rgba(245, 158, 11, 0.04);
+}
+
+.cp-row--thinking:hover {
+  background: rgba(245, 158, 11, 0.07);
+}
+
+/* error 状态行：极淡红色底色 */
+.cp-row--error {
+  background: rgba(239, 68, 68, 0.04);
+}
+
+.cp-row--error:hover {
+  background: rgba(239, 68, 68, 0.07);
 }
 
 .cp-dot {
@@ -446,24 +466,29 @@ defineExpose({ show, hide });
   margin-left: auto;
   font-size: 10px;
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   flex-shrink: 0;
 }
+
+/* 状态文字跟随状态语义色 */
+.cp-row--thinking .cp-status { color: rgba(245, 158, 11, 0.8); }
+.cp-row--error    .cp-status { color: rgba(239, 68, 68, 0.8); }
 
 .cp-tool {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   color: var(--accent);
   font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
   font-size: 10px;
   font-weight: 500;
   background: var(--accent-alpha-12);
   border: 1px solid var(--accent-alpha-20);
-  padding: 2px 6px;
-  border-radius: 5px;
+  padding: 1px 6px 2px;
+  border-radius: 4px;
   flex-shrink: 0;
-  line-height: 1.3;
+  line-height: 1.4;
+  cursor: default;
 }
 
 .cp-tool-icon {
@@ -478,10 +503,9 @@ defineExpose({ show, hide });
   min-width: 0;
 }
 
-/* subagent 行整体左移 */
+/* subagent 行：缩进 + 降低视觉重量（不用 opacity 以免影响文字对比度） */
 .cp-row--sub {
   padding-left: 8px;
-  opacity: 0.85;
 }
 
 .cp-sub-indent {
@@ -527,18 +551,21 @@ defineExpose({ show, hide });
 
 .cp-count {
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-tertiary);
   flex-shrink: 0;
-  font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
 }
 
 .cp-elapsed {
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-tertiary);
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
   font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
+  letter-spacing: 0;
 }
 
 .cp-dismiss {
@@ -576,5 +603,6 @@ defineExpose({ show, hide });
   .spin-svg { animation: none; }
   .cp-dot.state-thinking { animation: none; }
   .cp-row { transition: none; }
+  .claude-panel { transition: none; }
 }
 </style>
