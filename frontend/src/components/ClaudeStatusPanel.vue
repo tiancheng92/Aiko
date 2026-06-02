@@ -62,6 +62,28 @@ function toolLabel(name) {
   return map[name] ? t("claudeStatus.tool." + map[name]) : name;
 }
 
+/** hasThinking is true when any session is in thinking state. */
+const hasThinking = computed(() => sessions.value.some(s => s.state === "thinking"));
+
+/** Compute session groups sorted by CWD. Each group has a cwd label and sessions. */
+const groups = computed(() => {
+  const map = new Map();
+  for (const s of sessions.value) {
+    const cwd = s.cwd || "";
+    if (!map.has(cwd)) map.set(cwd, []);
+    map.get(cwd).push(s);
+  }
+  // Groups already in order because sessions are sorted CWD → state → name by backend.
+  return Array.from(map, ([cwd, items]) => ({ cwd, items }));
+});
+
+/** Shorten a CWD path for display (basename). */
+function cwdLabel(cwd) {
+  if (!cwd) return "";
+  const parts = cwd.replace(/\/$/, "").split("/");
+  return parts[parts.length - 1] || cwd;
+}
+
 function show() { visible.value = true; }
 function hide() { visible.value = false; }
 
@@ -103,24 +125,27 @@ defineExpose({ show, hide });
 
 <template>
     <Transition :css="false" @enter="onEnter" @leave="onLeave">
-      <div v-if="visible && sessions.length > 0" ref="panelRef" class="claude-panel">
-        <div
-          v-for="s in sessions"
-          :key="s.id"
-          class="cp-row"
-        >
-          <span class="cp-dot" :class="cfg(s.state).class">
-            <svg v-if="s.state === 'idle'" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" fill="currentColor"/></svg>
-            <svg v-else-if="s.state === 'thinking'" width="12" height="12" viewBox="0 0 12 12" class="spin-svg"><circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 3"/></svg>
-            <svg v-else width="12" height="12" viewBox="0 0 12 12"><line x1="3.5" y1="3.5" x2="8.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="8.5" y1="3.5" x2="3.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-          </span>
-          <span class="cp-session">{{ s.name }}</span>
-          <span v-if="s.toolName" class="cp-tool">
-            <svg v-if="toolIcon(s.toolName)" width="11" height="11" viewBox="0 0 24 24" class="cp-tool-icon" v-html="toolIcon(s.toolName)"></svg>
-            {{ toolLabel(s.toolName) }}
-          </span>
-          <span class="cp-status">{{ t("claudeStatus." + cfg(s.state).label) }}</span>
-        </div>
+      <div v-if="visible && sessions.length > 0" ref="panelRef" class="claude-panel" :class="{ 'claude-panel--thinking': hasThinking }">
+        <template v-for="group in groups" :key="group.cwd">
+          <div class="cp-group-label">{{ cwdLabel(group.cwd) }}</div>
+          <div
+            v-for="s in group.items"
+            :key="s.id"
+            class="cp-row"
+          >
+            <span class="cp-dot" :class="cfg(s.state).class">
+              <svg v-if="s.state === 'idle'" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" fill="currentColor"/></svg>
+              <svg v-else-if="s.state === 'thinking'" width="12" height="12" viewBox="0 0 12 12" class="spin-svg"><circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 3"/></svg>
+              <svg v-else width="12" height="12" viewBox="0 0 12 12"><line x1="3.5" y1="3.5" x2="8.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="8.5" y1="3.5" x2="3.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </span>
+            <span class="cp-session">{{ s.name }}</span>
+            <span v-if="s.toolName" class="cp-tool">
+              <svg v-if="toolIcon(s.toolName)" width="11" height="11" viewBox="0 0 24 24" class="cp-tool-icon" v-html="toolIcon(s.toolName)"></svg>
+              {{ toolLabel(s.toolName) }}
+            </span>
+            <span class="cp-status">{{ t("claudeStatus." + cfg(s.state).label) }}</span>
+          </div>
+        </template>
       </div>
     </Transition>
 </template>
@@ -134,7 +159,7 @@ defineExpose({ show, hide });
   -webkit-backdrop-filter: var(--lg-blur);
   border: 1px solid var(--lg-border);
   border-radius: 10px;
-  padding: 6px 10px;
+  padding: 8px 12px;
   box-shadow:
     0 8px 24px rgba(0, 0, 0, 0.45),
     0 0 0 0.5px rgba(0, 0, 0, 0.25),
@@ -145,13 +170,45 @@ defineExpose({ show, hide });
   display: flex;
   flex-direction: column;
   gap: 2px;
+  will-change: transform, opacity;
+  transition: border-color 0.3s var(--ease-enter), box-shadow 0.3s var(--ease-enter);
+}
+
+/* Panel-level thinking glow: subtle amber border when any session is thinking */
+.claude-panel--thinking {
+  border-color: rgba(245, 158, 11, 0.3);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.45),
+    0 0 0 0.5px rgba(0, 0, 0, 0.25),
+    0 0 16px rgba(245, 158, 11, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+.cp-group-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 8px 4px 4px;
+  opacity: 0.7;
+}
+
+.cp-group-label:first-child {
+  padding-top: 2px;
 }
 
 .cp-row {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 4px;
+  padding: 4px 4px;
+  border-radius: 6px;
+  transition: background 0.12s var(--ease-enter);
+}
+
+.cp-row:hover {
+  background: var(--lg-surface-hover);
 }
 
 .cp-row + .cp-row {
@@ -171,6 +228,16 @@ defineExpose({ show, hide });
 .state-thinking { color: #F59E0B; }
 .state-error    { color: #EF4444; }
 
+/* ── Thinking glow pulse ── */
+@keyframes thinking-glow {
+  0%, 100% { box-shadow: 0 0 6px rgba(245, 158, 11, 0.2); }
+  50%      { box-shadow: 0 0 14px rgba(245, 158, 11, 0.45); }
+}
+.cp-dot.state-thinking {
+  border-radius: 50%;
+  animation: thinking-glow 1.5s ease-in-out infinite;
+}
+
 .spin-svg {
   animation: cp-spin 1.5s linear infinite;
   transform-origin: 50% 50%;
@@ -186,11 +253,13 @@ defineExpose({ show, hide });
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+  flex: 1;
 }
 
 .cp-status {
   margin-left: auto;
   font-size: 10px;
+  font-weight: 500;
   color: var(--text-secondary);
   flex-shrink: 0;
 }
@@ -198,15 +267,28 @@ defineExpose({ show, hide });
 .cp-tool {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   color: var(--accent);
-  font-family: "SF Mono", "Fira Code", monospace;
+  font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
   font-size: 10px;
-  background: var(--bg-tertiary);
-  padding: 1px 5px;
-  border-radius: 4px;
+  font-weight: 500;
+  background: var(--accent-alpha-12);
+  border: 1px solid var(--accent-alpha-20);
+  padding: 2px 6px;
+  border-radius: 5px;
   flex-shrink: 0;
+  line-height: 1.3;
 }
 
-.cp-tool-icon { flex-shrink: 0; }
+.cp-tool-icon {
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .spin-svg { animation: none; }
+  .cp-dot.state-thinking { animation: none; }
+  .cp-row { transition: none; }
+}
 </style>

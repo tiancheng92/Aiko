@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -163,32 +164,25 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 	switch input.HookEventName {
 
 	case "SessionEnd":
-		// Session terminated (exit, Ctrl+C, etc.) — mark all sessions idle.
 		s.markAllIdle()
 
 	case "SessionStart", "PreToolUse", "PermissionRequest":
-		s.setSessionState(si, "thinking")
-		s.emitStatus("thinking", si, &input)
+		s.updateSessionState(si, "thinking")
+		s.emitStatus(si, &input)
 
 	case "UserPromptSubmit":
 		s.setSessionNameFromPrompt(si, &input)
-		s.setSessionState(si, "thinking")
-		s.emitStatus("thinking", si, &input)
+		s.updateSessionState(si, "thinking")
+		s.emitStatus(si, &input)
 
 	case "Stop":
-		// Stop fires on normal completion AND Ctrl+C interrupt.
-		s.setSessionState(si, "idle")
-		s.emit("notification:show", map[string]any{
-			"title":        "Claude Code",
-			"message":      "Claude Code 已完成",
-			"durationSecs": s.cfg.NotificationSecs,
-		})
+		s.updateSessionState(si, "idle")
 		s.refreshSessionTitle(si, &input)
-		s.emitStatus("idle", si, &input)
+		s.emitStatus(si, &input)
 
 	case "StopFailure":
-		s.setSessionState(si, "error")
-		s.emitStatus("error", si, &input)
+		s.updateSessionState(si, "error")
+		s.emitStatus(si, &input)
 
 	default:
 		log.Debug().Str("hook_event_name", input.HookEventName).Msg("claudecco: ignored event")
@@ -237,21 +231,14 @@ func (s *Server) ensureSession(input *hookInput) *sessionInfo {
 	return si
 }
 
-// setSessionState transitions a session to a new state and emits pet state.
-func (s *Server) setSessionState(si *sessionInfo, state string) {
+// updateSessionState transitions a session to a new state (panel only, no pet/notification).
+func (s *Server) updateSessionState(si *sessionInfo, state string) {
 	s.mu.Lock()
-	prev := si.state
-	si.state = state
-	if state == "idle" && prev != "idle" {
+	if state == "idle" && si.state != "idle" {
 		si.idleSince = time.Now()
 	}
+	si.state = state
 	s.mu.Unlock()
-
-	if state == "thinking" && prev != "thinking" {
-		s.emit("pet:state:change", "thinking")
-	} else if state != "thinking" {
-		s.emit("pet:state:change", s.aggregateState())
-	}
 }
 
 // markAllIdle sets all sessions to idle — used on SessionEnd (exit/interrupt).
@@ -263,7 +250,6 @@ func (s *Server) markAllIdle() {
 		si.idleSince = now
 	}
 	s.mu.Unlock()
-	s.emit("pet:state:change", "idle")
 }
 
 // aggregateState returns the highest-priority state across all sessions.
@@ -338,15 +324,19 @@ func (s *Server) refreshSessionTitle(si *sessionInfo, input *hookInput) {
 
 // ── status emission ──
 
+// stateOrder maps state strings to sort priority (lower = higher priority).
+var stateOrder = map[string]int{"thinking": 0, "error": 1, "idle": 2}
+
 type sessionSnapshot struct {
 	ID            string `json:"id"`
 	Name          string `json:"name"`
+	CWD           string `json:"cwd"`
 	State         string `json:"state"`
 	ToolName      string `json:"toolName,omitempty"`
 	HookEventName string `json:"hookEventName,omitempty"`
 }
 
-func (s *Server) emitStatus(_ string, si *sessionInfo, input *hookInput) {
+func (s *Server) emitStatus(si *sessionInfo, input *hookInput) {
 	s.mu.Lock()
 	now := time.Now()
 	active := make([]sessionSnapshot, 0)
@@ -355,7 +345,7 @@ func (s *Server) emitStatus(_ string, si *sessionInfo, input *hookInput) {
 		switch ses.state {
 		case "thinking", "error":
 			hasActive = true
-			snap := sessionSnapshot{ID: id, Name: ses.Name, State: ses.state}
+			snap := sessionSnapshot{ID: id, Name: ses.Name, CWD: ses.CWD, State: ses.state}
 			if id == input.SessionID {
 				snap.ToolName = input.ToolName
 				snap.HookEventName = input.HookEventName
@@ -364,7 +354,7 @@ func (s *Server) emitStatus(_ string, si *sessionInfo, input *hookInput) {
 		case "idle":
 			// Keep idle sessions visible for 5 minutes.
 			if now.Sub(ses.idleSince) < idleRetention {
-				snap := sessionSnapshot{ID: id, Name: ses.Name, State: "idle"}
+				snap := sessionSnapshot{ID: id, Name: ses.Name, CWD: ses.CWD, State: "idle"}
 				active = append(active, snap)
 			}
 		}
@@ -374,10 +364,24 @@ func (s *Server) emitStatus(_ string, si *sessionInfo, input *hookInput) {
 		active = append(active, sessionSnapshot{
 			ID:            input.SessionID,
 			Name:          si.Name,
+			CWD:           si.CWD,
 			State:         "idle",
 			HookEventName: input.HookEventName,
 		})
 	}
+
+	// Sort: CWD → state (thinking > error > idle) → name.
+	sort.SliceStable(active, func(i, j int) bool {
+		a, b := active[i], active[j]
+		if a.CWD != b.CWD {
+			return a.CWD < b.CWD
+		}
+		if a.State != b.State {
+			return stateOrder[a.State] < stateOrder[b.State]
+		}
+		return a.Name < b.Name
+	})
+
 	s.mu.Unlock()
 
 	s.emit("claudecco:status", map[string]any{"sessions": active})
@@ -393,24 +397,36 @@ func readTranscriptTitle(path string) string {
 	defer f.Close()
 
 	const chunkSize = 64 * 1024
+
+	// ── Pass 1: scan the tail for custom-title / ai-title ──
+	title := readTailTitles(f, chunkSize)
+	if title != "" {
+		return truncateTitle(title)
+	}
+
+	// ── Pass 2: fallback to the first user message from the head ──
+	title = readHeadUserMessage(f)
+	return truncateTitle(title)
+}
+
+// readTailTitles scans the last chunkSize bytes for custom-title or ai-title entries.
+func readTailTitles(f *os.File, chunkSize int64) string {
 	fi, err := f.Stat()
 	if err != nil {
 		return ""
 	}
-	offset := fi.Size() - chunkSize
-	if offset < 0 {
-		offset = 0
+	offset := max(fi.Size()-chunkSize, 0)
+	if _, err := f.Seek(offset, io.SeekStart); err != nil {
+		return ""
 	}
-	f.Seek(offset, io.SeekStart)
 
 	scanner := bufio.NewScanner(f)
 	var title string
-	var hasCustom bool // once custom-title is found, skip ai-title (matches VSCode extension logic)
+	var hasCustom bool // once custom-title is found, skip ai-title
 
 	for scanner.Scan() {
 		line := scanner.Bytes()
 
-		// Parse only the "type" field to avoid false matches.
 		var entryType struct {
 			Type string `json:"type"`
 		}
@@ -438,32 +454,64 @@ func readTranscriptTitle(path string) string {
 			if json.Unmarshal(line, &entry) == nil && entry.AITitle != "" {
 				title = entry.AITitle
 			}
+		}
+	}
 
-		case "user":
-			if title != "" {
-				continue
-			}
-			var entry struct {
-				UUID    string `json:"uuid"`
-				Message struct {
-					Content []struct {
-						Text string `json:"text"`
-					} `json:"content"`
-				} `json:"message"`
-			}
-			if json.Unmarshal(line, &entry) == nil && entry.UUID != "" && len(entry.Message.Content) > 0 {
-				if t := strings.TrimSpace(entry.Message.Content[0].Text); t != "" {
-					title = t
+	return title
+}
+
+// readHeadUserMessage scans from the beginning of the file for the first
+// user message with text content (skipping tool_result blocks).
+func readHeadUserMessage(f *os.File) string {
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return ""
+	}
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+
+		var entryType struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(line, &entryType) != nil {
+			continue
+		}
+		if entryType.Type != "user" {
+			continue
+		}
+
+		var entry struct {
+			UUID    string `json:"uuid"`
+			Message struct {
+				Content []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"content"`
+			} `json:"message"`
+		}
+		if json.Unmarshal(line, &entry) != nil || entry.UUID == "" {
+			continue
+		}
+		for _, c := range entry.Message.Content {
+			if c.Type == "text" {
+				if t := strings.TrimSpace(c.Text); t != "" {
+					return t
 				}
 			}
 		}
 	}
 
-	if title != "" {
-		log.Info().Str("title", title).Str("path", path).Msg("claudecco: read transcript title")
-		if len([]rune(title)) > 40 {
-			title = string([]rune(title)[:40]) + "…"
-		}
+	return ""
+}
+
+// truncateTitle truncates a title to 40 runes and appends "…" if needed.
+func truncateTitle(title string) string {
+	if title == "" {
+		return ""
+	}
+	if len([]rune(title)) > 40 {
+		title = string([]rune(title)[:40]) + "…"
 	}
 	return title
 }
