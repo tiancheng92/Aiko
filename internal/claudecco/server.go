@@ -3,16 +3,14 @@
 package claudecco
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"io"
 	"net"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,9 +33,9 @@ type hookInput struct {
 
 // sessionInfo tracks per-session state keyed by session_id.
 type sessionInfo struct {
-	Name  string // basename of cwd
-	CWD   string
-	State string // "thinking" | "idle" | "error"
+	Name     string // display name: first prompt > cwd basename
+	CWD      string
+	hasName  bool // true once Name was set from a user prompt
 }
 
 // Emitter is the interface for emitting Wails events.
@@ -150,15 +148,27 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		Str("cwd", input.CWD).
 		Msg("claudecco: received event")
 
-	// Update session tracking.
+	// Track session and set name from first user prompt.
 	if input.SessionID != "" {
 		s.updateSession(&input)
 	}
 
 	switch input.HookEventName {
-	case "UserPromptSubmit":
-		fallthrough
 	case "SessionStart", "PreToolUse", "PermissionRequest":
+		s.mu.Lock()
+		if s.debounce != nil {
+			s.debounce.Stop()
+		}
+		s.debounce = time.AfterFunc(3*time.Second, func() {
+			s.emit("pet:state:change", "thinking")
+		})
+		s.mu.Unlock()
+		s.emit("claudecco:status", s.statusPayload("thinking", &input))
+
+	case "UserPromptSubmit":
+		// UserPromptSubmit carries the user's message — use it as session name
+		// (only the first one sticks; subsequent prompts don't overwrite).
+		s.setSessionNameFromPrompt(&input)
 		s.mu.Lock()
 		if s.debounce != nil {
 			s.debounce.Stop()
@@ -182,8 +192,6 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 			"message":      "Claude Code 已完成",
 			"durationSecs": s.cfg.NotificationSecs,
 		})
-		// Refresh session title from transcript — AI-generated titles appear after Stop.
-		s.updateSessionName(&input)
 		s.emit("claudecco:status", s.statusPayload("idle", &input))
 
 	case "StopFailure":
@@ -211,7 +219,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"status":"ok","port":` + strconv.Itoa(s.cfg.Port) + `}`))
 }
 
-// updateSession derives a session name from cwd and tracks per-session state.
+// updateSession ensures a sessionInfo exists and tracks CWD changes.
 func (s *Server) updateSession(input *hookInput) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -228,17 +236,22 @@ func (s *Server) updateSession(input *hookInput) {
 	si.CWD = input.CWD
 }
 
-// updateSessionName reads the session title from the transcript JSONL file.
-// Claude Code stores AI-generated titles and /rename results as metadata entries
-// in the transcript. We scan backwards for the latest title entry.
-// Inspired by the VSCode extension's approach: read head/tail of JSONL.
-func (s *Server) updateSessionName(input *hookInput) {
-	if input.TranscriptPath == "" {
+// setSessionNameFromPrompt uses the first line of the user's prompt as the
+// session display name. Only sets the name once — subsequent prompts in the
+// same session won't overwrite.
+func (s *Server) setSessionNameFromPrompt(input *hookInput) {
+	if input.Prompt == "" {
 		return
 	}
-	title := readSessionTitle(input.TranscriptPath)
-	if title == "" {
+	name := strings.TrimSpace(input.Prompt)
+	if idx := strings.IndexByte(name, '\n'); idx >= 0 {
+		name = strings.TrimSpace(name[:idx])
+	}
+	if name == "" {
 		return
+	}
+	if len([]rune(name)) > 40 {
+		name = string([]rune(name)[:40]) + "…"
 	}
 
 	s.mu.Lock()
@@ -246,66 +259,12 @@ func (s *Server) updateSessionName(input *hookInput) {
 
 	si, ok := s.sessions[input.SessionID]
 	if !ok {
-		si = &sessionInfo{Name: title}
+		si = &sessionInfo{Name: name, hasName: true}
 		s.sessions[input.SessionID] = si
-	} else {
-		si.Name = title
+	} else if !si.hasName {
+		si.Name = name
+		si.hasName = true
 	}
-}
-
-// readSessionTitle scans a transcript JSONL file backwards for the latest
-// ai-title or rename metadata entry. Returns the title string or empty.
-func readSessionTitle(path string) string {
-	f, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-
-	// Read backwards in chunks to find the latest title entry efficiently.
-	// For simplicity, read the last 64KB — titles are near the end.
-	const chunkSize = 64 * 1024
-	fi, err := f.Stat()
-	if err != nil {
-		return ""
-	}
-	offset := fi.Size() - chunkSize
-	if offset < 0 {
-		offset = 0
-	}
-	f.Seek(offset, io.SeekStart)
-
-	scanner := bufio.NewScanner(f)
-	var title string
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		// Look for ai-title metadata entries.
-		// Format: {"type":"ai-title","title":"..."}
-		if bytes.Contains(line, []byte(`"ai-title"`)) {
-			var entry struct {
-				Title string `json:"title"`
-			}
-			if json.Unmarshal(line, &entry) == nil && entry.Title != "" {
-				title = entry.Title
-			}
-		}
-		// Also check for rename entries.
-		// Format: {"type":"rename","name":"..."}
-		if bytes.Contains(line, []byte(`"rename"`)) {
-			var entry struct {
-				Name string `json:"name"`
-			}
-			if json.Unmarshal(line, &entry) == nil && entry.Name != "" {
-				title = entry.Name
-			}
-		}
-	}
-
-	// Truncate to a reasonable length for display.
-	if title != "" && len([]rune(title)) > 40 {
-		title = string([]rune(title)[:40]) + "…"
-	}
-	return title
 }
 
 // statusPayload builds the structured status event sent to the ClaudeStatusPanel.
