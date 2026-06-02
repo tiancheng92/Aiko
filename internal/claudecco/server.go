@@ -36,9 +36,11 @@ type hookInput struct {
 
 // sessionInfo tracks per-session state keyed by session_id.
 type sessionInfo struct {
-	Name               string // display name
-	CWD                string
-	hasTranscriptTitle bool // true once Name was set from transcript ai-title/rename
+	Name               string      // display name
+	CWD                string      // working directory
+	hasTranscriptTitle bool        // true once Name was set from transcript ai-title/rename
+	state              string      // "thinking" | "idle" | "error"
+	debounce           *time.Timer // per-session debounce timer
 }
 
 // Emitter is the interface for emitting Wails events.
@@ -56,8 +58,8 @@ type Server struct {
 	emit     Emitter
 	srv      *http.Server
 	mu       sync.Mutex
-	debounce *time.Timer
 	sessions map[string]*sessionInfo
+	lastSID  string // most recently active session (for status panel)
 }
 
 // New creates a new Server.
@@ -98,14 +100,15 @@ func (s *Server) Start() error {
 	return nil
 }
 
-// Stop gracefully shuts down the HTTP server.
+// Stop gracefully shuts down the HTTP server and cleans up timers.
 func (s *Server) Stop() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.debounce != nil {
-		s.debounce.Stop()
-		s.debounce = nil
+	for _, si := range s.sessions {
+		if si.debounce != nil {
+			si.debounce.Stop()
+		}
 	}
 	if s.srv != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -151,60 +154,41 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		Str("cwd", input.CWD).
 		Msg("claudecco: received event")
 
-	if input.SessionID != "" {
-		s.updateSession(&input)
+	if input.SessionID == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"ok":true}`))
+		return
 	}
+
+	si := s.ensureSession(&input)
+	s.lastSID = input.SessionID
 
 	switch input.HookEventName {
 	case "SessionStart", "PreToolUse", "PermissionRequest":
-		s.mu.Lock()
-		if s.debounce != nil {
-			s.debounce.Stop()
-		}
-		s.debounce = time.AfterFunc(3*time.Second, func() {
-			s.emit("pet:state:change", "thinking")
-		})
-		s.mu.Unlock()
-		s.emit("claudecco:status", s.statusPayload("thinking", &input))
+		s.setSessionState(si, "thinking")
+		s.emitStatus("thinking", si, &input)
 
 	case "UserPromptSubmit":
-		s.setSessionNameFromPrompt(&input)
-		s.mu.Lock()
-		if s.debounce != nil {
-			s.debounce.Stop()
-		}
-		s.debounce = time.AfterFunc(3*time.Second, func() {
-			s.emit("pet:state:change", "thinking")
-		})
-		s.mu.Unlock()
-		s.emit("claudecco:status", s.statusPayload("thinking", &input))
+		s.setSessionNameFromPrompt(si, &input)
+		s.setSessionState(si, "thinking")
+		s.emitStatus("thinking", si, &input)
 
 	case "Stop":
-		s.mu.Lock()
-		if s.debounce != nil {
-			s.debounce.Stop()
-			s.debounce = nil
-		}
-		s.mu.Unlock()
-		s.emit("pet:state:change", "idle")
+		s.setSessionState(si, "idle")
+		s.emit("pet:state:change", s.aggregateState())
 		s.emit("notification:show", map[string]any{
 			"title":        "Claude Code",
 			"message":      "Claude Code 已完成",
 			"durationSecs": s.cfg.NotificationSecs,
 		})
-		// After Stop, the transcript has the AI-generated title. Refresh it.
-		s.refreshSessionTitle(&input)
-		s.emit("claudecco:status", s.statusPayload("idle", &input))
+		s.refreshSessionTitle(si, &input)
+		s.emitStatus("idle", si, &input)
 
 	case "StopFailure":
-		s.mu.Lock()
-		if s.debounce != nil {
-			s.debounce.Stop()
-			s.debounce = nil
-		}
-		s.mu.Unlock()
-		s.emit("pet:state:change", "error")
-		s.emit("claudecco:status", s.statusPayload("error", &input))
+		s.setSessionState(si, "error")
+		s.emit("pet:state:change", s.aggregateState())
+		s.emitStatus("error", si, &input)
 
 	default:
 		log.Debug().Str("hook_event_name", input.HookEventName).Msg("claudecco: ignored event")
@@ -221,25 +205,74 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"status":"ok","port":` + strconv.Itoa(s.cfg.Port) + `}`))
 }
 
-// updateSession ensures a sessionInfo exists with cwd-derived fallback name.
-func (s *Server) updateSession(input *hookInput) {
+// ── session helpers ──
+
+// ensureSession returns the sessionInfo for the given input, creating one
+// with a cwd-based fallback name if this is the first time we see it.
+func (s *Server) ensureSession(input *hookInput) *sessionInfo {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, ok := s.sessions[input.SessionID]; ok {
-		return
+	si, ok := s.sessions[input.SessionID]
+	if ok {
+		return si
 	}
 
 	name := filepath.Base(input.CWD)
 	if name == "" || name == "." || name == "/" {
 		name = "session"
 	}
-	s.sessions[input.SessionID] = &sessionInfo{Name: name, CWD: input.CWD}
+	si = &sessionInfo{Name: name, CWD: input.CWD}
+	s.sessions[input.SessionID] = si
+	return si
+}
+
+// setSessionState transitions a session to a new state, managing its debounce timer.
+func (s *Server) setSessionState(si *sessionInfo, state string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	si.state = state
+	if si.debounce != nil {
+		si.debounce.Stop()
+		si.debounce = nil
+	}
+
+	if state == "thinking" {
+		// Fire thinking after a short debounce to avoid flickering across rapid tool calls.
+		sid := s.lastSID
+		si.debounce = time.AfterFunc(3*time.Second, func() {
+			s.mu.Lock()
+			if ss, ok := s.sessions[sid]; ok && ss.state == "thinking" {
+				s.emit("pet:state:change", "thinking")
+			}
+			s.mu.Unlock()
+		})
+	}
+}
+
+// aggregateState returns the highest-priority state across all sessions.
+// thinking > error > idle
+func (s *Server) aggregateState() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, si := range s.sessions {
+		if si.state == "thinking" {
+			return "thinking"
+		}
+	}
+	for _, si := range s.sessions {
+		if si.state == "error" {
+			return "error"
+		}
+	}
+	return "idle"
 }
 
 // setSessionNameFromPrompt uses the first line of the user's prompt as the
-// session name, but only if we haven't already got a title from the transcript.
-func (s *Server) setSessionNameFromPrompt(input *hookInput) {
+// session name. Only sets if we haven't already got a title from the transcript.
+func (s *Server) setSessionNameFromPrompt(si *sessionInfo, input *hookInput) {
 	if input.Prompt == "" {
 		return
 	}
@@ -256,18 +289,13 @@ func (s *Server) setSessionNameFromPrompt(input *hookInput) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	si, ok := s.sessions[input.SessionID]
-	if !ok {
-		s.sessions[input.SessionID] = &sessionInfo{Name: name}
-	} else if !si.hasTranscriptTitle {
+	if !si.hasTranscriptTitle {
 		si.Name = name
 	}
 }
 
 // refreshSessionTitle reads the session title from the transcript JSONL file.
-// It updates the session name with the latest ai-title or rename metadata.
-func (s *Server) refreshSessionTitle(input *hookInput) {
+func (s *Server) refreshSessionTitle(si *sessionInfo, input *hookInput) {
 	if input.TranscriptPath == "" {
 		return
 	}
@@ -277,16 +305,30 @@ func (s *Server) refreshSessionTitle(input *hookInput) {
 	}
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	si, ok := s.sessions[input.SessionID]
-	if !ok {
-		s.sessions[input.SessionID] = &sessionInfo{Name: title, hasTranscriptTitle: true}
-	} else {
-		si.Name = title
-		si.hasTranscriptTitle = true
-	}
+	si.Name = title
+	si.hasTranscriptTitle = true
+	s.mu.Unlock()
 }
+
+// emitStatus sends a claudecco:status event to the frontend with the given
+// session's info.
+func (s *Server) emitStatus(state string, si *sessionInfo, input *hookInput) {
+	p := map[string]any{
+		"state":         state,
+		"hookEventName": input.HookEventName,
+		"sessionID":     input.SessionID,
+	}
+	if input.ToolName != "" {
+		p["toolName"] = input.ToolName
+	}
+	s.mu.Lock()
+	p["sessionName"] = si.Name
+	s.mu.Unlock()
+
+	s.emit("claudecco:status", p)
+}
+
+// ── transcript reading ──
 
 // readTranscriptTitle scans the last 64KB of a transcript JSONL file for the
 // latest ai-title or rename metadata entry.
@@ -312,7 +354,6 @@ func readTranscriptTitle(path string) string {
 	var title string
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		// {"type":"ai-title","title":"..."}
 		if bytes.Contains(line, []byte(`"ai-title"`)) {
 			var entry struct {
 				Title string `json:"title"`
@@ -321,7 +362,6 @@ func readTranscriptTitle(path string) string {
 				title = entry.Title
 			}
 		}
-		// {"type":"rename","name":"..."}
 		if bytes.Contains(line, []byte(`"type":"rename"`)) {
 			var entry struct {
 				Name string `json:"name"`
@@ -335,25 +375,4 @@ func readTranscriptTitle(path string) string {
 		title = string([]rune(title)[:40]) + "…"
 	}
 	return title
-}
-
-// statusPayload builds the structured status event sent to the ClaudeStatusPanel.
-func (s *Server) statusPayload(state string, input *hookInput) map[string]any {
-	p := map[string]any{
-		"state":         state,
-		"hookEventName": input.HookEventName,
-		"sessionID":     input.SessionID,
-	}
-	if input.ToolName != "" {
-		p["toolName"] = input.ToolName
-	}
-
-	s.mu.Lock()
-	si := s.sessions[input.SessionID]
-	s.mu.Unlock()
-	if si != nil {
-		p["sessionName"] = si.Name
-	}
-
-	return p
 }
