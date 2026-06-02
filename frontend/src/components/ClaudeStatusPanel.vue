@@ -16,6 +16,7 @@ const panelRef = ref(null);
 const tick = ref(0);
 let tickTimer = null;
 const sessionStartTimes = new Map(); // id → timestamp ms，首次 thinking 时记录
+const sessionEndTimes = new Map();   // id → timestamp ms，离开 thinking 时冻结计时
 const sessionToolCounts = reactive({}); // id → number，PreToolUse 事件计数
 const dismissed = ref(new Set());   // 手动关闭的 session id
 
@@ -124,14 +125,20 @@ onMounted(() => {
   tickTimer = setInterval(() => { tick.value++; }, 1000);
   offStatus = EventsOn("claudecco:status", (data) => {
     const incoming = data.sessions || [];
+    const now = Date.now();
     for (const s of incoming) {
       if (s.state === "thinking") {
         if (!sessionStartTimes.has(s.id)) {
-          sessionStartTimes.set(s.id, Date.now());
+          sessionStartTimes.set(s.id, now);
         }
+        // Clear end time if session resumes thinking (e.g. re-run)
+        sessionEndTimes.delete(s.id);
         if (s.hookEventName === "PreToolUse") {
           sessionToolCounts[s.id] = (sessionToolCounts[s.id] || 0) + 1;
         }
+      } else if (sessionStartTimes.has(s.id) && !sessionEndTimes.has(s.id)) {
+        // Session left thinking → freeze the elapsed time
+        sessionEndTimes.set(s.id, now);
       }
     }
     sessions.value = incoming;
@@ -141,6 +148,7 @@ onMounted(() => {
       if (!activeIds.has(id)) {
         delete sessionToolCounts[id];
         sessionStartTimes.delete(id);
+        sessionEndTimes.delete(id);
       }
     }
   });
@@ -153,12 +161,14 @@ onUnmounted(() => {
   tickTimer = null;
 });
 
-/** elapsedLabel returns a human-readable elapsed time string for a session. */
+/** elapsedLabel returns a human-readable elapsed time string for a session.
+ *  Freezes at the end time once the session leaves thinking state. */
 function elapsedLabel(id) {
   tick.value; // 触发响应式追踪
   const start = sessionStartTimes.get(id);
   if (!start) return "";
-  const sec = Math.floor((Date.now() - start) / 1000);
+  const end = sessionEndTimes.get(id) ?? Date.now();
+  const sec = Math.floor((end - start) / 1000);
   if (sec < 60) return `${sec}s`;
   const m = Math.floor(sec / 60), s = sec % 60;
   if (m < 60) return `${m}m ${s}s`;
@@ -185,6 +195,7 @@ function toolInputLabel(raw) {
 function dismiss(id) {
   dismissed.value = new Set([...dismissed.value, id]);
   sessionStartTimes.delete(id);
+  sessionEndTimes.delete(id);
   delete sessionToolCounts[id];
 }
 
