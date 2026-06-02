@@ -125,11 +125,12 @@ defineExpose({ show, hide });
 
 <template>
     <Transition :css="false" @enter="onEnter" @leave="onLeave">
-      <div v-if="visible && sessions.length > 0" ref="panelRef" class="claude-panel" :class="{ 'claude-panel--thinking': hasThinking }">
+      <div v-if="visible" ref="panelRef" class="claude-panel" :class="{ 'claude-panel--thinking': hasThinking }">
         <div class="cp-titlebar">
           <span class="cp-titlebar-label">Claude Code</span>
         </div>
-        <template v-for="group in groups" :key="group.cwd">
+        <div v-if="sessions.length === 0" class="cp-empty">无任务</div>
+        <template v-else v-for="group in groups" :key="group.cwd">
           <div class="cp-group-label">{{ cwdLabel(group.cwd) }}</div>
           <div
             v-for="s in group.items"
@@ -201,6 +202,12 @@ defineExpose({ show, hide });
   font-weight: 600;
   color: var(--text-secondary);
   letter-spacing: 0.02em;
+}
+
+.cp-empty {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  padding: 4px;
 }
 
 .cp-group-label {
