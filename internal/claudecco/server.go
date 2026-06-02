@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,6 +28,7 @@ type hookInput struct {
 	ToolName       string `json:"tool_name,omitempty"`
 	ToolInput      any    `json:"tool_input,omitempty"`
 	ErrorType      string `json:"error_type,omitempty"`
+	Prompt         string `json:"prompt,omitempty"` // UserPromptSubmit
 }
 
 // sessionInfo tracks per-session state keyed by session_id.
@@ -152,6 +154,10 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch input.HookEventName {
+	case "UserPromptSubmit":
+		// Use the user's first prompt line as the session name.
+		s.updateSessionName(&input)
+		fallthrough
 	case "SessionStart", "PreToolUse", "PermissionRequest":
 		s.mu.Lock()
 		if s.debounce != nil {
@@ -218,6 +224,39 @@ func (s *Server) updateSession(input *hookInput) {
 		s.sessions[input.SessionID] = si
 	}
 	si.CWD = input.CWD
+}
+
+// updateSessionName uses the user's first prompt line as the session name.
+// Inspired by claude-code-tab-title: SessionStart sets cwd fallback,
+// then UserPromptSubmit overwrites with the actual topic.
+func (s *Server) updateSessionName(input *hookInput) {
+	if input.Prompt == "" {
+		return
+	}
+	// Take the first line, trim whitespace.
+	name := input.Prompt
+	if idx := strings.IndexByte(name, '\n'); idx >= 0 {
+		name = name[:idx]
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return
+	}
+	// Truncate to a reasonable length.
+	if len([]rune(name)) > 40 {
+		name = string([]rune(name)[:40]) + "…"
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	si, ok := s.sessions[input.SessionID]
+	if !ok {
+		si = &sessionInfo{Name: name}
+		s.sessions[input.SessionID] = si
+	} else {
+		si.Name = name
+	}
 }
 
 // statusPayload builds the structured status event sent to the ClaudeStatusPanel.

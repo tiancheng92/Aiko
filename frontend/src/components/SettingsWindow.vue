@@ -117,6 +117,13 @@ const claudeCodeHookSnippet = computed(() => {
           url: `http://127.0.0.1:${port}/event`
         }]
       }],
+      UserPromptSubmit: [{
+        matcher: "",
+        hooks: [{
+          type: "http",
+          url: `http://127.0.0.1:${port}/event`
+        }]
+      }],
       PreToolUse: [{
         matcher: "",
         hooks: [{
