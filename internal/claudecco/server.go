@@ -382,42 +382,36 @@ func readTranscriptTitle(path string) string {
 
 	scanner := bufio.NewScanner(f)
 	var title string
+	var hasCustom bool // once custom-title is found, skip ai-title (matches VSCode extension logic)
+
 	for scanner.Scan() {
 		line := scanner.Bytes()
 
-		// Metadata: {"type":"ai-title","title":"..."} or {"type":"title","title":"..."}
-		if bytes.Contains(line, []byte(`"title"`)) {
+		// 1. custom-title — highest priority. Format confirmed by VSCode extension:
+		//    {"type":"custom-title","sessionId":"xxx","customTitle":"我的自定义标题"}
+		if bytes.Contains(line, []byte(`"custom-title"`)) {
 			var entry struct {
-				Type  string `json:"type"`
-				Title string `json:"title"`
-				Name  string `json:"name"`
-				UUID  string `json:"uuid"`
+				CustomTitle string `json:"customTitle"`
 			}
-			if json.Unmarshal(line, &entry) == nil {
-				// Only consider metadata entries, not streaming deltas (which lack uuid).
-				if entry.UUID != "" {
-					switch {
-					case entry.Title != "":
-						title = entry.Title
-					case entry.Name != "":
-						title = entry.Name
-					}
-				}
+			if json.Unmarshal(line, &entry) == nil && entry.CustomTitle != "" {
+				title = entry.CustomTitle
+				hasCustom = true
 			}
 		}
 
-		// {"type":"rename","name":"..."}
-		if bytes.Contains(line, []byte(`"rename"`)) {
+		// 2. ai-title — AI generated summary. Skip if custom-title already set.
+		//    {"type":"ai-title","sessionId":"xxx","aiTitle":"Explain Open function logic"}
+		if !hasCustom && bytes.Contains(line, []byte(`"ai-title"`)) {
 			var entry struct {
-				Name string `json:"name"`
-				UUID string `json:"uuid"`
+				AITitle string `json:"aiTitle"`
 			}
-			if json.Unmarshal(line, &entry) == nil && entry.Name != "" {
-				title = entry.Name
+			if json.Unmarshal(line, &entry) == nil && entry.AITitle != "" {
+				title = entry.AITitle
 			}
 		}
 
-		// First user message: {"type":"user","uuid":"...","message":{"content":[...]}}
+		// 3. First user message — last resort fallback.
+		//    {"type":"user","uuid":"...","message":{"content":[{"type":"text","text":"..."}]}}
 		if title == "" && bytes.Contains(line, []byte(`"type":"user"`)) {
 			var entry struct {
 				UUID    string `json:"uuid"`
