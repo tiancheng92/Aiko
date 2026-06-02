@@ -35,11 +35,14 @@ type hookInput struct {
 
 // sessionInfo tracks per-session state keyed by session_id.
 type sessionInfo struct {
-	Name               string // display name
-	CWD                string
-	hasTranscriptTitle bool   // true once Name was set from transcript ai-title/rename
-	state              string // "thinking" | "idle" | "error"
+	Name               string    // display name
+	CWD                string    // working directory
+	hasTranscriptTitle bool      // true once Name was set from transcript ai-title/rename
+	state              string    // "thinking" | "idle" | "error"
+	idleSince          time.Time // when the session last went idle
 }
+
+const idleRetention = 5 * time.Minute
 
 // Emitter is the interface for emitting Wails events.
 type Emitter func(event string, data any)
@@ -239,6 +242,9 @@ func (s *Server) setSessionState(si *sessionInfo, state string) {
 	s.mu.Lock()
 	prev := si.state
 	si.state = state
+	if state == "idle" && prev != "idle" {
+		si.idleSince = time.Now()
+	}
 	s.mu.Unlock()
 
 	if state == "thinking" && prev != "thinking" {
@@ -251,13 +257,13 @@ func (s *Server) setSessionState(si *sessionInfo, state string) {
 // markAllIdle sets all sessions to idle — used on SessionEnd (exit/interrupt).
 func (s *Server) markAllIdle() {
 	s.mu.Lock()
+	now := time.Now()
 	for _, si := range s.sessions {
 		si.state = "idle"
+		si.idleSince = now
 	}
 	s.mu.Unlock()
 	s.emit("pet:state:change", "idle")
-	// Send a status update so the panel clears.
-	s.emit("claudecco:status", map[string]any{"sessions": []sessionSnapshot{}})
 }
 
 // aggregateState returns the highest-priority state across all sessions.
@@ -342,23 +348,29 @@ type sessionSnapshot struct {
 
 func (s *Server) emitStatus(_ string, si *sessionInfo, input *hookInput) {
 	s.mu.Lock()
+	now := time.Now()
 	active := make([]sessionSnapshot, 0)
+	hasActive := false
 	for id, ses := range s.sessions {
-		if ses.state == "idle" {
-			continue
+		switch ses.state {
+		case "thinking", "error":
+			hasActive = true
+			snap := sessionSnapshot{ID: id, Name: ses.Name, State: ses.state}
+			if id == input.SessionID {
+				snap.ToolName = input.ToolName
+				snap.HookEventName = input.HookEventName
+			}
+			active = append(active, snap)
+		case "idle":
+			// Keep idle sessions visible for 5 minutes.
+			if now.Sub(ses.idleSince) < idleRetention {
+				snap := sessionSnapshot{ID: id, Name: ses.Name, State: "idle"}
+				active = append(active, snap)
+			}
 		}
-		snap := sessionSnapshot{
-			ID:    id,
-			Name:  ses.Name,
-			State: ses.state,
-		}
-		if id == input.SessionID {
-			snap.ToolName = input.ToolName
-			snap.HookEventName = input.HookEventName
-		}
-		active = append(active, snap)
 	}
-	if len(active) == 0 {
+	// If nothing active at all, show the triggering session as idle.
+	if !hasActive && len(active) == 0 {
 		active = append(active, sessionSnapshot{
 			ID:            input.SessionID,
 			Name:          si.Name,
