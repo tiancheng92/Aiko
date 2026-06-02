@@ -163,7 +163,8 @@ defineExpose({ show, hide });
   -webkit-backdrop-filter: var(--lg-blur);
   border: 1px solid var(--lg-border);
   border-radius: 10px;
-  padding: 8px 12px;
+  padding: 10px 14px;
+  gap: 4px;
   box-shadow:
     0 8px 24px rgba(0, 0, 0, 0.45),
     0 0 0 0.5px rgba(0, 0, 0, 0.25),
@@ -191,17 +192,16 @@ defineExpose({ show, hide });
 .cp-titlebar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 4px 6px;
-  margin-bottom: 2px;
+  padding-bottom: 6px;
   border-bottom: 1px solid var(--lg-border-subtle);
 }
 
 .cp-titlebar-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  color: var(--text-secondary);
-  letter-spacing: 0.02em;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .cp-empty {

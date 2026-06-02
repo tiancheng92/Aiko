@@ -327,8 +327,8 @@ defineExpose({ show });
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 10px;
+  padding: 10px 14px;
   box-sizing: border-box;
   overflow: hidden;
   background: var(--lg-surface-elevated);
@@ -340,22 +340,24 @@ defineExpose({ show });
     0 8px 24px rgba(0, 0, 0, 0.45),
     0 0 0 0.5px rgba(0, 0, 0, 0.25),
     0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+  -webkit-font-smoothing: antialiased;
   user-select: none;
 }
 
 .sys-titlebar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding-bottom: 8px;
+  padding-bottom: 6px;
   border-bottom: 1px solid var(--lg-border-subtle);
 }
 
 .sys-titlebar-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  color: var(--text-secondary);
-  letter-spacing: 0.02em;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .stat-row {

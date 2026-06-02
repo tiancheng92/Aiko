@@ -244,8 +244,8 @@ defineExpose({ show })
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 20px;
-  padding: 18px 22px;
+  gap: 12px;
+  padding: 10px 14px;
   background: var(--lg-surface-elevated);
   backdrop-filter: var(--lg-blur);
   -webkit-backdrop-filter: var(--lg-blur);
@@ -256,6 +256,7 @@ defineExpose({ show })
     0 0 0 0.5px rgba(0, 0, 0, 0.25),
     0 1px 0 rgba(255, 255, 255, 0.06) inset;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+  -webkit-font-smoothing: antialiased;
   user-select: none;
   color: var(--text-primary);
 }
@@ -264,16 +265,16 @@ defineExpose({ show })
   flex-basis: 100%;
   display: flex;
   align-items: center;
-  padding-bottom: 8px;
-  margin-bottom: 4px;
+  padding-bottom: 6px;
   border-bottom: 1px solid var(--lg-border-subtle);
 }
 
 .pomo-titlebar-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  color: var(--text-secondary);
-  letter-spacing: 0.02em;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 /* ── Ring ── */
@@ -293,7 +294,7 @@ defineExpose({ show })
   width: 84px;
   height: 84px;
   border-radius: 50%;
-  background: #0F172A;
+  background: var(--bg-primary);
   display: flex;
   flex-direction: column;
   align-items: center;
