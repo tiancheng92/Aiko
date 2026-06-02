@@ -214,11 +214,23 @@ func (s *Server) ensureSession(input *hookInput) *sessionInfo {
 		return si
 	}
 
-	name := filepath.Base(input.CWD)
-	if name == "" || name == "." || name == "/" {
-		name = "session"
+	// Primary source: JSONL transcript (catches resumed sessions with existing titles).
+	name := ""
+	if input.TranscriptPath != "" {
+		if t := readTranscriptTitle(input.TranscriptPath); t != "" {
+			name = t
+		}
 	}
-	si = &sessionInfo{Name: name, CWD: input.CWD}
+	// Fallback 1: cwd directory name.
+	if name == "" {
+		name = filepath.Base(input.CWD)
+		if name == "" || name == "." || name == "/" {
+			name = "session"
+		}
+	}
+
+	hasTitle := name != "" && name != filepath.Base(input.CWD) && name != "session"
+	si = &sessionInfo{Name: name, CWD: input.CWD, hasTranscriptTitle: hasTitle}
 	s.sessions[input.SessionID] = si
 	return si
 }
