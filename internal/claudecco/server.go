@@ -38,6 +38,7 @@ type hookInput struct {
 type sessionInfo struct {
 	Name               string    // display name
 	CWD                string    // working directory
+	ParentID           string    // non-empty when this is a subagent; set to the parent session_id
 	hasTranscriptTitle bool      // true once Name was set from transcript ai-title/rename
 	state              string    // "thinking" | "idle" | "error"
 	idleSince          time.Time // when the session last went idle
@@ -226,7 +227,8 @@ func (s *Server) ensureSession(input *hookInput) *sessionInfo {
 	}
 
 	hasTitle := name != "" && name != filepath.Base(input.CWD) && name != "session"
-	si = &sessionInfo{Name: name, CWD: input.CWD, hasTranscriptTitle: hasTitle}
+	parentID := parentSessionID(input.TranscriptPath)
+	si = &sessionInfo{Name: name, CWD: input.CWD, ParentID: parentID, hasTranscriptTitle: hasTitle}
 	s.sessions[input.SessionID] = si
 	return si
 }
@@ -331,6 +333,7 @@ type sessionSnapshot struct {
 	ID            string `json:"id"`
 	Name          string `json:"name"`
 	CWD           string `json:"cwd"`
+	ParentID      string `json:"parentId,omitempty"`
 	State         string `json:"state"`
 	ToolName      string `json:"toolName,omitempty"`
 	HookEventName string `json:"hookEventName,omitempty"`
@@ -346,7 +349,7 @@ func (s *Server) emitStatus(si *sessionInfo, input *hookInput) {
 		switch ses.state {
 		case "thinking", "error":
 			hasActive = true
-			snap := sessionSnapshot{ID: id, Name: ses.Name, CWD: ses.CWD, State: ses.state}
+			snap := sessionSnapshot{ID: id, Name: ses.Name, CWD: ses.CWD, ParentID: ses.ParentID, State: ses.state}
 			if id == input.SessionID {
 				snap.ToolName = input.ToolName
 				snap.HookEventName = input.HookEventName
@@ -365,7 +368,7 @@ func (s *Server) emitStatus(si *sessionInfo, input *hookInput) {
 		case "idle":
 			// Keep idle sessions visible for 5 minutes.
 			if now.Sub(ses.idleSince) < idleRetention {
-				snap := sessionSnapshot{ID: id, Name: ses.Name, CWD: ses.CWD, State: "idle"}
+				snap := sessionSnapshot{ID: id, Name: ses.Name, CWD: ses.CWD, ParentID: ses.ParentID, State: "idle"}
 				active = append(active, snap)
 			}
 		}
@@ -376,6 +379,7 @@ func (s *Server) emitStatus(si *sessionInfo, input *hookInput) {
 			ID:            input.SessionID,
 			Name:          si.Name,
 			CWD:           si.CWD,
+			ParentID:      si.ParentID,
 			State:         "idle",
 			HookEventName: input.HookEventName,
 		})
@@ -399,6 +403,18 @@ func (s *Server) emitStatus(si *sessionInfo, input *hookInput) {
 }
 
 // ── transcript reading ──
+
+// parentSessionID extracts the parent session ID from a subagent transcript path.
+// Subagent paths follow the pattern: .../projects/<proj>/<parentID>/subagents/agent-*.jsonl
+// Returns empty string for root session transcripts.
+func parentSessionID(transcriptPath string) string {
+	const marker = "/subagents/"
+	idx := strings.LastIndex(transcriptPath, marker)
+	if idx < 0 {
+		return ""
+	}
+	return filepath.Base(transcriptPath[:idx])
+}
 
 func readTranscriptTitle(path string) string {
 	f, err := os.Open(path)

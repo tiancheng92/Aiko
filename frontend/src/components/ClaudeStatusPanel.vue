@@ -76,17 +76,30 @@ const hasThinking = computed(() =>
   sessions.value.some((s) => !dismissed.value.has(s.id) && s.state === "thinking")
 );
 
-/** Compute session groups sorted by CWD. Each group has a cwd label and sessions. */
+/** Compute session groups sorted by CWD.
+ *  Each group has a cwd label and a list of root sessions, each with a children array. */
 const groups = computed(() => {
-  const map = new Map();
-  for (const s of sessions.value) {
-    if (dismissed.value.has(s.id)) continue;
-    const cwd = s.cwd || "";
-    if (!map.has(cwd)) map.set(cwd, []);
-    map.get(cwd).push(s);
+  const visible = sessions.value.filter((s) => !dismissed.value.has(s.id));
+  // Build lookup and children map
+  const byId = new Map(visible.map((s) => [s.id, s]));
+  const childrenOf = new Map(); // parentId → session[]
+  const roots = [];
+  for (const s of visible) {
+    if (s.parentId && byId.has(s.parentId)) {
+      if (!childrenOf.has(s.parentId)) childrenOf.set(s.parentId, []);
+      childrenOf.get(s.parentId).push(s);
+    } else {
+      roots.push(s);
+    }
   }
-  // Groups already in order because sessions are sorted CWD → state → name by backend.
-  return Array.from(map, ([cwd, items]) => ({ cwd, items }));
+  // Group roots by CWD, attach children
+  const cwdMap = new Map();
+  for (const s of roots) {
+    const cwd = s.cwd || "";
+    if (!cwdMap.has(cwd)) cwdMap.set(cwd, []);
+    cwdMap.get(cwd).push({ session: s, children: childrenOf.get(s.id) || [] });
+  }
+  return Array.from(cwdMap, ([cwd, items]) => ({ cwd, items }));
 });
 
 /** Shorten a CWD path for display (basename). */
@@ -214,36 +227,61 @@ defineExpose({ show, hide });
         <div v-if="sessions.length === 0" class="cp-empty">无任务</div>
         <template v-else v-for="group in groups" :key="group.cwd">
           <div class="cp-group-label">{{ cwdLabel(group.cwd) }}</div>
-          <div
-            v-for="s in group.items"
-            :key="s.id"
-            class="cp-row"
-          >
-            <!-- 行1：状态点 · 会话名 · × 关闭按钮 -->
-            <div class="cp-row-main">
-              <span class="cp-dot" :class="cfg(s.state).class">
-                <svg v-if="s.state === 'idle'" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" fill="currentColor"/></svg>
-                <svg v-else-if="s.state === 'thinking'" width="12" height="12" viewBox="0 0 12 12" class="spin-svg"><circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 3"/></svg>
-                <svg v-else width="12" height="12" viewBox="0 0 12 12"><line x1="3.5" y1="3.5" x2="8.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="8.5" y1="3.5" x2="3.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-              </span>
-              <span class="cp-session">{{ s.name }}</span>
-              <button v-if="s.state === 'idle'" class="cp-dismiss" @click.stop="dismiss(s.id)" :title="t('claudeStatus.dismiss')">×</button>
+          <template v-for="item in group.items" :key="item.session.id">
+            <!-- 主 session 行 -->
+            <div class="cp-row">
+              <div class="cp-row-main">
+                <span class="cp-dot" :class="cfg(item.session.state).class">
+                  <svg v-if="item.session.state === 'idle'" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" fill="currentColor"/></svg>
+                  <svg v-else-if="item.session.state === 'thinking'" width="12" height="12" viewBox="0 0 12 12" class="spin-svg"><circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 3"/></svg>
+                  <svg v-else width="12" height="12" viewBox="0 0 12 12"><line x1="3.5" y1="3.5" x2="8.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="8.5" y1="3.5" x2="3.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                </span>
+                <span class="cp-session">{{ item.session.name }}</span>
+                <button v-if="item.session.state === 'idle'" class="cp-dismiss" @click.stop="dismiss(item.session.id)" :title="t('claudeStatus.dismiss')">×</button>
+              </div>
+              <div class="cp-row-meta">
+                <span v-if="elapsedLabel(item.session.id)" class="cp-elapsed">{{ elapsedLabel(item.session.id) }}</span>
+                <span v-if="sessionToolCounts[item.session.id]" class="cp-count">×{{ sessionToolCounts[item.session.id] }}</span>
+                <span v-if="item.session.toolName" class="cp-tool">
+                  <svg v-if="toolIcon(item.session.toolName)" width="11" height="11" viewBox="0 0 24 24" class="cp-tool-icon" v-html="toolIcon(item.session.toolName)"></svg>
+                  {{ toolLabel(item.session.toolName) }}
+                </span>
+                <span class="cp-status">{{ t("claudeStatus." + cfg(item.session.state).label) }}</span>
+              </div>
+              <div v-if="toolInputLabel(item.session.toolInput)" class="cp-row-sub">
+                {{ toolInputLabel(item.session.toolInput) }}
+              </div>
             </div>
-            <!-- 行2：耗时 · 计数 · 工具 badge · 状态文字 -->
-            <div class="cp-row-meta">
-              <span v-if="elapsedLabel(s.id)" class="cp-elapsed">{{ elapsedLabel(s.id) }}</span>
-              <span v-if="sessionToolCounts[s.id]" class="cp-count">×{{ sessionToolCounts[s.id] }}</span>
-              <span v-if="s.toolName" class="cp-tool">
-                <svg v-if="toolIcon(s.toolName)" width="11" height="11" viewBox="0 0 24 24" class="cp-tool-icon" v-html="toolIcon(s.toolName)"></svg>
-                {{ toolLabel(s.toolName) }}
-              </span>
-              <span class="cp-status">{{ t("claudeStatus." + cfg(s.state).label) }}</span>
+            <!-- subagent 行（缩进） -->
+            <div
+              v-for="sub in item.children"
+              :key="sub.id"
+              class="cp-row cp-row--sub"
+            >
+              <div class="cp-row-main">
+                <span class="cp-sub-indent">└</span>
+                <span class="cp-dot" :class="cfg(sub.state).class">
+                  <svg v-if="sub.state === 'idle'" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" fill="currentColor"/></svg>
+                  <svg v-else-if="sub.state === 'thinking'" width="12" height="12" viewBox="0 0 12 12" class="spin-svg"><circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 3"/></svg>
+                  <svg v-else width="12" height="12" viewBox="0 0 12 12"><line x1="3.5" y1="3.5" x2="8.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="8.5" y1="3.5" x2="3.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                </span>
+                <span class="cp-session cp-session--sub">{{ sub.name }}</span>
+                <button v-if="sub.state === 'idle'" class="cp-dismiss" @click.stop="dismiss(sub.id)" :title="t('claudeStatus.dismiss')">×</button>
+              </div>
+              <div class="cp-row-meta cp-row-meta--sub">
+                <span v-if="elapsedLabel(sub.id)" class="cp-elapsed">{{ elapsedLabel(sub.id) }}</span>
+                <span v-if="sessionToolCounts[sub.id]" class="cp-count">×{{ sessionToolCounts[sub.id] }}</span>
+                <span v-if="sub.toolName" class="cp-tool">
+                  <svg v-if="toolIcon(sub.toolName)" width="11" height="11" viewBox="0 0 24 24" class="cp-tool-icon" v-html="toolIcon(sub.toolName)"></svg>
+                  {{ toolLabel(sub.toolName) }}
+                </span>
+                <span class="cp-status">{{ t("claudeStatus." + cfg(sub.state).label) }}</span>
+              </div>
+              <div v-if="toolInputLabel(sub.toolInput)" class="cp-row-sub cp-row-sub--indented">
+                {{ toolInputLabel(sub.toolInput) }}
+              </div>
             </div>
-            <!-- 行3：工具参数副标题 -->
-            <div v-if="toolInputLabel(s.toolInput)" class="cp-row-sub">
-              {{ toolInputLabel(s.toolInput) }}
-            </div>
-          </div>
+          </template>
         </template>
       </div>
     </Transition>
@@ -439,6 +477,25 @@ defineExpose({ show, hide });
   min-width: 0;
 }
 
+/* subagent 行整体左移 */
+.cp-row--sub {
+  padding-left: 8px;
+  opacity: 0.85;
+}
+
+.cp-sub-indent {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  opacity: 0.5;
+  line-height: 1;
+}
+
+.cp-session--sub {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
 .cp-row-meta {
   display: flex;
   align-items: center;
@@ -456,6 +513,15 @@ defineExpose({ show, hide });
   white-space: nowrap;
   font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
   opacity: 0.75;
+}
+
+/* subagent 行的 meta/sub 对齐：额外加 └(10px) + gap(6px) = 16px */
+.cp-row-meta--sub {
+  padding-left: 34px;
+}
+
+.cp-row-sub--indented {
+  padding-left: 34px;
 }
 
 .cp-count {
