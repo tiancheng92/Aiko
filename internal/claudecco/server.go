@@ -3,14 +3,16 @@
 package claudecco
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -155,8 +157,6 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 
 	switch input.HookEventName {
 	case "UserPromptSubmit":
-		// Use the user's first prompt line as the session name.
-		s.updateSessionName(&input)
 		fallthrough
 	case "SessionStart", "PreToolUse", "PermissionRequest":
 		s.mu.Lock()
@@ -182,6 +182,8 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 			"message":      "Claude Code 已完成",
 			"durationSecs": s.cfg.NotificationSecs,
 		})
+		// Refresh session title from transcript — AI-generated titles appear after Stop.
+		s.updateSessionName(&input)
 		s.emit("claudecco:status", s.statusPayload("idle", &input))
 
 	case "StopFailure":
@@ -226,25 +228,17 @@ func (s *Server) updateSession(input *hookInput) {
 	si.CWD = input.CWD
 }
 
-// updateSessionName uses the user's first prompt line as the session name.
-// Inspired by claude-code-tab-title: SessionStart sets cwd fallback,
-// then UserPromptSubmit overwrites with the actual topic.
+// updateSessionName reads the session title from the transcript JSONL file.
+// Claude Code stores AI-generated titles and /rename results as metadata entries
+// in the transcript. We scan backwards for the latest title entry.
+// Inspired by the VSCode extension's approach: read head/tail of JSONL.
 func (s *Server) updateSessionName(input *hookInput) {
-	if input.Prompt == "" {
+	if input.TranscriptPath == "" {
 		return
 	}
-	// Take the first line, trim whitespace.
-	name := input.Prompt
-	if idx := strings.IndexByte(name, '\n'); idx >= 0 {
-		name = name[:idx]
-	}
-	name = strings.TrimSpace(name)
-	if name == "" {
+	title := readSessionTitle(input.TranscriptPath)
+	if title == "" {
 		return
-	}
-	// Truncate to a reasonable length.
-	if len([]rune(name)) > 40 {
-		name = string([]rune(name)[:40]) + "…"
 	}
 
 	s.mu.Lock()
@@ -252,11 +246,66 @@ func (s *Server) updateSessionName(input *hookInput) {
 
 	si, ok := s.sessions[input.SessionID]
 	if !ok {
-		si = &sessionInfo{Name: name}
+		si = &sessionInfo{Name: title}
 		s.sessions[input.SessionID] = si
 	} else {
-		si.Name = name
+		si.Name = title
 	}
+}
+
+// readSessionTitle scans a transcript JSONL file backwards for the latest
+// ai-title or rename metadata entry. Returns the title string or empty.
+func readSessionTitle(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	// Read backwards in chunks to find the latest title entry efficiently.
+	// For simplicity, read the last 64KB — titles are near the end.
+	const chunkSize = 64 * 1024
+	fi, err := f.Stat()
+	if err != nil {
+		return ""
+	}
+	offset := fi.Size() - chunkSize
+	if offset < 0 {
+		offset = 0
+	}
+	f.Seek(offset, io.SeekStart)
+
+	scanner := bufio.NewScanner(f)
+	var title string
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		// Look for ai-title metadata entries.
+		// Format: {"type":"ai-title","title":"..."}
+		if bytes.Contains(line, []byte(`"ai-title"`)) {
+			var entry struct {
+				Title string `json:"title"`
+			}
+			if json.Unmarshal(line, &entry) == nil && entry.Title != "" {
+				title = entry.Title
+			}
+		}
+		// Also check for rename entries.
+		// Format: {"type":"rename","name":"..."}
+		if bytes.Contains(line, []byte(`"rename"`)) {
+			var entry struct {
+				Name string `json:"name"`
+			}
+			if json.Unmarshal(line, &entry) == nil && entry.Name != "" {
+				title = entry.Name
+			}
+		}
+	}
+
+	// Truncate to a reasonable length for display.
+	if title != "" && len([]rune(title)) > 40 {
+		title = string([]rune(title)[:40]) + "…"
+	}
+	return title
 }
 
 // statusPayload builds the structured status event sent to the ClaudeStatusPanel.
