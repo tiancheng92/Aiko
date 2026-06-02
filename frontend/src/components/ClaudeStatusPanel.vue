@@ -128,11 +128,13 @@ onMounted(() => {
     const now = Date.now();
     for (const s of incoming) {
       if (s.state === "thinking") {
-        if (!sessionStartTimes.has(s.id)) {
+        // Reset start time when session resumes after a completed/errored run
+        if (sessionEndTimes.has(s.id)) {
+          sessionStartTimes.set(s.id, now);
+          sessionEndTimes.delete(s.id);
+        } else if (!sessionStartTimes.has(s.id)) {
           sessionStartTimes.set(s.id, now);
         }
-        // Clear end time if session resumes thinking (e.g. re-run)
-        sessionEndTimes.delete(s.id);
         if (s.hookEventName === "PreToolUse") {
           sessionToolCounts[s.id] = (sessionToolCounts[s.id] || 0) + 1;
         }
