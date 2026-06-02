@@ -242,6 +242,7 @@ defineExpose({ show })
   width: 100%;
   box-sizing: border-box;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 20px;
   padding: 18px 22px;
@@ -260,10 +261,9 @@ defineExpose({ show })
 }
 
 .pomo-titlebar {
-  width: 100%;
+  flex-basis: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding-bottom: 8px;
   margin-bottom: 4px;
   border-bottom: 1px solid var(--lg-border-subtle);
