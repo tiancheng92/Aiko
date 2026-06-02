@@ -1747,7 +1747,7 @@ defineExpose({ enterSearch, focusInput, scrollToBottom })
       <TransitionGroup name="msg-slide" tag="div" class="messages-inner" :class="{ 'suppress-anim': suppressAnimation }">
       <div v-for="(m, i) in displayMessages" :key="msgKey(m, i)" :class="['msg', m.role, { 'is-info': m.isInfo, 'search-dimmed': searchMatchIds && !searchMatchIds.has(m.id) && !m.isInfo, 'search-result-selected': isSearching && selectedResultIndex === i }]" :data-msg-key="msgKey(m, i)" @click="isSearching && searchMatchIds && searchMatchIds.has(m.id) && jumpToMessage(m.id)">
         <img v-if="m.role === 'assistant'" class="msg-avatar" :src="aiAvatar || '/logo.png'" alt="AI" draggable="false" />
-        <div class="bubble-wrap" :class="{ ghost: m.ghost }">
+        <div class="bubble-wrap" :class="{ ghost: m.ghost, 'has-recollapse': isEverCollapsed(m, i) && !isCollapsed(m, i) }">
           <!-- Collapsible wrapper -->
           <div
             class="bubble-collapse-wrap"
@@ -2198,7 +2198,7 @@ defineExpose({ enterSearch, focusInput, scrollToBottom })
 .messages-inner {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 /* Slide-up + fade-in for newly appended messages */
@@ -2384,18 +2384,23 @@ img.msg-avatar {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 0;
-  background: none;
-  border: none;
+  padding: 2px 8px;
+  background: var(--lg-surface-input);
+  border: 1px solid var(--lg-border-subtle);
+  border-radius: 5px;
   color: var(--text-tertiary);
   font-size: 11px;
   cursor: pointer;
-  transition: color 0.12s;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
   font-family: inherit;
   box-shadow: none;
   line-height: 1;
 }
-.recollapse-btn:hover { color: var(--text-secondary); }
+.recollapse-btn:hover {
+  color: var(--text-primary);
+  background: var(--lg-surface-input-h);
+  border-color: var(--lg-border);
+}
 
 /* Bubble row: relative container，按钮绝对定位不占空间 */
 .bubble-row { position: relative; display: inline-flex; max-width: 100%; min-width: 0; }
@@ -2661,13 +2666,13 @@ img.msg-avatar {
   font-weight: 500;
   cursor: pointer;
   font-family: inherit;
-  transition: background 0.15s, transform 0.1s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s;
+  transition: background 0.15s var(--ease-enter), transform 0.15s var(--ease-spring), box-shadow 0.2s var(--ease-enter);
 }
 .stop-btn:hover {
   background: rgba(255, 69, 58, 0.22);
-  box-shadow: 0 0 0 3px rgba(255, 69, 58, 0.14);
+  box-shadow: 0 0 0 4px rgba(255, 69, 58, 0.12);
 }
-.stop-btn:active { transform: scale(0.95); }
+.stop-btn:active { transform: scale(0.94); }
 .stop-btn:focus-visible { outline: 2px solid var(--danger); outline-offset: 2px; }
 
 /* Per-token pop animation */
@@ -2724,12 +2729,16 @@ img.msg-avatar {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 18px;
-  margin-top: 3px;
+  min-height: 20px;
+  margin-top: 4px;
   padding: 0 4px;
+  opacity: 0;
+  transition: opacity 0.2s var(--ease-enter);
 }
 .msg.user .msg-meta-row { justify-content: flex-end; }
 .msg.assistant .msg-meta-row { justify-content: flex-start; }
+.bubble-wrap:hover .msg-meta-row,
+.bubble-wrap.has-recollapse .msg-meta-row { opacity: 1; }
 
 /* Timestamp */
 .msg-time {
@@ -2737,6 +2746,7 @@ img.msg-avatar {
   color: var(--text-label-muted);
   font-variant-numeric: tabular-nums;
   user-select: none;
+  line-height: 1;
 }
 
 /* Action buttons: absolutely positioned outside bubble */
@@ -3486,7 +3496,10 @@ img.msg-avatar {
   border: 1px solid var(--lg-border-subtle);
   border-radius: 12px;
   flex-shrink: 0;
-  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  transition:
+    border-color 0.2s var(--ease-enter),
+    box-shadow 0.25s var(--ease-enter),
+    background 0.2s var(--ease-enter);
   overflow: hidden;
   position: relative;
   z-index: 1;
@@ -3495,7 +3508,9 @@ img.msg-avatar {
 .input-area:hover:not(:focus-within) { background: var(--lg-surface-input-h); }
 .input-area:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-alpha-20);
+  box-shadow:
+    0 0 0 3px var(--accent-alpha-20),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 .input-area textarea {
   display: block;
@@ -3640,24 +3655,35 @@ img.msg-avatar {
   background: var(--accent);
   color: #fff;
   border: none;
-  border-radius: 7px;
+  border-radius: 8px;
   width: 30px;
   height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.15s, transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s;
+  transition:
+    background 0.15s var(--ease-enter),
+    transform 0.18s var(--ease-spring),
+    box-shadow 0.2s var(--ease-enter);
   flex-shrink: 0;
-  box-shadow: 0 2px 6px rgba(0, 122, 255, 0.35);
+  box-shadow:
+    0 2px 6px rgba(37, 99, 235, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 .send-btn:hover:not(:disabled) {
   background: var(--accent-hover);
-  box-shadow: 0 3px 10px rgba(0, 122, 255, 0.5);
-  transform: scale(1.04);
+  box-shadow:
+    0 4px 16px rgba(37, 99, 235, 0.5),
+    0 0 0 4px rgba(37, 99, 235, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transform: scale(1.06);
 }
 .send-btn:active:not(:disabled) {
-  transform: scale(0.93);
+  transform: scale(0.92);
+  box-shadow:
+    0 1px 3px rgba(37, 99, 235, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   transition-duration: 0.08s;
 }
 .send-btn:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
@@ -3675,6 +3701,14 @@ img.msg-avatar {
   border: 1px solid var(--accent-alpha-20);
   font-size: 12px;
   color: var(--accent);
+  animation: voice-bar-pulse 2s ease-in-out infinite;
+}
+@keyframes voice-bar-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.15); }
+  50%      { box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.06); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .voice-hint-bar { animation: none; }
 }
 
 .voice-hint-icon {
@@ -4203,10 +4237,10 @@ body > .lightbox .lightbox-img {
 .search-bar {
   padding: 8px 12px;
   border-bottom: 1px solid var(--lg-border-subtle);
-  animation: search-slide-down 0.15s ease-out;
+  animation: search-slide-down 0.18s var(--ease-enter);
 }
 @keyframes search-slide-down {
-  from { opacity: 0; transform: translateY(-8px); }
+  from { opacity: 0; transform: translateY(-6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 .search-input-wrap {
@@ -4214,8 +4248,14 @@ body > .lightbox .lightbox-img {
   align-items: center;
   gap: 8px;
   background: var(--lg-surface-elevated);
-  border-radius: 8px;
-  padding: 6px 10px;
+  border: 1px solid var(--lg-border-subtle);
+  border-radius: 9px;
+  padding: 5px 9px;
+  transition: border-color 0.2s var(--ease-enter), box-shadow 0.2s var(--ease-enter);
+}
+.search-input-wrap:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-alpha-20);
 }
 .search-input-icon {
   color: var(--text-secondary);
@@ -4223,17 +4263,12 @@ body > .lightbox .lightbox-img {
 }
 .search-input {
   flex: 1;
-  background: var(--lg-surface-input);
-  border: 1px solid var(--lg-border-subtle);
-  border-radius: 4px;
+  background: transparent;
+  border: none;
   color: var(--text-primary);
   font-size: 13px;
-  padding: 4px 8px;
+  padding: 5px 4px;
   outline: none;
-}
-.search-input:focus-visible {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(56, 139, 253, 0.25);
 }
 .search-input::placeholder {
   color: var(--text-tertiary);
@@ -4252,11 +4287,12 @@ body > .lightbox .lightbox-img {
   color: var(--text-secondary);
   cursor: pointer;
   padding: 6px;
-  border-radius: 4px;
+  border-radius: 5px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background 0.12s, color 0.12s;
 }
 .search-close-btn:hover {
   color: var(--text-primary);

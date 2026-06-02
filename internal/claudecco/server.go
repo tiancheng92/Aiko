@@ -5,6 +5,7 @@ package claudecco
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net"
 	"net/http"
 	"strconv"
@@ -18,9 +19,15 @@ import (
 // All hook events share this structure; event type is identified by hook_event_name.
 // Ref: https://code.claude.com/docs/en/hooks
 type hookInput struct {
-	SessionID     string `json:"session_id"`
-	HookEventName string `json:"hook_event_name"`
-	ToolName      string `json:"tool_name,omitempty"`
+	SessionID      string `json:"session_id"`
+	TranscriptPath string `json:"transcript_path"`
+	CWD            string `json:"cwd"`
+	HookEventName  string `json:"hook_event_name"`
+	PermissionMode string `json:"permission_mode"`
+	ToolName       string `json:"tool_name,omitempty"`
+	ToolInput      any    `json:"tool_input,omitempty"`
+	// StopFailure specific
+	ErrorType string `json:"error_type,omitempty"`
 }
 
 // Emitter is the interface for emitting Wails events.
@@ -112,8 +119,16 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read and log the complete raw JSON body that Claude Code sent.
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "read body failed", http.StatusInternalServerError)
+		return
+	}
+	log.Info().Str("body", string(body)).Msg("claudecco: raw hook payload")
+
 	var input hookInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	if err := json.Unmarshal(body, &input); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
@@ -121,6 +136,11 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 	log.Info().
 		Str("hook_event_name", input.HookEventName).
 		Str("tool_name", input.ToolName).
+		Str("session_id", input.SessionID).
+		Str("cwd", input.CWD).
+		Str("permission_mode", input.PermissionMode).
+		Str("error_type", input.ErrorType).
+		Interface("tool_input", input.ToolInput).
 		Msg("claudecco: received event")
 
 	switch input.HookEventName {

@@ -544,7 +544,9 @@ defineExpose({ focusInput, scrollToBottom })
   flex-shrink: 0;
   user-select: none;
   border-bottom: 1px solid var(--lg-border-subtle);
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 55%, rgba(255, 255, 255, 0) 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 50%);
 }
 .title-logo {
   width: 20px;
@@ -565,28 +567,29 @@ defineExpose({ focusInput, scrollToBottom })
 .title-tags {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
 }
 .title-tag {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 20px;
-  padding: 0 7px;
-  border-radius: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
   background: var(--lg-surface-input);
   border: 1px solid var(--lg-border-subtle);
   font-size: 11px;
   font-weight: 500;
   white-space: nowrap;
   user-select: none;
-  max-width: 120px;
+  max-width: 130px;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: background 0.12s, border-color 0.12s;
 }
 .latency-tag {
   font-variant-numeric: tabular-nums;
-  transition: color 0.4s;
+  transition: color 0.4s, background 0.12s, border-color 0.12s;
   max-width: none;
 }
 .model-tag   { color: var(--text-secondary); max-width: 200px; }
@@ -607,25 +610,26 @@ defineExpose({ focusInput, scrollToBottom })
   background: transparent;
   border: none;
   color: var(--text-tertiary);
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   cursor: pointer;
-  border-radius: 5px;
+  border-radius: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
-  transition: background 0.12s, color 0.12s;
+  transition: background 0.15s var(--ease-enter), color 0.15s var(--ease-enter);
   -webkit-appearance: none;
   appearance: none;
+  flex-shrink: 0;
 }
 .icon-btn:hover {
   background: var(--lg-surface-input);
   color: var(--text-primary);
 }
 .close-btn:hover {
-  background: rgba(255, 69, 58, 0.16);
+  background: rgba(255, 69, 58, 0.18);
   color: var(--danger);
 }
 .icon-btn:focus-visible,
