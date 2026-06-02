@@ -57,6 +57,7 @@ func (s *Server) Start() error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/event", s.handleEvent)
+	mux.HandleFunc("/health", s.handleHealth)
 
 	s.srv = &http.Server{
 		Addr:    net.JoinHostPort("127.0.0.1", strconv.Itoa(s.cfg.Port)),
@@ -117,7 +118,7 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Debug().
+	log.Info().
 		Str("hook_event_name", input.HookEventName).
 		Str("tool_name", input.ToolName).
 		Msg("claudecco: received event")
@@ -175,6 +176,12 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"ok":true}`))
+}
+
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"ok","port":` + strconv.Itoa(s.cfg.Port) + `}`))
 }
 
 // statusPayload builds the structured status event sent to the ClaudeStatusPanel.
