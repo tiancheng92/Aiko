@@ -310,22 +310,49 @@ func (s *Server) refreshSessionTitle(si *sessionInfo, input *hookInput) {
 	s.mu.Unlock()
 }
 
-// emitStatus sends a claudecco:status event to the frontend with the given
-// session's info.
-func (s *Server) emitStatus(state string, si *sessionInfo, input *hookInput) {
-	p := map[string]any{
-		"state":         state,
-		"hookEventName": input.HookEventName,
-		"sessionID":     input.SessionID,
-	}
-	if input.ToolName != "" {
-		p["toolName"] = input.ToolName
-	}
+// sessionSnapshot is a lightweight copy of sessionInfo for the status event.
+type sessionSnapshot struct {
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	State          string `json:"state"`
+	ToolName       string `json:"toolName,omitempty"`
+	HookEventName  string `json:"hookEventName,omitempty"`
+}
+
+// emitStatus sends all active sessions to the frontend.
+func (s *Server) emitStatus(_ string, si *sessionInfo, input *hookInput) {
 	s.mu.Lock()
-	p["sessionName"] = si.Name
+	// Snapshot all sessions with state != idle.
+	active := make([]sessionSnapshot, 0)
+	for id, ses := range s.sessions {
+		if ses.state == "idle" {
+			continue
+		}
+		snap := sessionSnapshot{
+			ID:    id,
+			Name:  ses.Name,
+			State: ses.state,
+		}
+		if id == input.SessionID {
+			snap.ToolName = input.ToolName
+			snap.HookEventName = input.HookEventName
+		}
+		active = append(active, snap)
+	}
+	// If nothing is active, include at least the triggering session (idle).
+	if len(active) == 0 {
+		active = append(active, sessionSnapshot{
+			ID:             input.SessionID,
+			Name:           si.Name,
+			State:          "idle",
+			HookEventName:  input.HookEventName,
+		})
+	}
 	s.mu.Unlock()
 
-	s.emit("claudecco:status", p)
+	s.emit("claudecco:status", map[string]any{
+		"sessions": active,
+	})
 }
 
 // ── transcript reading ──
