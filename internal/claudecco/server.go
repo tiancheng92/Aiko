@@ -355,12 +355,7 @@ func (s *Server) emitStatus(si *sessionInfo, input *hookInput) {
 				snap.HookEventName = input.HookEventName
 				if input.ToolInput != nil {
 					if b, err := json.Marshal(input.ToolInput); err == nil {
-						inputStr := string(b)
-						runes := []rune(inputStr)
-						if len(runes) > 120 {
-							inputStr = string(runes[:120]) + "…"
-						}
-						snap.ToolInput = inputStr
+						snap.ToolInput = string(b)
 					}
 				}
 			}
