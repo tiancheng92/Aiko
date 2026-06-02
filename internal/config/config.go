@@ -76,13 +76,13 @@ type Config struct {
 	Language string
 	// ClaudeCodeEnabled controls whether the built-in HTTP server listens for
 	// Claude Code hook events to sync pet state.
-	ClaudeCodeEnabled bool `json:"claude_code_enabled"`
+	ClaudeCodeEnabled bool
 	// ClaudeCodePort is the TCP port for the Claude Code hook HTTP server.
 	// Default 9876. Only effective when ClaudeCodeEnabled is true.
-	ClaudeCodePort int `json:"claude_code_port"`
+	ClaudeCodePort int
 	// ClaudeCodeNotificationSecs controls how long (in seconds) the
 	// Claude Code notification bubble stays visible. Default 15.
-	ClaudeCodeNotificationSecs int `json:"claude_code_notification_secs"`
+	ClaudeCodeNotificationSecs int
 }
 
 // Store provides persistent read/write access to application configuration in SQLite.
@@ -167,9 +167,9 @@ func (s *Store) Load() (*Config, error) {
 	cfg.UseKnowledge = m["use_knowledge"] != "false" // default true
 	cfg.UseMemory = m["use_memory"] != "false"        // default true
 	cfg.Language = m["language"]
-	cfg.ClaudeCodeEnabled = m["claude_code_enabled"] == "true"
-	cfg.ClaudeCodePort = parseInt(m["claude_code_port"], 9876)
-	cfg.ClaudeCodeNotificationSecs = parseInt(m["claude_code_notification_secs"], 15)
+	cfg.ClaudeCodeEnabled = m["ClaudeCodeEnabled"] == "true"
+	cfg.ClaudeCodePort = parseInt(m["ClaudeCodePort"], 9876)
+	cfg.ClaudeCodeNotificationSecs = parseInt(m["ClaudeCodeNotificationSecs"], 15)
 	return cfg, nil
 }
 
@@ -222,9 +222,9 @@ func (s *Store) Save(cfg *Config) error {
 		"pomodoro_rounds_before_long_break": strconv.Itoa(cfg.PomodoroRoundsBeforeLongBreak),
 		"system_stats_interval":           strconv.Itoa(cfg.SystemStatsInterval),
 		"language":                          cfg.Language,
-		"claude_code_enabled":            strconv.FormatBool(cfg.ClaudeCodeEnabled),
-		"claude_code_port":               strconv.Itoa(cfg.ClaudeCodePort),
-		"claude_code_notification_secs":  strconv.Itoa(cfg.ClaudeCodeNotificationSecs),
+		"ClaudeCodeEnabled":            strconv.FormatBool(cfg.ClaudeCodeEnabled),
+		"ClaudeCodePort":               strconv.Itoa(cfg.ClaudeCodePort),
+		"ClaudeCodeNotificationSecs":  strconv.Itoa(cfg.ClaudeCodeNotificationSecs),
 	}
 	tx, err := s.db.Begin()
 	if err != nil {
