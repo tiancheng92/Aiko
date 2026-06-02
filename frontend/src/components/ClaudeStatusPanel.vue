@@ -1,6 +1,6 @@
 <!-- frontend/src/components/ClaudeStatusPanel.vue -->
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { EventsOn } from "../../wailsjs/runtime/runtime";
 import { springAnimate } from "../composables/useSpring";
@@ -15,7 +15,7 @@ const panelRef = ref(null);
 const tick = ref(0);
 let tickTimer = null;
 const sessionStartTimes = new Map(); // id → timestamp ms，首次 thinking 时记录
-const sessionToolCounts = new Map(); // id → number，PreToolUse 事件计数
+const sessionToolCounts = reactive({}); // id → number，PreToolUse 事件计数
 const dismissed = ref(new Set());   // 手动关闭的 session id
 
 let offStatus = null;
@@ -129,11 +129,19 @@ onMounted(() => {
           sessionStartTimes.set(s.id, Date.now());
         }
         if (s.hookEventName === "PreToolUse") {
-          sessionToolCounts.set(s.id, (sessionToolCounts.get(s.id) || 0) + 1);
+          sessionToolCounts[s.id] = (sessionToolCounts[s.id] || 0) + 1;
         }
       }
     }
     sessions.value = incoming;
+    // Prune stale entries no longer in the active session list
+    const activeIds = new Set(incoming.map((s) => s.id));
+    for (const id of Object.keys(sessionToolCounts)) {
+      if (!activeIds.has(id) && dismissed.value.has(id)) {
+        delete sessionToolCounts[id];
+        sessionStartTimes.delete(id);
+      }
+    }
   });
 });
 
@@ -176,7 +184,7 @@ function toolInputLabel(raw) {
 function dismiss(id) {
   dismissed.value = new Set([...dismissed.value, id]);
   sessionStartTimes.delete(id);
-  sessionToolCounts.delete(id);
+  delete sessionToolCounts[id];
 }
 
 defineExpose({ show, hide });
@@ -204,7 +212,7 @@ defineExpose({ show, hide });
                 <svg v-else width="12" height="12" viewBox="0 0 12 12"><line x1="3.5" y1="3.5" x2="8.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="8.5" y1="3.5" x2="3.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
               </span>
               <span class="cp-session">{{ s.name }}</span>
-              <span v-if="sessionToolCounts.get(s.id)" class="cp-count">×{{ sessionToolCounts.get(s.id) }}</span>
+              <span v-if="sessionToolCounts[s.id]" class="cp-count">×{{ sessionToolCounts[s.id] }}</span>
               <span v-if="elapsedLabel(s.id)" class="cp-elapsed">{{ elapsedLabel(s.id) }}</span>
               <span v-if="s.toolName" class="cp-tool">
                 <svg v-if="toolIcon(s.toolName)" width="11" height="11" viewBox="0 0 24 24" class="cp-tool-icon" v-html="toolIcon(s.toolName)"></svg>
