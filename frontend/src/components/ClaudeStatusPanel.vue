@@ -217,7 +217,7 @@ defineExpose({ show, hide });
             :key="s.id"
             class="cp-row"
           >
-            <!-- 第一行：状态点 · 会话名 · 计数 · 耗时 · 工具 badge · 状态文字 · × 按钮 -->
+            <!-- 行1：状态点 · 会话名 · × 关闭按钮 -->
             <div class="cp-row-main">
               <span class="cp-dot" :class="cfg(s.state).class">
                 <svg v-if="s.state === 'idle'" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" fill="currentColor"/></svg>
@@ -225,16 +225,19 @@ defineExpose({ show, hide });
                 <svg v-else width="12" height="12" viewBox="0 0 12 12"><line x1="3.5" y1="3.5" x2="8.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="8.5" y1="3.5" x2="3.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
               </span>
               <span class="cp-session">{{ s.name }}</span>
-              <span v-if="sessionToolCounts[s.id]" class="cp-count">×{{ sessionToolCounts[s.id] }}</span>
+              <button v-if="s.state === 'idle'" class="cp-dismiss" @click.stop="dismiss(s.id)" :title="t('claudeStatus.dismiss')">×</button>
+            </div>
+            <!-- 行2：耗时 · 计数 · 工具 badge · 状态文字 -->
+            <div class="cp-row-meta">
               <span v-if="elapsedLabel(s.id)" class="cp-elapsed">{{ elapsedLabel(s.id) }}</span>
+              <span v-if="sessionToolCounts[s.id]" class="cp-count">×{{ sessionToolCounts[s.id] }}</span>
               <span v-if="s.toolName" class="cp-tool">
                 <svg v-if="toolIcon(s.toolName)" width="11" height="11" viewBox="0 0 24 24" class="cp-tool-icon" v-html="toolIcon(s.toolName)"></svg>
                 {{ toolLabel(s.toolName) }}
               </span>
               <span class="cp-status">{{ t("claudeStatus." + cfg(s.state).label) }}</span>
-              <button v-if="s.state === 'idle'" class="cp-dismiss" @click.stop="dismiss(s.id)" :title="t('claudeStatus.dismiss')">×</button>
             </div>
-            <!-- 第二行：工具参数副标题 -->
+            <!-- 行3：工具参数副标题 -->
             <div v-if="toolInputLabel(s.toolInput)" class="cp-row-sub">
               {{ toolInputLabel(s.toolInput) }}
             </div>
@@ -399,6 +402,7 @@ defineExpose({ show, hide });
 }
 
 .cp-status {
+  margin-left: auto;
   font-size: 10px;
   font-weight: 500;
   color: var(--text-secondary);
@@ -430,6 +434,14 @@ defineExpose({ show, hide });
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+}
+
+.cp-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 18px; /* 与 cp-session 对齐（dot 12px + gap 6px） */
   min-width: 0;
 }
 
