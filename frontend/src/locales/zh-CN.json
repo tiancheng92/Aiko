@@ -636,6 +636,7 @@
 		"eventPermissionRequest": "等待权限",
 		"eventStop": "已完成",
 		"eventStopFailure": "出错",
+		"dismiss": "关闭",
 		"tool": {
 			"bash": "Bash",
 			"write": "写入",

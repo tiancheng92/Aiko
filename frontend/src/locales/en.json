@@ -635,6 +635,7 @@
 		"eventPermissionRequest": "Waiting Permission",
 		"eventStop": "Done",
 		"eventStopFailure": "Error",
+		"dismiss": "Dismiss",
 		"tool": {
 			"bash": "Bash",
 			"write": "Write",

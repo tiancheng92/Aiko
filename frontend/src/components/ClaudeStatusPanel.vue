@@ -11,6 +11,13 @@ const visible = ref(false);
 const sessions = ref([]); // [{ id, name, state, toolName, hookEventName }]
 const panelRef = ref(null);
 
+// 计时器相关
+const tick = ref(0);
+let tickTimer = null;
+const sessionStartTimes = new Map(); // id → timestamp ms，首次 thinking 时记录
+const sessionToolCounts = new Map(); // id → number，PreToolUse 事件计数
+const dismissed = ref(new Set());   // 手动关闭的 session id
+
 let offStatus = null;
 let cancelAnim = null;
 
@@ -62,13 +69,16 @@ function toolLabel(name) {
   return map[name] ? t("claudeStatus.tool." + map[name]) : name;
 }
 
-/** hasThinking is true when any session is in thinking state. */
-const hasThinking = computed(() => sessions.value.some(s => s.state === "thinking"));
+/** hasThinking is true when any non-dismissed session is in thinking state. */
+const hasThinking = computed(() =>
+  sessions.value.some((s) => !dismissed.value.has(s.id) && s.state === "thinking")
+);
 
 /** Compute session groups sorted by CWD. Each group has a cwd label and sessions. */
 const groups = computed(() => {
   const map = new Map();
   for (const s of sessions.value) {
+    if (dismissed.value.has(s.id)) continue;
     const cwd = s.cwd || "";
     if (!map.has(cwd)) map.set(cwd, []);
     map.get(cwd).push(s);
@@ -110,15 +120,64 @@ function onLeave(el, done) {
 }
 
 onMounted(() => {
+  tickTimer = setInterval(() => { tick.value++; }, 1000);
   offStatus = EventsOn("claudecco:status", (data) => {
-    sessions.value = data.sessions || [];
+    const incoming = data.sessions || [];
+    for (const s of incoming) {
+      if (s.state === "thinking") {
+        if (!sessionStartTimes.has(s.id)) {
+          sessionStartTimes.set(s.id, Date.now());
+        }
+        if (s.hookEventName === "PreToolUse") {
+          sessionToolCounts.set(s.id, (sessionToolCounts.get(s.id) || 0) + 1);
+        }
+      }
+    }
+    sessions.value = incoming;
   });
 });
 
 onUnmounted(() => {
   offStatus?.();
   if (cancelAnim) cancelAnim();
+  clearInterval(tickTimer);
+  tickTimer = null;
 });
+
+/** elapsedLabel returns a human-readable elapsed time string for a session. */
+function elapsedLabel(id) {
+  tick.value; // 触发响应式追踪
+  const start = sessionStartTimes.get(id);
+  if (!start) return "";
+  const sec = Math.floor((Date.now() - start) / 1000);
+  if (sec < 60) return `${sec}s`;
+  const m = Math.floor(sec / 60), s = sec % 60;
+  if (m < 60) return `${m}m ${s}s`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+/** toolInputLabel extracts a human-readable summary from a JSON ToolInput string. */
+function toolInputLabel(raw) {
+  if (!raw) return "";
+  try {
+    const obj = JSON.parse(raw);
+    const key = ["command", "cmd", "file_path", "path", "query", "url", "skill", "prompt"]
+      .find((k) => obj[k] && typeof obj[k] === "string");
+    if (key) {
+      let val = obj[key];
+      if (val.length > 60) val = val.slice(0, 60) + "…";
+      return val;
+    }
+  } catch {}
+  return raw.length > 60 ? raw.slice(0, 60) + "…" : raw;
+}
+
+/** dismiss removes an idle session from the panel for this session lifetime. */
+function dismiss(id) {
+  dismissed.value = new Set([...dismissed.value, id]);
+  sessionStartTimes.delete(id);
+  sessionToolCounts.delete(id);
+}
 
 defineExpose({ show, hide });
 </script>
@@ -137,17 +196,27 @@ defineExpose({ show, hide });
             :key="s.id"
             class="cp-row"
           >
-            <span class="cp-dot" :class="cfg(s.state).class">
-              <svg v-if="s.state === 'idle'" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" fill="currentColor"/></svg>
-              <svg v-else-if="s.state === 'thinking'" width="12" height="12" viewBox="0 0 12 12" class="spin-svg"><circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 3"/></svg>
-              <svg v-else width="12" height="12" viewBox="0 0 12 12"><line x1="3.5" y1="3.5" x2="8.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="8.5" y1="3.5" x2="3.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-            </span>
-            <span class="cp-session">{{ s.name }}</span>
-            <span v-if="s.toolName" class="cp-tool">
-              <svg v-if="toolIcon(s.toolName)" width="11" height="11" viewBox="0 0 24 24" class="cp-tool-icon" v-html="toolIcon(s.toolName)"></svg>
-              {{ toolLabel(s.toolName) }}
-            </span>
-            <span class="cp-status">{{ t("claudeStatus." + cfg(s.state).label) }}</span>
+            <!-- 第一行：状态点 · 会话名 · 计数 · 耗时 · 工具 badge · 状态文字 · × 按钮 -->
+            <div class="cp-row-main">
+              <span class="cp-dot" :class="cfg(s.state).class">
+                <svg v-if="s.state === 'idle'" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" fill="currentColor"/></svg>
+                <svg v-else-if="s.state === 'thinking'" width="12" height="12" viewBox="0 0 12 12" class="spin-svg"><circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 3"/></svg>
+                <svg v-else width="12" height="12" viewBox="0 0 12 12"><line x1="3.5" y1="3.5" x2="8.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="8.5" y1="3.5" x2="3.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              </span>
+              <span class="cp-session">{{ s.name }}</span>
+              <span v-if="sessionToolCounts.get(s.id)" class="cp-count">×{{ sessionToolCounts.get(s.id) }}</span>
+              <span v-if="elapsedLabel(s.id)" class="cp-elapsed">{{ elapsedLabel(s.id) }}</span>
+              <span v-if="s.toolName" class="cp-tool">
+                <svg v-if="toolIcon(s.toolName)" width="11" height="11" viewBox="0 0 24 24" class="cp-tool-icon" v-html="toolIcon(s.toolName)"></svg>
+                {{ toolLabel(s.toolName) }}
+              </span>
+              <span class="cp-status">{{ t("claudeStatus." + cfg(s.state).label) }}</span>
+              <button v-if="s.state === 'idle'" class="cp-dismiss" @click.stop="dismiss(s.id)" :title="t('claudeStatus.dismiss')">×</button>
+            </div>
+            <!-- 第二行：工具参数副标题 -->
+            <div v-if="toolInputLabel(s.toolInput)" class="cp-row-sub">
+              {{ toolInputLabel(s.toolInput) }}
+            </div>
           </div>
         </template>
       </div>
@@ -226,8 +295,8 @@ defineExpose({ show, hide });
 
 .cp-row {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  gap: 2px;
   padding: 4px 4px;
   border-radius: 6px;
   transition: background 0.12s var(--ease-enter);
@@ -283,7 +352,6 @@ defineExpose({ show, hide });
 }
 
 .cp-status {
-  margin-left: auto;
   font-size: 10px;
   font-weight: 500;
   color: var(--text-secondary);
@@ -309,6 +377,70 @@ defineExpose({ show, hide });
 .cp-tool-icon {
   flex-shrink: 0;
   opacity: 0.75;
+}
+
+.cp-row-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cp-row-sub {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  padding-left: 18px; /* 与 cp-session 对齐（dot 12px + gap 6px） */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
+  opacity: 0.75;
+}
+
+.cp-count {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
+}
+
+.cp-elapsed {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
+}
+
+.cp-dismiss {
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-tertiary);
+  opacity: 0.3;
+  border-radius: 3px;
+  padding: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.cp-row:hover .cp-dismiss {
+  opacity: 0.7;
+}
+
+.cp-dismiss:hover {
+  opacity: 1 !important;
+  background: var(--lg-surface-hover);
+  color: var(--text-primary);
 }
 
 /* ── Reduced motion ── */

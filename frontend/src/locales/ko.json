@@ -630,6 +630,7 @@
 		"eventPermissionRequest": "권한 대기",
 		"eventStop": "완료",
 		"eventStopFailure": "오류",
+		"dismiss": "닫기",
 		"tool": {
 			"bash": "Bash",
 			"write": "쓰기",

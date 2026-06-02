@@ -630,6 +630,7 @@
 		"eventPermissionRequest": "権限待ち",
 		"eventStop": "完了",
 		"eventStopFailure": "エラー",
+		"dismiss": "閉じる",
 		"tool": {
 			"bash": "Bash",
 			"write": "書き込み",
