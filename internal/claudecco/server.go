@@ -41,7 +41,10 @@ type sessionInfo struct {
 	hasTranscriptTitle bool        // true once Name was set from transcript ai-title/rename
 	state              string      // "thinking" | "idle" | "error"
 	debounce           *time.Timer // per-session debounce timer
+	idleTimer          *time.Timer // auto-idle after 30s of inactivity (handles interrupts)
 }
+
+const sessionIdleTimeout = 30 * time.Second
 
 // Emitter is the interface for emitting Wails events.
 type Emitter func(event string, data any)
@@ -108,6 +111,9 @@ func (s *Server) Stop() {
 	for _, si := range s.sessions {
 		if si.debounce != nil {
 			si.debounce.Stop()
+		}
+		if si.idleTimer != nil {
+			si.idleTimer.Stop()
 		}
 	}
 	if s.srv != nil {
@@ -225,45 +231,40 @@ func (s *Server) ensureSession(input *hookInput) *sessionInfo {
 	return si
 }
 
-// setSessionState transitions a session to a new state, managing its debounce timer.
+// setSessionState transitions a session to a new state, managing its timers.
 func (s *Server) setSessionState(si *sessionInfo, state string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	prev := si.state
 	si.state = state
+
+	// Clear existing timers.
 	if si.debounce != nil {
 		si.debounce.Stop()
 		si.debounce = nil
 	}
+	if si.idleTimer != nil {
+		si.idleTimer.Stop()
+		si.idleTimer = nil
+	}
 
 	if state == "thinking" {
 		if prev != "thinking" {
-			// First thinking event — show immediately.
 			s.emit("pet:state:change", "thinking")
 		}
-		// Debounce subsequent idle→thinking transitions: after 5s of no new
-		// thinking events, re-sync pet state (handles rapid interleaved sessions).
+		// Auto-idle after 30s of no activity (handles Ctrl+C, crashes, etc.).
 		sid := s.lastSID
-		si.debounce = time.AfterFunc(5*time.Second, func() {
+		si.idleTimer = time.AfterFunc(sessionIdleTimeout, func() {
 			s.mu.Lock()
-			aggr := "idle"
-			for _, ses := range s.sessions {
-				if ses.state == "thinking" {
-					aggr = "thinking"
-					break
-				}
+			if ses, ok := s.sessions[sid]; ok && ses.state == "thinking" {
+				ses.state = "idle"
+				s.emit("pet:state:change", s.aggregateStateLocked())
+				s.emitStatus("idle", ses, &hookInput{SessionID: sid})
 			}
-			if aggr == "thinking" {
-				s.emit("pet:state:change", "thinking")
-			}
-			// If no sessions are thinking, this session's timer already
-			// won't fire (it was cancelled above when state changed).
 			s.mu.Unlock()
-			_ = sid
 		})
 	} else {
-		// State changed to idle/error — update pet state immediately.
 		s.emit("pet:state:change", s.aggregateStateLocked())
 	}
 }
@@ -395,15 +396,22 @@ func readTranscriptTitle(path string) string {
 	var title string
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		if bytes.Contains(line, []byte(`"ai-title"`)) {
+		// Try multiple known formats for Claude Code session titles.
+		if bytes.Contains(line, []byte(`"ai-title"`)) || bytes.Contains(line, []byte(`"title"`)) {
 			var entry struct {
 				Title string `json:"title"`
+				Name  string `json:"name"`
 			}
-			if json.Unmarshal(line, &entry) == nil && entry.Title != "" {
-				title = entry.Title
+			if json.Unmarshal(line, &entry) == nil {
+				switch {
+				case entry.Title != "":
+					title = entry.Title
+				case entry.Name != "":
+					title = entry.Name
+				}
 			}
 		}
-		if bytes.Contains(line, []byte(`"type":"rename"`)) {
+		if bytes.Contains(line, []byte("rename")) {
 			var entry struct {
 				Name string `json:"name"`
 			}
@@ -411,9 +419,27 @@ func readTranscriptTitle(path string) string {
 				title = entry.Name
 			}
 		}
+		// Fallback: first user message.
+		if title == "" && bytes.Contains(line, []byte(`"type":"user"`)) {
+			var entry struct {
+				Message struct {
+					Content []struct {
+						Text string `json:"text"`
+					} `json:"content"`
+				} `json:"message"`
+			}
+			if json.Unmarshal(line, &entry) == nil && len(entry.Message.Content) > 0 {
+				if t := strings.TrimSpace(entry.Message.Content[0].Text); t != "" {
+					title = t
+				}
+			}
+		}
 	}
-	if title != "" && len([]rune(title)) > 40 {
-		title = string([]rune(title)[:40]) + "…"
+	if title != "" {
+		log.Info().Str("title", title).Str("path", path).Msg("claudecco: read transcript title")
+		if len([]rune(title)) > 40 {
+			title = string([]rune(title)[:40]) + "…"
+		}
 	}
 	return title
 }
