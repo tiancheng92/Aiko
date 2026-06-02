@@ -97,6 +97,10 @@ func (a *App) SaveConfig(cfg *config.Config) error {
 			})
 			if err := ccSrv.Start(); err != nil {
 				log.Warn().Err(err).Msg("claudecco: server start failed")
+					wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
+						"title":   "Claude Code 同步",
+						"message": "HTTP 服务启动失败：" + err.Error(),
+					})
 			} else {
 				a.mu.Lock()
 				a.claudeccoServer = ccSrv
@@ -105,6 +109,10 @@ func (a *App) SaveConfig(cfg *config.Config) error {
 		} else {
 			if err := ccSrv.UpdateConfig(ccCfg); err != nil {
 				log.Warn().Err(err).Msg("claudecco: server restart failed")
+				wailsruntime.EventsEmit(a.ctx, "notification:show", map[string]any{
+					"title":   "Claude Code 同步",
+					"message": "HTTP 服务重启失败：" + err.Error(),
+				})
 			}
 		}
 	} else {
