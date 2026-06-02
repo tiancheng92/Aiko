@@ -3,6 +3,7 @@
       <div v-if="visible" ref="panelRef" class="system-panel">
         <div class="sys-titlebar">
           <span class="sys-titlebar-label">系统</span>
+          <button class="panel-close-btn" @click="emit('close')" :title="t('common.close')">×</button>
         </div>
         <!-- CPU -->
         <div class="stat-row">
@@ -170,6 +171,7 @@ import { EventsOn } from "../../wailsjs/runtime/runtime";
 import { springAnimate } from "../composables/useSpring";
 
 const { t } = useI18n();
+const emit = defineEmits(['close']);
 
 const visible = ref(false);
 const cpu = ref(0);
@@ -358,6 +360,32 @@ defineExpose({ show });
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.panel-close-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text-tertiary);
+  opacity: 0.3;
+  border-radius: 3px;
+  padding: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.panel-close-btn:hover {
+  opacity: 1;
+  background: var(--lg-surface-hover);
+  color: var(--text-primary);
 }
 
 .stat-row {
