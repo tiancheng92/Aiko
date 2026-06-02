@@ -2411,6 +2411,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                   v-model.number="cfg.ClaudeCodePort"
                   :disabled="!cfg.ClaudeCodeEnabled"
                   min="1024" max="65535"
+                  @change="debouncedSaveFlush"
                 />
               </div>
             </div>
@@ -2427,6 +2428,7 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                   v-model.number="cfg.ClaudeCodeNotificationSecs"
                   :disabled="!cfg.ClaudeCodeEnabled"
                   min="5" max="120"
+                  @change="debouncedSaveFlush"
                 />
               </div>
             </div>
