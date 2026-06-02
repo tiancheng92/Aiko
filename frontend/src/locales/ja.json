@@ -641,8 +641,8 @@
       "webFetch": "取得",
       "webSearch": "検索"
     },
-    "elapsedTime": "経過時間",
-    "toolCallCount": "ツール呼び出し回数",
+    "elapsedTime": "経過",
+    "toolCallCount": "呼出",
     "currentTool": "現在のツール"
   },
   "common": {

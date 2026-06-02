@@ -646,8 +646,8 @@
       "webFetch": "Fetch",
       "webSearch": "Search"
     },
-    "elapsedTime": "Elapsed time",
-    "toolCallCount": "Tool call count",
+    "elapsedTime": "took",
+    "toolCallCount": "calls",
     "currentTool": "Current tool"
   },
   "common": {

@@ -647,8 +647,8 @@
       "webFetch": "抓取网页",
       "webSearch": "搜索网页"
     },
-    "elapsedTime": "运行时长",
-    "toolCallCount": "工具调用次数",
+    "elapsedTime": "耗时",
+    "toolCallCount": "调用",
     "currentTool": "当前工具"
   },
   "common": {
