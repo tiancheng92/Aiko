@@ -244,7 +244,7 @@ defineExpose({ show })
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 20px;
   padding: 10px 14px;
   background: var(--lg-surface-elevated);
   backdrop-filter: var(--lg-blur);
@@ -294,7 +294,7 @@ defineExpose({ show })
   width: 84px;
   height: 84px;
   border-radius: 50%;
-  background: var(--bg-primary);
+  background: #0F172A;
   display: flex;
   flex-direction: column;
   align-items: center;
