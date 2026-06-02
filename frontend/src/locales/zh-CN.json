@@ -570,6 +570,7 @@
 		"kill": "终止"
 	},
 	"pomodoro": {
+		"title": "番茄钟",
 		"focus": "专注中",
 		"shortBreak": "短休息",
 		"longBreak": "长休息",

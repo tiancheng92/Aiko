@@ -8,6 +8,9 @@
         v-if="visible"
         class="pomodoro-panel"
       >
+        <div class="pomo-titlebar">
+          <span class="pomo-titlebar-label">番茄钟</span>
+        </div>
         <!-- Circular progress ring -->
         <div class="timer-ring" :style="ringStyle">
           <div class="timer-inner">
@@ -254,6 +257,23 @@ defineExpose({ show })
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
   user-select: none;
   color: var(--text-primary);
+}
+
+.pomo-titlebar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--lg-border-subtle);
+}
+
+.pomo-titlebar-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
 }
 
 /* ── Ring ── */

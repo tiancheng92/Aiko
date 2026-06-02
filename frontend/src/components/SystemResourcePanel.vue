@@ -1,6 +1,9 @@
 <template>
     <Transition :css="false" @enter="onEnter" @leave="onLeave">
       <div v-if="visible" ref="panelRef" class="system-panel">
+        <div class="sys-titlebar">
+          <span class="sys-titlebar-label">系统</span>
+        </div>
         <!-- CPU -->
         <div class="stat-row">
           <div class="stat-label">
@@ -338,6 +341,21 @@ defineExpose({ show });
     0 0 0 0.5px rgba(0, 0, 0, 0.25),
     0 1px 0 rgba(255, 255, 255, 0.06) inset;
   user-select: none;
+}
+
+.sys-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--lg-border-subtle);
+}
+
+.sys-titlebar-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
 }
 
 .stat-row {
