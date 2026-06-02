@@ -648,7 +648,7 @@
       "webSearch": "搜索网页"
     },
     "elapsedTime": "耗时",
-    "toolCallCount": "调用",
+    "toolCallCount": "工具调用",
     "currentTool": "当前工具"
   },
   "common": {

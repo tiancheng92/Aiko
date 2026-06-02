@@ -647,7 +647,7 @@
       "webSearch": "Search"
     },
     "elapsedTime": "took",
-    "toolCallCount": "calls",
+    "toolCallCount": "tool calls",
     "currentTool": "Current tool"
   },
   "common": {
