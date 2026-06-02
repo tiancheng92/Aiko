@@ -474,6 +474,11 @@ function closePomodoro() {
   pomodoroPanelOpen.value = false
 }
 
+/** closeClaudePanel hides the Claude Code status panel. */
+function closeClaudePanel() {
+  claudePanelOpen.value = false
+}
+
 /** toggleClaudePanel toggles the Claude Code status panel visibility. */
 function toggleClaudePanel() {
   if (claudePanelOpen.value) {
@@ -691,10 +696,12 @@ function onSettingsLeave(el, done) {
       <ClaudeStatusPanel
         v-if="claudePanelOpen"
         ref="claudePanelRef"
+        @close="closeClaudePanel"
       />
       <SystemResourcePanel
         v-if="systemPanelOpen"
         ref="systemPanelRef"
+        @close="closeSystemPanel"
       />
     </div>
   </Teleport>
