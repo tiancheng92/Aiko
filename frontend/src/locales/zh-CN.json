@@ -647,5 +647,8 @@
 			"webFetch": "抓取网页",
 			"webSearch": "搜索网页"
 		}
+	},
+	"common": {
+		"close": "关闭"
 	}
 }

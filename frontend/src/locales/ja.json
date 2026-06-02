@@ -641,5 +641,8 @@
 			"webFetch": "取得",
 			"webSearch": "検索"
 		}
+	},
+	"common": {
+		"close": "閉じる"
 	}
 }

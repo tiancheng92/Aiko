@@ -641,5 +641,8 @@
 			"webFetch": "가져오기",
 			"webSearch": "검색"
 		}
+	},
+	"common": {
+		"close": "닫기"
 	}
 }

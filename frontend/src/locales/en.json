@@ -646,5 +646,8 @@
 			"webFetch": "Fetch",
 			"webSearch": "Search"
 		}
+	},
+	"common": {
+		"close": "Close"
 	}
 }
