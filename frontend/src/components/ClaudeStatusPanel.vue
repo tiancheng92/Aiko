@@ -6,6 +6,7 @@ import { EventsOn } from "../../wailsjs/runtime/runtime";
 import { springAnimate } from "../composables/useSpring";
 
 const { t } = useI18n();
+const emit = defineEmits(['close']);
 
 const visible = ref(false);
 const sessions = ref([]); // [{ id, name, state, toolName, hookEventName }]
@@ -195,6 +196,7 @@ defineExpose({ show, hide });
       <div v-if="visible" ref="panelRef" class="claude-panel" :class="{ 'claude-panel--thinking': hasThinking }">
         <div class="cp-titlebar">
           <span class="cp-titlebar-label">Claude Code</span>
+          <button class="panel-close-btn" @click="emit('close')" :title="t('common.close')">×</button>
         </div>
         <div v-if="sessions.length === 0" class="cp-empty">无任务</div>
         <template v-else v-for="group in groups" :key="group.cwd">
@@ -279,6 +281,32 @@ defineExpose({ show, hide });
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.panel-close-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text-tertiary);
+  opacity: 0.3;
+  border-radius: 3px;
+  padding: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.panel-close-btn:hover {
+  opacity: 1;
+  background: var(--lg-surface-hover);
+  color: var(--text-primary);
 }
 
 .cp-empty {
