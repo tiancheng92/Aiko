@@ -240,9 +240,9 @@ defineExpose({ show, hide });
                 <button v-if="item.session.state === 'idle'" class="cp-dismiss" @click.stop="dismiss(item.session.id)" :title="t('claudeStatus.dismiss')">×</button>
               </div>
               <div class="cp-row-meta">
-                <span v-if="elapsedLabel(item.session.id)" class="cp-elapsed">{{ elapsedLabel(item.session.id) }}</span>
-                <span v-if="sessionToolCounts[item.session.id]" class="cp-count">×{{ sessionToolCounts[item.session.id] }}</span>
-                <span v-if="item.session.toolName" class="cp-tool">
+                <span v-if="elapsedLabel(item.session.id)" class="cp-elapsed" :title="t('claudeStatus.elapsedTime')">{{ elapsedLabel(item.session.id) }}</span>
+                <span v-if="sessionToolCounts[item.session.id]" class="cp-count" :title="t('claudeStatus.toolCallCount')">×{{ sessionToolCounts[item.session.id] }}</span>
+                <span v-if="item.session.toolName" class="cp-tool" :title="t('claudeStatus.currentTool')">
                   <svg v-if="toolIcon(item.session.toolName)" width="11" height="11" viewBox="0 0 24 24" class="cp-tool-icon" v-html="toolIcon(item.session.toolName)"></svg>
                   {{ toolLabel(item.session.toolName) }}
                 </span>
@@ -269,9 +269,9 @@ defineExpose({ show, hide });
                 <button v-if="sub.state === 'idle'" class="cp-dismiss" @click.stop="dismiss(sub.id)" :title="t('claudeStatus.dismiss')">×</button>
               </div>
               <div class="cp-row-meta cp-row-meta--sub">
-                <span v-if="elapsedLabel(sub.id)" class="cp-elapsed">{{ elapsedLabel(sub.id) }}</span>
-                <span v-if="sessionToolCounts[sub.id]" class="cp-count">×{{ sessionToolCounts[sub.id] }}</span>
-                <span v-if="sub.toolName" class="cp-tool">
+                <span v-if="elapsedLabel(sub.id)" class="cp-elapsed" :title="t('claudeStatus.elapsedTime')">{{ elapsedLabel(sub.id) }}</span>
+                <span v-if="sessionToolCounts[sub.id]" class="cp-count" :title="t('claudeStatus.toolCallCount')">×{{ sessionToolCounts[sub.id] }}</span>
+                <span v-if="sub.toolName" class="cp-tool" :title="t('claudeStatus.currentTool')">
                   <svg v-if="toolIcon(sub.toolName)" width="11" height="11" viewBox="0 0 24 24" class="cp-tool-icon" v-html="toolIcon(sub.toolName)"></svg>
                   {{ toolLabel(sub.toolName) }}
                 </span>
