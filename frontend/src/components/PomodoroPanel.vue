@@ -10,6 +10,7 @@
       >
         <div class="pomo-titlebar">
           <span class="pomo-titlebar-label">番茄钟</span>
+          <button class="panel-close-btn" @click="onClose" :title="t('common.close')">×</button>
         </div>
         <div class="pomo-body">
         <!-- Circular progress ring -->
@@ -145,6 +146,12 @@ async function onPause() {
 
 async function onResume() {
   try { await ResumePomodoro() } catch (e) { console.error('pomodoro resume failed:', e) }
+}
+
+/** onClose hides the panel without stopping the pomodoro timer. */
+function onClose() {
+  visible.value = false
+  emit('close')
 }
 
 async function onStop() {
@@ -284,6 +291,32 @@ defineExpose({ show })
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.panel-close-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text-tertiary);
+  opacity: 0.3;
+  border-radius: 3px;
+  padding: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.panel-close-btn:hover {
+  opacity: 1;
+  background: var(--lg-surface-hover);
+  color: var(--text-primary);
 }
 
 /* ── Ring ── */
