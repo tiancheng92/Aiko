@@ -280,19 +280,20 @@ defineExpose({ show })
 /* ── Ring ── */
 
 .timer-ring {
-  width: 100px;
-  height: 100px;
+  width: 90px;
+  height: 90px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   transition: background 0.3s ease, box-shadow 0.3s ease;
+  align-self: center;
 }
 
 .timer-inner {
-  width: 84px;
-  height: 84px;
+  width: 76px;
+  height: 76px;
   border-radius: 50%;
   background: #0F172A;
   display: flex;
@@ -302,7 +303,7 @@ defineExpose({ show })
 }
 
 .timer-time {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
   color: #fff;
   font-variant-numeric: tabular-nums;
@@ -313,13 +314,15 @@ defineExpose({ show })
 .timer-label {
   font-size: 11px;
   font-weight: 500;
-  margin-top: 3px;
+  margin-top: 2px;
   letter-spacing: 0.02em;
 }
 
 /* ── Info ── */
 
 .timer-info {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
