@@ -4,7 +4,6 @@ package claudecco
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -399,9 +398,16 @@ func readTranscriptTitle(path string) string {
 	for scanner.Scan() {
 		line := scanner.Bytes()
 
-		// 1. custom-title — highest priority. Format confirmed by VSCode extension:
-		//    {"type":"custom-title","sessionId":"xxx","customTitle":"我的自定义标题"}
-		if bytes.Contains(line, []byte(`"custom-title"`)) {
+		// Parse only the "type" field to avoid false matches.
+		var entryType struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(line, &entryType) != nil {
+			continue
+		}
+
+		switch entryType.Type {
+		case "custom-title":
 			var entry struct {
 				CustomTitle string `json:"customTitle"`
 			}
@@ -409,22 +415,22 @@ func readTranscriptTitle(path string) string {
 				title = entry.CustomTitle
 				hasCustom = true
 			}
-		}
 
-		// 2. ai-title — AI generated summary. Skip if custom-title already set.
-		//    {"type":"ai-title","sessionId":"xxx","aiTitle":"Explain Open function logic"}
-		if !hasCustom && bytes.Contains(line, []byte(`"ai-title"`)) {
+		case "ai-title":
+			if hasCustom {
+				continue
+			}
 			var entry struct {
 				AITitle string `json:"aiTitle"`
 			}
 			if json.Unmarshal(line, &entry) == nil && entry.AITitle != "" {
 				title = entry.AITitle
 			}
-		}
 
-		// 3. First user message — last resort fallback.
-		//    {"type":"user","uuid":"...","message":{"content":[{"type":"text","text":"..."}]}}
-		if title == "" && bytes.Contains(line, []byte(`"type":"user"`)) {
+		case "user":
+			if title != "" {
+				continue
+			}
 			var entry struct {
 				UUID    string `json:"uuid"`
 				Message struct {
