@@ -11,6 +11,7 @@
         <div class="pomo-titlebar">
           <span class="pomo-titlebar-label">番茄钟</span>
         </div>
+        <div class="pomo-body">
         <!-- Circular progress ring -->
         <div class="timer-ring" :style="ringStyle">
           <div class="timer-inner">
@@ -60,6 +61,7 @@
               @click="onStop"
             >{{ $t('pomodoro.stop') }}</button>
           </div>
+        </div>
         </div>
       </div>
     </Transition>
@@ -242,9 +244,8 @@ defineExpose({ show })
   width: 100%;
   box-sizing: border-box;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 20px;
+  flex-direction: column;
+  gap: 8px;
   padding: 10px 14px;
   background: var(--lg-surface-elevated);
   backdrop-filter: var(--lg-blur);
@@ -259,6 +260,14 @@ defineExpose({ show })
   -webkit-font-smoothing: antialiased;
   user-select: none;
   color: var(--text-primary);
+}
+
+.pomo-body {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
 }
 
 .pomo-titlebar {
