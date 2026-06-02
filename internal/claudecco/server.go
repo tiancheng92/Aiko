@@ -334,6 +334,7 @@ type sessionSnapshot struct {
 	State         string `json:"state"`
 	ToolName      string `json:"toolName,omitempty"`
 	HookEventName string `json:"hookEventName,omitempty"`
+	ToolInput     string `json:"toolInput,omitempty"`
 }
 
 func (s *Server) emitStatus(si *sessionInfo, input *hookInput) {
@@ -349,6 +350,16 @@ func (s *Server) emitStatus(si *sessionInfo, input *hookInput) {
 			if id == input.SessionID {
 				snap.ToolName = input.ToolName
 				snap.HookEventName = input.HookEventName
+				if input.ToolInput != nil {
+					if b, err := json.Marshal(input.ToolInput); err == nil {
+						inputStr := string(b)
+						runes := []rune(inputStr)
+						if len(runes) > 120 {
+							inputStr = string(runes[:120]) + "…"
+						}
+						snap.ToolInput = inputStr
+					}
+				}
 			}
 			active = append(active, snap)
 		case "idle":

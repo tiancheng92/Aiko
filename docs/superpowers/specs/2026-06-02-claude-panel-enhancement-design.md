@@ -151,14 +151,15 @@ function toolInputLabel(raw) {
 - `dismissed` 仅存 `reactive(new Set())`，不持久化（组件卸载后清空）
 
 ```js
-const dismissed = reactive(new Set())
+// 注意：Vue 3 无法追踪 Set.add() 的变化，必须替换整个 ref 值来触发响应式更新
+const dismissed = ref(new Set())
 
 const visibleSessions = computed(() =>
-  sessions.value.filter(s => !dismissed.has(s.id))
+  sessions.value.filter(s => !dismissed.value.has(s.id))
 )
 
 function dismiss(id) {
-  dismissed.add(id)
+  dismissed.value = new Set([...dismissed.value, id])
   // 清理计时器数据
   sessionStartTimes.delete(id)
   sessionToolCounts.delete(id)
