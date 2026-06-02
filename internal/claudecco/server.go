@@ -36,15 +36,11 @@ type hookInput struct {
 
 // sessionInfo tracks per-session state keyed by session_id.
 type sessionInfo struct {
-	Name               string      // display name
-	CWD                string      // working directory
-	hasTranscriptTitle bool        // true once Name was set from transcript ai-title/rename
-	state              string      // "thinking" | "idle" | "error"
-	debounce           *time.Timer // per-session debounce timer
-	idleTimer          *time.Timer // auto-idle after 30s of inactivity (handles interrupts)
+	Name               string // display name
+	CWD                string
+	hasTranscriptTitle bool   // true once Name was set from transcript ai-title/rename
+	state              string // "thinking" | "idle" | "error"
 }
-
-const sessionIdleTimeout = 30 * time.Second
 
 // Emitter is the interface for emitting Wails events.
 type Emitter func(event string, data any)
@@ -62,7 +58,7 @@ type Server struct {
 	srv      *http.Server
 	mu       sync.Mutex
 	sessions map[string]*sessionInfo
-	lastSID  string // most recently active session (for status panel)
+	lastSID  string // most recently active session ID
 }
 
 // New creates a new Server.
@@ -103,19 +99,11 @@ func (s *Server) Start() error {
 	return nil
 }
 
-// Stop gracefully shuts down the HTTP server and cleans up timers.
+// Stop gracefully shuts down the HTTP server.
 func (s *Server) Stop() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	for _, si := range s.sessions {
-		if si.debounce != nil {
-			si.debounce.Stop()
-		}
-		if si.idleTimer != nil {
-			si.idleTimer.Stop()
-		}
-	}
 	if s.srv != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
@@ -171,6 +159,11 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 	s.lastSID = input.SessionID
 
 	switch input.HookEventName {
+
+	case "SessionEnd":
+		// Session terminated (exit, Ctrl+C, etc.) — mark all sessions idle.
+		s.markAllIdle()
+
 	case "SessionStart", "PreToolUse", "PermissionRequest":
 		s.setSessionState(si, "thinking")
 		s.emitStatus("thinking", si, &input)
@@ -181,6 +174,7 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		s.emitStatus("thinking", si, &input)
 
 	case "Stop":
+		// Stop fires on normal completion AND Ctrl+C interrupt.
 		s.setSessionState(si, "idle")
 		s.emit("notification:show", map[string]any{
 			"title":        "Claude Code",
@@ -211,8 +205,6 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 // ── session helpers ──
 
-// ensureSession returns the sessionInfo for the given input, creating one
-// with a cwd-based fallback name if this is the first time we see it.
 func (s *Server) ensureSession(input *hookInput) *sessionInfo {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -231,46 +223,51 @@ func (s *Server) ensureSession(input *hookInput) *sessionInfo {
 	return si
 }
 
-// setSessionState transitions a session to a new state, managing its timers.
+// setSessionState transitions a session to a new state and emits pet state.
 func (s *Server) setSessionState(si *sessionInfo, state string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	prev := si.state
 	si.state = state
+	s.mu.Unlock()
 
-	// Clear existing timers.
-	if si.debounce != nil {
-		si.debounce.Stop()
-		si.debounce = nil
-	}
-	if si.idleTimer != nil {
-		si.idleTimer.Stop()
-		si.idleTimer = nil
-	}
-
-	if state == "thinking" {
-		if prev != "thinking" {
-			s.emit("pet:state:change", "thinking")
-		}
-		// Auto-idle after 30s of no activity (handles Ctrl+C, crashes, etc.).
-		sid := s.lastSID
-		si.idleTimer = time.AfterFunc(sessionIdleTimeout, func() {
-			s.mu.Lock()
-			if ses, ok := s.sessions[sid]; ok && ses.state == "thinking" {
-				ses.state = "idle"
-				s.emit("pet:state:change", s.aggregateStateLocked())
-				s.emitStatus("idle", ses, &hookInput{SessionID: sid})
-			}
-			s.mu.Unlock()
-		})
-	} else {
-		s.emit("pet:state:change", s.aggregateStateLocked())
+	if state == "thinking" && prev != "thinking" {
+		s.emit("pet:state:change", "thinking")
+	} else if state != "thinking" {
+		s.emit("pet:state:change", s.aggregateState())
 	}
 }
 
-// aggregateStateLocked returns the highest-priority state across all sessions.
-// Caller must hold s.mu.
+// markAllIdle sets all sessions to idle — used on SessionEnd (exit/interrupt).
+func (s *Server) markAllIdle() {
+	s.mu.Lock()
+	for _, si := range s.sessions {
+		si.state = "idle"
+	}
+	s.mu.Unlock()
+	s.emit("pet:state:change", "idle")
+	// Send a status update so the panel clears.
+	s.emit("claudecco:status", map[string]any{"sessions": []sessionSnapshot{}})
+}
+
+// aggregateState returns the highest-priority state across all sessions.
+func (s *Server) aggregateState() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, si := range s.sessions {
+		if si.state == "thinking" {
+			return "thinking"
+		}
+	}
+	for _, si := range s.sessions {
+		if si.state == "error" {
+			return "error"
+		}
+	}
+	return "idle"
+}
+
+// aggregateStateLocked is the locked variant (caller holds s.mu). Not used
+// outside of this file — kept for potential internal use.
 func (s *Server) aggregateStateLocked() string {
 	for _, si := range s.sessions {
 		if si.state == "thinking" {
@@ -285,8 +282,6 @@ func (s *Server) aggregateStateLocked() string {
 	return "idle"
 }
 
-// setSessionNameFromPrompt uses the first line of the user's prompt as the
-// session name. Only sets if we haven't already got a title from the transcript.
 func (s *Server) setSessionNameFromPrompt(si *sessionInfo, input *hookInput) {
 	if input.Prompt == "" {
 		return
@@ -309,7 +304,6 @@ func (s *Server) setSessionNameFromPrompt(si *sessionInfo, input *hookInput) {
 	}
 }
 
-// refreshSessionTitle reads the session title from the transcript JSONL file.
 func (s *Server) refreshSessionTitle(si *sessionInfo, input *hookInput) {
 	if input.TranscriptPath == "" {
 		return
@@ -325,19 +319,18 @@ func (s *Server) refreshSessionTitle(si *sessionInfo, input *hookInput) {
 	s.mu.Unlock()
 }
 
-// sessionSnapshot is a lightweight copy of sessionInfo for the status event.
+// ── status emission ──
+
 type sessionSnapshot struct {
-	ID             string `json:"id"`
-	Name           string `json:"name"`
-	State          string `json:"state"`
-	ToolName       string `json:"toolName,omitempty"`
-	HookEventName  string `json:"hookEventName,omitempty"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	State         string `json:"state"`
+	ToolName      string `json:"toolName,omitempty"`
+	HookEventName string `json:"hookEventName,omitempty"`
 }
 
-// emitStatus sends all active sessions to the frontend.
 func (s *Server) emitStatus(_ string, si *sessionInfo, input *hookInput) {
 	s.mu.Lock()
-	// Snapshot all sessions with state != idle.
 	active := make([]sessionSnapshot, 0)
 	for id, ses := range s.sessions {
 		if ses.state == "idle" {
@@ -354,26 +347,21 @@ func (s *Server) emitStatus(_ string, si *sessionInfo, input *hookInput) {
 		}
 		active = append(active, snap)
 	}
-	// If nothing is active, include at least the triggering session (idle).
 	if len(active) == 0 {
 		active = append(active, sessionSnapshot{
-			ID:             input.SessionID,
-			Name:           si.Name,
-			State:          "idle",
-			HookEventName:  input.HookEventName,
+			ID:            input.SessionID,
+			Name:          si.Name,
+			State:         "idle",
+			HookEventName: input.HookEventName,
 		})
 	}
 	s.mu.Unlock()
 
-	s.emit("claudecco:status", map[string]any{
-		"sessions": active,
-	})
+	s.emit("claudecco:status", map[string]any{"sessions": active})
 }
 
 // ── transcript reading ──
 
-// readTranscriptTitle scans the last 64KB of a transcript JSONL file for the
-// latest ai-title or rename metadata entry.
 func readTranscriptTitle(path string) string {
 	f, err := os.Open(path)
 	if err != nil {
@@ -396,45 +384,57 @@ func readTranscriptTitle(path string) string {
 	var title string
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		// Try multiple known formats for Claude Code session titles.
-		if bytes.Contains(line, []byte(`"ai-title"`)) || bytes.Contains(line, []byte(`"title"`)) {
+
+		// Metadata: {"type":"ai-title","title":"..."} or {"type":"title","title":"..."}
+		if bytes.Contains(line, []byte(`"title"`)) {
 			var entry struct {
+				Type  string `json:"type"`
 				Title string `json:"title"`
 				Name  string `json:"name"`
+				UUID  string `json:"uuid"`
 			}
 			if json.Unmarshal(line, &entry) == nil {
-				switch {
-				case entry.Title != "":
-					title = entry.Title
-				case entry.Name != "":
-					title = entry.Name
+				// Only consider metadata entries, not streaming deltas (which lack uuid).
+				if entry.UUID != "" {
+					switch {
+					case entry.Title != "":
+						title = entry.Title
+					case entry.Name != "":
+						title = entry.Name
+					}
 				}
 			}
 		}
-		if bytes.Contains(line, []byte("rename")) {
+
+		// {"type":"rename","name":"..."}
+		if bytes.Contains(line, []byte(`"rename"`)) {
 			var entry struct {
 				Name string `json:"name"`
+				UUID string `json:"uuid"`
 			}
 			if json.Unmarshal(line, &entry) == nil && entry.Name != "" {
 				title = entry.Name
 			}
 		}
-		// Fallback: first user message.
+
+		// First user message: {"type":"user","uuid":"...","message":{"content":[...]}}
 		if title == "" && bytes.Contains(line, []byte(`"type":"user"`)) {
 			var entry struct {
+				UUID    string `json:"uuid"`
 				Message struct {
 					Content []struct {
 						Text string `json:"text"`
 					} `json:"content"`
 				} `json:"message"`
 			}
-			if json.Unmarshal(line, &entry) == nil && len(entry.Message.Content) > 0 {
+			if json.Unmarshal(line, &entry) == nil && entry.UUID != "" && len(entry.Message.Content) > 0 {
 				if t := strings.TrimSpace(entry.Message.Content[0].Text); t != "" {
 					title = t
 				}
 			}
 		}
 	}
+
 	if title != "" {
 		log.Info().Str("title", title).Str("path", path).Msg("claudecco: read transcript title")
 		if len([]rune(title)) > 40 {

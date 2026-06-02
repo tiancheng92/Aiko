@@ -151,6 +151,13 @@ const claudeCodeHookSnippet = computed(() => {
           type: "http",
           url: `http://127.0.0.1:${port}/event`
         }]
+      }],
+      SessionEnd: [{
+        matcher: "",
+        hooks: [{
+          type: "http",
+          url: `http://127.0.0.1:${port}/event`
+        }]
       }]
     }
   }, null, 2)
