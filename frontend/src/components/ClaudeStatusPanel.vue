@@ -134,10 +134,10 @@ onMounted(() => {
       }
     }
     sessions.value = incoming;
-    // Prune stale entries no longer in the active session list
+    // Prune entries for sessions no longer in the active list
     const activeIds = new Set(incoming.map((s) => s.id));
     for (const id of Object.keys(sessionToolCounts)) {
-      if (!activeIds.has(id) && dismissed.value.has(id)) {
+      if (!activeIds.has(id)) {
         delete sessionToolCounts[id];
         sessionStartTimes.delete(id);
       }
