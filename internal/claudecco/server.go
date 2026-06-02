@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -16,7 +17,6 @@ import (
 )
 
 // hookInput is the standard JSON payload that Claude Code sends to HTTP hooks.
-// All hook events share this structure; event type is identified by hook_event_name.
 // Ref: https://code.claude.com/docs/en/hooks
 type hookInput struct {
 	SessionID      string `json:"session_id"`
@@ -26,8 +26,14 @@ type hookInput struct {
 	PermissionMode string `json:"permission_mode"`
 	ToolName       string `json:"tool_name,omitempty"`
 	ToolInput      any    `json:"tool_input,omitempty"`
-	// StopFailure specific
-	ErrorType string `json:"error_type,omitempty"`
+	ErrorType      string `json:"error_type,omitempty"`
+}
+
+// sessionInfo tracks per-session state keyed by session_id.
+type sessionInfo struct {
+	Name  string // basename of cwd
+	CWD   string
+	State string // "thinking" | "idle" | "error"
 }
 
 // Emitter is the interface for emitting Wails events.
@@ -46,11 +52,12 @@ type Server struct {
 	srv      *http.Server
 	mu       sync.Mutex
 	debounce *time.Timer
+	sessions map[string]*sessionInfo
 }
 
 // New creates a new Server.
 func New(cfg Config, emit Emitter) *Server {
-	return &Server{cfg: cfg, emit: emit}
+	return &Server{cfg: cfg, emit: emit, sessions: make(map[string]*sessionInfo)}
 }
 
 // Start begins listening on 127.0.0.1:<port>.
@@ -119,7 +126,6 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Read and log the complete raw JSON body that Claude Code sent.
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "read body failed", http.StatusInternalServerError)
@@ -138,19 +144,15 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		Str("tool_name", input.ToolName).
 		Str("session_id", input.SessionID).
 		Str("cwd", input.CWD).
-		Str("permission_mode", input.PermissionMode).
-		Str("error_type", input.ErrorType).
-		Interface("tool_input", input.ToolInput).
 		Msg("claudecco: received event")
 
+	// Update session tracking.
+	if input.SessionID != "" {
+		s.updateSession(&input)
+	}
+
 	switch input.HookEventName {
-	case "PreToolUse", "PermissionRequest":
-		// Both indicate Claude is actively working — debounce to avoid flickering
-		// across rapid tool calls. Inspired by clawdex's state mapping:
-		//   PreToolUse(Bash/Write/Edit) → running
-		//   PreToolUse(Read/Grep)      → reviewing
-		//   PermissionRequest          → waiting
-		// We unify to "thinking" since Aiko's state system is simpler.
+	case "SessionStart", "PreToolUse", "PermissionRequest":
 		s.mu.Lock()
 		if s.debounce != nil {
 			s.debounce.Stop()
@@ -159,10 +161,9 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 			s.emit("pet:state:change", "thinking")
 		})
 		s.mu.Unlock()
-		s.emit("claudecco:status", statusPayload("thinking", input))
+		s.emit("claudecco:status", s.statusPayload("thinking", &input))
 
 	case "Stop":
-		// Claude finished a turn — clear thinking, show completion bubble.
 		s.mu.Lock()
 		if s.debounce != nil {
 			s.debounce.Stop()
@@ -175,11 +176,9 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 			"message":      "Claude Code 已完成",
 			"durationSecs": s.cfg.NotificationSecs,
 		})
-		s.emit("claudecco:status", statusPayload("idle", input))
+		s.emit("claudecco:status", s.statusPayload("idle", &input))
 
 	case "StopFailure":
-		// API error (rate limit, auth failure, server error, etc.) —
-		// briefly show error state; usePetState auto-resets to idle after 3s.
 		s.mu.Lock()
 		if s.debounce != nil {
 			s.debounce.Stop()
@@ -187,7 +186,7 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		}
 		s.mu.Unlock()
 		s.emit("pet:state:change", "error")
-		s.emit("claudecco:status", statusPayload("error", input))
+		s.emit("claudecco:status", s.statusPayload("error", &input))
 
 	default:
 		log.Debug().Str("hook_event_name", input.HookEventName).Msg("claudecco: ignored event")
@@ -204,14 +203,40 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"status":"ok","port":` + strconv.Itoa(s.cfg.Port) + `}`))
 }
 
+// updateSession derives a session name from cwd and tracks per-session state.
+func (s *Server) updateSession(input *hookInput) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	si, ok := s.sessions[input.SessionID]
+	if !ok {
+		name := filepath.Base(input.CWD)
+		if name == "" || name == "." || name == "/" {
+			name = input.SessionID[:min(8, len(input.SessionID))]
+		}
+		si = &sessionInfo{Name: name, CWD: input.CWD}
+		s.sessions[input.SessionID] = si
+	}
+	si.CWD = input.CWD
+}
+
 // statusPayload builds the structured status event sent to the ClaudeStatusPanel.
-func statusPayload(state string, input hookInput) map[string]any {
+func (s *Server) statusPayload(state string, input *hookInput) map[string]any {
 	p := map[string]any{
 		"state":         state,
 		"hookEventName": input.HookEventName,
+		"sessionID":     input.SessionID,
 	}
 	if input.ToolName != "" {
 		p["toolName"] = input.ToolName
 	}
+
+	s.mu.Lock()
+	si := s.sessions[input.SessionID]
+	s.mu.Unlock()
+	if si != nil {
+		p["sessionName"] = si.Name
+	}
+
 	return p
 }

@@ -2238,15 +2238,20 @@ defineExpose({ enterSearch, focusInput, scrollToBottom })
   backdrop-filter: var(--lg-blur-sm);
   -webkit-backdrop-filter: var(--lg-blur-sm);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-  transition: background 0.12s, color 0.12s, transform 0.1s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition:
+    background 0.15s var(--ease-enter),
+    color 0.15s var(--ease-enter),
+    box-shadow 0.2s var(--ease-enter),
+    transform 0.18s var(--ease-spring);
   z-index: 5;
 }
 .scroll-to-bottom-btn:hover {
   background: var(--accent);
   border-color: transparent;
   color: #fff;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.4);
 }
-.scroll-to-bottom-btn:active { transform: scale(0.9); }
+.scroll-to-bottom-btn:active { transform: scale(0.88); }
 .scroll-btn-enter-active { transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .scroll-btn-leave-active { transition: opacity 0.14s ease, transform 0.14s ease; }
 .scroll-btn-enter-from { opacity: 0; transform: scale(0.7); }
@@ -4453,14 +4458,6 @@ body > .lightbox .lightbox-img {
   font-weight: 600;
 }
 .clear-confirm-ok:hover { background: #ff5e55; }
-
-/* ── Design tokens ─────────────────────────────────────── */
-/* expo-out: snappy enter;  ease-in-cubic: brisk exit (30% faster) */
-:root {
-  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-exit:  cubic-bezier(0.4, 0, 0.9, 1);
-  --ease-spring: cubic-bezier(0.34, 1.3, 0.64, 1);
-}
 
 /* ── ThinkingBlock ─────────────────────────────────────── */
 /* Entrance: fade-in + slide-up from 6px */
