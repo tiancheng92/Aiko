@@ -47,7 +47,7 @@ function cfg(s) {
 
 function toolIcon(name) {
   const icons = {
-    Bash: '<path d="M2 4l3 3-3 3" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><rect x="7" y="5" width="4" height="1.5" rx="0.5" fill="currentColor"/>',
+    Bash: '<path d="M4 17l6-6-6-6" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 19h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
     Write: '<path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor"/>',
     Edit: '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" fill="currentColor"/>',
     Read: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" fill="none" stroke-width="1.5"/>',
@@ -203,7 +203,8 @@ function toolInputLabel(raw) {
       return val;
     }
   } catch {}
-  return raw.length > 60 ? raw.slice(0, 60) + "…" : raw;
+  // JSON parse failed (e.g. truncated) — don't show raw JSON
+  return "";
 }
 
 /** dismiss removes an idle session from the panel for this session lifetime. */
