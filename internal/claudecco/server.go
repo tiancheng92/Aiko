@@ -176,7 +176,6 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 
 	case "Stop":
 		s.setSessionState(si, "idle")
-		s.emit("pet:state:change", s.aggregateState())
 		s.emit("notification:show", map[string]any{
 			"title":        "Claude Code",
 			"message":      "Claude Code 已完成",
@@ -187,7 +186,6 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 
 	case "StopFailure":
 		s.setSessionState(si, "error")
-		s.emit("pet:state:change", s.aggregateState())
 		s.emitStatus("error", si, &input)
 
 	default:
@@ -232,6 +230,7 @@ func (s *Server) setSessionState(si *sessionInfo, state string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	prev := si.state
 	si.state = state
 	if si.debounce != nil {
 		si.debounce.Stop()
@@ -239,24 +238,39 @@ func (s *Server) setSessionState(si *sessionInfo, state string) {
 	}
 
 	if state == "thinking" {
-		// Fire thinking after a short debounce to avoid flickering across rapid tool calls.
+		if prev != "thinking" {
+			// First thinking event — show immediately.
+			s.emit("pet:state:change", "thinking")
+		}
+		// Debounce subsequent idle→thinking transitions: after 5s of no new
+		// thinking events, re-sync pet state (handles rapid interleaved sessions).
 		sid := s.lastSID
-		si.debounce = time.AfterFunc(3*time.Second, func() {
+		si.debounce = time.AfterFunc(5*time.Second, func() {
 			s.mu.Lock()
-			if ss, ok := s.sessions[sid]; ok && ss.state == "thinking" {
+			aggr := "idle"
+			for _, ses := range s.sessions {
+				if ses.state == "thinking" {
+					aggr = "thinking"
+					break
+				}
+			}
+			if aggr == "thinking" {
 				s.emit("pet:state:change", "thinking")
 			}
+			// If no sessions are thinking, this session's timer already
+			// won't fire (it was cancelled above when state changed).
 			s.mu.Unlock()
+			_ = sid
 		})
+	} else {
+		// State changed to idle/error — update pet state immediately.
+		s.emit("pet:state:change", s.aggregateStateLocked())
 	}
 }
 
-// aggregateState returns the highest-priority state across all sessions.
-// thinking > error > idle
-func (s *Server) aggregateState() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
+// aggregateStateLocked returns the highest-priority state across all sessions.
+// Caller must hold s.mu.
+func (s *Server) aggregateStateLocked() string {
 	for _, si := range s.sessions {
 		if si.state == "thinking" {
 			return "thinking"
