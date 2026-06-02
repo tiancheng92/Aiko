@@ -91,6 +91,9 @@ const cfg = ref({
   VRMModel: '',
   ThemeStyle: 'frosted',
   Language: '',
+  ClaudeCodeEnabled: false,
+  ClaudeCodePort: 9876,
+  ClaudeCodeNotificationSecs: 15,
 })
 const availableVRMModels = ref([])
 const { availableModels, loadModels } = useModelPath()
