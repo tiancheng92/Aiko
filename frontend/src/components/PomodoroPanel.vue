@@ -297,7 +297,6 @@ defineExpose({ show })
   justify-content: center;
   flex-shrink: 0;
   transition: background 0.3s ease, box-shadow 0.3s ease;
-  align-self: center;
 }
 
 .timer-inner {
@@ -330,8 +329,6 @@ defineExpose({ show })
 /* ── Info ── */
 
 .timer-info {
-  flex: 1;
-  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
