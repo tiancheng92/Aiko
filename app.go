@@ -419,7 +419,7 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 		} else {
 			ch = ag.ChatDirect(ctx, job.Prompt)
 		}
-		ep := agent.NewEmotionParser()
+		bp := agent.NewBehaviorParser()
 		var sb strings.Builder
 		for r := range ch {
 			if r.Err != nil {
@@ -440,14 +440,14 @@ func (a *App) initLLMComponents(ctx context.Context) error {
 				}
 				continue
 			}
-			text, _, _ := ep.Feed(r.Token)
+			text, _, _ := bp.Feed(r.Token)
 			sb.WriteString(text)
 			if job.SaveToMemory && text != "" {
 				wailsruntime.EventsEmit(a.ctx, "chat:token", text)
 			}
 		}
 		// Flush any buffered tail after the last token.
-		if tail := ep.Flush(); tail != "" {
+		if tail := bp.Flush(); tail != "" {
 			sb.WriteString(tail)
 			if job.SaveToMemory {
 				wailsruntime.EventsEmit(a.ctx, "chat:token", tail)

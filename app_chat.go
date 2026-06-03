@@ -115,7 +115,7 @@ func (a *App) streamChat(start func(context.Context, *agent.Agent) <-chan agent.
 			a.mu.Unlock()
 		}()
 		ch := start(chatCtx, ag)
-		ep := agent.NewEmotionParser()
+		bp := agent.NewBehaviorParser()
 		for result := range ch {
 			if result.Err != nil {
 				// Ignore context cancellation — user triggered StopGeneration; frontend handles UI.
@@ -126,7 +126,7 @@ func (a *App) streamChat(start func(context.Context, *agent.Agent) <-chan agent.
 				return
 			}
 			if result.Done {
-				if tail := ep.Flush(); tail != "" {
+				if tail := bp.Flush(); tail != "" {
 					wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
 				}
 				wailsruntime.EventsEmit(a.ctx, "chat:done", "")
@@ -139,18 +139,18 @@ func (a *App) streamChat(start func(context.Context, *agent.Agent) <-chan agent.
 			if len(result.Images) > 0 {
 				wailsruntime.EventsEmit(a.ctx, "chat:image", result.Images)
 			}
-			text, emotion, intensity := ep.Feed(result.Token)
+			text, emotion, action := bp.Feed(result.Token)
 			if emotion != "" {
-				wailsruntime.EventsEmit(a.ctx, "chat:emotion", map[string]any{
-					"emotion":   emotion,
-					"intensity": intensity,
+				wailsruntime.EventsEmit(a.ctx, "chat:behavior", map[string]any{
+					"emotion": emotion,
+					"action":  action,
 				})
 			}
 			if text != "" {
 				wailsruntime.EventsEmit(a.ctx, "chat:token", text)
 			}
 		}
-		if tail := ep.Flush(); tail != "" {
+		if tail := bp.Flush(); tail != "" {
 			wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
 		}
 		wailsruntime.EventsEmit(a.ctx, "chat:done", "")
