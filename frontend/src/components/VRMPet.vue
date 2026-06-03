@@ -31,7 +31,7 @@ import {
 } from "../../wailsjs/go/main/App";
 import { EventsEmit, EventsOn, Quit } from "../../wailsjs/runtime/runtime";
 import { debounce } from "../utils/timing.js";
-import { useEmotionEvents } from "../composables/useEmotionEvents.js";
+import { useBehaviorEvents } from "../composables/useBehaviorEvents.js";
 import { usePetState } from "../composables/usePetState.js";
 import { useVRMModel } from "../composables/useVRMModel.js";
 import { ICON_POWER, ICON_SETTING, ICON_SHIRT, ICON_POMODORO, ICON_CPU, ICON_CLAUDE_CODE } from "../utils/icons";
@@ -74,6 +74,11 @@ let targetHeadY = 0;
 const targetEmotionWeights = {};
 const currentEmotionWeights = {};
 
+// VRM canvas is square but the model head sits ~35% down from the top.
+// Shift the reported Y down so ChatBubble attaches near the actual head, not the canvas top.
+const VRM_HEAD_CANVAS_OFFSET = 0.35;
+
+// LLM emotion → VRM blendshape name
 const EMOTION_MAP = {
   joy: "happy",
   sad: "sad",
@@ -81,9 +86,21 @@ const EMOTION_MAP = {
   angry: "angry",
 };
 
-// VRM canvas is square but the model head sits ~35% down from the top.
-// Shift the reported Y down so ChatBubble attaches near the actual head, not the canvas top.
-const VRM_HEAD_CANVAS_OFFSET = 0.35;
+// LLM emotion → sustained animation (applies to ALL pet states, loop)
+const EMOTION_ANIMS = {
+  joy: "/vrm/celebrate.vrma",
+  sad: "/vrm/sad.vrma",
+  surprised: "/vrm/surprised_react.vrma",
+  angry: "/vrm/angry.vrma",
+};
+
+// LLM action → one-shot animation (plays once, then returns to current animation)
+const ACTION_ANIMS = {
+  wave: "/vrm/wave_big.vrma",
+  nod: "/vrm/nod.vrma",
+  celebrate: "/vrm/celebrate.vrma",
+  surprised_react: "/vrm/surprised_react.vrma",
+};
 
 watch(pos, (p) => {
   if (p)
@@ -97,22 +114,21 @@ function setState(state) {
   mouthPhase = 0;
   switch (state) {
     case "idle":
-      Object.keys(targetEmotionWeights).forEach((k) => {
-        targetEmotionWeights[k] = 0;
-      });
-      break;
-    case "listening":
+      // Clear emotion state — pet returns to neutral waiting.
+      _activeEmotion = null;
       Object.keys(targetEmotionWeights).forEach((k) => {
         targetEmotionWeights[k] = 0;
       });
       break;
     case "error":
+      // Error always overrides with sad expression.
+      _activeEmotion = null;
       Object.keys(targetEmotionWeights).forEach((k) => {
         targetEmotionWeights[k] = 0;
       });
       targetEmotionWeights["sad"] = 0.6;
       break;
-    // thinking and speaking: keep current emotion, speaking drives mouth anim
+    // thinking, speaking, listening: keep active emotion if set.
   }
 }
 
@@ -126,19 +142,51 @@ function focusGlobal(mx, my) {
   targetHeadY = Math.max(-0.5, Math.min(0.5, (my - cy) / (rect.height * 1.5)));
 }
 
-/** applyEmotion sets blendshape targets and records emotion for speaking animation. */
-function applyEmotion({ emotion, intensity }) {
-  const mapped = EMOTION_MAP[emotion];
+/**
+ * applyBehavior handles a chat:behavior event.
+ * 1. If action is set → play one-shot animation, then return to sustained/fallback.
+ * 2. If emotion ≠ neutral → set blendshape + switch sustained animation.
+ * 3. If emotion = neutral → clear blendshape, return to petState fallback.
+ */
+function applyBehavior({ emotion, action }) {
+  // Reset blendshape targets.
   Object.keys(targetEmotionWeights).forEach((k) => {
     targetEmotionWeights[k] = 0;
   });
-  if (mapped)
-    targetEmotionWeights[mapped] = Math.max(0, Math.min(1, intensity));
-  // Store for speaking animation override; clear on low intensity.
-  _speakingEmotion =
-    intensity >= 0.4 && EMOTION_SPEAKING_ANIMS[emotion] ? emotion : null;
-  // If already speaking, switch animation immediately.
-  if (petState.value === "speaking") applyStateAnimation("speaking");
+
+  // 1. One-shot action — plays once, then auto-returns to sustained/fallback.
+  if (action && ACTION_ANIMS[action]) {
+    playAnimation(ACTION_ANIMS[action], { loop: false, fadeTime: 0.3 }).then(() => {
+      // After action completes, apply sustained animation.
+      _applySustainedAnimation(emotion);
+    });
+    return;
+  }
+
+  // 2. No action — apply sustained animation directly.
+  _applySustainedAnimation(emotion);
+}
+
+/** _applySustainedAnimation sets blendshape and sustained animation for the given emotion. */
+function _applySustainedAnimation(emotion) {
+  if (emotion === "neutral" || !emotion) {
+    _activeEmotion = null;
+    applyStateAnimation(petState.value);
+    return;
+  }
+
+  const mapped = EMOTION_MAP[emotion];
+  if (mapped) {
+    targetEmotionWeights[mapped] = 0.7;
+  }
+
+  _activeEmotion = emotion;
+  const animFile = EMOTION_ANIMS[emotion];
+  if (animFile) {
+    playAnimation(animFile, { loop: true, fadeTime: 0.4 });
+  } else {
+    applyStateAnimation(petState.value);
+  }
 }
 
 /** setSize resizes the renderer to n×n pixels. */
@@ -149,7 +197,7 @@ function setSize(n) {
   emit("ball-size", n);
 }
 
-defineExpose({ setState, focusGlobal, applyEmotion, setSize });
+defineExpose({ setState, focusGlobal, applyBehavior, setSize });
 
 // ── Render Loop Sub-Systems ──────────────────────────────────────────────────
 
@@ -217,14 +265,6 @@ const STATE_ANIMS = {
   error: "/vrm/embarrassed.vrma",
 };
 
-// LLM emotion → speaking animation override (fired via chat:emotion)
-const EMOTION_SPEAKING_ANIMS = {
-  joy: "/vrm/celebrate.vrma",
-  sad: "/vrm/sad.vrma",
-  angry: "/vrm/angry.vrma",
-  surprised: "/vrm/surprised_react.vrma",
-};
-
 // Idle variety pool — randomly shown every 60–120s then returns to waiting
 const IDLE_VARIETY_POOL = [
   "/vrm/sleepy.vrma",
@@ -237,7 +277,7 @@ const IDLE_GESTURES = [
   "/vrm/wave_big.vrma",
 ];
 
-let _speakingEmotion = null; // last emotion received, used on speaking state entry
+let _activeEmotion = null; // current sustained emotion (null when neutral/idle-cleared)
 let _idleVarietyTimer = null;
 /** _pendingTimers tracks inner setTimeout IDs so they can be cleared on unmount. */
 const _pendingTimers = [];
@@ -300,18 +340,32 @@ async function initAnimationSystem(v) {
   }, 3000));
 }
 
-/** applyStateAnimation switches to the animation for the given petState. */
+/**
+ * applyStateAnimation switches to the fallback animation for the given petState.
+ * If an active emotion is set, the emotion animation takes priority over the
+ * state fallback (except for error, which always forces its animation).
+ */
 async function applyStateAnimation(state) {
-  if (state === "speaking") {
-    const file =
-      EMOTION_SPEAKING_ANIMS[_speakingEmotion] ?? STATE_ANIMS.speaking;
-    await playAnimation(file, { fadeTime: 0.4 });
-  } else {
-    const file = STATE_ANIMS[state];
-    if (file) await playAnimation(file, { fadeTime: 0.5 });
+  // Error always takes priority.
+  if (state === "error") {
+    await playAnimation(STATE_ANIMS.error, { fadeTime: 0.5 });
+    return;
   }
-  // Reset emotion override when leaving speaking state.
-  if (state !== "speaking") _speakingEmotion = null;
+
+  // Active emotion overrides state fallback.
+  if (_activeEmotion && EMOTION_ANIMS[_activeEmotion]) {
+    await playAnimation(EMOTION_ANIMS[_activeEmotion], { loop: true, fadeTime: 0.4 });
+    return;
+  }
+
+  // Speaking with no emotion: hand_talk + mouth blendshape.
+  if (state === "speaking") {
+    await playAnimation(STATE_ANIMS.speaking, { fadeTime: 0.4 });
+    return;
+  }
+
+  const file = STATE_ANIMS[state];
+  if (file) await playAnimation(file, { fadeTime: 0.5 });
 }
 
 /**
@@ -621,9 +675,9 @@ function startGlobalMouseTracking() {
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 
-// Subscribe to emotion events — forwarded to applyEmotion.
-useEmotionEvents(({ emotion, intensity }) =>
-  applyEmotion({ emotion, intensity }),
+// Subscribe to behavior events — forwarded to applyBehavior.
+useBehaviorEvents(({ emotion, action }) =>
+  applyBehavior({ emotion, action }),
 );
 
 // Hot-reload VRM when model URL changes.
