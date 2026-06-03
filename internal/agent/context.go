@@ -249,7 +249,7 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userIma
 		}
 		// Strip the leading emotion tag before persisting so it never appears in
 		// chat history or long-term memory.
-		if _, _, stripped, ok := parseEmotionTag(assistantReply); ok {
+		if _, _, stripped, ok := parseBehaviorTag(assistantReply); ok {
 			assistantReply = stripped
 		}
 		assistantReply = collapseBlankLines(assistantReply)

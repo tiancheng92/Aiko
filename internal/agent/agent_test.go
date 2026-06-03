@@ -80,74 +80,74 @@ func TestStreamResult_TokenCarriesText(t *testing.T) {
 	}
 }
 
-// TestEmotionParser_PlainText verifies that plain text without emotion tags
+// TestBehaviorParser_PlainText verifies that plain text without behavior tags
 // passes through as-is with no emotion set. The parser buffers short leading
 // text to check for a tag prefix; once flushed at stream end the full text is returned.
-func TestEmotionParser_PlainText(t *testing.T) {
-	ep := agent.NewEmotionParser()
+func TestBehaviorParser_PlainText(t *testing.T) {
+	bp := agent.NewBehaviorParser()
 	// Feed a short plain token — may be buffered pending tag detection.
-	_, emotion, _ := ep.Feed("hello world")
+	_, emotion, _ := bp.Feed("hello world")
 	if emotion != "" {
 		t.Errorf("expected empty emotion, got %q", emotion)
 	}
 	// Flush must return any remaining buffered content.
-	tail := ep.Flush()
+	tail := bp.Flush()
 	if tail != "hello world" {
 		t.Errorf("Flush: expected %q, got %q", "hello world", tail)
 	}
 }
 
-// TestEmotionParser_ExtractsEmotion verifies that a well-formed emotion tag
-// is stripped from the text output and returned as a separate emotion/intensity.
-func TestEmotionParser_ExtractsEmotion(t *testing.T) {
-	ep := agent.NewEmotionParser()
-	text, emotion, intensity := ep.Feed("[情绪:joy/0.8]\n你好！")
-	if strings.Contains(text, "情绪") {
-		t.Errorf("emotion tag leaked into text: %q", text)
+// TestBehaviorParser_ExtractsBehavior verifies that a well-formed behavior tag
+// is stripped from the text output and returned as separate emotion/action.
+func TestBehaviorParser_ExtractsBehavior(t *testing.T) {
+	bp := agent.NewBehaviorParser()
+	text, emotion, action := bp.Feed("[表现:joy,动作:wave]\n你好！")
+	if strings.Contains(text, "表现") {
+		t.Errorf("behavior tag leaked into text: %q", text)
 	}
 	if emotion != "joy" {
 		t.Errorf("expected emotion %q, got %q", "joy", emotion)
 	}
-	if intensity < 0.7 || intensity > 0.9 {
-		t.Errorf("expected intensity ~0.8, got %f", intensity)
+	if action != "wave" {
+		t.Errorf("expected action %q, got %q", "wave", action)
 	}
 }
 
-// TestEmotionParser_FlushReturnsRemainder verifies that Flush returns any
+// TestBehaviorParser_FlushReturnsRemainder verifies that Flush returns any
 // buffered text that hadn't been emitted yet and does not panic.
-func TestEmotionParser_FlushReturnsRemainder(t *testing.T) {
-	ep := agent.NewEmotionParser()
-	text, _, _ := ep.Feed("[情绪:joy") // partial tag — must be buffered
+func TestBehaviorParser_FlushReturnsRemainder(t *testing.T) {
+	bp := agent.NewBehaviorParser()
+	text, _, _ := bp.Feed("[表现:joy") // partial tag — must be buffered
 	if text != "" {
 		t.Errorf("partial tag should be buffered, not emitted: got %q", text)
 	}
-	tail := ep.Flush()
-	if tail != "[情绪:joy" {
-		t.Errorf("Flush: got %q, want %q", tail, "[情绪:joy")
+	tail := bp.Flush()
+	if tail != "[表现:joy" {
+		t.Errorf("Flush: got %q, want %q", tail, "[表现:joy")
 	}
 }
 
-// TestEmotionParser_FlushOnEmptyIsNoOp verifies that Flush on a fresh parser
+// TestBehaviorParser_FlushOnEmptyIsNoOp verifies that Flush on a fresh parser
 // returns an empty string without panicking.
-func TestEmotionParser_FlushOnEmptyIsNoOp(t *testing.T) {
-	ep := agent.NewEmotionParser()
-	tail := ep.Flush()
+func TestBehaviorParser_FlushOnEmptyIsNoOp(t *testing.T) {
+	bp := agent.NewBehaviorParser()
+	tail := bp.Flush()
 	if tail != "" {
 		t.Errorf("Flush on empty parser should return empty string, got %q", tail)
 	}
 }
 
-// TestEmotionParser_MultipleTokensNoTag verifies that multiple tokens without
-// any emotion tag all pass through as text.
-func TestEmotionParser_MultipleTokensNoTag(t *testing.T) {
-	ep := agent.NewEmotionParser()
+// TestBehaviorParser_MultipleTokensNoTag verifies that multiple tokens without
+// any behavior tag all pass through as text.
+func TestBehaviorParser_MultipleTokensNoTag(t *testing.T) {
+	bp := agent.NewBehaviorParser()
 	words := []string{"the ", "quick ", "brown ", "fox"}
 	var collected strings.Builder
 	for _, w := range words {
-		text, _, _ := ep.Feed(w)
+		text, _, _ := bp.Feed(w)
 		collected.WriteString(text)
 	}
-	collected.WriteString(ep.Flush())
+	collected.WriteString(bp.Flush())
 	if collected.String() != "the quick brown fox" {
 		t.Errorf("expected full text, got %q", collected.String())
 	}

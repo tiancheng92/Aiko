@@ -153,7 +153,7 @@ func (a *Agent) Chat(ctx context.Context, userInput string, opts ChatOptions) <-
 				return
 			}
 			flushed = true
-			if _, _, stripped, ok := parseEmotionTag(assistantSummary); ok {
+			if _, _, stripped, ok := parseBehaviorTag(assistantSummary); ok {
 				assistantSummary = stripped
 			}
 			if _, err := a.shortMem.AddWithImagesAndFiles("user", userInput, nil, nil); err != nil {
@@ -320,7 +320,7 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message, opts C
 			if _, err := a.shortMem.AddWithImagesAndFiles("user", userMemory, userImages, userFiles); err != nil {
 				log.Warn().Err(err).Msg("short memory: add user message")
 			}
-			if _, _, stripped, ok := parseEmotionTag(assistantSummary); ok {
+			if _, _, stripped, ok := parseBehaviorTag(assistantSummary); ok {
 				assistantSummary = stripped
 			}
 			assistantSummary = collapseBlankLines(assistantSummary)
