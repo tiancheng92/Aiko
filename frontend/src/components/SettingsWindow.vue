@@ -93,7 +93,6 @@ const cfg = ref({
   Language: '',
   ClaudeCodeEnabled: false,
   ClaudeCodePort: 9876,
-  ClaudeCodeNotificationSecs: 15,
 })
 const availableVRMModels = ref([])
 const { availableModels, loadModels } = useModelPath()
@@ -131,7 +130,52 @@ const claudeCodeHookSnippet = computed(() => {
           url: `http://127.0.0.1:${port}/event`
         }]
       }],
+
+      PostToolUse: [{
+        matcher: "",
+        hooks: [{
+          type: "http",
+          url: `http://127.0.0.1:${port}/event`
+        }]
+      }],
+      PostToolUseFailure: [{
+        matcher: "",
+        hooks: [{
+          type: "http",
+          url: `http://127.0.0.1:${port}/event`
+        }]
+      }],
       PermissionRequest: [{
+        matcher: "",
+        hooks: [{
+          type: "http",
+          url: `http://127.0.0.1:${port}/event`
+        }]
+      }],
+      PermissionDenied: [{
+        matcher: "",
+        hooks: [{
+          type: "http",
+          url: `http://127.0.0.1:${port}/event`
+        }],
+      PreCompact: [{
+        matcher: "",
+        hooks: [{
+          type: "http",
+          url: `http://127.0.0.1:${port}/event`
+        }]
+      }],
+      PostCompact: [{
+        matcher: "",
+        hooks: [{
+          type: "http",
+          url: `http://127.0.0.1:${port}/event`
+        }]
+      }],
+
+      }],
+
+      Notification: [{
         matcher: "",
         hooks: [{
           type: "http",
@@ -146,6 +190,20 @@ const claudeCodeHookSnippet = computed(() => {
         }]
       }],
       StopFailure: [{
+        matcher: "",
+        hooks: [{
+          type: "http",
+          url: `http://127.0.0.1:${port}/event`
+        }]
+      }],
+      SubagentStart: [{
+        matcher: "",
+        hooks: [{
+          type: "http",
+          url: `http://127.0.0.1:${port}/event`
+        }]
+      }],
+      SubagentStop: [{
         matcher: "",
         hooks: [{
           type: "http",
@@ -2434,23 +2492,6 @@ watch(automationSubTab, v => { if (v === 'proactive') loadProactiveItems() })
                   v-model.number="cfg.ClaudeCodePort"
                   :disabled="!cfg.ClaudeCodeEnabled"
                   min="1024" max="65535"
-                  @change="debouncedSaveFlush"
-                />
-              </div>
-            </div>
-            <div class="settings-row">
-              <div class="row-body">
-                <div class="row-title">{{ $t('claudeCode.notificationSecs') }}</div>
-                <div class="row-desc">{{ $t('claudeCode.notificationSecsDesc') }}</div>
-              </div>
-              <div class="row-ctrl">
-                <input
-                  type="number"
-                  class="vrm-input"
-                  style="width:80px"
-                  v-model.number="cfg.ClaudeCodeNotificationSecs"
-                  :disabled="!cfg.ClaudeCodeEnabled"
-                  min="5" max="120"
                   @change="debouncedSaveFlush"
                 />
               </div>

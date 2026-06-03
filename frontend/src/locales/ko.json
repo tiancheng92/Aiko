@@ -646,9 +646,12 @@
       "webFetch": "가져오기",
       "webSearch": "검색"
     },
-    "elapsedTime": "경과",
+    "stale": "중단?",
+    "compact": "압축중",
+    "elapsedTime": "경과: ",
     "toolCallCount": "도구 호출",
-    "currentTool": "현재 도구"
+    "currentTool": "현재 도구",
+    "toolCountLabel": "도구: "
   },
   "common": {
     "close": "닫기"

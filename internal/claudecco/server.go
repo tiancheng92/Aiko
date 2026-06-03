@@ -31,17 +31,27 @@ type hookInput struct {
 	ToolName       string `json:"tool_name,omitempty"`
 	ToolInput      any    `json:"tool_input,omitempty"`
 	ErrorType      string `json:"error_type,omitempty"`
-	Prompt         string `json:"prompt,omitempty"` // UserPromptSubmit
+	Prompt         string `json:"prompt,omitempty"`  // UserPromptSubmit
+	Message        string `json:"message,omitempty"` // Notification
+			NotificationType string `json:"notification_type,omitempty"` // Notification type
+			Title            string `json:"title,omitempty"`             // Notification title
+	AgentID        string `json:"agent_id,omitempty"`
+	AgentType      string `json:"agent_type,omitempty"`
 }
 
-// sessionInfo tracks per-session state keyed by session_id.
+// sessionInfo tracks per-session state keyed by session_id (or session_id/agent_id for subagents).
 type sessionInfo struct {
 	Name               string    // display name
 	CWD                string    // working directory
 	ParentID           string    // non-empty when this is a subagent; set to the parent session_id
 	hasTranscriptTitle bool      // true once Name was set from transcript ai-title/rename
-	state              string    // "thinking" | "idle" | "error"
-	idleSince          time.Time // when the session last went idle
+	lastAgentPrompt    string    // cached from parent's PreToolUse for Agent tool
+	state            string    // "thinking" | "idle" | "error" | "compact"
+	idleSince        time.Time // when the session last went idle
+	preCompactState  string    // state before compaction, restored on PostCompact
+	toolOk               *bool     // last tool result: true=success, false=failure, nil=no result yet
+	lastNotification     string    // most recent Notification message
+	lastNotificationType string    // most recent Notification type
 }
 
 const idleRetention = 5 * time.Minute
@@ -51,8 +61,7 @@ type Emitter func(event string, data any)
 
 // Config provides the current Claude Code settings.
 type Config struct {
-	Port             int
-	NotificationSecs int
+	Port int
 }
 
 // Server listens for Claude Code hook HTTP requests and emits pet state events.
@@ -121,6 +130,7 @@ func (s *Server) Stop() {
 func (s *Server) UpdateConfig(cfg Config) error {
 	s.mu.Lock()
 	s.cfg = cfg
+
 	s.mu.Unlock()
 	if s.srv != nil {
 		return s.Start()
@@ -168,8 +178,21 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 
 	case "SessionEnd":
 		s.markAllIdle()
+		s.emitStatus(si, &input)
 
-	case "SessionStart", "PreToolUse", "PermissionRequest":
+		case "PermissionDenied":
+			s.updateSessionState(si, "idle")
+			s.emitStatus(si, &input)
+
+	case "SessionStart", "PermissionRequest":
+		s.updateSessionState(si, "thinking")
+		s.emitStatus(si, &input)
+
+	case "PreToolUse":
+		// Cache Agent tool prompt on parent session for subagent naming.
+		if input.AgentID == "" && input.ToolName == "Agent" && input.ToolInput != nil {
+			s.cacheAgentPrompt(input.SessionID, input.ToolInput)
+		}
 		s.updateSessionState(si, "thinking")
 		s.emitStatus(si, &input)
 
@@ -187,8 +210,76 @@ func (s *Server) handleEvent(w http.ResponseWriter, r *http.Request) {
 		s.updateSessionState(si, "error")
 		s.emitStatus(si, &input)
 
+	case "SubagentStart":
+		s.updateSessionState(si, "thinking")
+		s.emitStatus(si, &input)
+
+	case "SubagentStop":
+		s.updateSessionState(si, "idle")
+		s.emitStatus(si, &input)
+
+	case "PostToolUse":
+		s.mu.Lock()
+		ok := true
+		si.toolOk = &ok
+		s.mu.Unlock()
+		s.emitStatus(si, &input)
+
+	case "PostToolUseFailure":
+		s.mu.Lock()
+		ok := false
+		si.toolOk = &ok
+		s.mu.Unlock()
+		s.emitStatus(si, &input)
+
+	case "Notification":
+		s.mu.Lock()
+		si.lastNotification = input.Message
+		si.lastNotificationType = input.NotificationType
+		s.mu.Unlock()
+		s.emitStatus(si, &input)
+
+	case "PreCompact":
+		s.mu.Lock()
+		// PreCompact may carry agent_id when triggered inside a subagent;
+		// always update the root session (session_id alone), not a subagent entry.
+		if root, ok := s.sessions[input.SessionID]; ok {
+			root.preCompactState = root.state
+			root.state = "compact"
+			si = root
+		} else {
+			si.preCompactState = si.state
+			si.state = "compact"
+		}
+		s.mu.Unlock()
+		s.emitStatus(si, &input)
+
+	case "PostCompact":
+		s.mu.Lock()
+		// A compacted session is done — mark it and all its subagents idle.
+		if root, ok := s.sessions[input.SessionID]; ok {
+			root.state = "idle"
+			root.idleSince = time.Now()
+			root.preCompactState = ""
+			si = root
+		} else {
+			si.state = "idle"
+			si.idleSince = time.Now()
+			si.preCompactState = ""
+		}
+		// Also idle all subagents belonging to this session.
+		for key, ses := range s.sessions {
+			if ses.ParentID == input.SessionID {
+				ses.state = "idle"
+				ses.idleSince = time.Now()
+				_ = key
+			}
+		}
+		s.mu.Unlock()
+		s.emitStatus(si, &input)
+
 	default:
-		log.Debug().Str("hook_event_name", input.HookEventName).Msg("claudecco: ignored event")
+		log.Info().Str("hook_event_name", input.HookEventName).Msg("claudecco: unhandled event")
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -204,41 +295,68 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 // ── session helpers ──
 
+// sessionKey returns the map key for a hook input: session_id for root sessions,
+// session_id/agent_id for subagent sessions.
+func sessionKey(input *hookInput) string {
+	if input.AgentID != "" {
+		return input.SessionID + "/" + input.AgentID
+	}
+	return input.SessionID
+}
+
 func (s *Server) ensureSession(input *hookInput) *sessionInfo {
+	key := sessionKey(input)
 	s.mu.Lock()
-	si, ok := s.sessions[input.SessionID]
+	si, ok := s.sessions[key]
+
 	s.mu.Unlock()
 	if ok {
 		return si
 	}
 
-	// Primary source: JSONL transcript (catches resumed sessions with existing titles).
-	// Read title outside the lock — it performs filesystem I/O and should not block other sessions.
+	// Subagent: use agent_id or parent's Agent tool prompt as name; skip transcript I/O.
 	name := ""
-	if input.TranscriptPath != "" {
-		if t := readTranscriptTitle(input.TranscriptPath); t != "" {
-			name = t
+	parentID := ""
+	if input.AgentID != "" {
+		parentID = input.SessionID
+		// Try cached prompt from parent session.
+		s.mu.Lock()
+		if p, ok := s.sessions[input.SessionID]; ok && p.lastAgentPrompt != "" {
+			name = p.lastAgentPrompt
 		}
-	}
-	// Fallback 1: cwd directory name.
-	if name == "" {
-		name = filepath.Base(input.CWD)
-		if name == "" || name == "." || name == "/" {
-			name = "session"
+		s.mu.Unlock()
+		if name == "" {
+			name = input.AgentType
+		}
+		if name == "" {
+			name = "subagent"
+		}
+	} else {
+		// Root session: read transcript title.
+		if input.TranscriptPath != "" {
+			if t := readTranscriptTitle(input.TranscriptPath); t != "" {
+				name = t
+			}
+		}
+		if name == "" {
+			name = filepath.Base(input.CWD)
+			if name == "" || name == "." || name == "/" {
+				name = "session"
+			}
 		}
 	}
 
-	hasTitle := name != "" && name != filepath.Base(input.CWD) && name != "session"
-	parentID := parentSessionID(input.TranscriptPath)
+	hasTitle := name != "" && name != filepath.Base(input.CWD) && name != "session" && name != input.AgentType
 
 	s.mu.Lock()
-	// Double-check: another goroutine may have created it while we read the transcript.
-	if si, ok = s.sessions[input.SessionID]; ok {
+	// Double-check: another goroutine may have created it while we built the name.
+	if si, ok = s.sessions[key]; ok {
 		s.mu.Unlock()
 		return si
 	}
 	si = &sessionInfo{Name: name, CWD: input.CWD, ParentID: parentID, hasTranscriptTitle: hasTitle}
-	s.sessions[input.SessionID] = si
+	s.sessions[key] = si
+
 	s.mu.Unlock()
 	return si
 }
@@ -250,6 +368,7 @@ func (s *Server) updateSessionState(si *sessionInfo, state string) {
 		si.idleSince = time.Now()
 	}
 	si.state = state
+
 	s.mu.Unlock()
 }
 
@@ -261,44 +380,8 @@ func (s *Server) markAllIdle() {
 		si.state = "idle"
 		si.idleSince = now
 	}
+
 	s.mu.Unlock()
-}
-
-// aggregateState returns the highest-priority state across all sessions.
-func (s *Server) aggregateState() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var hasError bool
-	for _, si := range s.sessions {
-		if si.state == "thinking" {
-			return "thinking"
-		}
-		if si.state == "error" {
-			hasError = true
-		}
-	}
-	if hasError {
-		return "error"
-	}
-	return "idle"
-}
-
-// aggregateStateLocked is the locked variant (caller holds s.mu). Not used
-// outside of this file — kept for potential internal use.
-func (s *Server) aggregateStateLocked() string {
-	var hasError bool
-	for _, si := range s.sessions {
-		if si.state == "thinking" {
-			return "thinking"
-		}
-		if si.state == "error" {
-			hasError = true
-		}
-	}
-	if hasError {
-		return "error"
-	}
-	return "idle"
 }
 
 func (s *Server) setSessionNameFromPrompt(si *sessionInfo, input *hookInput) {
@@ -311,9 +394,6 @@ func (s *Server) setSessionNameFromPrompt(si *sessionInfo, input *hookInput) {
 	}
 	if name == "" {
 		return
-	}
-	if len([]rune(name)) > 40 {
-		name = string([]rune(name)[:40]) + "…"
 	}
 
 	s.mu.Lock()
@@ -335,13 +415,45 @@ func (s *Server) refreshSessionTitle(si *sessionInfo, input *hookInput) {
 	s.mu.Lock()
 	si.Name = title
 	si.hasTranscriptTitle = true
+
+	s.mu.Unlock()
+}
+
+// cacheAgentPrompt extracts the prompt from an Agent tool's tool_input and
+// caches it on the parent session so that SubagentStart can use it as the
+// subagent display name.
+func (s *Server) cacheAgentPrompt(sessionID string, toolInput any) {
+	var prompt string
+	switch v := toolInput.(type) {
+	case map[string]interface{}:
+		if p, ok := v["prompt"].(string); ok && p != "" {
+			prompt = p
+		} else if d, ok := v["description"].(string); ok && d != "" {
+			prompt = d
+		}
+	case string:
+		prompt = v
+	}
+	if prompt == "" {
+		return
+	}
+	name := strings.TrimSpace(prompt)
+	if idx := strings.IndexByte(name, '\n'); idx >= 0 {
+		name = strings.TrimSpace(name[:idx])
+	}
+
+	s.mu.Lock()
+	if si, ok := s.sessions[sessionID]; ok {
+		si.lastAgentPrompt = name
+	}
+
 	s.mu.Unlock()
 }
 
 // ── status emission ──
 
 // stateOrder maps state strings to sort priority (lower = higher priority).
-var stateOrder = map[string]int{"thinking": 0, "error": 1, "idle": 2}
+var stateOrder = map[string]int{"thinking": 0, "compact": 0, "error": 1, "idle": 2}
 
 type sessionSnapshot struct {
 	ID            string `json:"id"`
@@ -352,6 +464,9 @@ type sessionSnapshot struct {
 	ToolName      string `json:"toolName,omitempty"`
 	HookEventName string `json:"hookEventName,omitempty"`
 	ToolInput     string `json:"toolInput,omitempty"`
+	ToolOk           *bool  `json:"toolOk,omitempty"`           // last tool result
+	Notification     string `json:"notification,omitempty"`     // most recent Notification message
+	NotificationType string `json:"notificationType,omitempty"` // Notification type
 }
 
 func (s *Server) emitStatus(si *sessionInfo, input *hookInput) {
@@ -361,20 +476,15 @@ func (s *Server) emitStatus(si *sessionInfo, input *hookInput) {
 	hasActive := false
 	for id, ses := range s.sessions {
 		switch ses.state {
-		case "thinking", "error":
+		case "thinking", "error", "compact":
 			hasActive = true
-			snap := sessionSnapshot{ID: id, Name: ses.Name, CWD: ses.CWD, ParentID: ses.ParentID, State: ses.state}
-			if id == input.SessionID {
+			snap := sessionSnapshot{ID: id, Name: ses.Name, CWD: ses.CWD, ParentID: ses.ParentID, State: ses.state, ToolOk: ses.toolOk, Notification: ses.lastNotification, NotificationType: ses.lastNotificationType}
+			if id == sessionKey(input) {
 				snap.ToolName = input.ToolName
 				snap.HookEventName = input.HookEventName
 				if input.ToolInput != nil {
 					if b, err := json.Marshal(input.ToolInput); err == nil {
-						inputStr := string(b)
-						runes := []rune(inputStr)
-						if len(runes) > 120 {
-							inputStr = string(runes[:120]) + "…"
-						}
-						snap.ToolInput = inputStr
+						snap.ToolInput = string(b)
 					}
 				}
 			}
@@ -382,17 +492,26 @@ func (s *Server) emitStatus(si *sessionInfo, input *hookInput) {
 		case "idle":
 			// Keep idle sessions visible for 5 minutes; prune older entries.
 			if now.Sub(ses.idleSince) < idleRetention {
-				snap := sessionSnapshot{ID: id, Name: ses.Name, CWD: ses.CWD, ParentID: ses.ParentID, State: "idle"}
+				snap := sessionSnapshot{ID: id, Name: ses.Name, CWD: ses.CWD, ParentID: ses.ParentID, State: "idle", ToolOk: ses.toolOk, Notification: ses.lastNotification, NotificationType: ses.lastNotificationType}
 				active = append(active, snap)
 			} else {
 				delete(s.sessions, id)
 			}
 		}
+		// Prune orphaned children whose parent no longer exists.
+		for oid, oses := range s.sessions {
+			if oses.ParentID != "" {
+				if _, ok := s.sessions[oses.ParentID]; !ok {
+					delete(s.sessions, oid)
+				}
+			}
+		}
+
 	}
 	// If nothing active at all, show the triggering session as idle.
 	if !hasActive && len(active) == 0 {
 		active = append(active, sessionSnapshot{
-			ID:            input.SessionID,
+			ID:            sessionKey(input),
 			Name:          si.Name,
 			CWD:           si.CWD,
 			ParentID:      si.ParentID,
@@ -413,24 +532,17 @@ func (s *Server) emitStatus(si *sessionInfo, input *hookInput) {
 		return a.Name < b.Name
 	})
 
-	s.mu.Unlock()
+
+		si.lastNotification = ""
+		si.lastNotificationType = ""
+
+		s.mu.Unlock()
 
 	s.emit("claudecco:status", map[string]any{"sessions": active})
 }
 
 // ── transcript reading ──
 
-// parentSessionID extracts the parent session ID from a subagent transcript path.
-// Subagent paths follow the pattern: .../projects/<proj>/<parentID>/subagents/agent-*.jsonl
-// Returns empty string for root session transcripts.
-func parentSessionID(transcriptPath string) string {
-	const marker = "/subagents/"
-	idx := strings.LastIndex(transcriptPath, marker)
-	if idx < 0 {
-		return ""
-	}
-	return filepath.Base(transcriptPath[:idx])
-}
 
 func readTranscriptTitle(path string) string {
 	f, err := os.Open(path)
@@ -548,13 +660,7 @@ func readHeadUserMessage(f *os.File) string {
 	return ""
 }
 
-// truncateTitle truncates a title to 40 runes and appends "…" if needed.
+// truncateTitle returns the title as-is (visual truncation is handled by the frontend CSS).
 func truncateTitle(title string) string {
-	if title == "" {
-		return ""
-	}
-	if len([]rune(title)) > 40 {
-		title = string([]rune(title)[:40]) + "…"
-	}
 	return title
 }

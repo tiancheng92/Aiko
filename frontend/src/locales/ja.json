@@ -646,9 +646,12 @@
       "webFetch": "取得",
       "webSearch": "検索"
     },
-    "elapsedTime": "経過",
+    "stale": "中断?",
+    "compact": "圧縮中",
+    "elapsedTime": "経過: ",
     "toolCallCount": "ツール呼出",
-    "currentTool": "現在のツール"
+    "currentTool": "現在のツール",
+    "toolCountLabel": "ツール: "
   },
   "common": {
     "close": "閉じる"

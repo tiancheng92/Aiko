@@ -697,7 +697,7 @@ function onSettingsLeave(el, done) {
         @close="closePomodoro"
       />
       <ClaudeStatusPanel
-        v-if="claudePanelOpen"
+        v-show="claudePanelOpen"
         ref="claudePanelRef"
         @close="closeClaudePanel"
       />

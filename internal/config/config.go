@@ -80,9 +80,6 @@ type Config struct {
 	// ClaudeCodePort is the TCP port for the Claude Code hook HTTP server.
 	// Default 9876. Only effective when ClaudeCodeEnabled is true.
 	ClaudeCodePort int
-	// ClaudeCodeNotificationSecs controls how long (in seconds) the
-	// Claude Code notification bubble stays visible. Default 15.
-	ClaudeCodeNotificationSecs int
 }
 
 // Store provides persistent read/write access to application configuration in SQLite.
@@ -169,7 +166,6 @@ func (s *Store) Load() (*Config, error) {
 	cfg.Language = m["language"]
 	cfg.ClaudeCodeEnabled = m["ClaudeCodeEnabled"] == "true"
 	cfg.ClaudeCodePort = parseInt(m["ClaudeCodePort"], 9876)
-	cfg.ClaudeCodeNotificationSecs = parseInt(m["ClaudeCodeNotificationSecs"], 15)
 	return cfg, nil
 }
 
@@ -224,7 +220,6 @@ func (s *Store) Save(cfg *Config) error {
 		"language":                          cfg.Language,
 		"ClaudeCodeEnabled":            strconv.FormatBool(cfg.ClaudeCodeEnabled),
 		"ClaudeCodePort":               strconv.Itoa(cfg.ClaudeCodePort),
-		"ClaudeCodeNotificationSecs":  strconv.Itoa(cfg.ClaudeCodeNotificationSecs),
 	}
 	tx, err := s.db.Begin()
 	if err != nil {

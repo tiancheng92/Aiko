@@ -646,9 +646,12 @@
       "webFetch": "Fetch",
       "webSearch": "Search"
     },
-    "elapsedTime": "took",
+    "stale": "Stalled?",
+    "compact": "Compacting",
+    "elapsedTime": "took: ",
     "toolCallCount": "tool calls",
-    "currentTool": "Current tool"
+    "currentTool": "Current tool",
+    "toolCountLabel": "Tools: "
   },
   "common": {
     "close": "Close"

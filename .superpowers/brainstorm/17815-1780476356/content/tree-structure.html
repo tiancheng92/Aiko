@@ -1,0 +1,72 @@
+<h2>Claude Status Panel — 树状结构优化</h2>
+<p class="subtitle">当前方案 vs 三种优化方案，哪个让父子关系更清晰？</p>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>当前：└ 单字符连接</h3>
+      <p>仅用 └ 字符表示子行，缩进 8px，无线条</p>
+      <pre style="font-size:11px;margin:4px 0;background:var(--surface);padding:6px;border-radius:4px;overflow-x:auto;color:var(--text-secondary);line-height:1.5;">
+  ● main-session                    ×
+    耗时: 12s · 工具: ✓3 · thinking
+    [✏️ write] some_file.go
+  └ sub-agent-name                  ×
+    耗时: 5s · 工具: ✓1 · thinking
+      </pre>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>树状线条（推荐）</h3>
+      <p>├ └ 分支 + │ 垂直线，完整树形层级感</p>
+      <pre style="font-size:11px;margin:4px 0;background:var(--surface);padding:6px;border-radius:4px;overflow-x:auto;color:var(--text-secondary);line-height:1.5;">
+  ● main-session                    ×
+  │ 耗时: 12s · 工具: ✓3 · thinking
+  │ [✏️ write] some_file.go
+  ├─ sub-agent-1                    ×
+  │ │ 耗时: 5s · 工具: ✓1 · thinking
+  │ └─ sub-sub-agent
+  │    耗时: 3s · thinking
+  └─ sub-agent-2                    ×
+    耗时: 2s · ✓0 ✗1 · thinking
+      </pre>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>左侧色条引导</h3>
+      <p>子行左侧带颜色竖线 + 微缩进，视觉分组明确</p>
+      <pre style="font-size:11px;margin:4px 0;background:var(--surface);padding:6px;border-radius:4px;overflow-x:auto;color:var(--text-secondary);line-height:1.5;">
+  ● main-session                    ×
+    耗时: 12s · 工具: ✓3 · thinking
+    [✏️ write] some_file.go
+  ┃ sub-agent-1                     ×
+  ┃  耗时: 5s · 工具: ✓1 · thinking
+  ┃ sub-agent-2                     ×
+  ┃  耗时: 2s · ✓0 ✗1 · thinking
+      </pre>
+    </div>
+  </div>
+
+  <div class="option" data-choice="d" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>嵌套卡片式</h3>
+      <p>子行缩进 + 左侧半透明色块区分层级</p>
+      <pre style="font-size:11px;margin:4px 0;background:var(--surface);padding:6px;border-radius:4px;overflow-x:auto;color:var(--text-secondary);line-height:1.5;">
+  ● main-session                    ×
+    耗时: 12s · 工具: ✓3 · thinking
+    [✏️ write] some_file.go
+  ▎ sub-agent-1                     ×
+  ▎  耗时: 5s · 工具: ✓1 · thinking
+  ▎ sub-agent-2                     ×
+  ▎  耗时: 2s · ✓0 ✗1 · thinking
+      </pre>
+    </div>
+  </div>
+</div>

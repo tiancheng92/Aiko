@@ -88,8 +88,7 @@ func (a *App) SaveConfig(cfg *config.Config) error {
 	a.mu.Unlock()
 	if cfg.ClaudeCodeEnabled {
 		ccCfg := claudecco.Config{
-			Port:             cfg.ClaudeCodePort,
-			NotificationSecs: cfg.ClaudeCodeNotificationSecs,
+			Port: cfg.ClaudeCodePort,
 		}
 		if ccSrv == nil {
 			ccSrv = claudecco.New(ccCfg, func(event string, data any) {

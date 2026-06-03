@@ -53,7 +53,6 @@ export namespace config {
 	    Language: string;
 	    ClaudeCodeEnabled: boolean;
 	    ClaudeCodePort: number;
-	    ClaudeCodeNotificationSecs: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -113,7 +112,6 @@ export namespace config {
 	        this.Language = source["Language"];
 	        this.ClaudeCodeEnabled = source["ClaudeCodeEnabled"];
 	        this.ClaudeCodePort = source["ClaudeCodePort"];
-	        this.ClaudeCodeNotificationSecs = source["ClaudeCodeNotificationSecs"];
 	    }
 	}
 	export class ModelProfile {

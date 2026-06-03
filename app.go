@@ -283,8 +283,7 @@ func (a *App) startup(ctx context.Context) {
 	// Start Claude Code hook HTTP server if enabled.
 	if a.cfg.ClaudeCodeEnabled {
 		ccCfg := claudecco.Config{
-			Port:             a.cfg.ClaudeCodePort,
-			NotificationSecs: a.cfg.ClaudeCodeNotificationSecs,
+			Port: a.cfg.ClaudeCodePort,
 		}
 		ccSrv := claudecco.New(ccCfg, func(event string, data any) {
 			wailsruntime.EventsEmit(a.ctx, event, data)

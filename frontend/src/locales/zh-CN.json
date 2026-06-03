@@ -647,9 +647,12 @@
       "webFetch": "抓取网页",
       "webSearch": "搜索网页"
     },
-    "elapsedTime": "耗时",
+    "stale": "疑似中断",
+    "compact": "压缩中",
+    "elapsedTime": "耗时: ",
     "toolCallCount": "工具调用",
-    "currentTool": "当前工具"
+    "currentTool": "当前工具",
+    "toolCountLabel": "工具: "
   },
   "common": {
     "close": "关闭"
