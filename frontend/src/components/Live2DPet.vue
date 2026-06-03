@@ -8,7 +8,6 @@ import { Quit, EventsOn, EventsEmit } from '../../wailsjs/runtime/runtime'
 import { debounce } from '../utils/timing.js'
 import { usePetState } from '../composables/usePetState.js'
 import { useModelPath } from '../composables/useModelPath.js'
-import { useEmotionEvents } from '../composables/useEmotionEvents.js'
 import ContextMenu from './ContextMenu.vue'
 import { ICON_FACE, ICON_SHIRT, ICON_SETTING, ICON_POWER, ICON_POMODORO, ICON_CPU, ICON_CLAUDE_CODE } from '../utils/icons'
 
@@ -45,36 +44,6 @@ function cycleExpression() {
 function namedExpr(keyword) {
   if (!keyword) return undefined
   return modelExpressions.find(n => n.includes(keyword))
-}
-
-/**
- * Emotion → expression keyword mapping for Live2D models.
- * Each keyword is matched against model-registered expression names via
- * case-insensitive substring search (namedExpr). If the model lacks a
- * matching expression, the expression resets gracefully.
- */
-const EMOTION_EXPRESSION_KEYWORDS = {
-  joy: '星星眼',
-  sad: '伤心',
-  surprised: '惊讶',
-  angry: '生气',
-}
-
-/**
- * applyEmotionToExpression maps an LLM emotion tag to a Live2D expression.
- * Intensity below 0.3 resets the expression to neutral.
- * @param {{emotion: string, intensity: number}} param0
- */
-function applyEmotionToExpression({ emotion, intensity }) {
-  if (!live2dModel) return
-  if (intensity < 0.3) {
-    live2dModel.expression()
-    return
-  }
-  const keyword = EMOTION_EXPRESSION_KEYWORDS[emotion]
-  if (keyword) {
-    live2dModel.expression(namedExpr(keyword))
-  }
 }
 
 /** switchToNextModel cycles availableModels and persists the selection. */
@@ -300,27 +269,21 @@ watch(modelPath, async (path) => {
   }
 })
 
-// Subscribe to LLM emotion events — drives expression independently from pet state.
-useEmotionEvents(({ emotion, intensity }) =>
-  applyEmotionToExpression({ emotion, intensity }),
-)
-
-/**
- * watchPetState maps pet states to Live2D motions.
- * Expression is driven by LLM emotion tags (via useEmotionEvents), not pet state.
- * Only applied after the model is loaded (live2dModel is non-null).
- */
+/** watchPetState maps pet states to Live2D motions and expressions. */
 watch(petState, (state) => {
   if (!live2dModel) return
   switch (state) {
     case 'thinking':
       live2dModel.motion('Idle', undefined, MotionPriority.NORMAL)
+      live2dModel.expression(namedExpr('星星眼'))
       break
     case 'speaking':
       live2dModel.motion('TapBody', undefined, MotionPriority.FORCE)
+      live2dModel.expression(namedExpr('爱心'))
       break
     case 'listening':
       live2dModel.motion('Idle', undefined, MotionPriority.NORMAL)
+      live2dModel.expression(namedExpr('星星眼'))
       break
     case 'error':
       live2dModel.motion('TapBody', undefined, MotionPriority.FORCE)
