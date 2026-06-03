@@ -1,0 +1,66 @@
+<h2>设计 — 标签协议</h2>
+<p class="subtitle">Section 1/4：统一行为标签格式</p>
+
+<div class="section">
+  <h3>标签格式</h3>
+  <div style="background:#1a1a2e;border-radius:8px;padding:16px;margin-bottom:12px">
+    <code style="font-size:16px;color:#7ec699">[表现:emotion/intensity,动作:action]</code>
+  </div>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#0f3460">
+      <th style="padding:6px 10px;text-align:left">字段</th>
+      <th style="padding:6px 10px;text-align:left">必填</th>
+      <th style="padding:6px 10px;text-align:left">取值</th>
+    </tr>
+    <tr style="background:#1a1a2e">
+      <td style="padding:6px 10px"><code>emotion</code></td>
+      <td style="padding:6px 10px;color:#7ec699">✅ 必填</td>
+      <td style="padding:6px 10px">joy, sad, surprised, angry, neutral</td>
+    </tr>
+    <tr style="background:#16213e">
+      <td style="padding:6px 10px"><code>intensity</code></td>
+      <td style="padding:6px 10px;color:#7ec699">✅ 必填</td>
+      <td style="padding:6px 10px">0.0 ~ 1.0</td>
+    </tr>
+    <tr style="background:#1a1a2e">
+      <td style="padding:6px 10px"><code>动作:xxx</code></td>
+      <td style="padding:6px 10px;color:#e6a817">可选</td>
+      <td style="padding:6px 10px">wave, nod, celebrate, surprised_react, sad_pose, angry_pose</td>
+    </tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>解析规则</h3>
+  <ul style="font-size:13px;line-height:2">
+    <li>标签必须在回复<strong>第一行</strong>，后面换行写正文</li>
+    <li>流式输出时，TagParser 累积 buffer 直到遇到 <code>]</code> 后尝试匹配</li>
+    <li>buffer 超过 80 字节未匹配 → 放弃，原文透传</li>
+    <li>匹配失败（格式不对）→ 整行原文透传</li>
+    <li>匹配成功 → 标签从显示文本中<strong>剔除</strong>，emit 事件</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h3>示例</h3>
+  <div style="display:flex;flex-direction:column;gap:8px;font-size:12px;font-family:monospace">
+    <div style="background:#16213e;border-radius:6px;padding:10px">
+      <div style="color:#e6a817;margin-bottom:4px"># 纯情绪，无动作</div>
+      <span style="color:#7ec699">[表现:joy/0.7]</span><br>
+      你好呀！今天天气真好 ☀️<br>
+      <span style="color:#888">→ blendshape happy=0.7, 动画 celebrate.vrma（持续）</span>
+    </div>
+    <div style="background:#16213e;border-radius:6px;padding:10px">
+      <div style="color:#e6a817;margin-bottom:4px"># 情绪 + 挥手</div>
+      <span style="color:#7ec699">[表现:joy/0.9,动作:wave]</span><br>
+      太棒了！我一直在等你！<br>
+      <span style="color:#888">→ blendshape happy=0.9, 先播 wave 一次, 再持续 celebrate</span>
+    </div>
+    <div style="background:#16213e;border-radius:6px;padding:10px">
+      <div style="color:#e6a817;margin-bottom:4px"># 中性情绪</div>
+      <span style="color:#7ec699">[表现:neutral/0.0]</span><br>
+      让我查一下今天的天气...<br>
+      <span style="color:#888">→ 重置 blendshape, 动画保持 hand_talk</span>
+    </div>
+  </div>
+</div>

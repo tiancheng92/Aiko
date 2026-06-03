@@ -1069,6 +1069,7 @@ onUnmounted(() => {
   clearInterval(settleIntervalId)
   // Release table state accumulated from rendered markdown tables.
   window.__tableState = {}
+  clearTimeout(searchDebounceTimer)
 })
 
 /** extractUrls returns deduplicated http(s) URLs found in plain text, skipping markdown image syntax. */

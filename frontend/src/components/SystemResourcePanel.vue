@@ -271,7 +271,7 @@ function onEnter(el, done) {
       el.style.opacity = v;
       el.style.scale = 0.8 + 0.2 * v;
     },
-    onComplete: () => {
+    onDone: () => {
       done();
     },
   });
@@ -292,7 +292,7 @@ function onLeave(el, done) {
       el.style.opacity = v;
       el.style.scale = 0.8 + 0.2 * v;
     },
-    onComplete: () => {
+    onDone: () => {
       done();
     },
   });
@@ -307,7 +307,7 @@ onMounted(() => {
     disk.value = st.disk;
     network.value = st.network || { downRate: 0, upRate: 0 };
     if (!expanded.value) {
-      nextTick(updateBaseHeight);
+      nextTick(updateExpandedHeight);
     }
     if (expanded.value) {
       fetchTopProcesses();

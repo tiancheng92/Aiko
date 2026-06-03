@@ -119,7 +119,9 @@ func (s *Server) Stop() {
 
 // UpdateConfig applies new settings. Restarts the server if the port changed.
 func (s *Server) UpdateConfig(cfg Config) error {
+	s.mu.Lock()
 	s.cfg = cfg
+	s.mu.Unlock()
 	if s.srv != nil {
 		return s.Start()
 	}
@@ -204,14 +206,14 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) ensureSession(input *hookInput) *sessionInfo {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	si, ok := s.sessions[input.SessionID]
+	s.mu.Unlock()
 	if ok {
 		return si
 	}
 
 	// Primary source: JSONL transcript (catches resumed sessions with existing titles).
+	// Read title outside the lock — it performs filesystem I/O and should not block other sessions.
 	name := ""
 	if input.TranscriptPath != "" {
 		if t := readTranscriptTitle(input.TranscriptPath); t != "" {
@@ -228,8 +230,16 @@ func (s *Server) ensureSession(input *hookInput) *sessionInfo {
 
 	hasTitle := name != "" && name != filepath.Base(input.CWD) && name != "session"
 	parentID := parentSessionID(input.TranscriptPath)
+
+	s.mu.Lock()
+	// Double-check: another goroutine may have created it while we read the transcript.
+	if si, ok = s.sessions[input.SessionID]; ok {
+		s.mu.Unlock()
+		return si
+	}
 	si = &sessionInfo{Name: name, CWD: input.CWD, ParentID: parentID, hasTranscriptTitle: hasTitle}
 	s.sessions[input.SessionID] = si
+	s.mu.Unlock()
 	return si
 }
 
@@ -258,15 +268,17 @@ func (s *Server) markAllIdle() {
 func (s *Server) aggregateState() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	var hasError bool
 	for _, si := range s.sessions {
 		if si.state == "thinking" {
 			return "thinking"
 		}
-	}
-	for _, si := range s.sessions {
 		if si.state == "error" {
-			return "error"
+			hasError = true
 		}
+	}
+	if hasError {
+		return "error"
 	}
 	return "idle"
 }
@@ -274,15 +286,17 @@ func (s *Server) aggregateState() string {
 // aggregateStateLocked is the locked variant (caller holds s.mu). Not used
 // outside of this file — kept for potential internal use.
 func (s *Server) aggregateStateLocked() string {
+	var hasError bool
 	for _, si := range s.sessions {
 		if si.state == "thinking" {
 			return "thinking"
 		}
-	}
-	for _, si := range s.sessions {
 		if si.state == "error" {
-			return "error"
+			hasError = true
 		}
+	}
+	if hasError {
+		return "error"
 	}
 	return "idle"
 }
@@ -355,16 +369,23 @@ func (s *Server) emitStatus(si *sessionInfo, input *hookInput) {
 				snap.HookEventName = input.HookEventName
 				if input.ToolInput != nil {
 					if b, err := json.Marshal(input.ToolInput); err == nil {
-						snap.ToolInput = string(b)
+						inputStr := string(b)
+						runes := []rune(inputStr)
+						if len(runes) > 120 {
+							inputStr = string(runes[:120]) + "…"
+						}
+						snap.ToolInput = inputStr
 					}
 				}
 			}
 			active = append(active, snap)
 		case "idle":
-			// Keep idle sessions visible for 5 minutes.
+			// Keep idle sessions visible for 5 minutes; prune older entries.
 			if now.Sub(ses.idleSince) < idleRetention {
 				snap := sessionSnapshot{ID: id, Name: ses.Name, CWD: ses.CWD, ParentID: ses.ParentID, State: "idle"}
 				active = append(active, snap)
+			} else {
+				delete(s.sessions, id)
 			}
 		}
 	}

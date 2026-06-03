@@ -1,0 +1,77 @@
+<h2>设计总结 — 完整方案</h2>
+<p class="subtitle">Section 4/4：去掉 intensity 后的最终设计</p>
+
+<div class="section">
+  <h3>标签协议（简化为）</h3>
+  <div style="background:#1a1a2e;border-radius:8px;padding:16px;margin-bottom:12px">
+    <code style="font-size:16px;color:#7ec699">[表现:emotion]</code>
+    <span style="color:#888;margin:0 8px">或</span>
+    <code style="font-size:16px;color:#7ec699">[表现:emotion,动作:action]</code>
+  </div>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#0f3460">
+      <th style="padding:6px 10px;text-align:left"></th>
+      <th style="padding:6px 10px;text-align:left">emotion</th>
+      <th style="padding:6px 10px;text-align:left">action（可选）</th>
+      <th style="padding:6px 10px;text-align:left">blendshape 权重</th>
+    </tr>
+    <tr style="background:#1a1a2e">
+      <td style="padding:6px 10px">取值范围</td>
+      <td style="padding:6px 10px">joy, sad, surprised, angry, neutral</td>
+      <td style="padding:6px 10px">wave, nod, celebrate, surprised_react</td>
+      <td style="padding:6px 10px">统一 0.7（有 emotion 时）</td>
+    </tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>示例</h3>
+  <div style="font-size:12px;font-family:monospace;display:flex;flex-direction:column;gap:8px">
+    <div style="background:#16213e;border-radius:6px;padding:10px">
+      <span style="color:#7ec699">[表现:joy,动作:wave]</span><br>
+      太棒了！我一直在等你！<br>
+      <span style="color:#888">→ 先播 wave（一次性）→ celebrate（持续）+ blendshape happy=0.7</span>
+    </div>
+    <div style="background:#16213e;border-radius:6px;padding:10px">
+      <span style="color:#7ec699">[表现:sad]</span><br>
+      对不起，我查不到这个信息...<br>
+      <span style="color:#888">→ sad.vrma（持续）+ blendshape sad=0.7</span>
+    </div>
+    <div style="background:#16213e;border-radius:6px;padding:10px">
+      <span style="color:#7ec699">[表现:neutral]</span><br>
+      让我想想...<br>
+      <span style="color:#888">→ 清除 blendshape，回退到 petState fallback 动画</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>后端改动</h3>
+  <div style="font-size:12px;line-height:1.8">
+    <p>正则简化为 <code style="background:#0f3460;padding:2px 6px;border-radius:3px">^\[表现:(\w+)(?:,动作:(\w+))?\]\n?</code></p>
+    <p><code>BehaviorParser.Feed()</code> 返回 <code>(text, emotion, action)</code>，buffer 上限 60 字节</p>
+    <p>emit <code>chat:behavior</code> → <code>{emotion: "joy", action: "wave"}</code>（action 空串即纯情绪）</p>
+    <p>保留旧 <code>chat:emotion</code> 兼容（Live2D 暂时继续消费）</p>
+  </div>
+</div>
+
+<div class="section">
+  <h3>前端改动</h3>
+  <div style="font-size:12px;line-height:1.8">
+    <p><strong>监听 chat:behavior</strong> 替代 VRMPet 内的 useEmotionEvents</p>
+    <p><strong>applyBehavior({emotion, action})</strong> 替代 applyEmotion()：</p>
+    <ol>
+      <li>如有 action → playAnimation(action, loop=false)，播完回退</li>
+      <li>如有 emotion（非neutral）→ 设置 blendshape 0.7 + 切换持续动画</li>
+      <li>如 neutral → 清除 blendshape，回退 petState fallback</li>
+    </ol>
+    <p><strong>petState watch 瘦身</strong>：只负责 mouth blendshape（speaking）、error 表情、idle 时清除 emotion</p>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Live2D 兼容</h3>
+  <div style="font-size:12px;color:#888">
+    <p>聊天空时从前端 emit <code>chat:emotion</code>（兼容事件）→ Live2DPet 现有的 useEmotionEvents 继续工作，无需改动。</p>
+  </div>
+</div>

@@ -1,0 +1,73 @@
+<h2>三种重构方案</h2>
+<p class="subtitle">从标签协议到动画系统的完整设计对比</p>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>双标签独立解析</h3>
+      <p>情绪和动作各自独立标签，各自独立事件，前端各管各的。</p>
+      <div style="background:#16213e;border-radius:6px;padding:10px;margin:8px 0;font-size:12px;font-family:monospace">
+        <span style="color:#e6a817">[动作:wave]</span><br>
+        <span style="color:#7ec699">[情绪:joy/0.8]</span><br>
+        你好呀！
+      </div>
+      <div style="font-size:12px;color:#888">
+        后端：TagParser 解析两种标签 → emit <code>chat:emotion</code> + <code>chat:action</code><br>
+        前端：emotion 持续驱动动画 + blendshape，action 一次性播放
+      </div>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>优点</h4><ul><li>职责分离清晰</li><li>各自独立扩展</li><li>action 可放在回复任意位置</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>两个标签要写两行</li><li>LLM 可能忘记写 action</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>统一行为标签（推荐）</h3>
+      <p>一条标签同时表达情绪和可选动作，紧凑且 LLM 不易遗漏。</p>
+      <div style="background:#16213e;border-radius:6px;padding:10px;margin:8px 0;font-size:12px;font-family:monospace">
+        <span style="color:#7ec699">[表现:joy/0.8]</span><br>
+        你好呀！<br><br>
+        <span style="color:#7ec699">[表现:joy/0.8,动作:wave]</span><br>
+        太棒了！我一直在等你！
+      </div>
+      <div style="font-size:12px;color:#888">
+        后端：BehaviorParser 一次解析 → emit <code>chat:behavior</code>{emotion, intensity, action?}<br>
+        前端：统一处理——emotion 持续驱动，action（如有）一次性播放后回退
+      </div>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>优点</h4><ul><li>一个事件搞定一切</li><li>LLM 只需记一种格式</li><li>action 可选——不写就纯情绪</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>格式稍复杂</li><li>action 不能穿插文中（但实际也不需要在文中）</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>自然语言驱动（激进）</h3>
+      <p>去掉结构化标签，让 LLM 在 system prompt 的约束下用自然语言描述行为，后端用正则/关键词提取。</p>
+      <div style="background:#16213e;border-radius:6px;padding:10px;margin:8px 0;font-size:12px;font-family:monospace">
+        <span style="color:#7ec699">（开心地挥手）</span>你好呀！<br><br>
+        <span style="color:#7ec699">（惊讶地睁大眼睛）</span>真的吗？
+      </div>
+      <div style="font-size:12px;color:#888">
+        后端：正则匹配 (xxx地yyy) 模式 → 映射到 emotion + action<br>
+        前端：同方案 B
+      </div>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>优点</h4><ul><li>LLM 最自然的表达方式</li><li>对用户可见（显示时保留或剔除都行）</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>解析不可靠——LLM 可能不遵循格式</li><li>中文分词/语义映射容易出错</li><li>调试困难</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>我推荐方案 B</h3>
+  <p>方案 B 在<strong>可靠性</strong>（结构化标签 LLM 容易遵循）和<strong>简洁性</strong>（一个标签一个事件）之间取得了最佳平衡。方案 C 太脆弱不值得冒险——哪怕 5% 的解析失败率都会让宠物表现很怪。</p>
+  <p>如果选 B，后端改动约 50 行 Go（改 emotionPromptSuffix + EmotionParser），前端改动约 80 行（重构 VRMPet 动画状态机）。</p>
+</div>

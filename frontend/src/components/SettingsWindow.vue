@@ -462,10 +462,12 @@ onMounted(async () => {
   progressHandler = throttle((p) => { importProgress.value = p }, 100)
   offProgress = EventsOn('knowledge:progress', progressHandler)
   offKnowledgeDone = EventsOn('knowledge:done', async () => {
+    progressHandler?.cancel?.()  // cancel any pending throttled progress update (avoids race where trailing setTimeout re-shows the progress bar after we clear it)
     importProgress.value = null
     try { sources.value = await ListKnowledgeSources() || [] } catch (_) {}
   })
   offKnowledgeError = EventsOn('knowledge:error', (msg) => {
+    progressHandler?.cancel?.()
     importProgress.value = null
     statusMsg.value = t('settings.knowledge.importFailedDetail', { error: msg })
   })

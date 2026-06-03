@@ -512,7 +512,10 @@ function closeSystemPanel() {
 const panelStackWidth = 280
 const panelStackStyle = computed(() => {
   const x = ballPos.value.x - panelStackWidth + 50
-  const petBottom = ballPos.value.y + ballSize.value
+  // VRMPet emits ballPos.y shifted down by 35% of petSize so ChatBubble aligns
+  // with the head. Panels should attach below the canvas bottom, so undo the shift.
+  const headShift = renderBackend.value === 'vrm' ? ballSize.value * 0.35 : 0
+  const petBottom = ballPos.value.y - headShift + ballSize.value
   const bottom = window.innerHeight - petBottom
   const clampedX = Math.min(Math.max(x, 8), window.innerWidth - panelStackWidth - 8)
   // Clamp bottom so the stack doesn't overflow past the menu bar when pet is high up.

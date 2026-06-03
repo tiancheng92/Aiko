@@ -79,7 +79,8 @@ func (a *Agent) checkAndSummarize(ctx context.Context) {
 	if a.shortMem == nil || a.summaryStore == nil || a.chatModel == nil {
 		return
 	}
-	limit := a.cfg.MaxContextTokens
+	maxContextTokens := a.cfg.MaxContextTokens // snapshot to avoid race with SaveConfig
+	limit := maxContextTokens
 	if limit <= 0 {
 		return
 	}

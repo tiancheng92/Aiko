@@ -12,11 +12,17 @@ function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
+/**
+ * offModelChanged is stored so it can be unregistered if cleanup is ever needed.
+ * In practice this composable is used at the root level and lives for the app lifetime.
+ */
+let offModelChanged = null
+
 /** useModelPath provides reactive Live2D model state. */
 export function useModelPath() {
   if (!listenerRegistered) {
     listenerRegistered = true
-    EventsOn('config:model:changed', (name) => {
+    offModelChanged = EventsOn('config:model:changed', (name) => {
       // Ignore nil — the backend emits config:model:changed with nil as an
       // "agent restart done" signal after SaveConfig / ActivateModelProfile,
       // but that should not overwrite the Live2D model name set by the frontend.

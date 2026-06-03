@@ -164,6 +164,8 @@ func (a *App) GetKokoroTTSVoices() ([]string, error) {
 
 // GetTTSAutoPlay returns whether TTS auto-play is enabled.
 func (a *App) GetTTSAutoPlay() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
 	return a.cfg.TTSAutoPlay
 }
 

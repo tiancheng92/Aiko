@@ -601,6 +601,11 @@
     "memory": "メモリ",
     "disk": "ディスク",
     "usedTotal": "{used} / {total}",
+    "expand": "プロセス一覧を表示",
+    "collapse": "プロセス一覧を隠す",
+    "topCpu": "CPU トップ5 (コア比)",
+    "topMemory": "メモリ トップ5",
+    "network": "ネットワーク",
     "settings": {
       "title": "システムリソース",
       "interval": "更新間隔",

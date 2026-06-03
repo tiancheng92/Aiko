@@ -601,6 +601,11 @@
     "memory": "메모리",
     "disk": "디스크",
     "usedTotal": "{used} / {total}",
+    "expand": "프로세스 목록 보기",
+    "collapse": "프로세스 목록 숨기기",
+    "topCpu": "CPU 상위 5 (코어당)",
+    "topMemory": "메모리 상위 5",
+    "network": "네트워크",
     "settings": {
       "title": "시스템 리소스",
       "interval": "새로고침 간격",

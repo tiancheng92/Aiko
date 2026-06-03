@@ -1,0 +1,95 @@
+<h2>情绪 vs 动作：两种不同的时间语义</h2>
+<p class="subtitle">情绪是持续状态，动作是一次性手势——应该区别对待</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">情绪 = 持续性状态</div>
+    <div class="mockup-body" style="font-size:13px;line-height:1.8">
+      <div style="background:#1a1a2e;border-radius:6px;padding:10px;margin-bottom:12px">
+        <span style="color:#888;font-size:11px">LLM 输出</span><br>
+        <code style="color:#7ec699">[情绪:joy/0.8]<br>今天天气真好！</code>
+      </div>
+      <div style="font-size:12px;color:#888;margin-bottom:8px">joy 是这<strong>整句话</strong>的底色</div>
+      <div style="background:#16213e;border-radius:6px;padding:10px">
+        <span style="font-size:11px;color:#e6a817">动作时间线：</span><br>
+        <span style="font-size:11px">thinking → <span style="color:#7ec699">celebrate（持续）</span> → speaking（继续celebrate+mouth） → idle</span>
+      </div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">动作 = 一次性手势</div>
+    <div class="mockup-body" style="font-size:13px;line-height:1.8">
+      <div style="background:#1a1a2e;border-radius:6px;padding:10px;margin-bottom:12px">
+        <span style="color:#888;font-size:11px">LLM 输出</span><br>
+        <code style="color:#7ec699">[动作:nod]<br>嗯，我同意你的看法</code>
+      </div>
+      <div style="font-size:12px;color:#888;margin-bottom:8px">nod 只是<strong>一瞬间</strong>的点头</div>
+      <div style="background:#16213e;border-radius:6px;padding:10px">
+        <span style="font-size:11px;color:#e6a817">动作时间线：</span><br>
+        <span style="font-size:11px">thinking → <span style="color:#7ec699">nod（播1次）</span> → <span style="color:#e6a817">回到thinking动画</span> → speaking → idle</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>结论：两种类型，两种播放模式</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#0f3460">
+      <th style="padding:8px 12px;text-align:left"></th>
+      <th style="padding:8px 12px;text-align:left">情绪 (emotion)</th>
+      <th style="padding:8px 12px;text-align:left">动作 (action/gesture)</th>
+    </tr>
+    <tr style="background:#1a1a2e">
+      <td style="padding:8px 12px">语义</td>
+      <td style="padding:8px 12px">这段话的情绪基调</td>
+      <td style="padding:8px 12px">一个具体的手势/行为</td>
+    </tr>
+    <tr style="background:#16213e">
+      <td style="padding:8px 12px">持续时间</td>
+      <td style="padding:8px 12px;color:#7ec699">持续到下一个情绪或状态结束</td>
+      <td style="padding:8px 12px;color:#e6a817">播完即止，回退到当前状态动画</td>
+    </tr>
+    <tr style="background:#1a1a2e">
+      <td style="padding:8px 12px">播放模式</td>
+      <td style="padding:8px 12px">循环（loop）</td>
+      <td style="padding:8px 12px">单次（once）</td>
+    </tr>
+    <tr style="background:#16213e">
+      <td style="padding:8px 12px">示例</td>
+      <td style="padding:8px 12px">celebrate, sad, angry, surprised_react</td>
+      <td style="padding:8px 12px">nod, wave, surprised_react（也可以是一次性）</td>
+    </tr>
+    <tr style="background:#1a1a2e">
+      <td style="padding:8px 12px">结束条件</td>
+      <td style="padding:8px 12px">新情绪到达 / petState 回 idle</td>
+      <td style="padding:8px 12px">动画播完自动回退</td>
+    </tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>动画池按类型重新划分</h3>
+  <div style="display:flex;gap:12px;font-size:12px">
+    <div style="flex:1;background:#1a1a2e;border-radius:6px;padding:10px">
+      <span style="color:#7ec699;font-weight:bold">持续动画（情绪驱动）</span>
+      <ul style="margin:8px 0 0 16px;padding:0">
+        <li>celebrate ← joy</li>
+        <li>sad ← sad</li>
+        <li>angry ← angry</li>
+        <li>surprised_react ← surprised</li>
+        <li>waiting ← neutral/default</li>
+        <li>hand_talk ← speaking(neutral)</li>
+      </ul>
+    </div>
+    <div style="flex:1;background:#1a1a2e;border-radius:6px;padding:10px">
+      <span style="color:#e6a817;font-weight:bold">一次性动作（动作标签驱动）</span>
+      <ul style="margin:8px 0 0 16px;padding:0">
+        <li>nod → 点头</li>
+        <li>wave → 挥手</li>
+        <li>surprised_react → 惊讶一下</li>
+        <li>appearing → 登场（启动时）</li>
+      </ul>
+    </div>
+  </div>
+</div>

@@ -139,6 +139,7 @@ func (a *Agent) Chat(ctx context.Context, userInput string, opts ChatOptions) <-
 			}
 		}()
 
+		llmProvider := a.cfg.LLMProvider // snapshot to avoid race with SaveConfig
 		ctxMsgs, err := a.buildContext(ctx, userInput, opts.UseKnowledge, opts.UseMemory)
 		if err != nil {
 			ch <- StreamResult{Err: err}
@@ -168,7 +169,7 @@ func (a *Agent) Chat(ctx context.Context, userInput string, opts ChatOptions) <-
 
 		msgs := append(ctxMsgs, &schema.Message{Role: schema.User, Content: content})
 		checkpointID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
-		fullResponse, thinkingContent, toolImgs, toolCallCount, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID, opts.ThinkingLevel, a.cfg.LLMProvider)
+		fullResponse, thinkingContent, toolImgs, toolCallCount, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID, opts.ThinkingLevel, llmProvider)
 		if !ok {
 			return
 		}
@@ -331,7 +332,8 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message, opts C
 
 		msgs := append(ctxMsgs, sendMsg)
 		checkpointID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
-		fullResponse, thinkingContent, toolImgs, toolCallCount, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID, opts.ThinkingLevel, a.cfg.LLMProvider)
+		llmProvider := a.cfg.LLMProvider // snapshot to avoid race with SaveConfig
+		fullResponse, thinkingContent, toolImgs, toolCallCount, ok := drainRunnerMsg(ctx, a.runner, msgs, ch, a.pendingConfirms, a.emitEvent, checkpointID, opts.ThinkingLevel, llmProvider)
 		if !ok {
 			return
 		}

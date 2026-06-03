@@ -1,0 +1,55 @@
+<h2>动画触发时机：两种哲学</h2>
+<p class="subtitle">情绪标签在流式输出中先于正文到达，何时切换动画？</p>
+
+<div style="background:#1a1a2e;border-radius:8px;padding:16px;margin-bottom:20px">
+  <h3 style="margin-top:0">时序关系</h3>
+  <div style="display:flex;align-items:center;gap:8px;font-size:13px;font-family:monospace;overflow-x:auto;padding:8px 0">
+    <span style="background:#e76f51;color:white;padding:4px 8px;border-radius:4px;white-space:nowrap">thinking 开始</span>
+    <span style="color:#666">→</span>
+    <span style="background:#e6a817;color:black;padding:4px 8px;border-radius:4px;white-space:nowrap">[情绪:joy/0.7]</span>
+    <span style="color:#666">→</span>
+    <span style="background:#7ec699;color:black;padding:4px 8px;border-radius:4px;white-space:nowrap">你好！今天...</span>
+    <span style="color:#666">→</span>
+    <span style="background:#7ec699;color:black;padding:4px 8px;border-radius:4px;white-space:nowrap">天气不错...</span>
+    <span style="color:#666">→</span>
+    <span style="background:#888;color:white;padding:4px 8px;border-radius:4px;white-space:nowrap">done</span>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>情绪 = 预告（立即切换）</h3>
+      <p>情绪标签一解析到就立刻切换动画，不等待正文。就像人开口前表情先变化。</p>
+      <div style="background:#16213e;border-radius:6px;padding:10px;margin-top:8px;font-size:12px;font-family:monospace">
+        thinking → <span style="color:#e6a817">解析到 joy/0.7</span> → <span style="color:#7ec699">立即切换 celebrate.vrma</span> → 正文流式输出 → idle
+      </div>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>优点</h4><ul><li>表情预告，更自然</li><li>thinking 状态下也能换动画</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>可能和实际说话内容有时间差</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>情绪 = 演绎风格（延迟到 speaking）</h3>
+      <p>情绪标签只记录，等正文开始输出（petState→speaking）时才应用动画。</p>
+      <div style="background:#16213e;border-radius:6px;padding:10px;margin-top:8px;font-size:12px;font-family:monospace">
+        thinking → <span style="color:#e6a817">解析到 joy/0.7（记录）</span> → 正文开始 → <span style="color:#7ec699">切换 celebrate.vrma</span> → idle
+      </div>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros"><h4>优点</h4><ul><li>动画和语音同步</li><li>和当前逻辑最接近</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>thinking 期间空白表情</li><li>实际就是现状</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>我的推荐：A</h3>
+  <p>情绪标签在 token 流中最先到达，立刻切换动画意味着 pet 的表情/身体语言<strong>在正文到达前就已经变化</strong>——就像人说话前先有表情。而且这从根本上解决了「thinking 状态无法被 emotion 驱动」的问题。</p>
+  <p>实际上这个选择会导向一个更简洁的架构：<strong>emotion 驱动动画，petState 只提供默认 fallback</strong>。</p>
+</div>

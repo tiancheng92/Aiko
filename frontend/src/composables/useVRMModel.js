@@ -6,11 +6,17 @@ const currentVRMModel = ref('')
 const availableVRMModels = ref([])
 let listenerRegistered = false
 
+/**
+ * offVRMModelChanged is stored so it can be unregistered if cleanup is ever needed.
+ * In practice this composable is used at the root level and lives for the app lifetime.
+ */
+let offVRMModelChanged = null
+
 /** useVRMModel provides reactive VRM model state (current selection + available list). */
 export function useVRMModel() {
   if (!listenerRegistered) {
     listenerRegistered = true
-    EventsOn('config:vrm:model:changed', async (name) => {
+    offVRMModelChanged = EventsOn('config:vrm:model:changed', async (name) => {
       // Refresh available list first so vrmModelURL can resolve the new model's URL.
       try {
         const models = await ListVRMModels()

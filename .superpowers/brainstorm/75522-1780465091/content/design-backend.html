@@ -1,0 +1,67 @@
+<h2>设计 — 后端改动</h2>
+<p class="subtitle">Section 2/4：Go 后端 — 标签解析 + 事件发射</p>
+
+<div class="section">
+  <h3>改动范围</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#0f3460">
+      <th style="padding:6px 10px;text-align:left">文件</th>
+      <th style="padding:6px 10px;text-align:left">改动</th>
+      <th style="padding:6px 10px;text-align:left">量</th>
+    </tr>
+    <tr style="background:#1a1a2e">
+      <td style="padding:6px 10px"><code>agent.go</code></td>
+      <td style="padding:6px 10px">改 <code>emotionPromptSuffix</code> → <code>behaviorPromptSuffix</code></td>
+      <td style="padding:6px 10px">~5 行</td>
+    </tr>
+    <tr style="background:#16213e">
+      <td style="padding:6px 10px"><code>emotion.go</code></td>
+      <td style="padding:6px 10px"><code>EmotionParser</code> → <code>BehaviorParser</code>，支持解析 action 字段</td>
+      <td style="padding:6px 10px">~40 行</td>
+    </tr>
+    <tr style="background:#1a1a2e">
+      <td style="padding:6px 10px"><code>app_chat.go</code></td>
+      <td style="padding:6px 10px">emit <code>chat:behavior</code> 替代 <code>chat:emotion</code></td>
+      <td style="padding:6px 10px">~10 行</td>
+    </tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>system prompt 改动</h3>
+  <div style="background:#16213e;border-radius:6px;padding:12px;font-size:12px;margin-bottom:8px">
+    <div style="color:#888;margin-bottom:6px;font-size:11px">旧：</div>
+    <code style="color:#e76f51">在每条回复的第一行必须输出情绪标签，格式严格为 [情绪:emotion/intensity]，其中 emotion ∈ {joy, sad, surprised, angry, neutral}，intensity ∈ [0.0, 1.0]</code>
+  </div>
+  <div style="background:#1a1a2e;border-radius:6px;padding:12px;font-size:12px">
+    <div style="color:#888;margin-bottom:6px;font-size:11px">新：</div>
+    <code style="color:#7ec699">在每条回复的第一行必须输出行为标签，格式严格为 [表现:emotion/intensity] 或 [表现:emotion/intensity,动作:action]，其中 emotion ∈ {joy, sad, surprised, angry, neutral}，intensity ∈ [0.0, 1.0]，action ∈ {wave, nod, celebrate, surprised_react, sad_pose, angry_pose} 为可选项</code>
+  </div>
+</div>
+
+<div class="section">
+  <h3>BehaviorParser 改动</h3>
+  <div style="background:#1a1a2e;border-radius:6px;padding:12px;font-size:12px;font-family:monospace;line-height:1.8">
+    <span style="color:#888">// 新正则</span><br>
+    <span style="color:#e6a817">行为标签Re</span> = <span style="color:#7ec699">`^\[表现:(\w+)/([\d.]+)(?:,动作:(\w+))?\]\n?`</span><br><br>
+    <span style="color:#888">// Feed() 返回值</span><br>
+    <span style="color:#e6a817">func</span> (p *BehaviorParser) Feed(tok <span style="color:#e6a817">string</span>) (<br>
+    &nbsp;&nbsp;text <span style="color:#e6a817">string</span>,      <span style="color:#888">// 正文（剔除标签后）</span><br>
+    &nbsp;&nbsp;emotion <span style="color:#e6a817">string</span>,   <span style="color:#888">// joy/sad/surprised/angry/neutral</span><br>
+    &nbsp;&nbsp;intensity <span style="color:#e6a817">float64</span>, <span style="color:#888">// 0.0-1.0</span><br>
+    &nbsp;&nbsp;action <span style="color:#e6a817">string</span>,    <span style="color:#888">// wave/nod/celebrate/... 或空字符串</span><br>
+    )<br><br>
+    <span style="color:#888">// buffer 上限从 30 字节提到 80 字节（容纳 action 字段）</span>
+  </div>
+</div>
+
+<div class="section">
+  <h3>事件协议</h3>
+  <div style="background:#1a1a2e;border-radius:6px;padding:12px;font-size:12px;font-family:monospace;line-height:1.8">
+    <span style="color:#888">// 旧：chat:emotion（保留兼容，Live2D 暂时还用）</span><br>
+    emit <span style="color:#7ec699">"chat:emotion"</span>, {emotion, intensity}<br><br>
+    <span style="color:#888">// 新：chat:behavior（VRM 使用）</span><br>
+    emit <span style="color:#7ec699">"chat:behavior"</span>, {emotion, intensity, action}<br>
+    <span style="color:#888">// action 为空字符串时即纯情绪，非空时前端播一次性手势</span>
+  </div>
+</div>

@@ -197,7 +197,7 @@ function onEnter(el, done) {
     stiffness: 320,
     damping: 22,
     onUpdate: (v) => { el.style.opacity = v; el.style.scale = 0.8 + 0.2 * v },
-    onComplete: () => { done() },
+    onDone: () => { done() },
   })
 }
 
@@ -213,7 +213,7 @@ function onLeave(el, done) {
     stiffness: 400,
     damping: 36,
     onUpdate: (v) => { el.style.opacity = v; el.style.scale = 0.8 + 0.2 * v },
-    onComplete: () => { done() },
+    onDone: () => { done() },
   })
 }
 

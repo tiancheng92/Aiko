@@ -92,8 +92,11 @@ func (a *App) StartSMSWatcher() error {
 	if running {
 		return nil // already running
 	}
+	a.mu.Lock()
 	a.cfg.SMSWatcherEnabled = true
-	if err := a.configStore.Save(a.cfg); err != nil {
+	cfgCopy := *a.cfg
+	a.mu.Unlock()
+	if err := a.configStore.Save(&cfgCopy); err != nil {
 		return fmt.Errorf("save config: %w", err)
 	}
 	return a.startSMSWatcher()
@@ -101,8 +104,11 @@ func (a *App) StartSMSWatcher() error {
 
 // StopSMSWatcher disables SMS monitoring, persists the setting, and stops the watcher.
 func (a *App) StopSMSWatcher() error {
+	a.mu.Lock()
 	a.cfg.SMSWatcherEnabled = false
-	if err := a.configStore.Save(a.cfg); err != nil {
+	cfgCopy := *a.cfg
+	a.mu.Unlock()
+	if err := a.configStore.Save(&cfgCopy); err != nil {
 		return fmt.Errorf("save config: %w", err)
 	}
 	a.mu.Lock()

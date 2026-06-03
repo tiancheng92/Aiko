@@ -1,0 +1,100 @@
+<h2>设计 — 前端动画状态机</h2>
+<p class="subtitle">Section 3/4：VRMPet.vue 重构</p>
+
+<div class="section">
+  <h3>核心原则</h3>
+  <div style="display:flex;gap:12px;font-size:13px;margin-bottom:16px">
+    <div style="flex:1;background:#7ec69933;border:1px solid #7ec699;border-radius:6px;padding:10px;text-align:center">
+      <strong>emotion = 持续状态</strong><br>
+      <span style="font-size:11px;color:#888">驱动动画 + blendshape<br>对所有 petState 生效<br>idle 时自动清除</span>
+    </div>
+    <div style="flex:1;background:#e6a81733;border:1px solid #e6a817;border-radius:6px;padding:10px;text-align:center">
+      <strong>action = 一次性手势</strong><br>
+      <span style="font-size:11px;color:#888">播完回退<br>不改变当前情绪状态<br>可在任意 petState 触发</span>
+    </div>
+    <div style="flex:1;background:#88888833;border:1px solid #888;border-radius:6px;padding:10px;text-align:center">
+      <strong>petState = fallback</strong><br>
+      <span style="font-size:11px;color:#888">没有 emotion 时才用<br>提供 speaking 口型<br>提供 error 表情</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>动画优先级</h3>
+  <div style="background:#1a1a2e;border-radius:8px;padding:16px;text-align:center;font-size:14px;font-family:monospace">
+    <span style="color:#e6a817;font-size:16px">action（一次性）</span>
+    <span style="color:#666;margin:0 8px">&gt;</span>
+    <span style="color:#7ec699;font-size:16px">emotion（持续）</span>
+    <span style="color:#666;margin:0 8px">&gt;</span>
+    <span style="color:#888;font-size:16px">petState（fallback）</span>
+  </div>
+  <p style="font-size:12px;color:#888;margin-top:8px">action 播放期间抢占动画，播完后 emotion 接管。没有 emotion 时 petState fallback 生效。</p>
+</div>
+
+<div class="section">
+  <h3>emo→动画 映射（新增 thinking/idle/listening 覆盖）</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#0f3460">
+      <th style="padding:6px 10px;text-align:left">emotion</th>
+      <th style="padding:6px 10px;text-align:left">动画（持续）</th>
+      <th style="padding:6px 10px;text-align:left">intensity 阈值</th>
+    </tr>
+    <tr style="background:#1a1a2e">
+      <td style="padding:6px 10px">joy</td>
+      <td style="padding:6px 10px">celebrate.vrma</td>
+      <td style="padding:6px 10px">≥ 0.4</td>
+    </tr>
+    <tr style="background:#16213e">
+      <td style="padding:6px 10px">sad</td>
+      <td style="padding:6px 10px">sad.vrma</td>
+      <td style="padding:6px 10px">≥ 0.4</td>
+    </tr>
+    <tr style="background:#1a1a2e">
+      <td style="padding:6px 10px">surprised</td>
+      <td style="padding:6px 10px">surprised_react.vrma</td>
+      <td style="padding:6px 10px">≥ 0.4</td>
+    </tr>
+    <tr style="background:#16213e">
+      <td style="padding:6px 10px">angry</td>
+      <td style="padding:6px 10px">angry.vrma</td>
+      <td style="padding:6px 10px">≥ 0.4</td>
+    </tr>
+    <tr style="background:#1a1a2e">
+      <td style="padding:6px 10px">neutral / &lt;0.4</td>
+      <td style="padding:6px 10px;color:#888">回退到 petState fallback</td>
+      <td style="padding:6px 10px">—</td>
+    </tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>action→动画 映射</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#0f3460">
+      <th style="padding:6px 10px;text-align:left">action</th>
+      <th style="padding:6px 10px;text-align:left">动画（一次性）</th>
+      <th style="padding:6px 10px;text-align:left">播放时长</th>
+    </tr>
+    <tr style="background:#1a1a2e"><td style="padding:6px 10px">wave</td><td style="padding:6px 10px">wave_big.vrma</td><td style="padding:6px 10px">~3s</td></tr>
+    <tr style="background:#16213e"><td style="padding:6px 10px">nod</td><td style="padding:6px 10px">nod.vrma</td><td style="padding:6px 10px">~2s</td></tr>
+    <tr style="background:#1a1a2e"><td style="padding:6px 10px">surprised_react</td><td style="padding:6px 10px">surprised_react.vrma</td><td style="padding:6px 10px">~3s</td></tr>
+    <tr style="background:#16213e"><td style="padding:6px 10px">celebrate</td><td style="padding:6px 10px">celebrate.vrma</td><td style="padding:6px 10px">~2s</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>全新工作流</h3>
+  <div style="background:#1a1a2e;border-radius:6px;padding:12px;font-size:13px;line-height:2">
+    <code>chat:behavior</code> 到达 →<br>
+    &nbsp;&nbsp;1. 设置 blendshape target（emotion → VRM blendshape, intensity → 权重）<br>
+    &nbsp;&nbsp;2. 如果有 action → 立即播放一次性动画，播完后自动回退到第3步<br>
+    &nbsp;&nbsp;3. 如果 intensity ≥ 0.4 → 切换到 emotion 对应的持续动画<br>
+    &nbsp;&nbsp;4. 如果 intensity &lt; 0.4 → 回退到当前 petState fallback 动画<br>
+    <br>
+    <code>pet:state:change</code> 到达 →<br>
+    &nbsp;&nbsp;1. speaking 状态：驱动 mouth blendshape（aa sin波）<br>
+    &nbsp;&nbsp;2. idle 状态：清除 blendshape target + 清除 emotion → 回退到 waiting<br>
+    &nbsp;&nbsp;3. error 状态：设置 sad blendshape + embarrassed 动画<br>
+    &nbsp;&nbsp;4. 其他状态：如果没有活跃 emotion，设置状态 fallback 动画
+  </div>
+</div>

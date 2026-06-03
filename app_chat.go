@@ -92,7 +92,9 @@ func (a *App) streamChat(start func(context.Context, *agent.Agent) <-chan agent.
 
 	if ag == nil {
 		a.mu.Lock()
-		a.chatCancel = nil
+		if a.chatGeneration == myGen {
+			a.chatCancel = nil
+		}
 		a.mu.Unlock()
 		cancel()
 		return fmt.Errorf("agent not initialized: complete settings first")
@@ -100,6 +102,11 @@ func (a *App) streamChat(start func(context.Context, *agent.Agent) <-chan agent.
 
 	go func() {
 		defer cancel()
+		defer func() {
+			if r := recover(); r != nil {
+				wailsruntime.EventsEmit(a.ctx, "chat:error", fmt.Sprintf("agent panic: %v", r))
+			}
+		}()
 		defer func() {
 			a.mu.Lock()
 			if a.chatGeneration == myGen {
@@ -351,9 +358,10 @@ func (a *App) ClearChatHistory() error {
 	}
 	a.mu.RLock()
 	longMem := a.longMem
+	cfgCopy := *a.cfg
 	a.mu.RUnlock()
 	if longMem != nil {
-		embedder, err := llm.NewEmbedder(a.ctx, a.cfg)
+		embedder, err := llm.NewEmbedder(a.ctx, &cfgCopy)
 		if err != nil {
 			log.Warn().Err(err).Msg("ClearChatHistory: embedder init failed, skipping long-term memory clear")
 		} else if err := longMem.DeleteAll(a.vectorDB, embedder); err != nil {
