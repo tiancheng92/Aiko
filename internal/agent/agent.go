@@ -20,11 +20,12 @@ import (
 	"aiko/internal/memory"
 )
 
-// emotionPromptSuffix is appended to the system prompt to instruct the LLM
-// to prefix every reply with an emotion tag for VRM blendshape driving.
-const emotionPromptSuffix = "\n\n在每条回复的第一行必须输出情绪标签，格式严格为 `[情绪:emotion/intensity]`，" +
-	"其中 emotion ∈ {joy, sad, surprised, angry, neutral}，intensity ∈ [0.0, 1.0]，然后换行写正文。" +
-	"示例：[情绪:joy/0.7]\n你好！"
+// behaviorPromptSuffix is appended to the system prompt to instruct the LLM
+// to prefix every reply with a behavior tag for pet expression and gesture driving.
+const behaviorPromptSuffix = "\n\n在每条回复的第一行必须输出行为标签，格式为 `[表现:emotion]` 或 `[表现:emotion,动作:action]`。" +
+	"emotion ∈ {joy, sad, surprised, angry, neutral}。" +
+	"action ∈ {wave, nod, celebrate, surprised_react} 为可选项，表示一次性手势。" +
+	"然后换行写正文。示例：[表现:joy,动作:wave]\n你好！"
 
 // toolPolicyPrompt is injected between the user-configured system prompt and the
 // emotion suffix to enforce strict tool-call discipline and reduce hallucinations.
@@ -143,7 +144,7 @@ func buildAgentRunner(ctx context.Context,
 		handlers = append(handlers, skillMW)
 	}
 
-	systemPrompt := cfg.SystemPrompt + toolPolicyPrompt + emotionPromptSuffix
+	systemPrompt := cfg.SystemPrompt + toolPolicyPrompt + behaviorPromptSuffix
 
 	deepCfg := &deep.Config{
 		Name:                   "aiko",
