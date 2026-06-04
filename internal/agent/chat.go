@@ -155,6 +155,8 @@ func (a *Agent) Chat(ctx context.Context, userInput string, opts ChatOptions) <-
 			flushed = true
 			if _, _, stripped, ok := parseBehaviorTag(assistantSummary); ok {
 				assistantSummary = stripped
+			} else {
+				assistantSummary = stripBehaviorTag(assistantSummary)
 			}
 			if _, err := a.shortMem.AddWithImagesAndFiles("user", userInput, nil, nil); err != nil {
 				log.Warn().Err(err).Msg("short memory: add user message")
@@ -322,6 +324,8 @@ func (a *Agent) ChatWithMessage(ctx context.Context, msg *schema.Message, opts C
 			}
 			if _, _, stripped, ok := parseBehaviorTag(assistantSummary); ok {
 				assistantSummary = stripped
+			} else {
+				assistantSummary = stripBehaviorTag(assistantSummary)
 			}
 			assistantSummary = collapseBlankLines(assistantSummary)
 			if _, err := a.shortMem.AddFull("assistant", assistantSummary, "", nil, nil); err != nil {

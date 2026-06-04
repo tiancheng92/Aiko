@@ -311,8 +311,8 @@ export function shortenUrl(url) {
   }
 }
 
-/** stripEmotionTags removes [情绪:xxx/0.0] tags from a string. */
-export function stripEmotionTags(s) { return s.replace(/\[情绪:\w+\/[\d.]+\]\n?/g, '') }
+/** stripEmotionTags removes [情绪:xxx/0.0] and [表现:xxx] / [表现:xxx,动作:yyy] tags from a string. */
+export function stripEmotionTags(s) { return s.replace(/\[(?:情绪:\w+\/[\d.]+|表现:\w+(?:,动作:\w+)?)\]\n?/g, '') }
 
 /** stripToolCallTags removes emotion tags, <tool-call> and <skill-call> markers from a string (e.g. before TTS). */
 export function stripToolCallTags(s) {

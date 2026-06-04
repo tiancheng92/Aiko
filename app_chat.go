@@ -43,6 +43,7 @@ func (a *App) ChatDirect(ctx context.Context, prompt string) error {
 		return fmt.Errorf("agent not initialized")
 	}
 	ch := ag.ChatDirect(ctx, prompt)
+	bp := agent.NewBehaviorParser()
 	for r := range ch {
 		if r.Err != nil {
 			wailsruntime.EventsEmit(a.ctx, "chat:error", a.formatChatError(r.Err))
@@ -53,9 +54,28 @@ func (a *App) ChatDirect(ctx context.Context, prompt string) error {
 			wailsruntime.EventsEmit(a.ctx, "chat:image", r.Images)
 		}
 		if r.Done {
+			if tail := bp.Flush(); tail != "" {
+				wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
+			}
 			break
 		}
-		wailsruntime.EventsEmit(a.ctx, "chat:token", r.Token)
+		if r.ThinkingToken != "" {
+			wailsruntime.EventsEmit(a.ctx, "chat:thinking", r.ThinkingToken)
+			continue
+		}
+		text, emotion, action := bp.Feed(r.Token)
+		if emotion != "" {
+			wailsruntime.EventsEmit(a.ctx, "chat:behavior", map[string]any{
+				"emotion": emotion,
+				"action":  action,
+			})
+		}
+		if text != "" {
+			wailsruntime.EventsEmit(a.ctx, "chat:token", text)
+		}
+	}
+	if tail := bp.Flush(); tail != "" {
+		wailsruntime.EventsEmit(a.ctx, "chat:token", tail)
 	}
 	wailsruntime.EventsEmit(a.ctx, "chat:done", nil)
 	return nil

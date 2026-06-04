@@ -21,7 +21,7 @@ import (
 var (
 	reToolCall  = regexp.MustCompile(`<tool-call[^>]*></tool-call>`)
 	reSkillCall = regexp.MustCompile(`<skill-call[^>]*></skill-call>`)
-	reEmotion   = regexp.MustCompile(`\[情绪:\w+/[\d.]+\]\n?`)
+	reEmotion   = regexp.MustCompile(`\[(?:情绪:\w+/[\d.]+|表现:\w+(?:,动作:\w+)?)\]\n?`)
 )
 
 // maxBodyRunes caps the notification body length. macOS truncates very long

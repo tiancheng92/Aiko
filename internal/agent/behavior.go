@@ -7,6 +7,16 @@ import (
 
 var behaviorTagRe = regexp.MustCompile(`^\[表现:(\w+)(?:,动作:(\w+))?\]\n?`)
 
+// behaviorTagGlobalRe matches a behavior tag anywhere in a string (no ^ anchor).
+// Used to strip tags from persisted responses when the tag is not at position 0
+// (e.g. when tool-call indicators precede the tag in the full response).
+var behaviorTagGlobalRe = regexp.MustCompile(`\[表现:\w+(?:,动作:\w+)?\]\n?`)
+
+// stripBehaviorTag removes all behavior tags from s regardless of position.
+func stripBehaviorTag(s string) string {
+	return behaviorTagGlobalRe.ReplaceAllString(s, "")
+}
+
 // parseBehaviorTag extracts a behavior tag from the start of s.
 // On success returns (emotion, action, textAfterTag, true).
 // action is empty string when no action is specified.

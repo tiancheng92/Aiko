@@ -251,6 +251,10 @@ func (a *Agent) persistAndMigrate(ctx context.Context, userInput string, userIma
 		// chat history or long-term memory.
 		if _, _, stripped, ok := parseBehaviorTag(assistantReply); ok {
 			assistantReply = stripped
+		} else {
+			// If the tag isn't at position 0 (e.g. preceded by tool-call
+			// indicators), strip it wherever it appears.
+			assistantReply = stripBehaviorTag(assistantReply)
 		}
 		assistantReply = collapseBlankLines(assistantReply)
 		if _, err := a.shortMem.AddFull("assistant", assistantReply, thinkingContent, assistantImages, nil); err != nil {
